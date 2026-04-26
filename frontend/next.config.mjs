@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   output: "export",
   // TODO (before T07): static export cannot serve dynamic routes such as
   // /groups/[gid]. Migrate to Firebase App Hosting for full Next.js SSR.
