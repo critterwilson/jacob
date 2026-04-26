@@ -1,0 +1,16 @@
+{
+  "name": "jacob-firestore",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4",
+    "firebase": "^11",
+    "typescript": "^5",
+    "vitest": "^2"
+  }
+}
