@@ -3,5 +3,17 @@
     "default": "jacob-staging-494515",
     "staging": "jacob-staging-494515",
     "production": "jacob-494515"
+  },
+  "targets": {
+    "jacob-staging-494515": {
+      "hosting": {
+        "app": ["jacob-staging-494515"]
+      }
+    },
+    "jacob-494515": {
+      "hosting": {
+        "app": ["jacob-494515"]
+      }
+    }
   }
 }
