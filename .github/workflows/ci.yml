@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  frontend-lint:
+    name: "Frontend — lint & type-check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter jacob-frontend lint
+      - run: pnpm --filter jacob-frontend type-check
+
+  frontend-test:
+    name: "Frontend — vitest"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter jacob-frontend test
+
+  backend-lint:
+    name: "Backend — ruff, black, mypy"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv pip install --system -e ".[dev]"
+        working-directory: backend
+      - run: ruff check .
+        working-directory: backend
+      - run: black --check .
+        working-directory: backend
+      - run: mypy app/
+        working-directory: backend
+
+  backend-test:
+    name: "Backend — pytest"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv pip install --system -e ".[dev]"
+        working-directory: backend
+      - run: pytest
+        working-directory: backend
+
+  functions-build:
+    name: "Functions — tsc & eslint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter jacob-functions build
+      - run: pnpm --filter jacob-functions lint
+
+  rules-test:
+    name: "Firestore rules — vitest + emulator"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: pnpm install --frozen-lockfile
+      - run: npm install -g firebase-tools
+      - name: Run rules tests against Firestore emulator
+        run: >
+          firebase emulators:exec
+          --only firestore
+          --project demo-jacob
+          "pnpm --filter jacob-firestore test"
