@@ -1,7 +1,7 @@
 {
   "projects": {
-    "default": "jacob-staging-REPLACE-ME",
-    "staging": "jacob-staging-REPLACE-ME",
-    "production": "jacob-prod-REPLACE-ME"
+    "default": "jacob-staging-494515",
+    "staging": "jacob-staging-494515",
+    "production": "jacob-494515"
   }
 }
