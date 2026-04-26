@@ -1,0 +1,12 @@
+{
+  "name": "jacob",
+  "private": true,
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@firebase/util",
+      "esbuild",
+      "protobufjs",
+      "unrs-resolver"
+    ]
+  }
+}
