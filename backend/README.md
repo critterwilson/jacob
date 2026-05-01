@@ -30,6 +30,19 @@ uvicorn app.main:app --reload
 pytest
 ```
 
+## Grant admin to a user
+
+The backend uses a Firebase Auth custom claim (`admin: true`) to gate
+admin-only endpoints. After a user has signed up, run:
+
+```bash
+cd backend
+python scripts/grant_admin.py <uid>
+```
+
+The user must sign out and sign back in (or refresh their ID token)
+before the new claim is visible in the token.
+
 ## Lint and type-check
 
 ```bash
