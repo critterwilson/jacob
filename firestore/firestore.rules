@@ -1,6 +1,168 @@
 rules_version = '2';
+
+// JACOB Firestore security rules.
+// Source of truth for who can do what. Every write predicate also calls
+// notBanned() so an active ban silently blocks all client writes.
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // --- helpers ---------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isBanned() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/bans/$(request.auth.uid))
+        && get(/databases/$(database)/documents/bans/$(request.auth.uid)).data.expiresAt > request.time;
+    }
+
+    function notBanned() {
+      return !isBanned();
+    }
+
+    function isGroupMember(gid) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
+    }
+
+    function isGroupLeader(gid) {
+      return isGroupMember(gid)
+        && get(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid)).data.role == 'leader';
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function fieldsLocked(locked) {
+      return changedKeys().intersection(locked.toSet()).size() == 0;
+    }
+
+    function onlyChanges(allowed) {
+      return changedKeys().hasOnly(allowed);
+    }
+
+    function messageExists(gid, mid) {
+      return exists(/databases/$(database)/documents/groups/$(gid)/messages/$(mid));
+    }
+
+    // --- users -----------------------------------------------------------
+    // The user document holds public-safe fields (displayName, photoURL,
+    // schemaVersion, etc.). Anything sensitive lives in the private
+    // subcollection below.
+    match /users/{uid} {
+      allow read: if isUser(uid);
+
+      allow create: if isUser(uid)
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.createdAt == request.time
+        && (!('role' in request.resource.data) || request.resource.data.role == 'member');
+
+      allow update: if isUser(uid) && notBanned()
+        && fieldsLocked(['role', 'createdAt', 'schemaVersion']);
+
+      // Account deletion goes through the backend (T14), never the client.
+      allow delete: if false;
+
+      // PII: email, leader/mod-only fields, etc. Owner-only.
+      match /private/{docId} {
+        allow read: if isUser(uid);
+        allow write: if isUser(uid) && notBanned();
+      }
+    }
+
+    // --- groups ----------------------------------------------------------
+    match /groups/{gid} {
+      allow read: if isGroupMember(gid);
+
+      allow create: if isSignedIn() && notBanned()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.memberCount == 1;
+
+      // memberCount is updated only via Cloud Functions (Admin SDK bypasses
+      // these rules); leaders edit metadata only.
+      allow update: if isGroupLeader(gid) && notBanned()
+        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet']);
+
+      allow delete: if false;
+
+      // --- members -----------------------------------------------------
+      match /members/{uid} {
+        allow read: if isGroupMember(gid) || isUser(uid);
+
+        // Two creation paths: bootstrap (the original creator self-adds as
+        // leader, immediately after creating the group doc) and an
+        // existing leader adding someone. The bootstrap path is gated on
+        // `groups/{gid}.createdBy` so it can't be used to self-elevate
+        // into someone else's group.
+        allow create: if notBanned() && (
+          (isUser(uid)
+            && request.resource.data.role == 'leader'
+            && request.resource.data.joinedAt == request.time
+            && get(/databases/$(database)/documents/groups/$(gid)).data.createdBy == request.auth.uid)
+          || (isGroupLeader(gid)
+            && request.resource.data.role in ['member', 'leader']
+            && request.resource.data.joinedAt == request.time)
+        );
+
+        allow update: if isGroupLeader(gid) && notBanned()
+          && onlyChanges(['role']);
+
+        allow delete: if (isGroupLeader(gid) || isUser(uid)) && notBanned();
+      }
+
+      // --- messages ----------------------------------------------------
+      match /messages/{mid} {
+        allow read: if isGroupMember(gid);
+
+        allow create: if isGroupMember(gid) && notBanned()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.threadReplyCount == 0
+          && request.resource.data.deletedAt == null
+          && request.resource.data.editedAt == null
+          && (request.resource.data.parentMessageId == null
+              || messageExists(gid, request.resource.data.parentMessageId));
+
+        // Author can soft-edit body / mark editedAt / soft-delete. All
+        // other fields (authorUid, createdAt, parentMessageId,
+        // threadReplyCount, mediaRefs, stickerIds) are immutable.
+        allow update: if isGroupMember(gid) && notBanned()
+          && resource.data.authorUid == request.auth.uid
+          && onlyChanges(['body', 'editedAt', 'deletedAt']);
+
+        // Soft-delete only.
+        allow delete: if false;
+      }
+    }
+
+    // --- stickers --------------------------------------------------------
+    match /stickers/{sid} {
+      allow read: if isSignedIn();
+      allow write: if false; // seeded via Admin SDK
+    }
+
+    // --- backend-only collections ---------------------------------------
+    match /moderation_queue/{itemId} {
+      allow read, write: if false;
+    }
+    match /bans/{uid} {
+      allow read, write: if false;
+    }
+    match /audit_log/{eventId} {
+      allow read, write: if false;
+    }
+
+    // --- default deny (defense in depth) --------------------------------
     match /{document=**} {
       allow read, write: if false;
     }
