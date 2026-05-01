@@ -1,16 +1,4 @@
 {
-  "hosting": {
-    "target": "app",
-    "public": "frontend/out",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "cleanUrls": true,
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  },
   "firestore": {
     "rules": "firestore/firestore.rules",
     "indexes": "firestore/firestore.indexes.json"
@@ -34,9 +22,6 @@
     },
     "functions": {
       "port": 5001
-    },
-    "hosting": {
-      "port": 5000
     },
     "ui": {
       "enabled": true,

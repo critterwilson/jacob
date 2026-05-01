@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "export",
-  // TODO (before T07): static export cannot serve dynamic routes such as
-  // /groups/[gid]. Migrate to Firebase App Hosting for full Next.js SSR.
-  // https://firebase.google.com/docs/app-hosting
+  // Frontend deploys to Firebase App Hosting (managed Cloud Run for Next.js
+  // SSR). No `output:` override — App Hosting builds a standard `.next/`
+  // server bundle from `next build`.
 };
 
 export default nextConfig;

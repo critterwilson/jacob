@@ -1,0 +1,21 @@
+# Firebase App Hosting backend configuration.
+# https://firebase.google.com/docs/app-hosting/configure
+#
+# This file is read by App Hosting on every build/rollout. The backend
+# resource itself (region, GitHub repo connection, live branch) is
+# created once with `firebase apphosting:backends:create`; see
+# README.md for the one-time setup steps.
+
+runConfig:
+  # Phase 1 traffic is small; cold starts on cheap min-instances=0 are
+  # acceptable. Bump these once we have real users.
+  minInstances: 0
+  maxInstances: 5
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+# Public env vars and secret references go here as later tasks need them
+# (e.g. NEXT_PUBLIC_FIREBASE_* in T04, Sentry DSN in T15). Keep the file
+# committed; secrets are referenced by name, not by value.
+env: []

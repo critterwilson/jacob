@@ -3,7 +3,7 @@
 Small-group messaging for Christian communities — Phase 1 monorepo.
 
 ```
-frontend/    Next.js 14 (App Router, TypeScript, Tailwind) → Firebase Hosting
+frontend/    Next.js 14 (App Router, TypeScript, Tailwind) → Firebase App Hosting
 backend/     FastAPI (Python 3.12)                         → Cloud Run
 functions/   Cloud Functions for Firebase (TypeScript v2)  → Firebase Functions
 firestore/   Security rules + indexes + rule tests
@@ -32,22 +32,17 @@ Install these tools before running anything locally.
 
 ## One-time setup
 
-### 1 — Replace project ID placeholders
+### 1 — Firebase projects
 
-Edit `.firebaserc` and swap the two `REPLACE-ME` values for your real Firebase
-project IDs:
+You'll need two Firebase projects (staging + production). Create them at
+https://console.firebase.google.com and enable:
 
-```json
-{
-  "projects": {
-    "staging":    "YOUR_STAGING_PROJECT_ID",
-    "production": "YOUR_PROD_PROJECT_ID"
-  }
-}
-```
+- **Firestore** (Native mode, region `nam5`)
+- **Authentication**
+- **App Hosting** (under "Build")
 
-You'll need two Firebase projects. Create them at https://console.firebase.google.com.
-Enable **Firestore** (Native mode, region `nam5`) and **Authentication** in each.
+The project IDs in `.firebaserc` are already set to `jacob-staging-494515`
+and `jacob-494515` — replace them if you're forking the repo.
 
 ### 2 — Authenticate local tooling
 
@@ -59,7 +54,7 @@ firebase login
 
 ### 3 — Create the Artifact Registry repository (once per GCP project)
 
-Run this for both your staging and production GCP projects:
+Used by the backend image. Run for both staging and production GCP projects:
 
 ```bash
 gcloud artifacts repositories create jacob-images \
@@ -68,13 +63,35 @@ gcloud artifacts repositories create jacob-images \
   --project=YOUR_PROJECT_ID
 ```
 
-### 4 — Install Node dependencies and generate the lockfile
+### 4 — Create the App Hosting backend (once per Firebase project)
+
+App Hosting deploys the Next.js frontend straight from GitHub. For each
+Firebase project, run:
+
+```bash
+firebase apphosting:backends:create \
+  --project YOUR_FIREBASE_PROJECT_ID \
+  --location us-central1
+```
+
+The wizard will prompt you to:
+1. Connect this GitHub repository.
+2. Set the **root directory** to `frontend`.
+3. Set the **live branch** to `main` (staging) or your prod branch.
+4. Pick or grant the GitHub App permissions.
+
+Once created, every push to the live branch builds and rolls out
+automatically. The runtime config (instance limits, env vars) lives in
+[`frontend/apphosting.yaml`](frontend/apphosting.yaml) — edit and commit
+to change it.
+
+### 5 — Install Node dependencies and generate the lockfile
 
 ```bash
 pnpm install        # generates pnpm-lock.yaml — commit this file
 ```
 
-### 5 — Install Python dependencies
+### 6 — Install Python dependencies
 
 ```bash
 cd backend
@@ -102,7 +119,7 @@ uvicorn app.main:app --reload
 # Health check: GET /health → {"status":"ok"}
 ```
 
-### Firebase emulators (Auth + Firestore + Functions + Hosting)
+### Firebase emulators (Auth + Firestore + Functions)
 
 ```bash
 firebase emulators:start
@@ -110,8 +127,10 @@ firebase emulators:start
 # Auth:      localhost:9099
 # Firestore: localhost:8080
 # Functions: localhost:5001
-# Hosting:   localhost:5000
 ```
+
+(There's no hosting emulator: the frontend dev server is `pnpm dev` above,
+and App Hosting has no local emulator — it runs `next dev` the same way.)
 
 ---
 
@@ -156,7 +175,11 @@ Two GitHub Actions workflows live in `.github/workflows/`:
 
 The deploy workflow has two parallel jobs:
 - **deploy-backend** — builds the Docker image, pushes to Artifact Registry, deploys to Cloud Run
-- **deploy-firebase** — builds the Next.js static export + Cloud Functions, then runs `firebase deploy --only hosting,functions,firestore`
+- **deploy-firebase** — builds Cloud Functions, then runs `firebase deploy --only functions,firestore`
+
+The **frontend deploys outside CI**: Firebase App Hosting watches the live
+branch on GitHub and rolls out a new revision automatically on each push.
+There is no `firebase deploy --only hosting` step.
 
 ### GitHub Actions secrets
 
@@ -188,7 +211,6 @@ Create these in **Settings → Secrets and variables → Actions** on your GitHu
 
 ---
 
-## Known limitations of the T01 scaffold
+## Repo conventions
 
-- **Static export and dynamic routes**: `next.config.ts` has `output: "export"`, which cannot serve dynamic segments like `/groups/[gid]`. Before T07 (group routes), this must be migrated to Firebase App Hosting. See the TODO comment in `frontend/next.config.ts`.
 - **`pnpm-lock.yaml` must be committed**: run `pnpm install` after first clone and commit the generated lockfile so CI's `--frozen-lockfile` flag works.
