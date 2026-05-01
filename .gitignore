@@ -366,6 +366,8 @@ vite.config.ts.timestamp-*
 # JACOB — project-specific
 frontend/out/
 functions/lib/
+# frontend/lib/ is source code, not a build artifact — unignore it
+!frontend/lib/
 firebase-debug.*.log
 firestore-debug.log
 ui-debug.log
