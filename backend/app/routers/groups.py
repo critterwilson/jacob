@@ -18,16 +18,20 @@ from google.cloud import firestore as gcf
 
 from app.deps import get_current_user
 from app.errors import APIError
-from app.limits import GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
+from app.limits import ADMIN_MUTATION, GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
 from app.middleware.rate_limit import limiter
 from app.models.group import (
     CreateGroupRequest,
     CreateGroupResponse,
+    FounderTransferRequest,
+    FounderTransferResponse,
     JoinGroupRequest,
     JoinGroupResponse,
+    LeaderActionResponse,
     RotateInviteResponse,
 )
 from app.models.user import CurrentUser
+from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
@@ -87,6 +91,7 @@ def create_group(
             "description": body.description.strip(),
             "isPrivate": body.isPrivate,
             "createdBy": user.uid,
+            "founderUid": user.uid,
             "createdAt": fb_firestore.SERVER_TIMESTAMP,
             "inviteCode": code,
             "memberCount": 1,
@@ -187,3 +192,195 @@ def rotate_invite(
 
     logger.info("rotated invite gid=%s uid=%s", gid, user.uid)
     return RotateInviteResponse(inviteCode=new_code)
+
+
+# ── T22: leader hierarchy ────────────────────────────────────────────────────
+
+
+def _require_leader(db: Any, gid: str, uid: str) -> dict[str, Any]:
+    """Return the group doc data; raise 404/403 if missing or not a leader."""
+    group_snap = db.collection("groups").document(gid).get()
+    if not group_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="group_not_found",
+            message="Group not found",
+        )
+    member_snap = db.collection("groups").document(gid).collection("members").document(uid).get()
+    if not member_snap.exists or (member_snap.to_dict() or {}).get("role") != "leader":
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="forbidden",
+            message="Only group leaders can perform this action",
+        )
+    return group_snap.to_dict() or {}
+
+
+def _members_collection(db: Any, gid: str) -> Any:
+    return db.collection("groups").document(gid).collection("members")
+
+
+@router.post(
+    "/{gid}/leaders/{target_uid}/promote",
+    response_model=LeaderActionResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def promote_member(
+    gid: str,
+    target_uid: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> LeaderActionResponse:
+    """Promote a member to leader. Caller must be a leader of this group."""
+    db = _db()
+    _require_leader(db, gid, user.uid)
+
+    target_ref = _members_collection(db, gid).document(target_uid)
+    target_snap = target_ref.get()
+    if not target_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="member_not_found",
+            message="Target user is not a member of this group",
+        )
+    current_role = (target_snap.to_dict() or {}).get("role", "member")
+    if current_role == "leader":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="already_leader",
+            message="Target user is already a leader",
+        )
+    target_ref.update({"role": "leader"})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="promote_member",
+        target_ref=f"groups/{gid}/members/{target_uid}",
+        payload={"newRole": "leader"},
+    )
+    logger.info("promote gid=%s actor=%s target=%s", gid, user.uid, target_uid)
+    return LeaderActionResponse(gid=gid, uid=target_uid, role="leader")
+
+
+@router.post(
+    "/{gid}/leaders/{target_uid}/demote",
+    response_model=LeaderActionResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def demote_member(
+    gid: str,
+    target_uid: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> LeaderActionResponse:
+    """Demote a leader to member. Founder cannot be demoted; self-demote
+    requires more than one leader.
+    """
+    db = _db()
+    group_data = _require_leader(db, gid, user.uid)
+
+    if group_data.get("founderUid") == target_uid:
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="founder_immutable",
+            message="The founder cannot be demoted; transfer first",
+        )
+
+    target_ref = _members_collection(db, gid).document(target_uid)
+    target_snap = target_ref.get()
+    if not target_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="member_not_found",
+            message="Target user is not a member of this group",
+        )
+    current_role = (target_snap.to_dict() or {}).get("role", "member")
+    if current_role != "leader":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="not_a_leader",
+            message="Target user is not a leader",
+        )
+
+    leader_count = group_data.get("leaderCount") or 0
+    if user.uid == target_uid and leader_count <= 1:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="last_leader",
+            message="You are the only leader; promote someone else first",
+        )
+
+    target_ref.update({"role": "member"})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="demote_member",
+        target_ref=f"groups/{gid}/members/{target_uid}",
+        payload={"newRole": "member"},
+    )
+    logger.info("demote gid=%s actor=%s target=%s", gid, user.uid, target_uid)
+    return LeaderActionResponse(gid=gid, uid=target_uid, role="member")
+
+
+@router.post(
+    "/{gid}/founder/transfer",
+    response_model=FounderTransferResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def transfer_founder(
+    gid: str,
+    request: Request,
+    response: Response,
+    body: FounderTransferRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> FounderTransferResponse:
+    """Transfer founder status. Only the current founder may call this;
+    the target must already be a leader.
+    """
+    db = _db()
+    group_ref = db.collection("groups").document(gid)
+    group_snap = group_ref.get()
+    if not group_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="group_not_found",
+            message="Group not found",
+        )
+    group_data = group_snap.to_dict() or {}
+    if group_data.get("founderUid") != user.uid:
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="not_founder",
+            message="Only the current founder can transfer founder status",
+        )
+    if body.targetUid == user.uid:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_target",
+            message="Target must differ from the current founder",
+        )
+
+    target_ref = _members_collection(db, gid).document(body.targetUid)
+    target_snap = target_ref.get()
+    if not target_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="member_not_found",
+            message="Target user is not a member of this group",
+        )
+    if (target_snap.to_dict() or {}).get("role") != "leader":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="target_not_leader",
+            message="Target must already be a leader; promote first",
+        )
+
+    group_ref.update({"founderUid": body.targetUid})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="transfer_founder",
+        target_ref=f"groups/{gid}",
+        payload={"newFounderUid": body.targetUid, "previousFounderUid": user.uid},
+    )
+    logger.info("transfer founder gid=%s from=%s to=%s", gid, user.uid, body.targetUid)
+    return FounderTransferResponse(gid=gid, founderUid=body.targetUid)
