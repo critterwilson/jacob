@@ -195,3 +195,124 @@ def test_rotate_invite_group_not_found_returns_404() -> None:
 
     assert res.status_code == 404
     assert res.json()["error"]["code"] == "group_not_found"
+
+
+# ── T23: POST /api/groups/{gid}/archive & /unarchive ─────────────────────────
+
+def _make_archive_db(
+    *,
+    group_exists: bool = True,
+    member_role: str = "leader",
+    archived_at: object | None = None,
+) -> MagicMock:
+    """DB mock wired for _require_leader + archive/unarchive."""
+    from unittest.mock import MagicMock
+
+    db = MagicMock()
+    groups_col = MagicMock()
+    db.collection.side_effect = (
+        lambda name: groups_col if name in ("groups", "audit_log") else MagicMock()
+    )
+
+    # group doc
+    group_ref = MagicMock()
+    group_snap = MagicMock()
+    group_snap.exists = group_exists
+    group_snap.to_dict.return_value = (
+        {"archivedAt": archived_at} if group_exists else {}
+    )
+    group_ref.get.return_value = group_snap
+    groups_col.document.return_value = group_ref
+
+    # member doc
+    member_snap = MagicMock()
+    member_snap.exists = True
+    member_snap.to_dict.return_value = {"role": member_role}
+    group_ref.collection.return_value.document.return_value.get.return_value = member_snap
+
+    return db
+
+
+def test_archive_group_happy_path() -> None:
+    mock_db = _make_archive_db(archived_at=None)
+
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.routers.groups.write_audit_log"),
+    ):
+        res = TestClient(_make_app()).post(
+            "/api/groups/gid-001/archive",
+            json={"reason": "Season ended"},
+        )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["gid"] == "gid-001"
+    assert "archivedAt" in body
+
+
+def test_archive_group_already_archived_returns_409() -> None:
+    from datetime import UTC, datetime
+    ts = datetime.now(UTC)
+    mock_db = _make_archive_db(archived_at=ts)
+
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post(
+            "/api/groups/gid-001/archive",
+            json={"reason": ""},
+        )
+
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "already_archived"
+
+
+def test_archive_group_not_leader_returns_403() -> None:
+    mock_db = _make_archive_db(member_role="member")
+
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app("bob")).post(
+            "/api/groups/gid-001/archive",
+            json={"reason": ""},
+        )
+
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "forbidden"
+
+
+def test_unarchive_group_happy_path() -> None:
+    from datetime import UTC, datetime
+    ts = MagicMock()
+    ts.seconds = int(datetime.now(UTC).timestamp())  # recent
+    mock_db = _make_archive_db(archived_at=ts)
+
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.routers.groups.write_audit_log"),
+    ):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/unarchive")
+
+    assert res.status_code == 200
+    assert res.json()["gid"] == "gid-001"
+
+
+def test_unarchive_group_not_archived_returns_409() -> None:
+    mock_db = _make_archive_db(archived_at=None)
+
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/unarchive")
+
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "not_archived"
+
+
+def test_unarchive_group_too_old_returns_410() -> None:
+    from datetime import UTC, datetime, timedelta
+    old_ts = MagicMock()
+    old_ts.seconds = int((datetime.now(UTC) - timedelta(days=61)).timestamp())
+    mock_db = _make_archive_db(archived_at=old_ts)
+
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/unarchive")
+
+    assert res.status_code == 410
+    assert res.json()["error"]["code"] == "archive_too_old"

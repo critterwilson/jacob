@@ -19,7 +19,7 @@ export const ALLOWED_PHOTO_MIME_TYPES = [
 export type AllowedPhotoMimeType = (typeof ALLOWED_PHOTO_MIME_TYPES)[number];
 export const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
-export type UploadPurpose = "message" | "avatar";
+export type UploadPurpose = "message" | "avatar" | "group_avatar";
 
 export type UploadOptions = {
   file: File;
@@ -104,10 +104,10 @@ export function useUploadPhoto() {
       if (!user) {
         throw new UploadError("unauthenticated", "You must be signed in to upload.");
       }
-      if (purpose === "message" && !groupId) {
+      if ((purpose === "message" || purpose === "group_avatar") && !groupId) {
         throw new UploadError(
           "missing_group",
-          "groupId is required for message uploads.",
+          "groupId is required for this upload.",
         );
       }
 

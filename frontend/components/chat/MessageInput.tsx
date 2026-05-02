@@ -28,9 +28,10 @@ type FormValues = z.infer<typeof schema>;
 
 type Props = {
   gid: string;
+  archived?: boolean;
 };
 
-export function MessageInput({ gid }: Props) {
+export function MessageInput({ gid, archived = false }: Props) {
   const { user } = useAuth();
   const [stickers, setStickers] = useState<string[]>([]);
   const [mediaRefs, setMediaRefs] = useState<string[]>([]);
@@ -76,8 +77,11 @@ export function MessageInput({ gid }: Props) {
       reset();
       setStickers([]);
       setMediaRefs([]);
-    } catch {
-      setError("Failed to send message. Please try again.");
+    } catch (err) {
+      const msg = err instanceof Error && err.message.includes("permission-denied")
+        ? "Group was archived."
+        : "Failed to send message. Please try again.";
+      setError(msg);
     } finally {
       setSending(false);
     }
@@ -85,6 +89,17 @@ export function MessageInput({ gid }: Props) {
 
   const removePhoto = (url: string) =>
     setMediaRefs((prev) => prev.filter((u) => u !== url));
+
+  if (archived) {
+    return (
+      <div
+        aria-label="Message input disabled"
+        className="border-t border-gray-200 px-4 py-3 text-center text-sm text-gray-500"
+      >
+        This group is archived. New messages are disabled.
+      </div>
+    );
+  }
 
   return (
     <form

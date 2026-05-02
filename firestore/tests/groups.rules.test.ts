@@ -301,3 +301,189 @@ describe("banned user group leave (M2)", () => {
     );
   });
 });
+
+// ── T23: archive / unarchive rules ───────────────────────────────────────────
+
+async function seedArchivedGroup(opts: {
+  gid: string;
+  leaderUid: string;
+  archivedAt?: Timestamp | null;
+}) {
+  await seed(async (db) => {
+    await setDoc(doc(db, "groups", opts.gid), {
+      name: "Test Group",
+      description: "",
+      createdBy: opts.leaderUid,
+      founderUid: opts.leaderUid,
+      createdAt: Timestamp.now(),
+      isPrivate: false,
+      inviteCode: "TESTCODE",
+      memberCount: 1,
+      stickerSet: "christian",
+      schemaVersion: 1,
+      ...(opts.archivedAt !== undefined ? { archivedAt: opts.archivedAt } : {}),
+    });
+    await setDoc(doc(db, "groups", opts.gid, "members", opts.leaderUid), {
+      role: "leader",
+      joinedAt: Timestamp.now(),
+      uid: opts.leaderUid,
+    });
+  });
+}
+
+describe("T23 — group archive rules", () => {
+  it("leader can archive (set archivedAt = serverTimestamp)", async () => {
+    await seedArchivedGroup({ gid: "arc1", leaderUid: "alice", archivedAt: null });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "arc1"), {
+        archivedAt: serverTimestamp(),
+        archivedBy: "alice",
+      }),
+    );
+  });
+
+  it("non-leader cannot archive", async () => {
+    await seedGroup({ gid: "arc2", createdBy: "alice", leaderUid: "alice", memberUid: "bob" });
+    await assertFails(
+      updateDoc(doc(authed("bob"), "groups", "arc2"), {
+        archivedAt: serverTimestamp(),
+        archivedBy: "bob",
+      }),
+    );
+  });
+
+  it("leader can unarchive (set archivedAt = null)", async () => {
+    await seedArchivedGroup({
+      gid: "arc3",
+      leaderUid: "alice",
+      archivedAt: Timestamp.now(),
+    });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "arc3"), {
+        archivedAt: null,
+        archivedBy: null,
+      }),
+    );
+  });
+
+  it("client message write denied when group is archived", async () => {
+    await seedArchivedGroup({
+      gid: "arc4",
+      leaderUid: "alice",
+      archivedAt: Timestamp.now(),
+    });
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "arc4", "messages", "m1"), {
+        authorUid: "alice",
+        body: "hello",
+        stickerIds: [],
+        createdAt: serverTimestamp(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      }),
+    );
+  });
+
+  it("messages are still readable when archived", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "arc5"), {
+        name: "Archived",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "ARCCODE5",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        archivedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", "arc5", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+      await setDoc(doc(db, "groups", "arc5", "messages", "m1"), {
+        authorUid: "alice",
+        body: "old message",
+        stickerIds: [],
+        createdAt: Timestamp.now(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      });
+    });
+    await assertSucceeds(
+      getDoc(doc(authed("alice"), "groups", "arc5", "messages", "m1")),
+    );
+  });
+
+  it("client cannot send a backdated archivedAt", async () => {
+    await seedArchivedGroup({ gid: "arc6", leaderUid: "alice", archivedAt: null });
+    // Backdated timestamp (not == request.time) should be rejected
+    const past = Timestamp.fromDate(new Date(Date.now() - 60000));
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "arc6"), {
+        archivedAt: past,
+        archivedBy: "alice",
+      }),
+    );
+  });
+
+  it("archived group: name edit still allowed", async () => {
+    await seedArchivedGroup({
+      gid: "arc7",
+      leaderUid: "alice",
+      archivedAt: Timestamp.now(),
+    });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "arc7"), {
+        name: "New Name",
+      }),
+    );
+  });
+
+  it("missing archivedAt field treated as null (messages allowed)", async () => {
+    // Group with no archivedAt field at all
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "arc8"), {
+        name: "Test",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "ARCCODE8",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        // No archivedAt field
+      });
+      await setDoc(doc(db, "groups", "arc8", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+      // sticker must exist for reaction tests but not needed here
+    });
+    await assertSucceeds(
+      setDoc(doc(authed("alice"), "groups", "arc8", "messages", "m1"), {
+        authorUid: "alice",
+        body: "hello",
+        stickerIds: [],
+        createdAt: serverTimestamp(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      }),
+    );
+  });
+});

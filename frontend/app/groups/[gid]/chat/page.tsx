@@ -12,6 +12,8 @@ import type { Message } from "@/lib/hooks/useGroupMessages";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageList } from "@/components/chat/MessageList";
 import { ThreadPanel } from "@/components/chat/ThreadPanel";
+import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
+import type { Timestamp } from "firebase/firestore";
 
 type Props = { params: { gid: string } };
 
@@ -24,6 +26,7 @@ export default function ChatPage({ params }: Props) {
     useGroupMessages(user ? gid : undefined);
 
   const [groupName, setGroupName] = useState<string | null>(null);
+  const [archivedAt, setArchivedAt] = useState<Timestamp | null>(null);
   const [isLeader, setIsLeader] = useState(false);
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [activeThread, setActiveThread] = useState<Message | null>(null);
@@ -50,13 +53,20 @@ export default function ChatPage({ params }: Props) {
     );
   }, [user, gid]);
 
-  // Watch group name for the header.
+  // Watch group doc for name and archival state.
   useEffect(() => {
     if (!gid) return;
     return onSnapshot(
       doc(firestore, "groups", gid),
       (snap) => {
-        setGroupName(snap.exists() ? (snap.data().name as string) : null);
+        if (snap.exists()) {
+          const data = snap.data();
+          setGroupName(data.name as string);
+          setArchivedAt((data.archivedAt as Timestamp | null) ?? null);
+        } else {
+          setGroupName(null);
+          setArchivedAt(null);
+        }
       },
       () => {},
     );
@@ -94,6 +104,9 @@ export default function ChatPage({ params }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden">
+          {archivedAt && (
+            <ArchivedBanner />
+          )}
           <MessageList
             gid={gid}
             messages={messages}
@@ -104,7 +117,7 @@ export default function ChatPage({ params }: Props) {
             onLoadOlder={() => void loadOlder()}
             onReply={setActiveThread}
           />
-          <MessageInput gid={gid} />
+          <MessageInput gid={gid} archived={archivedAt != null} />
         </div>
 
         {activeThread && (

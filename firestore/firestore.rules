@@ -134,11 +134,13 @@ service cloud.firestore {
       // through `POST /api/groups/{gid}/founder/transfer` (Admin SDK).
       // `leaderCount` is system-only — the onMemberWrite trigger sets it
       // and the rule rejects every client write.
+      // T23: `avatarUrl` and `archivedAt` added to create allowlist; both
+      // must be null at create time.
       allow create: if isSignedIn() && notBanned()
         && request.resource.data.keys().hasOnly(
              ['name', 'description', 'isPrivate', 'createdBy', 'founderUid',
               'createdAt', 'inviteCode', 'memberCount', 'stickerSet',
-              'schemaVersion'])
+              'schemaVersion', 'avatarUrl', 'archivedAt'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.founderUid == request.auth.uid
         && request.resource.data.createdAt == request.time
@@ -151,20 +153,41 @@ service cloud.firestore {
         && request.resource.data.inviteCode.size() >= 6
         && (!('description' in request.resource.data)
             || (request.resource.data.description is string
-                && request.resource.data.description.size() <= 500));
+                && request.resource.data.description.size() <= 500))
+        && (!('avatarUrl' in request.resource.data)
+            || request.resource.data.avatarUrl == null)
+        && (!('archivedAt' in request.resource.data)
+            || request.resource.data.archivedAt == null);
 
       // memberCount, leaderCount, founderUid, and moderationPolicy are all
       // system-only (Admin SDK bypasses these rules). Leaders edit metadata
       // only via the listed fields.
+      // T23: added avatarUrl, archivedAt, archivedBy, archiveReason.
+      // avatarUrl must be null or a URL from the public media bucket.
+      // archivedAt may only transition null→now (archive) or now→null (unarchive).
       allow update: if isGroupLeader(gid) && notBanned()
-        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet'])
+        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet',
+                        'avatarUrl', 'archivedAt', 'archivedBy', 'archiveReason'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 100
         && request.resource.data.inviteCode is string
         && request.resource.data.inviteCode.size() >= 6
         && request.resource.data.description is string
-        && request.resource.data.description.size() <= 500;
+        && request.resource.data.description.size() <= 500
+        && (!('avatarUrl' in changedKeys())
+            || request.resource.data.avatarUrl == null
+            || (request.resource.data.avatarUrl is string
+                && request.resource.data.avatarUrl.matches('https://storage\\.googleapis\\.com/jacob-media-public-.*')))
+        && (!('archivedAt' in changedKeys())
+            || (
+              (resource.data.archivedAt == null
+                && request.resource.data.archivedAt == request.time
+                && request.resource.data.archivedBy == request.auth.uid)
+              || (resource.data.archivedAt != null
+                && request.resource.data.archivedAt == null
+                && request.resource.data.archivedBy == null)
+            ));
 
       allow delete: if false;
 
@@ -230,7 +253,13 @@ service cloud.firestore {
       match /messages/{mid} {
         allow read: if isGroupMember(gid);
 
+        // T23: reject writes when the group is archived. The get() adds one
+        // Firestore read per message create; acceptable since archived groups
+        // are rare and MessageInput disables sends client-side anyway.
+        // Use 'in' guard because missing field != null in the emulator.
         allow create: if isGroupMember(gid) && notBanned()
+          && (!('archivedAt' in get(/databases/$(database)/documents/groups/$(gid)).data)
+              || get(/databases/$(database)/documents/groups/$(gid)).data.archivedAt == null)
           && request.resource.data.keys().hasOnly(
                ['authorUid', 'body', 'stickerIds', 'createdAt', 'editedAt',
                 'deletedAt', 'parentMessageId', 'threadReplyCount', 'mediaRefs'])

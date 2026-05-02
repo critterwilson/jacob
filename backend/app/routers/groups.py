@@ -10,6 +10,7 @@ import logging
 import secrets
 import string
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -21,6 +22,8 @@ from app.errors import APIError
 from app.limits import ADMIN_MUTATION, GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
 from app.middleware.rate_limit import limiter
 from app.models.group import (
+    ArchiveGroupRequest,
+    ArchiveResponse,
     CreateGroupRequest,
     CreateGroupResponse,
     FounderTransferRequest,
@@ -29,6 +32,7 @@ from app.models.group import (
     JoinGroupResponse,
     LeaderActionResponse,
     RotateInviteResponse,
+    UnarchiveResponse,
 )
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
@@ -384,3 +388,102 @@ def transfer_founder(
     )
     logger.info("transfer founder gid=%s from=%s to=%s", gid, user.uid, body.targetUid)
     return FounderTransferResponse(gid=gid, founderUid=body.targetUid)
+
+
+# ── T23: archive / unarchive ──────────────────────────────────────────────────
+
+_ARCHIVE_MAX_AGE_DAYS = 60
+
+
+@router.post("/{gid}/archive", response_model=ArchiveResponse)
+@limiter.limit(ADMIN_MUTATION)
+def archive_group(
+    gid: str,
+    request: Request,
+    response: Response,
+    body: ArchiveGroupRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> ArchiveResponse:
+    db = _db()
+    group_data = _require_leader(db, gid, user.uid)
+
+    if group_data.get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="already_archived",
+            message="This group is already archived",
+        )
+
+    group_ref = db.collection("groups").document(gid)
+    group_ref.update(
+        {
+            "archivedAt": fb_firestore.SERVER_TIMESTAMP,
+            "archivedBy": user.uid,
+            "archiveReason": body.reason,
+        }
+    )
+
+    now_iso = datetime.now(UTC).isoformat()
+    write_audit_log(
+        actor_uid=user.uid,
+        action="archive_group",
+        target_ref=f"groups/{gid}",
+        payload={"reason": body.reason},
+    )
+    logger.info("archived group gid=%s uid=%s", gid, user.uid)
+    return ArchiveResponse(gid=gid, archivedAt=now_iso)
+
+
+@router.post("/{gid}/unarchive", response_model=UnarchiveResponse)
+@limiter.limit(ADMIN_MUTATION)
+def unarchive_group(
+    gid: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> UnarchiveResponse:
+    db = _db()
+    group_data = _require_leader(db, gid, user.uid)
+
+    archived_at = group_data.get("archivedAt")
+    if archived_at is None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="not_archived",
+            message="This group is not archived",
+        )
+
+    # Firestore timestamps come back as datetime when read via Admin SDK
+    if hasattr(archived_at, "seconds"):
+        archived_dt = datetime.fromtimestamp(archived_at.seconds, tz=UTC)
+    else:
+        archived_dt = archived_at.replace(tzinfo=UTC) if archived_at.tzinfo is None else archived_at
+
+    cutoff = datetime.now(UTC) - timedelta(days=_ARCHIVE_MAX_AGE_DAYS)
+    if archived_dt < cutoff:
+        raise APIError(
+            status_code=status.HTTP_410_GONE,
+            code="archive_too_old",
+            message=(
+                f"Group was archived more than {_ARCHIVE_MAX_AGE_DAYS} days ago;"
+                " contact admin to restore"
+            ),
+        )
+
+    group_ref = db.collection("groups").document(gid)
+    group_ref.update(
+        {
+            "archivedAt": None,
+            "archivedBy": None,
+            "archiveReason": None,
+        }
+    )
+
+    write_audit_log(
+        actor_uid=user.uid,
+        action="unarchive_group",
+        target_ref=f"groups/{gid}",
+        payload={},
+    )
+    logger.info("unarchived group gid=%s uid=%s", gid, user.uid)
+    return UnarchiveResponse(gid=gid)

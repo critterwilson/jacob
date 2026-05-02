@@ -39,3 +39,16 @@ class FounderTransferRequest(BaseModel):
 class FounderTransferResponse(BaseModel):
     gid: str
     founderUid: str
+
+
+class ArchiveGroupRequest(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
+class ArchiveResponse(BaseModel):
+    gid: str
+    archivedAt: str  # ISO-8601
+
+
+class UnarchiveResponse(BaseModel):
+    gid: str
