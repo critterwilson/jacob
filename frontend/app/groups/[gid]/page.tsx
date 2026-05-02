@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
+import { ReportLink } from "@/components/moderation/ReportLink";
 
 type Props = { params: { gid: string } };
 
@@ -85,9 +86,16 @@ export default function GroupPage({ params }: Props) {
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-2 flex items-start justify-between">
         <h1 className="text-2xl font-semibold">{group.name}</h1>
-        <Link href="/groups" className="text-sm text-blue-600 hover:underline">
-          All groups
-        </Link>
+        <div className="flex items-center gap-3">
+          <ReportLink
+            contentType="group"
+            groupId={gid}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          />
+          <Link href="/groups" className="text-sm text-blue-600 hover:underline">
+            All groups
+          </Link>
+        </div>
       </div>
 
       {group.description && (
