@@ -10,7 +10,7 @@ from app.config import get_settings
 from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.logging import StructuredLoggingMiddleware
 from app.middleware.rate_limit import limiter
-from app.routers import account, admin, groups, reports, uploads
+from app.routers import account, admin, groups, invites, reports, uploads
 from app.services.sentry import init_sentry
 
 # Emit JSON-formatted logs so Cloud Logging auto-parses them on Cloud Run.
@@ -53,6 +53,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler) 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.include_router(groups.router)
+app.include_router(invites.router)
 app.include_router(uploads.router)
 app.include_router(reports.router)
 app.include_router(admin.router)

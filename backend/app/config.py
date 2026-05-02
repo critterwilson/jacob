@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Reply-to address that maps to a monitored inbox
     email_reply_to: str = ""
 
+    # T25 — Invite URL base (used in InviteResponse.url)
+    app_url: str = "https://jacob.app"
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 
