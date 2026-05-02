@@ -70,6 +70,7 @@ def _make_db(
 
 # ── POST /api/groups ─────────────────────────────────────────────────────────
 
+
 def test_create_group_happy_path() -> None:
     mock_db = _make_db()
     with (
@@ -117,14 +118,13 @@ def test_create_group_strips_and_stores_name() -> None:
         res = TestClient(_make_app()).post("/api/groups", json={"name": "  Padded  "})
 
     assert res.status_code == 201
-    group_doc = next(
-        (d for d in captured if isinstance(d, dict) and "name" in d), None
-    )
+    group_doc = next((d for d in captured if isinstance(d, dict) and "name" in d), None)
     assert group_doc is not None
     assert group_doc["name"] == "Padded"
 
 
 # ── POST /api/groups/join ─────────────────────────────────────────────────────
+
 
 def test_join_group_happy_path() -> None:
     mock_snap = MagicMock()
@@ -132,9 +132,7 @@ def test_join_group_happy_path() -> None:
     mock_db = _make_db(stream_results=[mock_snap], member_exists=False)
 
     with patch("app.routers.groups._db", return_value=mock_db):
-        res = TestClient(_make_app("bob")).post(
-            "/api/groups/join", json={"code": "TESTCODE1"}
-        )
+        res = TestClient(_make_app("bob")).post("/api/groups/join", json={"code": "TESTCODE1"})
 
     assert res.status_code == 200
     assert res.json()["groupId"] == "group-abc"
@@ -145,9 +143,7 @@ def test_join_invalid_code_returns_404() -> None:
     mock_db = _make_db(stream_results=[])
 
     with patch("app.routers.groups._db", return_value=mock_db):
-        res = TestClient(_make_app()).post(
-            "/api/groups/join", json={"code": "BADCODE1"}
-        )
+        res = TestClient(_make_app()).post("/api/groups/join", json={"code": "BADCODE1"})
 
     assert res.status_code == 404
     assert res.json()["error"]["code"] == "invalid_invite"
@@ -159,15 +155,14 @@ def test_join_already_member_returns_409() -> None:
     mock_db = _make_db(stream_results=[mock_snap], member_exists=True)
 
     with patch("app.routers.groups._db", return_value=mock_db):
-        res = TestClient(_make_app()).post(
-            "/api/groups/join", json={"code": "TESTCODE1"}
-        )
+        res = TestClient(_make_app()).post("/api/groups/join", json={"code": "TESTCODE1"})
 
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "already_member"
 
 
 # ── POST /api/groups/{gid}/invite/rotate ─────────────────────────────────────
+
 
 def test_rotate_invite_happy_path() -> None:
     mock_db = _make_db(group_exists=True, member_exists=True, member_role="leader")

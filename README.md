@@ -98,6 +98,18 @@ cd backend
 uv pip install --system -e ".[dev]"
 ```
 
+### 7 — Configure frontend env vars
+
+```bash
+cp frontend/.env.example frontend/.env.local
+# Then fill in NEXT_PUBLIC_FIREBASE_* values from the Firebase Console.
+```
+
+For App Hosting backends, set the same env vars in the Firebase Console
+(App Hosting → backend → environment) or with
+`firebase apphosting:secrets:set`. Values are inlined into the client
+bundle at build time, so they must be present when the backend builds.
+
 ---
 
 ## Running locally
@@ -109,6 +121,10 @@ cd frontend
 pnpm dev
 # http://localhost:3000
 ```
+
+To point Auth + Firestore at the local emulator instead of the live
+Firebase project, set `NEXT_PUBLIC_USE_FIREBASE_EMULATOR=true` in
+`.env.local` and start the emulators (below).
 
 ### Backend
 

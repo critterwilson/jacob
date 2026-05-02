@@ -20,6 +20,7 @@ import {
 import {
   doc,
   getDoc,
+  serverTimestamp,
   setDoc,
   updateDoc,
   Timestamp,
@@ -192,7 +193,9 @@ describe("member bootstrap path", () => {
     await assertSucceeds(
       setDoc(doc(authed("alice"), "groups", "g6", "members", "alice"), {
         role: "leader",
-        joinedAt: new Date(),  // serverTimestamp() equivalent in tests
+        // Bootstrap rule pins joinedAt to request.time, so the client must
+        // use serverTimestamp() here (not new Date()).
+        joinedAt: serverTimestamp(),
       }),
     );
   });
@@ -211,7 +214,7 @@ describe("member bootstrap path", () => {
     await assertFails(
       setDoc(doc(authed("eve"), "groups", "g7", "members", "eve"), {
         role: "leader",
-        joinedAt: new Date(),
+        joinedAt: serverTimestamp(),
       }),
     );
   });

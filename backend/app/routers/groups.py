@@ -36,6 +36,7 @@ _BASE32 = string.ascii_uppercase + "234567"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _db() -> Any:
     init_firebase_admin()
     return fb_firestore.client()
@@ -48,12 +49,7 @@ def _new_code() -> str:
 def _unique_invite_code(db: Any) -> str:
     for _ in range(5):
         code = _new_code()
-        hits = list(
-            db.collection("groups")
-            .where("inviteCode", "==", code)
-            .limit(1)
-            .stream()
-        )
+        hits = list(db.collection("groups").where("inviteCode", "==", code).limit(1).stream())
         if not hits:
             return code
     raise APIError(
@@ -64,6 +60,7 @@ def _unique_invite_code(db: Any) -> str:
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateGroupResponse)
 def create_group(
@@ -108,12 +105,7 @@ def join_group(
 ) -> JoinGroupResponse:
     db = _db()
 
-    hits = list(
-        db.collection("groups")
-        .where("inviteCode", "==", body.code)
-        .limit(1)
-        .stream()
-    )
+    hits = list(db.collection("groups").where("inviteCode", "==", body.code).limit(1).stream())
     if not hits:
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
