@@ -9,6 +9,19 @@ class CreateGroupRequest(BaseModel):
     isPrivate: bool = False
 
 
+class ArchiveGroupRequest(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
+class ArchiveResponse(BaseModel):
+    gid: str
+    archivedAt: str  # ISO-8601
+
+
+class UnarchiveResponse(BaseModel):
+    gid: str
+
+
 class CreateGroupResponse(BaseModel):
     groupId: str
     inviteCode: str

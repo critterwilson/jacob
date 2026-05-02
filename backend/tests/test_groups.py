@@ -8,6 +8,7 @@ CurrentUser without touching firebase_admin.auth.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI, HTTPException
@@ -195,3 +196,93 @@ def test_rotate_invite_group_not_found_returns_404() -> None:
 
     assert res.status_code == 404
     assert res.json()["error"]["code"] == "group_not_found"
+
+
+# ── T23: POST /api/groups/{gid}/archive + unarchive ──────────────────────────
+
+
+def _make_archive_db(*, archived_at: object = None, member_role: str = "leader") -> MagicMock:
+    """Build a mock DB wired up for archive/unarchive tests."""
+    db = MagicMock()
+    groups_col = MagicMock()
+    db.collection.side_effect = lambda name: groups_col if name == "groups" else MagicMock()
+
+    group_snap = MagicMock()
+    group_snap.exists = True
+    group_snap.to_dict.return_value = {"archivedAt": archived_at}
+    group_ref = MagicMock()
+    group_ref.get.return_value = group_snap
+
+    member_snap = MagicMock()
+    member_snap.exists = True
+    member_snap.to_dict.return_value = {"role": member_role}
+    member_ref = MagicMock()
+    member_ref.get.return_value = member_snap
+
+    group_ref.collection.return_value.document.return_value = member_ref
+    groups_col.document.return_value = group_ref
+    return db
+
+
+def test_archive_group_happy_path() -> None:
+    mock_db = _make_archive_db(archived_at=None)
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.services.audit._db", return_value=mock_db),
+    ):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/archive", json={"reason": "test"})
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["gid"] == "gid-001"
+    assert "archivedAt" in body
+
+
+def test_archive_group_already_archived_returns_409() -> None:
+    mock_db = _make_archive_db(archived_at=datetime(2026, 1, 1, tzinfo=UTC))
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/archive", json={})
+
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "already_archived"
+
+
+def test_archive_group_not_leader_returns_403() -> None:
+    mock_db = _make_archive_db(archived_at=None, member_role="member")
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/archive", json={})
+
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "forbidden"
+
+
+def test_unarchive_group_happy_path() -> None:
+    archived_ts = datetime(2026, 4, 1, tzinfo=UTC)
+    mock_db = _make_archive_db(archived_at=archived_ts)
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.services.audit._db", return_value=mock_db),
+    ):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/unarchive")
+
+    assert res.status_code == 200
+    assert res.json()["gid"] == "gid-001"
+
+
+def test_unarchive_group_not_archived_returns_409() -> None:
+    mock_db = _make_archive_db(archived_at=None)
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/unarchive")
+
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "not_archived"
+
+
+def test_unarchive_group_too_old_returns_410() -> None:
+    stale = datetime.now(UTC) - timedelta(days=61)
+    mock_db = _make_archive_db(archived_at=stale)
+    with patch("app.routers.groups._db", return_value=mock_db):
+        res = TestClient(_make_app()).post("/api/groups/gid-001/unarchive")
+
+    assert res.status_code == 410
+    assert res.json()["error"]["code"] == "archive_too_old"

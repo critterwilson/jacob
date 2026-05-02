@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Timestamp,
   collectionGroup,
   doc,
   getDoc,
@@ -10,6 +11,8 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { firestore } from "@/lib/firebase";
+
+export const ARCHIVE_HIDE_DAYS = 60;
 
 export type Group = {
   id: string;
@@ -22,6 +25,10 @@ export type Group = {
   inviteCode: string;
   schemaVersion: number;
   createdAt: unknown;
+  avatarUrl?: string | null;
+  archivedAt?: Timestamp | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
 };
 
 /**
@@ -69,10 +76,19 @@ export function useGroups(uid: string | undefined) {
           gids.map((gid) => getDoc(doc(firestore, "groups", gid))),
         );
 
+        const cutoff = Date.now() - ARCHIVE_HIDE_DAYS * 24 * 60 * 60 * 1000;
         setGroups(
           groupSnaps
             .filter((s) => s.exists())
-            .map((s) => ({ id: s.id, ...(s.data() as Omit<Group, "id">) })),
+            .map((s) => ({ id: s.id, ...(s.data() as Omit<Group, "id">) }))
+            .filter((g) => {
+              if (!g.archivedAt) return true;
+              const archivedMs =
+                g.archivedAt instanceof Timestamp
+                  ? g.archivedAt.toMillis()
+                  : Number(g.archivedAt);
+              return archivedMs >= cutoff;
+            }),
         );
         setLoading(false);
       },
