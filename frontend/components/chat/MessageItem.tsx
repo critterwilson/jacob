@@ -15,17 +15,21 @@ type Props = {
   gid: string;
   message: Message;
   isLeader: boolean;
+  onReply?: (message: Message) => void;
+  currentUserUid?: string;
 };
 
-export function MessageItem({ gid, message, isLeader }: Props) {
+export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }: Props) {
   const { user } = useAuth();
+  const resolvedUid = currentUserUid ?? user?.uid;
   const { stickers } = useStickers();
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(message.body);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isAuthor = user?.uid === message.authorUid;
+  const isAuthor = resolvedUid === message.authorUid;
+  const hasParticipated = message.participants?.includes(resolvedUid ?? "") ?? false;
   const createdAtMs = message.createdAt?.toMillis() ?? 0;
   const isDeleted = message.deletedAt != null;
   const canEdit =
@@ -144,8 +148,35 @@ export function MessageItem({ gid, message, isLeader }: Props) {
         </p>
       )}
 
-      {!isDeleted && !editing && (canEdit || canDelete) && (
+      {!isDeleted && message.parentMessageId === null && message.threadReplyCount > 0 && (
+        <button
+          type="button"
+          onClick={() => onReply?.(message)}
+          aria-label={`${message.threadReplyCount} ${message.threadReplyCount === 1 ? "reply" : "replies"}, open thread`}
+          className="flex items-center gap-1 self-start text-xs text-blue-600 hover:underline"
+        >
+          {hasParticipated && (
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"
+            />
+          )}
+          {message.threadReplyCount}{" "}
+          {message.threadReplyCount === 1 ? "reply" : "replies"}
+        </button>
+      )}
+
+      {!isDeleted && !editing && (canEdit || canDelete || (onReply && message.parentMessageId === null)) && (
         <div className="absolute right-4 top-2 hidden gap-1 group-hover:flex">
+          {onReply && message.parentMessageId === null && (
+            <button
+              type="button"
+              onClick={() => onReply(message)}
+              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+            >
+              Reply
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"

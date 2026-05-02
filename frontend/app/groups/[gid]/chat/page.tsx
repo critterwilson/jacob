@@ -8,8 +8,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { firestore } from "@/lib/firebase";
 import { useGroupMessages } from "@/lib/hooks/useGroupMessages";
+import type { Message } from "@/lib/hooks/useGroupMessages";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageList } from "@/components/chat/MessageList";
+import { ThreadPanel } from "@/components/chat/ThreadPanel";
 
 type Props = { params: { gid: string } };
 
@@ -24,6 +26,7 @@ export default function ChatPage({ params }: Props) {
   const [groupName, setGroupName] = useState<string | null>(null);
   const [isLeader, setIsLeader] = useState(false);
   const [membershipLoading, setMembershipLoading] = useState(true);
+  const [activeThread, setActiveThread] = useState<Message | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -59,6 +62,14 @@ export default function ChatPage({ params }: Props) {
     );
   }, [gid]);
 
+  // Keep activeThread in sync with live message data so threadReplyCount and
+  // participants stay fresh while the panel is open.
+  useEffect(() => {
+    if (!activeThread) return;
+    const updated = messages.find((m: Message) => m.id === activeThread.id);
+    if (updated) setActiveThread(updated);
+  }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (authLoading || membershipLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -81,17 +92,31 @@ export default function ChatPage({ params }: Props) {
         <h1 className="text-sm font-semibold text-gray-900">Chat</h1>
       </header>
 
-      <MessageList
-        gid={gid}
-        messages={messages}
-        loading={loading}
-        loadingOlder={loadingOlder}
-        hasMore={hasMore}
-        isLeader={isLeader}
-        onLoadOlder={() => void loadOlder()}
-      />
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <MessageList
+            gid={gid}
+            messages={messages}
+            loading={loading}
+            loadingOlder={loadingOlder}
+            hasMore={hasMore}
+            isLeader={isLeader}
+            onLoadOlder={() => void loadOlder()}
+            onReply={setActiveThread}
+          />
+          <MessageInput gid={gid} />
+        </div>
 
-      <MessageInput gid={gid} />
+        {activeThread && (
+          <ThreadPanel
+            gid={gid}
+            parentMessage={activeThread}
+            isLeader={isLeader}
+            currentUserUid={user.uid}
+            onClose={() => setActiveThread(null)}
+          />
+        )}
+      </div>
     </main>
   );
 }

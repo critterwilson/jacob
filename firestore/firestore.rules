@@ -130,6 +130,7 @@ service cloud.firestore {
           && request.resource.data.threadReplyCount == 0
           && request.resource.data.deletedAt == null
           && request.resource.data.editedAt == null
+          && !('participants' in request.resource.data)
           && (request.resource.data.parentMessageId == null
               || messageExists(gid, request.resource.data.parentMessageId));
 
