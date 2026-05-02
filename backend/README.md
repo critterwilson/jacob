@@ -63,5 +63,8 @@ mypy app/
 | `JACOB_HASH_SERVICE_URL` | T10 (prod) | CSAM hash lookup endpoint. Vendor TBD before launch — see `docs/moderation-pipeline.md` |
 | `JACOB_NCMEC_ENDPOINT` | T10 (prod) | NCMEC CyberTipline submission endpoint |
 | `JACOB_DISABLE_MODERATION` | T10 (dev) | Set to `true` only for local emulator runs to bypass external moderation calls. Must be unset in deployed environments |
+| `SENDGRID_API_KEY` | T18 | SendGrid API key. Leave empty in local dev to skip email sending (a warning is logged). |
+| `EMAIL_SENDER` | T18 | Full RFC 5322 From address, e.g. `JACOB <noreply@yourdomain.com>` |
+| `EMAIL_REPLY_TO` | T18 | Reply-To address that maps to a monitored inbox |
 
 Add new variables here and to `.env.example` as tasks are implemented.
