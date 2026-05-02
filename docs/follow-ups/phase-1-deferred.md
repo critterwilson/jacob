@@ -174,3 +174,56 @@ from different machines will diverge.
 4. Document the bucket creation step in `infra/README.md`.
 
 **Complexity:** Low — infrastructure setup, no app code changes.
+
+---
+
+## I1 — Backend runs as default Compute SA; needs a dedicated least-privilege SA
+
+**Finding:** The Cloud Run `jacob-backend` service and the `firestore_export`
+job both run as the default Compute Engine SA
+(`732806466572-compute@developer.gserviceaccount.com`). The default Compute SA
+carries project-Editor-equivalent permissions by default, violating least
+privilege. The same SA email is referenced by the `api_service_account_email`
+and `backup_service_account_email` Terraform variables.
+
+**What is required:**
+1. Create a dedicated `jacob-api@jacob-staging-494515.iam.gserviceaccount.com`
+   SA with only the roles the backend actually needs: `roles/datastore.user`,
+   `roles/storage.objectAdmin` on the quarantine and public buckets,
+   `roles/logging.logWriter`, `roles/cloudtrace.agent`, and
+   `roles/pubsub.publisher` if Pub/Sub is ever wired up.
+2. Update the Cloud Run service config (`gcloud run services update jacob-backend
+   --service-account=jacob-api@...`) or the Terraform `google_cloud_run_v2_service`
+   resource.
+3. Update the `api_service_account_email` Terraform variable value in
+   `infra/terraform.tfvars` (or equivalent) to point at the new SA.
+4. Grant the GitHub deploy SA (`jacob-deployer@...`) `roles/iam.serviceAccountUser`
+   on the new SA so CI can deploy new revisions.
+5. Consider a separate `jacob-backup@...` SA for the export job and update
+   `backup_service_account_email` similarly.
+
+**Complexity:** Medium — IAM + Cloud Run config change, no application code
+changes, but needs careful role enumeration to avoid breaking the backend.
+
+---
+
+## I2 — Backend uses auto-generated Cloud Run hostname; needs a custom domain
+
+**Finding:** The backend is currently reachable only at the auto-generated URL
+`jacob-backend-7fk543coqq-uc.a.run.app`. This URL changes if the service is
+ever recreated, looks untrustworthy to end users and third-party services (e.g.,
+SendGrid webhook validation), and makes the `backend_host` Terraform variable
+brittle.
+
+**What is required:**
+1. Register or delegate a subdomain, e.g. `api.jacob.app`, in your DNS provider.
+2. Map the domain via Cloud Run domain mapping:
+   `gcloud run domain-mappings create --service jacob-backend --domain api.jacob.app --region us-central1`.
+3. Add the DNS records Cloud Run returns (CNAME or A records) to your DNS
+   provider; Cloud Run will provision a managed TLS cert automatically.
+4. Update the `backend_host` Terraform variable value to `api.jacob.app`.
+5. Update any CORS allowlists or environment variables that reference the old
+   Cloud Run URL.
+
+**Complexity:** Low-medium — DNS + Cloud Run config, no application code changes.
+Requires ownership of the `jacob.app` domain (or whatever subdomain is chosen).
