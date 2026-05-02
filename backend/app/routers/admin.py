@@ -1,0 +1,294 @@
+"""Admin router: moderation queue, user ban/unban, group search.
+
+All endpoints require the `admin` custom claim (enforced by `require_admin`).
+Every mutating action writes an audit_log entry via `services.audit`.
+
+Collections accessed here (moderation_queue, bans, audit_log, users, groups)
+all have `allow read, write: if false` in Firestore security rules; the
+Admin SDK bypasses those rules by design.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query, status
+from firebase_admin import firestore as fb_firestore
+
+from app.deps import require_admin
+from app.errors import APIError
+from app.models.admin import (
+    AdminGroup,
+    AdminGroupListResponse,
+    AdminUser,
+    AdminUserListResponse,
+    BanRequest,
+    BanResponse,
+    ModerationItem,
+    ModerationListResponse,
+    ResolveRequest,
+    ResolveResponse,
+    UnbanResponse,
+)
+from app.models.user import CurrentUser
+from app.services.audit import write_audit_log
+from app.services.firebase import init_firebase_admin
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+_PAGE_SIZE = 20
+
+
+def _db() -> Any:
+    init_firebase_admin()
+    return fb_firestore.client()
+
+
+def _ts_to_str(ts: Any) -> str | None:
+    if ts is None:
+        return None
+    try:
+        result: str = ts.isoformat()
+        return result
+    except AttributeError:
+        return str(ts)
+
+
+# ── moderation queue ──────────────────────────────────────────────────────────
+
+
+@router.get("/moderation", response_model=ModerationListResponse)
+def list_moderation_queue(
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    admin: CurrentUser = Depends(require_admin),
+) -> ModerationListResponse:
+    db = _db()
+    query = (
+        db.collection("moderation_queue")
+        .where("status", "==", "pending")
+        .order_by("createdAt")
+        .limit(limit + 1)
+    )
+    if cursor:
+        cursor_snap = db.collection("moderation_queue").document(cursor).get()
+        if cursor_snap.exists:
+            query = query.start_after(cursor_snap)
+
+    docs = list(query.stream())
+    has_more = len(docs) > limit
+    page = docs[:limit]
+
+    items = []
+    for doc in page:
+        data = doc.to_dict() or {}
+        extra = {
+            k: v
+            for k, v in data.items()
+            if k not in {"resourceRef", "reason", "status", "uploaderUid", "createdAt"}
+        }
+        items.append(
+            ModerationItem(
+                itemId=doc.id,
+                resourceRef=data.get("resourceRef", ""),
+                reason=data.get("reason"),
+                status=data.get("status", "pending"),
+                uploaderUid=data.get("uploaderUid"),
+                createdAt=_ts_to_str(data.get("createdAt")),
+                extra=extra,
+            )
+        )
+
+    next_cursor = page[-1].id if has_more and page else None
+    return ModerationListResponse(items=items, nextCursor=next_cursor)
+
+
+@router.post("/moderation/{item_id}/resolve", response_model=ResolveResponse)
+def resolve_moderation_item(
+    item_id: str,
+    body: ResolveRequest,
+    admin: CurrentUser = Depends(require_admin),
+) -> ResolveResponse:
+    db = _db()
+    item_ref = db.collection("moderation_queue").document(item_id)
+    item_snap = item_ref.get()
+
+    if not item_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="item_not_found",
+            message="Moderation queue item not found",
+        )
+
+    item_data = item_snap.to_dict() or {}
+    if item_data.get("status") != "pending":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="already_resolved",
+            message="Moderation queue item has already been resolved",
+        )
+
+    new_status = "approved" if body.resolution == "approve" else "rejected"
+    item_ref.update({"status": new_status, "reviewedBy": admin.uid})
+
+    write_audit_log(
+        actor_uid=admin.uid,
+        action=f"moderation_{new_status}",
+        target_ref=f"moderation_queue/{item_id}",
+        payload={
+            "resolution": body.resolution,
+            "resourceRef": item_data.get("resourceRef", ""),
+        },
+    )
+
+    logger.info("admin=%s resolved item=%s as=%s", admin.uid, item_id, new_status)
+    return ResolveResponse(itemId=item_id, status=new_status)
+
+
+# ── users ──────────────────────────────────────────────────────────────────────
+
+
+@router.get("/users", response_model=AdminUserListResponse)
+def search_users(
+    q: str = Query(default=""),
+    limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    admin: CurrentUser = Depends(require_admin),
+) -> AdminUserListResponse:
+    db = _db()
+
+    if q:
+        # Firestore prefix search on displayName
+        users_query = (
+            db.collection("users")
+            .where("displayName", ">=", q)
+            .where("displayName", "<=", q + "")
+            .limit(limit)
+        )
+    else:
+        users_query = (
+            db.collection("users").order_by("createdAt", direction="DESCENDING").limit(limit)
+        )
+
+    docs = list(users_query.stream())
+
+    # Collect UIDs to check bans in a single batch
+    uids = [doc.id for doc in docs]
+    banned_uids: set[str] = set()
+    if uids:
+        now = datetime.now(UTC)
+        for uid in uids:
+            ban_snap = db.collection("bans").document(uid).get()
+            if ban_snap.exists:
+                ban_data = ban_snap.to_dict() or {}
+                expires = ban_data.get("expiresAt")
+                if expires is None or expires > now:
+                    banned_uids.add(uid)
+
+    users = []
+    for doc in docs:
+        data = doc.to_dict() or {}
+        users.append(
+            AdminUser(
+                uid=doc.id,
+                displayName=data.get("displayName"),
+                email=data.get("email"),
+                createdAt=_ts_to_str(data.get("createdAt")),
+                isBanned=doc.id in banned_uids,
+            )
+        )
+
+    return AdminUserListResponse(users=users)
+
+
+@router.post("/users/{uid}/ban", response_model=BanResponse)
+def ban_user(
+    uid: str,
+    body: BanRequest,
+    admin: CurrentUser = Depends(require_admin),
+) -> BanResponse:
+    db = _db()
+    now = datetime.now(UTC)
+    if body.duration == "24h":
+        expires_at = now + timedelta(hours=24)
+    elif body.duration == "7d":
+        expires_at = now + timedelta(days=7)
+    else:
+        expires_at = datetime(2099, 12, 31, tzinfo=UTC)
+
+    db.collection("bans").document(uid).set(
+        {"reason": body.reason, "bannedBy": admin.uid, "expiresAt": expires_at}
+    )
+
+    write_audit_log(
+        actor_uid=admin.uid,
+        action="ban_user",
+        target_ref=f"users/{uid}",
+        payload={"reason": body.reason, "duration": body.duration},
+    )
+
+    logger.info("admin=%s banned uid=%s duration=%s", admin.uid, uid, body.duration)
+    return BanResponse(uid=uid, banned=True)
+
+
+@router.post("/users/{uid}/unban", response_model=UnbanResponse)
+def unban_user(
+    uid: str,
+    admin: CurrentUser = Depends(require_admin),
+) -> UnbanResponse:
+    db = _db()
+    ban_ref = db.collection("bans").document(uid)
+    ban_snap = ban_ref.get()
+    if ban_snap.exists:
+        ban_ref.delete()
+
+    write_audit_log(
+        actor_uid=admin.uid,
+        action="unban_user",
+        target_ref=f"users/{uid}",
+        payload={"was_banned": ban_snap.exists},
+    )
+
+    logger.info("admin=%s unbanned uid=%s was_banned=%s", admin.uid, uid, ban_snap.exists)
+    return UnbanResponse(uid=uid, unbanned=True)
+
+
+# ── groups ─────────────────────────────────────────────────────────────────────
+
+
+@router.get("/groups", response_model=AdminGroupListResponse)
+def search_groups(
+    q: str = Query(default=""),
+    limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    admin: CurrentUser = Depends(require_admin),
+) -> AdminGroupListResponse:
+    db = _db()
+
+    if q:
+        groups_query = (
+            db.collection("groups")
+            .where("name", ">=", q)
+            .where("name", "<=", q + "")
+            .limit(limit)
+        )
+    else:
+        groups_query = (
+            db.collection("groups").order_by("createdAt", direction="DESCENDING").limit(limit)
+        )
+
+    docs = list(groups_query.stream())
+    groups = []
+    for doc in docs:
+        data = doc.to_dict() or {}
+        groups.append(
+            AdminGroup(
+                gid=doc.id,
+                name=data.get("name", ""),
+                memberCount=data.get("memberCount", 0),
+                createdAt=_ts_to_str(data.get("createdAt")),
+            )
+        )
+
+    return AdminGroupListResponse(groups=groups)

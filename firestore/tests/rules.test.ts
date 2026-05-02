@@ -784,6 +784,24 @@ describe("backend-only collections", () => {
       setDoc(doc(authed("alice"), "audit_log", "e1"), { action: "x" }),
     );
   });
+
+  it("denies client read of audit_log", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "audit_log", "e1"), {
+        actorUid: "admin",
+        action: "ban_user",
+        targetRef: "users/alice",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "audit_log", "e1")));
+  });
+
+  it("denies unauthenticated read of audit_log", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "audit_log", "e1"), { actorUid: "admin", action: "x" });
+    });
+    await assertFails(getDoc(doc(anon(), "audit_log", "e1")));
+  });
 });
 
 // ---------------------------------------------------------------------------
