@@ -59,6 +59,11 @@ def _is_group_member(db: Any, gid: str, uid: str) -> bool:
     return bool(snap.exists)
 
 
+def _is_group_leader(db: Any, gid: str, uid: str) -> bool:
+    snap = db.collection("groups").document(gid).collection("members").document(uid).get()
+    return bool(snap.exists) and (snap.to_dict() or {}).get("role") == "leader"
+
+
 def _object_name(uid: str, upload_id: str, mime_type: str) -> str:
     extension = _MIME_EXTENSIONS[mime_type]
     return f"uploads/{uid}/{upload_id}.{extension}"
@@ -93,6 +98,32 @@ def create_photo_upload(
                 status_code=status.HTTP_403_FORBIDDEN,
                 code="forbidden",
                 message="Not a member of the group",
+            )
+    elif body.purpose == "group_avatar":
+        if not body.groupId:
+            raise APIError(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code="validation_error",
+                message="groupId is required for group_avatar uploads",
+            )
+        group_snap = db.collection("groups").document(body.groupId).get()
+        if not group_snap.exists:
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="group_not_found",
+                message="Group not found",
+            )
+        if (group_snap.to_dict() or {}).get("archivedAt") is not None:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="archived",
+                message="Cannot upload avatar to an archived group",
+            )
+        if not _is_group_leader(db, body.groupId, user.uid):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="forbidden",
+                message="Only group leaders can upload a group avatar",
             )
 
     upload_id = str(uuid.uuid4())

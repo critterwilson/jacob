@@ -10,6 +10,7 @@ import logging
 import secrets
 import string
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -21,6 +22,8 @@ from app.errors import APIError
 from app.limits import ADMIN_MUTATION, GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
 from app.middleware.rate_limit import limiter
 from app.models.group import (
+    ArchiveGroupRequest,
+    ArchiveResponse,
     CreateGroupRequest,
     CreateGroupResponse,
     FounderTransferRequest,
@@ -29,6 +32,7 @@ from app.models.group import (
     JoinGroupResponse,
     LeaderActionResponse,
     RotateInviteResponse,
+    UnarchiveResponse,
 )
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
@@ -384,3 +388,102 @@ def transfer_founder(
     )
     logger.info("transfer founder gid=%s from=%s to=%s", gid, user.uid, body.targetUid)
     return FounderTransferResponse(gid=gid, founderUid=body.targetUid)
+
+
+# ── T23: archive / unarchive ──────────────────────────────────────────────────
+
+_ARCHIVE_HIDE_DAYS = 60
+
+
+@router.post("/{gid}/archive", response_model=ArchiveResponse)
+@limiter.limit(ADMIN_MUTATION)
+def archive_group(
+    gid: str,
+    request: Request,
+    response: Response,
+    body: ArchiveGroupRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> ArchiveResponse:
+    """Archive a group. Only the group leader may archive."""
+    db = _db()
+    group_data = _require_leader(db, gid, user.uid)
+
+    if group_data.get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="already_archived",
+            message="Group is already archived",
+        )
+
+    group_ref = db.collection("groups").document(gid)
+    group_ref.update(
+        {
+            "archivedAt": fb_firestore.SERVER_TIMESTAMP,
+            "archivedBy": user.uid,
+            "archiveReason": body.reason,
+        }
+    )
+    archived_at_str = datetime.now(UTC).isoformat()
+    write_audit_log(
+        actor_uid=user.uid,
+        action="archive_group",
+        target_ref=f"groups/{gid}",
+        payload={"reason": body.reason},
+    )
+    logger.info("archive_group gid=%s uid=%s", gid, user.uid)
+    return ArchiveResponse(gid=gid, archivedAt=archived_at_str)
+
+
+@router.post("/{gid}/unarchive", response_model=UnarchiveResponse)
+@limiter.limit(ADMIN_MUTATION)
+def unarchive_group(
+    gid: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> UnarchiveResponse:
+    """Unarchive a group. Only possible within 60 days of archival."""
+    db = _db()
+    group_data = _require_leader(db, gid, user.uid)
+
+    archived_at = group_data.get("archivedAt")
+    if archived_at is None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="not_archived",
+            message="Group is not archived",
+        )
+
+    # Firestore Timestamps have a .timestamp_pb() or we can compare as datetime
+    archived_dt: datetime
+    if hasattr(archived_at, "ToDatetime"):
+        archived_dt = archived_at.ToDatetime(tzinfo=UTC)
+    elif hasattr(archived_at, "timestamp"):
+        archived_dt = datetime.fromtimestamp(archived_at.timestamp(), tz=UTC)
+    else:
+        archived_dt = archived_at  # already datetime
+
+    cutoff = datetime.now(UTC) - timedelta(days=_ARCHIVE_HIDE_DAYS)
+    if archived_dt < cutoff:
+        raise APIError(
+            status_code=status.HTTP_410_GONE,
+            code="archive_too_old",
+            message="Archive window expired; contact an admin to restore",
+        )
+
+    group_ref = db.collection("groups").document(gid)
+    group_ref.update(
+        {
+            "archivedAt": None,
+            "archivedBy": None,
+            "archiveReason": None,
+        }
+    )
+    write_audit_log(
+        actor_uid=user.uid,
+        action="unarchive_group",
+        target_ref=f"groups/{gid}",
+        payload={},
+    )
+    logger.info("unarchive_group gid=%s uid=%s", gid, user.uid)
+    return UnarchiveResponse(gid=gid)
