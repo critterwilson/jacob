@@ -303,4 +303,55 @@ describe("useUser cookie", () => {
     });
     expect(document.cookie).toContain("jacob-has-profile=1");
   });
+
+  // M10 — auth-state-change cookie race coverage gap
+  it("starts in loading state with the cookie unchanged before the snapshot fires", async () => {
+    // Document the *known* race: useUser is mounted with a uid before the
+    // snapshot has fired. Initial state must be `loading: true` and the
+    // cookie should not yet be set by this hook on this render. (The
+    // production race lives between the SSR middleware run and the
+    // first snapshot — see the comment in `useUser.ts`.)
+    document.cookie = "jacob-has-profile=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
+    // Mock onSnapshot so the callback is *captured* but never fired.
+    vi.mocked(fbFirestore.doc).mockReturnValue({} as ReturnType<typeof fbFirestore.doc>);
+    vi.mocked(fbFirestore.onSnapshot).mockImplementation(
+      (() => {
+        return () => {};
+      }) as unknown as typeof fbFirestore.onSnapshot,
+    );
+
+    const { useUser } = await import("@/lib/hooks/useUser");
+
+    let result: ReturnType<typeof useUser> | undefined;
+    function Probe() {
+      result = useUser("uid-pending");
+      return null;
+    }
+    render(<Probe />);
+    // Right after render, before the mocked snapshot has been delivered,
+    // the hook is in its loading state and document.cookie does not yet
+    // contain the flag.
+    expect(result?.loading).toBe(true);
+    expect(document.cookie).not.toContain("jacob-has-profile=1");
+  });
+
+  it("clears the cookie when the user doc does not exist (signed-out / deleted)", async () => {
+    const { useUser } = await import("@/lib/hooks/useUser");
+    document.cookie = "jacob-has-profile=1; path=/";
+
+    mockProfileSnapshot(false);
+
+    let result: ReturnType<typeof useUser> | undefined;
+    function Probe() {
+      result = useUser("uid-missing");
+      return null;
+    }
+    render(<Probe />);
+
+    await waitFor(() => {
+      expect(result?.loading).toBe(false);
+    });
+    expect(document.cookie).not.toContain("jacob-has-profile=1");
+  });
 });

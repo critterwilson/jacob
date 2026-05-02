@@ -7,6 +7,53 @@ if (!getApps().length) {
   initializeApp();
 }
 
+// ── pure types for testability ────────────────────────────────────────────────
+
+export type MessageData = {
+  authorUid?: unknown;
+  parentMessageId?: unknown;
+  deletedAt?: unknown;
+} & Record<string, unknown>;
+
+export type ChangeKind =
+  | "create"
+  | "soft-delete"
+  | "hard-delete"
+  | "undelete"
+  | "noop";
+
+/**
+ * Decide what kind of write this is. Pure function — easy to unit-test.
+ */
+export function classifyChange(
+  beforeExists: boolean,
+  afterExists: boolean,
+  beforeDeletedAt: unknown,
+  afterDeletedAt: unknown,
+): ChangeKind {
+  if (!beforeExists && afterExists) return "create";
+  if (beforeExists && !afterExists) return "hard-delete";
+  if (
+    beforeExists &&
+    afterExists &&
+    beforeDeletedAt === null &&
+    afterDeletedAt != null
+  ) {
+    return "soft-delete";
+  }
+  if (
+    beforeExists &&
+    afterExists &&
+    beforeDeletedAt != null &&
+    afterDeletedAt === null
+  ) {
+    return "undelete";
+  }
+  return "noop";
+}
+
+// ── the trigger ───────────────────────────────────────────────────────────────
+
 export const onMessageWrite = onDocumentWritten(
   {
     document: "groups/{gid}/messages/{mid}",
@@ -18,8 +65,8 @@ export const onMessageWrite = onDocumentWritten(
     const before = event.data?.before;
     const after = event.data?.after;
 
-    const beforeData = before?.data();
-    const afterData = after?.data();
+    const beforeData = before?.data() as MessageData | undefined;
+    const afterData = after?.data() as MessageData | undefined;
 
     const parentMessageId =
       afterData?.parentMessageId ?? beforeData?.parentMessageId;
@@ -33,26 +80,19 @@ export const onMessageWrite = onDocumentWritten(
       .collection("messages")
       .doc(parentMessageId as string);
 
-    // Determine the operation outside the transaction so we can skip early.
-    const isCreate = !before?.exists && after?.exists;
-    const isSoftDelete =
-      before?.exists &&
-      after?.exists &&
-      beforeData?.deletedAt === null &&
-      afterData?.deletedAt != null;
-    const isHardDelete = before?.exists && !after?.exists;
-    const isUndelete =
-      before?.exists &&
-      after?.exists &&
-      beforeData?.deletedAt != null &&
-      afterData?.deletedAt === null;
+    const change = classifyChange(
+      Boolean(before?.exists),
+      Boolean(after?.exists),
+      beforeData?.deletedAt ?? null,
+      afterData?.deletedAt ?? null,
+    );
 
-    if (!isCreate && !isSoftDelete) {
+    if (change !== "create" && change !== "soft-delete") {
       // Hard deletes and undeletes don't change threadReplyCount.
-      if (isHardDelete) {
+      if (change === "hard-delete") {
         logger.warn("hard delete observed", { gid, mid: event.params.mid, eventId: event.id });
       }
-      if (isUndelete) {
+      if (change === "undelete") {
         logger.warn("undelete observed — possible rule gap", { gid, mid: event.params.mid });
       }
       return;
@@ -69,13 +109,13 @@ export const onMessageWrite = onDocumentWritten(
         }
         txn.set(eventRef, { processedAt: FieldValue.serverTimestamp() });
 
-        if (isCreate) {
+        if (change === "create") {
           txn.update(parentRef, {
             threadReplyCount: FieldValue.increment(1),
             participants: FieldValue.arrayUnion(afterData!.authorUid as string),
           });
           logger.info("thread reply counted", { gid, parentMessageId, eventId: event.id });
-        } else if (isSoftDelete) {
+        } else if (change === "soft-delete") {
           txn.update(parentRef, {
             threadReplyCount: FieldValue.increment(-1),
           });

@@ -39,6 +39,28 @@ these can be picked up as discrete Phase 2 tasks.
   *deferred-data-perf* PR. Wrapped in SWR with a 60s dedupe window and
   `keepPreviousData` so navigation doesn't refetch within the window or
   flash empty.
+- **M9 — Frontend integration tests with the emulator** — landed in the
+  *deferred-test-coverage* PR. `frontend/tests/integration/` runs against
+  the Firestore emulator via `pnpm test:integration` (separate
+  `vitest.integration.config.ts`); CI runs it under `firebase
+  emulators:exec`. Three specs cover member read/write, non-member read
+  denied, non-member write denied.
+- **M10 — Test coverage gaps** — landed in the *deferred-test-coverage*
+  PR. New tests:
+  - `backend/tests/test_rate_limits.py` — five route-decorator-presence
+    tests (uploads, invites, reports, admin resolve, admin bulk-resolve)
+    that detect a removed `@limiter.limit` by closure introspection, not
+    by triggering 429.
+  - `functions/src/__tests__/onMessageWrite.test.ts` — vitest harness
+    for the Cloud Function, with `classifyChange` extracted as a pure
+    function and 6 unit tests covering create / hard-delete / soft-delete
+    / undelete / noop branches. CI runs them via `pnpm --filter
+    jacob-functions test`.
+  - `frontend/tests/onboarding.test.tsx` — two new useUser cookie tests:
+    initial loading state with no cookie, and clearing on a missing user
+    doc.
+  - `firestore/tests/rules.test.ts` — three minor-user rule tests, three
+    expired-ban rule tests.
 
 ## Punted
 

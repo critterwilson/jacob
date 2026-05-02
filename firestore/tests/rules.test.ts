@@ -262,6 +262,49 @@ describe("users/{uid}", () => {
     );
   });
 
+  // M10 — minor-user rule coverage gap
+  it("allows owner to set isMinor=true on create", async () => {
+    await assertSucceeds(
+      setDoc(doc(authed("alice"), "users", "alice"), {
+        displayName: "Alice",
+        schemaVersion: 1,
+        createdAt: serverTimestamp(),
+        isMinor: true,
+      }),
+    );
+  });
+
+  it("allows owner to flip isMinor on update", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice"), {
+        displayName: "Alice",
+        schemaVersion: 1,
+        createdAt: Timestamp.now(),
+        isMinor: false,
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "users", "alice"), {
+        isMinor: true,
+      }),
+    );
+  });
+
+  it("denies non-owner updating isMinor on someone else's doc", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice"), {
+        displayName: "Alice",
+        schemaVersion: 1,
+        createdAt: Timestamp.now(),
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("bob"), "users", "alice"), {
+        isMinor: true,
+      }),
+    );
+  });
+
   describe("private subcollection", () => {
     it("owner reads own private profile", async () => {
       await seed(async (db) => {
@@ -932,6 +975,60 @@ describe("banned users", () => {
     });
     await seedBan("bob", new Date(Date.now() - 86_400_000));
     await assertSucceeds(
+      setDoc(doc(authed("bob"), "groups", "g1", "messages", "m1"), {
+        authorUid: "bob",
+        body: "x",
+        stickerIds: [],
+        createdAt: serverTimestamp(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      }),
+    );
+  });
+
+  // M10 — expired-ban rule coverage gap
+  it("expired ban: user can update their own user doc", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "bob"), {
+        displayName: "Bob",
+        schemaVersion: 1,
+        createdAt: Timestamp.now(),
+      });
+    });
+    await seedBan("bob", new Date(Date.now() - 86_400_000));
+    await assertSucceeds(
+      updateDoc(doc(authed("bob"), "users", "bob"), {
+        displayName: "Bob Renamed",
+      }),
+    );
+  });
+
+  it("expired ban: user can leave a group (delete own member doc)", async () => {
+    await seedGroup({
+      gid: "g1",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    await seedBan("bob", new Date(Date.now() - 86_400_000));
+    await assertSucceeds(
+      deleteDoc(doc(authed("bob"), "groups", "g1", "members", "bob")),
+    );
+  });
+
+  it("active ban that expires in the future still blocks writes", async () => {
+    await seedGroup({
+      gid: "g1",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    // Ban valid for 1 minute from now — must still block.
+    await seedBan("bob", new Date(Date.now() + 60_000));
+    await assertFails(
       setDoc(doc(authed("bob"), "groups", "g1", "messages", "m1"), {
         authorUid: "bob",
         body: "x",
