@@ -159,9 +159,7 @@ def test_announce_writes_notifications_for_each_member() -> None:
 
 def test_announce_skips_blocked_members() -> None:
     """Recipient 'bob' has blocked alice → only 2 notifications for a 3-member group."""
-    mock_db = _make_announce_db(
-        member_uids=["alice", "bob", "carol"], blocker_uid="bob"
-    )
+    mock_db = _make_announce_db(member_uids=["alice", "bob", "carol"], blocker_uid="bob")
     with (
         patch("app.routers.groups._db", return_value=mock_db),
         patch("app.services.audit._db", return_value=mock_db),

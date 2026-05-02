@@ -37,9 +37,7 @@ def write_notification(
 ) -> str:
     """Write a single notification doc. Returns the generated nid."""
     nid = str(uuid.uuid4())
-    db.collection("users").document(recipient_uid).collection("notifications").document(
-        nid
-    ).set(
+    db.collection("users").document(recipient_uid).collection("notifications").document(nid).set(
         {
             "kind": kind,
             "groupId": group_id,
@@ -91,12 +89,7 @@ def bulk_write_notifications(
                     continue
 
             nid = str(uuid.uuid4())
-            ref = (
-                db.collection("users")
-                .document(uid)
-                .collection("notifications")
-                .document(nid)
-            )
+            ref = db.collection("users").document(uid).collection("notifications").document(nid)
             batch.set(
                 ref,
                 {
