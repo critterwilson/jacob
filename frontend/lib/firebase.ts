@@ -20,6 +20,11 @@ import {
   connectFirestoreEmulator,
   getFirestore,
 } from "firebase/firestore";
+import {
+  type FirebaseStorage,
+  connectStorageEmulator,
+  getStorage,
+} from "firebase/storage";
 
 type FirebaseClientConfig = {
   apiKey: string;
@@ -82,8 +87,10 @@ const app: FirebaseApp = getApps()[0] ?? initializeApp(readConfig());
 
 export const auth: Auth = getAuth(app);
 export const firestore: Firestore = getFirestore(app);
+export const storage: FirebaseStorage = getStorage(app);
 
 if (useEmulator && isBrowser) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
   connectFirestoreEmulator(firestore, "127.0.0.1", 8080);
+  connectStorageEmulator(storage, "127.0.0.1", 9199);
 }

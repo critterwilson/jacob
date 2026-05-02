@@ -58,5 +58,10 @@ mypy app/
 | `PORT` | T01 | Port Cloud Run injects (default 8080 in the container) |
 | `FIREBASE_AUTH_EMULATOR_HOST` | T03 | Set to `127.0.0.1:9099` when using the local emulator |
 | `GOOGLE_APPLICATION_CREDENTIALS` | T03 | Path to service account JSON for local dev (not needed on Cloud Run with ADC) |
+| `JACOB_MEDIA_QUARANTINE_BUCKET` | T10 | Quarantine GCS bucket name (e.g. `jacob-media-quarantine-staging`) |
+| `JACOB_MEDIA_PUBLIC_BUCKET` | T10 | Public CDN-served GCS bucket name |
+| `JACOB_HASH_SERVICE_URL` | T10 (prod) | CSAM hash lookup endpoint. Vendor TBD before launch — see `docs/moderation-pipeline.md` |
+| `JACOB_NCMEC_ENDPOINT` | T10 (prod) | NCMEC CyberTipline submission endpoint |
+| `JACOB_DISABLE_MODERATION` | T10 (dev) | Set to `true` only for local emulator runs to bypass external moderation calls. Must be unset in deployed environments |
 
 Add new variables here and to `.env.example` as tasks are implemented.
