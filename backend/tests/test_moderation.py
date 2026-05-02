@@ -35,6 +35,7 @@ def test_hash_check_without_endpoint_raises(monkeypatch) -> None:  # type: ignor
     monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
     monkeypatch.delenv(moderation.HASH_SERVICE_URL_ENV, raising=False)
     import pytest
+
     with pytest.raises(RuntimeError, match="CSAM hash service URL unset"):
         moderation.check_hash_service("deadbeef")
 
@@ -53,6 +54,7 @@ def test_hash_check_without_endpoint_captures_sentry(monkeypatch) -> None:  # ty
 
     monkeypatch.setattr(moderation, "_sentry_sdk", _FakeSentry)
     import pytest
+
     with pytest.raises(RuntimeError):
         moderation.check_hash_service("deadbeef")
     assert captured and captured[0][1] == "error"

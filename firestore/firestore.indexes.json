@@ -15,13 +15,6 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "authorUid", "order": "ASCENDING" }
-      ]
     }
   ],
   "fieldOverrides": [

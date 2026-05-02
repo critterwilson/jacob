@@ -363,6 +363,14 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Terraform — state, working dir, and variable files with real values
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/.terraform.tfstate.lock.info
+infra/terraform.*.tfvars
+!infra/terraform.*.tfvars.example
+
 # JACOB — project-specific
 frontend/out/
 functions/lib/
