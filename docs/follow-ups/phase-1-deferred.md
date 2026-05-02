@@ -177,30 +177,38 @@ from different machines will diverge.
 
 ---
 
-## I1 — Backend runs as default Compute SA; needs a dedicated least-privilege SA
+## I1 — All services run as default Compute SA; need dedicated least-privilege SAs
 
-**Finding:** The Cloud Run `jacob-backend` service and the `firestore_export`
-job both run as the default Compute Engine SA
-(`732806466572-compute@developer.gserviceaccount.com`). The default Compute SA
-carries project-Editor-equivalent permissions by default, violating least
-privilege. The same SA email is referenced by the `api_service_account_email`
-and `backup_service_account_email` Terraform variables.
+**Finding:** Three Terraform variables — `api_service_account_email`,
+`backup_service_account_email`, and `moderation_service_account_email` — all
+currently use the default Compute Engine SA
+(`732806466572-compute@developer.gserviceaccount.com`) as a temporary value.
+The default Compute SA carries project-Editor-equivalent permissions by default,
+violating least privilege.
 
-**What is required:**
-1. Create a dedicated `jacob-api@jacob-staging-494515.iam.gserviceaccount.com`
-   SA with only the roles the backend actually needs: `roles/datastore.user`,
-   `roles/storage.objectAdmin` on the quarantine and public buckets,
-   `roles/logging.logWriter`, `roles/cloudtrace.agent`, and
-   `roles/pubsub.publisher` if Pub/Sub is ever wired up.
-2. Update the Cloud Run service config (`gcloud run services update jacob-backend
-   --service-account=jacob-api@...`) or the Terraform `google_cloud_run_v2_service`
-   resource.
-3. Update the `api_service_account_email` Terraform variable value in
-   `infra/terraform.tfvars` (or equivalent) to point at the new SA.
-4. Grant the GitHub deploy SA (`jacob-deployer@...`) `roles/iam.serviceAccountUser`
-   on the new SA so CI can deploy new revisions.
-5. Consider a separate `jacob-backup@...` SA for the export job and update
-   `backup_service_account_email` similarly.
+**Priority order (highest first):**
+
+1. **`moderation_service_account_email` — MOST URGENT.** This SA is the sole
+   writer to the public media bucket (`roles/storage.objectAdmin` on
+   `jacob-media-public-*`) and has read access to the quarantine bucket. Any
+   compromise of the default Compute SA means arbitrary content can be published
+   to the public bucket. Create `jacob-moderation@jacob-staging-494515.iam.gserviceaccount.com`
+   with only `roles/storage.objectViewer` on quarantine and
+   `roles/storage.objectAdmin` on the public bucket.
+
+2. **`api_service_account_email`** — the Cloud Run backend SA. Replace with
+   `jacob-api@jacob-staging-494515.iam.gserviceaccount.com` bound to:
+   `roles/datastore.user`, `roles/storage.objectAdmin` on quarantine,
+   `roles/logging.logWriter`, `roles/cloudtrace.agent`.
+
+3. **`backup_service_account_email`** — the `firestore_export` Cloud Run job SA.
+   Replace with `jacob-backup@jacob-staging-494515.iam.gserviceaccount.com`
+   bound to `roles/storage.objectAdmin` on the backup bucket and
+   `roles/datastore.importExportAdmin`.
+
+**Additional steps for `api_service_account_email`:**
+- Update the Cloud Run service config (`gcloud run services update jacob-backend --service-account=jacob-api@...`).
+- Grant `jacob-deployer@...` `roles/iam.serviceAccountUser` on the new SA so CI can deploy.
 
 **Complexity:** Medium — IAM + Cloud Run config change, no application code
 changes, but needs careful role enumeration to avoid breaking the backend.
