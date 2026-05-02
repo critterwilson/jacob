@@ -22,6 +22,7 @@ from app.errors import APIError
 from app.limits import ADMIN_MUTATION, GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
 from app.middleware.rate_limit import limiter
 from app.models.group import (
+    AnnounceResponse,
     ArchiveGroupRequest,
     ArchiveResponse,
     CreateGroupRequest,
@@ -37,6 +38,7 @@ from app.models.group import (
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
+from app.services.notifications import bulk_write_notifications
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -487,3 +489,99 @@ def unarchive_group(
     )
     logger.info("unarchive_group gid=%s uid=%s", gid, user.uid)
     return UnarchiveResponse(gid=gid)
+
+
+# ── T24: announce ────────────────────────────────────────────────────────────
+
+
+@router.post("/{gid}/messages/{mid}/announce", response_model=AnnounceResponse)
+@limiter.limit(ADMIN_MUTATION)
+def announce_message(
+    gid: str,
+    mid: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> AnnounceResponse:
+    """Pin and announce a message to all group members.
+
+    Pinning via the announce endpoint is allowed to drop the oldest pin when
+    the group already has 5 — unlike the client-side rule which rejects a 6th.
+    """
+    db = _db()
+    group_data = _require_leader(db, gid, user.uid)
+
+    if group_data.get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="archived",
+            message="Cannot announce in an archived group",
+        )
+
+    group_ref = db.collection("groups").document(gid)
+    msg_ref = group_ref.collection("messages").document(mid)
+    msg_snap = msg_ref.get()
+    if not msg_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="message_not_found",
+            message="Message not found",
+        )
+
+    msg_data = msg_snap.to_dict() or {}
+    if msg_data.get("deletedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="message_deleted",
+            message="Cannot announce a deleted message",
+        )
+    if msg_data.get("announcedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="already_announced",
+            message="This message has already been announced",
+        )
+
+    # Update pinnedMessageIds: most-recent-first; cap at 5 by dropping oldest.
+    pinned_ids: list[str] = list(group_data.get("pinnedMessageIds") or [])
+    if mid not in pinned_ids:
+        pinned_ids = [mid] + pinned_ids
+        if len(pinned_ids) > 5:
+            pinned_ids = pinned_ids[:5]
+
+    batch = db.batch()
+    batch.update(msg_ref, {
+        "announcedAt": fb_firestore.SERVER_TIMESTAMP,
+        "announcedBy": user.uid,
+    })
+    batch.update(group_ref, {"pinnedMessageIds": pinned_ids})
+    batch.commit()
+
+    # Fan out notifications to all group members (skipping blocks).
+    members_snap = group_ref.collection("members").stream()
+    member_uids = [s.id for s in members_snap]
+
+    body_preview = (msg_data.get("body") or "")[:200].replace("\n", " ")
+    notified = bulk_write_notifications(
+        db,
+        recipient_uids=member_uids,
+        kind="announcement",
+        group_id=gid,
+        message_ref=f"groups/{gid}/messages/{mid}",
+        from_uid=user.uid,
+        body=body_preview,
+    )
+
+    write_audit_log(
+        actor_uid=user.uid,
+        action="announce_message",
+        target_ref=f"groups/{gid}/messages/{mid}",
+        payload={"messageRef": f"groups/{gid}/messages/{mid}", "notifiedCount": notified},
+    )
+    logger.info("announce gid=%s mid=%s uid=%s notified=%d", gid, mid, user.uid, notified)
+    return AnnounceResponse(
+        gid=gid,
+        mid=mid,
+        announcedAt=datetime.now(UTC).isoformat(),
+        notifiedCount=notified,
+    )

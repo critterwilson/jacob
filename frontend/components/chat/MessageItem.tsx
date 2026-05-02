@@ -24,9 +24,21 @@ type Props = {
   isLeader: boolean;
   onReply?: (message: Message) => void;
   currentUserUid?: string;
+  isPinned?: boolean;
+  onTogglePin?: (mid: string) => void;
+  onAnnounce?: (mid: string) => void;
 };
 
-export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }: Props) {
+export function MessageItem({
+  gid,
+  message,
+  isLeader,
+  onReply,
+  currentUserUid,
+  isPinned,
+  onTogglePin,
+  onAnnounce,
+}: Props) {
   const { user } = useAuth();
   const resolvedUid = currentUserUid ?? user?.uid;
   const { stickers } = useStickers();
@@ -236,6 +248,26 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
               className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
             >
               Delete
+            </button>
+          )}
+          {isLeader && onTogglePin && (
+            <button
+              type="button"
+              onClick={() => onTogglePin(message.id)}
+              aria-label={isPinned ? "Unpin message" : "Pin message"}
+              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+            >
+              {isPinned ? "Unpin" : "Pin"}
+            </button>
+          )}
+          {isLeader && onAnnounce && !isPinned && (
+            <button
+              type="button"
+              onClick={() => onAnnounce(message.id)}
+              aria-label="Pin as announcement"
+              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+            >
+              Announce
             </button>
           )}
           {!isAuthor && (

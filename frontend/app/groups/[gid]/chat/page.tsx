@@ -12,6 +12,7 @@ import type { Message } from "@/lib/hooks/useGroupMessages";
 import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageList } from "@/components/chat/MessageList";
+import { PinnedBar } from "@/components/chat/PinnedBar";
 import { ThreadPanel } from "@/components/chat/ThreadPanel";
 import type { Timestamp } from "firebase/firestore";
 
@@ -104,6 +105,7 @@ export default function ChatPage({ params }: Props) {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden">
+          <PinnedBar gid={gid} isLeader={isLeader} />
           {archivedAt && <ArchivedBanner />}
           <MessageList
             gid={gid}

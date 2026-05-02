@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { MessageItem } from "@/components/chat/MessageItem";
 import { useBlocks } from "@/lib/hooks/useBlocks";
 import { useMutes } from "@/lib/hooks/useMutes";
+import { usePinnedMessages } from "@/lib/hooks/usePinnedMessages";
+import { useAnnounce } from "@/lib/hooks/useAnnounce";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
 type Props = {
@@ -40,6 +42,8 @@ export function MessageList({
   const { isMuted } = useMutes();
   const { isBlocked } = useBlocks();
   const [expandedMutes, setExpandedMutes] = useState<Set<string>>(new Set());
+  const { isPinned, togglePin } = usePinnedMessages(gid);
+  const { announce } = useAnnounce();
 
   // Scroll to bottom only when new messages arrive (not on older-page loads).
   useEffect(() => {
@@ -113,6 +117,9 @@ export function MessageList({
               message={msg}
               isLeader={isLeader}
               onReply={onReply}
+              isPinned={isPinned(msg.id)}
+              onTogglePin={isLeader ? (mid) => void togglePin(mid) : undefined}
+              onAnnounce={isLeader ? (mid) => void announce(gid, mid) : undefined}
             />
           );
         })}
