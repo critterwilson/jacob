@@ -24,3 +24,18 @@ class JoinGroupResponse(BaseModel):
 
 class RotateInviteResponse(BaseModel):
     inviteCode: str
+
+
+class LeaderActionResponse(BaseModel):
+    gid: str
+    uid: str
+    role: str
+
+
+class FounderTransferRequest(BaseModel):
+    targetUid: str = Field(min_length=1, max_length=200)
+
+
+class FounderTransferResponse(BaseModel):
+    gid: str
+    founderUid: str

@@ -1,0 +1,211 @@
+"use client";
+
+import { collection, onSnapshot, doc as fdoc, getDoc } from "firebase/firestore";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import { useAuth } from "@/lib/auth-context";
+import { firestore } from "@/lib/firebase";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+type Member = {
+  uid: string;
+  role: "member" | "leader";
+};
+
+type GroupMeta = {
+  name: string;
+  founderUid: string;
+  leaderCount?: number;
+};
+
+type Props = { params: { gid: string } };
+
+/**
+ * Group members page. Members see the list; leaders also get
+ * promote / demote / transfer-founder controls.
+ */
+export default function MembersPage({ params }: Props) {
+  const { gid } = params;
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const [members, setMembers] = useState<Member[]>([]);
+  const [meta, setMeta] = useState<GroupMeta | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/sign-in");
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsubMembers = onSnapshot(
+      collection(firestore, "groups", gid, "members"),
+      (snap) => {
+        setMembers(
+          snap.docs.map((d) => ({
+            uid: d.id,
+            role: ((d.data().role as string) || "member") as Member["role"],
+          })),
+        );
+      },
+    );
+    void getDoc(fdoc(firestore, "groups", gid)).then((s) => {
+      if (s.exists()) {
+        const data = s.data();
+        setMeta({
+          name: (data.name as string) ?? "",
+          founderUid: (data.founderUid as string) ?? "",
+          leaderCount: data.leaderCount as number | undefined,
+        });
+      }
+    });
+    return unsubMembers;
+  }, [user, gid]);
+
+  const callApi = async (path: string, body?: object) => {
+    if (!user) return false;
+    setPending(path);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`${API}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as
+          | { error?: { message?: string } }
+          | null;
+        setError(err?.error?.message ?? `HTTP ${res.status}`);
+        return false;
+      }
+      return true;
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const promote = (uid: string) =>
+    void callApi(`/api/groups/${gid}/leaders/${uid}/promote`);
+  const demote = (uid: string) =>
+    void callApi(`/api/groups/${gid}/leaders/${uid}/demote`);
+  const transferFounder = (uid: string) =>
+    void callApi(`/api/groups/${gid}/founder/transfer`, { targetUid: uid });
+
+  if (authLoading) return <p className="p-4 text-sm text-gray-500">Loading…</p>;
+  if (!user) return null;
+
+  const myMember = members.find((m) => m.uid === user.uid);
+  const isLeader = myMember?.role === "leader";
+  const isFounder = meta?.founderUid === user.uid;
+
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h1 className="text-2xl font-semibold">{meta?.name ?? "Group"} members</h1>
+        <Link
+          href={`/groups/${gid}`}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Back
+        </Link>
+      </div>
+      <p className="mb-6 text-sm text-gray-500">
+        {meta?.leaderCount ?? 0}{" "}
+        {meta?.leaderCount === 1 ? "leader" : "leaders"} ·{" "}
+        {members.length} total
+      </p>
+
+      {error && (
+        <p
+          role="alert"
+          className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700"
+        >
+          {error}
+        </p>
+      )}
+
+      <ul className="divide-y divide-gray-200 rounded border border-gray-200">
+        {members.map((m) => {
+          const isFounderRow = meta?.founderUid === m.uid;
+          const isSelf = m.uid === user.uid;
+          return (
+            <li
+              key={m.uid}
+              className="flex items-center justify-between gap-2 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <code className="text-xs text-gray-700">{m.uid}</code>
+                <div className="mt-1 flex gap-1">
+                  <span
+                    className={`rounded px-2 py-0.5 text-xs font-medium ${
+                      m.role === "leader"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {m.role}
+                  </span>
+                  {isFounderRow && (
+                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      founder
+                    </span>
+                  )}
+                  {isSelf && (
+                    <span className="rounded bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
+                      you
+                    </span>
+                  )}
+                </div>
+              </div>
+              {isLeader && (
+                <div className="flex flex-wrap gap-2">
+                  {m.role === "member" && (
+                    <button
+                      type="button"
+                      onClick={() => promote(m.uid)}
+                      disabled={pending !== null}
+                      className="rounded border border-blue-300 px-3 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      Promote
+                    </button>
+                  )}
+                  {m.role === "leader" && !isFounderRow && (
+                    <button
+                      type="button"
+                      onClick={() => demote(m.uid)}
+                      disabled={pending !== null}
+                      className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Demote
+                    </button>
+                  )}
+                  {m.role === "leader" && !isFounderRow && isFounder && (
+                    <button
+                      type="button"
+                      onClick={() => transferFounder(m.uid)}
+                      disabled={pending !== null}
+                      className="rounded border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                    >
+                      Make founder
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </main>
+  );
+}

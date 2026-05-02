@@ -358,6 +358,7 @@ describe("groups/{gid}", () => {
         name: "New Group",
         description: "",
         createdBy: "alice",
+        founderUid: "alice",
         createdAt: serverTimestamp(),
         isPrivate: false,
         inviteCode: "abc123",

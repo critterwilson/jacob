@@ -129,11 +129,18 @@ service cloud.firestore {
     match /groups/{gid} {
       allow read: if isGroupMember(gid);
 
+      // T22: `founderUid` is set on create and matches `createdBy`. The
+      // value never changes via the client — founder transfer goes
+      // through `POST /api/groups/{gid}/founder/transfer` (Admin SDK).
+      // `leaderCount` is system-only — the onMemberWrite trigger sets it
+      // and the rule rejects every client write.
       allow create: if isSignedIn() && notBanned()
         && request.resource.data.keys().hasOnly(
-             ['name', 'description', 'isPrivate', 'createdBy', 'createdAt',
-              'inviteCode', 'memberCount', 'stickerSet', 'schemaVersion'])
+             ['name', 'description', 'isPrivate', 'createdBy', 'founderUid',
+              'createdAt', 'inviteCode', 'memberCount', 'stickerSet',
+              'schemaVersion'])
         && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.founderUid == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.schemaVersion == 1
         && request.resource.data.memberCount == 1
@@ -146,8 +153,9 @@ service cloud.firestore {
             || (request.resource.data.description is string
                 && request.resource.data.description.size() <= 500));
 
-      // memberCount is updated only via Cloud Functions (Admin SDK bypasses
-      // these rules); leaders edit metadata only.
+      // memberCount, leaderCount, founderUid, and moderationPolicy are all
+      // system-only (Admin SDK bypasses these rules). Leaders edit metadata
+      // only via the listed fields.
       allow update: if isGroupLeader(gid) && notBanned()
         && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet'])
         && request.resource.data.name is string
@@ -189,13 +197,33 @@ service cloud.firestore {
               && request.resource.data.role in ['member', 'leader'])
           );
 
-        allow update: if isGroupLeader(gid) && notBanned()
-          && onlyChanges(['role'])
-          && request.resource.data.role in ['member', 'leader'];
+        // T22: clients can no longer flip `role` directly — promotion
+        // and demotion go through the backend (which writes via the
+        // Admin SDK and validates the leader-count invariant). The rule
+        // is left as a hard "no" to prevent a leader from quietly
+        // demoting themselves below the threshold.
+        allow update: if false;
 
-        // Leaders must be unbanned to remove others; a banned user may still
-        // leave a group (self-delete their own member doc).
-        allow delete: if (isGroupLeader(gid) && notBanned()) || isUser(uid);
+        // Leaders must be unbanned to remove others; a banned user may
+        // still leave a group (self-delete their own member doc) UNLESS
+        // they are the last leader — that path goes through founder
+        // transfer first.
+        //
+        // Leaderless guard (T22): a delete that would drop the leader
+        // count to zero is rejected. The check uses the denormalised
+        // `groups/{gid}.leaderCount` field maintained by onMemberWrite
+        // (the rule cannot do the math itself).
+        allow delete: if (
+            (isGroupLeader(gid) && notBanned())
+            || isUser(uid)
+          )
+          && (
+            resource.data.role != 'leader'
+            || (
+              exists(/databases/$(database)/documents/groups/$(gid))
+              && get(/databases/$(database)/documents/groups/$(gid)).data.leaderCount > 1
+            )
+          );
       }
 
       // --- messages ----------------------------------------------------
