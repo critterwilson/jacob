@@ -130,6 +130,7 @@ service cloud.firestore {
           && request.resource.data.threadReplyCount == 0
           && request.resource.data.deletedAt == null
           && request.resource.data.editedAt == null
+          && !('participants' in request.resource.data)
           && (request.resource.data.parentMessageId == null
               || messageExists(gid, request.resource.data.parentMessageId));
 
@@ -164,6 +165,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /audit_log/{eventId} {
+      allow read, write: if false;
+    }
+    // T10: photo upload pipeline state. Owned and read by the backend
+    // Admin SDK; clients receive their public URL in the finalize response
+    // and never need to touch this collection.
+    match /uploads/{uploadId} {
       allow read, write: if false;
     }
 

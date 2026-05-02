@@ -49,6 +49,27 @@ vi.mock("firebase/storage", () => ({
   getDownloadURL: vi.fn(),
 }));
 
+// --- T10 photo upload hook -------------------------------------------------
+// PhotoUpload now goes through useUploadPhoto, which calls useAuth(). Tests
+// that render ProfileForm bare (no AuthProvider) would otherwise crash, so
+// stub the hook with a no-op upload.
+vi.mock("@/lib/hooks/useUploadPhoto", () => ({
+  ALLOWED_PHOTO_MIME_TYPES: ["image/jpeg", "image/png", "image/webp"],
+  MAX_PHOTO_BYTES: 8 * 1024 * 1024,
+  UploadError: class UploadError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  },
+  useUploadPhoto: () => ({
+    upload: vi.fn().mockResolvedValue("https://cdn/public/avatar.jpg"),
+    uploading: false,
+    progress: "idle",
+  }),
+}));
+
 import * as fbAuth from "firebase/auth";
 import * as fbFirestore from "firebase/firestore";
 import * as fbStorage from "firebase/storage";

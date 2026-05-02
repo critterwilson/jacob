@@ -150,10 +150,12 @@ describe("useGroupMessages", () => {
 // ── MessageInput ─────────────────────────────────────────────────────────────
 
 describe("MessageInput", () => {
-  it("shows validation error when body is empty", async () => {
+  it("shows validation error when body and attachments are both empty", async () => {
     render(<MessageInput gid="g1" />);
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
-    expect(await screen.findByText(/cannot be empty/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/add a message or a photo/i),
+    ).toBeInTheDocument();
     expect(fbFirestore.addDoc).not.toHaveBeenCalled();
   });
 

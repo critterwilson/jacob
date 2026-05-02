@@ -13,6 +13,7 @@ type Props = {
   hasMore: boolean;
   isLeader: boolean;
   onLoadOlder: () => void;
+  onReply?: (message: Message) => void;
 };
 
 export function MessageList({
@@ -23,6 +24,7 @@ export function MessageList({
   hasMore,
   isLeader,
   onLoadOlder,
+  onReply,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -69,7 +71,13 @@ export function MessageList({
 
       <div className="flex flex-col">
         {messages.map((msg) => (
-          <MessageItem key={msg.id} gid={gid} message={msg} isLeader={isLeader} />
+          <MessageItem
+            key={msg.id}
+            gid={gid}
+            message={msg}
+            isLeader={isLeader}
+            onReply={onReply}
+          />
         ))}
       </div>
 

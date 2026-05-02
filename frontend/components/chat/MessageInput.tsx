@@ -7,17 +7,21 @@ import { z } from "zod";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 import { useAuth } from "@/lib/auth-context";
+import { PhotoAttachButton } from "@/components/chat/PhotoAttachButton";
 import {
   DEFAULT_STICKER_SLUG,
   StickerPicker,
 } from "@/components/stickers/StickerPicker";
 import { firestore } from "@/lib/firebase";
 
+const MAX_PHOTOS_PER_MESSAGE = 4;
+
+// Body itself is permissive: photo-only messages are allowed, so we only
+// gate on max length here. The "must contain text or a photo" rule is
+// enforced in `onSubmit` because it depends on `mediaRefs` state, which
+// react-hook-form doesn't see.
 const schema = z.object({
-  body: z
-    .string()
-    .min(1, "Message cannot be empty")
-    .max(4000, "Message must be 4000 characters or less"),
+  body: z.string().max(4000, "Message must be 4000 characters or less"),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -29,6 +33,7 @@ type Props = {
 export function MessageInput({ gid }: Props) {
   const { user } = useAuth();
   const [stickers, setStickers] = useState<string[]>([]);
+  const [mediaRefs, setMediaRefs] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,10 +44,17 @@ export function MessageInput({ gid }: Props) {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
+    defaultValues: { body: "" },
   });
 
   const onSubmit = async (values: FormValues) => {
     if (!user) return;
+    const trimmedBody = values.body.trim();
+    if (!trimmedBody && mediaRefs.length === 0) {
+      setError("Add a message or a photo before sending.");
+      return;
+    }
+
     setSending(true);
     setError(null);
 
@@ -52,23 +64,27 @@ export function MessageInput({ gid }: Props) {
     try {
       await addDoc(collection(firestore, "groups", gid, "messages"), {
         authorUid: user.uid,
-        body: values.body.trim(),
+        body: trimmedBody,
         stickerIds: finalStickers,
         createdAt: serverTimestamp(),
         editedAt: null,
         deletedAt: null,
         parentMessageId: null,
         threadReplyCount: 0,
-        mediaRefs: [],
+        mediaRefs,
       });
       reset();
       setStickers([]);
+      setMediaRefs([]);
     } catch {
       setError("Failed to send message. Please try again.");
     } finally {
       setSending(false);
     }
   };
+
+  const removePhoto = (url: string) =>
+    setMediaRefs((prev) => prev.filter((u) => u !== url));
 
   return (
     <form
@@ -77,6 +93,29 @@ export function MessageInput({ gid }: Props) {
       className="border-t border-gray-200 px-4 py-3"
     >
       <StickerPicker value={stickers} onChange={setStickers} />
+
+      {mediaRefs.length > 0 && (
+        <ul className="mt-2 flex flex-wrap gap-2" aria-label="Attached photos">
+          {mediaRefs.map((url) => (
+            <li key={url} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt="Attached"
+                className="h-16 w-16 rounded object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removePhoto(url)}
+                aria-label="Remove attached photo"
+                className="absolute -right-1 -top-1 rounded-full bg-gray-900 px-1.5 text-xs text-white"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mt-2 flex gap-2">
         <textarea
@@ -94,6 +133,15 @@ export function MessageInput({ gid }: Props) {
         >
           {sending ? "Sending…" : "Send"}
         </button>
+      </div>
+
+      <div className="mt-2">
+        <PhotoAttachButton
+          gid={gid}
+          disabled={mediaRefs.length >= MAX_PHOTOS_PER_MESSAGE}
+          onAttach={(url) => setMediaRefs((prev) => [...prev, url])}
+          onError={setError}
+        />
       </div>
 
       {errors.body && (
