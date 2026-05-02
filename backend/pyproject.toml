@@ -9,6 +9,7 @@ dependencies = [
     "google-cloud-vision>=3.7",
     "pydantic-settings>=2.0",
     "sentry-sdk[fastapi]>=2.58.0",
+    "slowapi>=0.1.9",
     "uvicorn[standard]>=0.32",
 ]
 
