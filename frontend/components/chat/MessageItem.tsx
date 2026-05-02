@@ -36,6 +36,7 @@ type Props = {
   isMyReaction?: (mid: string, slug: string) => boolean;
   onToggleReaction?: (mid: string, slug: string) => void;
   members?: Member[];
+  readonly?: boolean;
 };
 
 export function MessageItem({
@@ -51,6 +52,7 @@ export function MessageItem({
   isMyReaction,
   onToggleReaction,
   members,
+  readonly = false,
 }: Props) {
   const { user } = useAuth();
   const resolvedUid = currentUserUid ?? user?.uid;
@@ -230,12 +232,21 @@ export function MessageItem({
         </ul>
       )}
 
-      {!isDeleted && onToggleReaction && isMyReaction && (
+      {!isDeleted && !readonly && onToggleReaction && isMyReaction && (
         <ReactionBar
           mid={message.id}
           reactionCounts={message.reactionCounts}
           isMyReaction={isMyReaction}
           onToggle={onToggleReaction}
+        />
+      )}
+
+      {!isDeleted && readonly && message.reactionCounts && (
+        <ReactionBar
+          mid={message.id}
+          reactionCounts={message.reactionCounts}
+          isMyReaction={() => false}
+          onToggle={() => undefined}
         />
       )}
 
@@ -263,7 +274,7 @@ export function MessageItem({
         </button>
       )}
 
-      {!isDeleted && !editing && (
+      {!isDeleted && !editing && !readonly && (
         <div className="absolute right-4 top-2 hidden gap-1 group-hover:flex">
           {onReply && message.parentMessageId === null && (
             <button
