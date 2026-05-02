@@ -1141,6 +1141,106 @@ describe("default deny", () => {
 });
 
 // ---------------------------------------------------------------------------
+// T21: mute / block subcollections
+// ---------------------------------------------------------------------------
+describe("users/{uid}/mutes/{otherUid}", () => {
+  it("owner can mute another user", async () => {
+    await assertSucceeds(
+      setDoc(doc(authed("alice"), "users", "alice", "mutes", "bob"), {
+        mutedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("owner cannot mute themselves", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "users", "alice", "mutes", "alice"), {
+        mutedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("non-owner cannot read someone else's mute set", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "mutes", "bob"), {
+        mutedAt: Timestamp.now(),
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("eve"), "users", "alice", "mutes", "bob")),
+    );
+  });
+
+  it("non-owner cannot create mute on behalf of someone else", async () => {
+    await assertFails(
+      setDoc(doc(authed("eve"), "users", "alice", "mutes", "bob"), {
+        mutedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("owner can unmute (delete)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "mutes", "bob"), {
+        mutedAt: Timestamp.now(),
+      });
+    });
+    await assertSucceeds(
+      deleteDoc(doc(authed("alice"), "users", "alice", "mutes", "bob")),
+    );
+  });
+
+  it("rejects extra fields beyond mutedAt", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "users", "alice", "mutes", "bob"), {
+        mutedAt: serverTimestamp(),
+        comment: "annoying",
+      }),
+    );
+  });
+});
+
+describe("users/{uid}/blocks/{otherUid}", () => {
+  it("owner can block another user", async () => {
+    await assertSucceeds(
+      setDoc(doc(authed("alice"), "users", "alice", "blocks", "bob"), {
+        blockedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("owner cannot block themselves", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "users", "alice", "blocks", "alice"), {
+        blockedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("non-owner cannot read someone else's block set", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "blocks", "bob"), {
+        blockedAt: Timestamp.now(),
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("eve"), "users", "alice", "blocks", "bob")),
+    );
+  });
+
+  it("owner can unblock (delete)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "blocks", "bob"), {
+        blockedAt: Timestamp.now(),
+      });
+    });
+    await assertSucceeds(
+      deleteDoc(doc(authed("alice"), "users", "alice", "blocks", "bob")),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // M11: collection-group query for memberships
 // ---------------------------------------------------------------------------
 describe("members collectionGroup", () => {

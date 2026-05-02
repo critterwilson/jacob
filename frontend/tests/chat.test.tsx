@@ -350,3 +350,88 @@ describe("MessageList", () => {
     expect(onLoadOlder).toHaveBeenCalledOnce();
   });
 });
+
+// ── T21 — MessageList filters muted + blocked authors ───────────────────────
+
+describe("MessageList — mute + block filters", () => {
+  const defaultProps = {
+    gid: "g1",
+    messages: [] as Message[],
+    loading: false,
+    loadingOlder: false,
+    hasMore: false,
+    isLeader: false,
+    onLoadOlder: vi.fn(),
+  };
+
+  it("hides messages from blocked authors entirely", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/hooks/useBlocks", () => ({
+      useBlocks: () => ({
+        isBlocked: (uid: string) => uid === "eve",
+        blockedSet: new Set(["eve"]),
+        blockedList: ["eve"],
+        block: vi.fn(),
+        unblock: vi.fn(),
+        loading: false,
+      }),
+    }));
+    vi.doMock("@/lib/hooks/useMutes", () => ({
+      useMutes: () => ({
+        isMuted: () => false,
+        mutedSet: new Set(),
+        mute: vi.fn(),
+        unmute: vi.fn(),
+        loading: false,
+      }),
+    }));
+    const { MessageList: ML } = await import("@/components/chat/MessageList");
+    render(
+      <ML
+        {...defaultProps}
+        messages={[
+          makeMessage({ id: "m1", body: "from-alice", authorUid: "alice" }),
+          makeMessage({ id: "m2", body: "from-eve", authorUid: "eve" }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("from-alice")).toBeInTheDocument();
+    expect(screen.queryByText("from-eve")).not.toBeInTheDocument();
+  });
+
+  it("collapses muted-author messages until 'Show' is clicked", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/hooks/useBlocks", () => ({
+      useBlocks: () => ({
+        isBlocked: () => false,
+        blockedSet: new Set(),
+        blockedList: [],
+        block: vi.fn(),
+        unblock: vi.fn(),
+        loading: false,
+      }),
+    }));
+    vi.doMock("@/lib/hooks/useMutes", () => ({
+      useMutes: () => ({
+        isMuted: (uid: string) => uid === "noisy",
+        mutedSet: new Set(["noisy"]),
+        mute: vi.fn(),
+        unmute: vi.fn(),
+        loading: false,
+      }),
+    }));
+    const { MessageList: ML } = await import("@/components/chat/MessageList");
+    render(
+      <ML
+        {...defaultProps}
+        messages={[
+          makeMessage({ id: "m1", body: "from-noisy", authorUid: "noisy" }),
+        ]}
+      />,
+    );
+    expect(screen.queryByText("from-noisy")).not.toBeInTheDocument();
+    expect(screen.getByText(/muted user/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /show/i }));
+    expect(screen.getByText("from-noisy")).toBeInTheDocument();
+  });
+});
