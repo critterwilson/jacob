@@ -142,6 +142,22 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
         </div>
       )}
 
+      {!isDeleted && message.mediaRefs.length > 0 && (
+        <ul className="mt-1 flex flex-wrap gap-2" aria-label="Photos">
+          {message.mediaRefs.map((url) => (
+            <li key={url}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt=""
+                className="max-h-64 rounded border border-gray-200 object-cover"
+                loading="lazy"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
       {error && (
         <p role="alert" className="text-xs text-red-600">
           {error}

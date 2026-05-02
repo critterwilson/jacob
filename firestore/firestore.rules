@@ -167,6 +167,12 @@ service cloud.firestore {
     match /audit_log/{eventId} {
       allow read, write: if false;
     }
+    // T10: photo upload pipeline state. Owned and read by the backend
+    // Admin SDK; clients receive their public URL in the finalize response
+    // and never need to touch this collection.
+    match /uploads/{uploadId} {
+      allow read, write: if false;
+    }
 
     // --- default deny (defense in depth) --------------------------------
     match /{document=**} {

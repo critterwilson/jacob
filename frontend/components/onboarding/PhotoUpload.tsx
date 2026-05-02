@@ -1,13 +1,12 @@
 "use client";
 
-// Temporary avatar path — T10 not yet integrated.
-// Uploaded files go to users/{uid}/uncheckedAvatar in Firebase Storage and
-// are visible only to the uploader until T10's moderation pipeline runs.
-// See docs/temporary-avatar-flow.md for the full plan.
+// T10 moderation pipeline: avatars are uploaded via signed URL into the
+// quarantine bucket, scanned by the backend (CSAM hash + Cloud Vision
+// SafeSearch), and only the resulting public URL is shown to the user.
 
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useRef, useState } from "react";
-import { storage } from "@/lib/firebase";
+
+import { UploadError, useUploadPhoto } from "@/lib/hooks/useUploadPhoto";
 
 type PhotoUploadProps = {
   uid: string;
@@ -15,37 +14,33 @@ type PhotoUploadProps = {
   onUploadError: (msg: string) => void;
 };
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 8 * 1024 * 1024;
-
-export function PhotoUpload({ uid, onUploadComplete, onUploadError }: PhotoUploadProps) {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+export function PhotoUpload({ onUploadComplete, onUploadError }: PhotoUploadProps) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { upload, uploading, progress } = useUploadPhoto();
 
   const handleFile = async (file: File) => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      onUploadError("Photo must be JPEG, PNG, or WebP.");
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      onUploadError("Photo must be 8 MB or smaller.");
-      return;
-    }
-
-    setPreview(URL.createObjectURL(file));
-    setUploading(true);
     try {
-      const storageRef = ref(storage, `users/${uid}/uncheckedAvatar`);
-      await uploadBytes(storageRef, file, { contentType: file.type });
-      const url = await getDownloadURL(storageRef);
-      onUploadComplete(url);
-    } catch {
-      onUploadError("Upload failed. Please try again.");
+      const publicUrl = await upload({ file, purpose: "avatar" });
+      setPreviewUrl(publicUrl);
+      onUploadComplete(publicUrl);
+    } catch (err) {
+      const message =
+        err instanceof UploadError ? err.message : "Upload failed. Please try again.";
+      onUploadError(message);
     } finally {
-      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
     }
   };
+
+  const statusLabel =
+    progress === "finalizing"
+      ? "Reviewing photo…"
+      : progress === "uploading"
+        ? "Uploading…"
+        : progress === "signing"
+          ? "Preparing…"
+          : null;
 
   return (
     <div className="space-y-2">
@@ -57,9 +52,9 @@ export function PhotoUpload({ uid, onUploadComplete, onUploadError }: PhotoUploa
         tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
       >
-        {preview ? (
+        {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Profile preview" className="h-full w-full object-cover" />
+          <img src={previewUrl} alt="Profile preview" className="h-full w-full object-cover" />
         ) : (
           <span className="text-xs text-gray-400">Add photo</span>
         )}
@@ -71,12 +66,16 @@ export function PhotoUpload({ uid, onUploadComplete, onUploadError }: PhotoUploa
         className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) handleFile(file);
+          if (file) void handleFile(file);
         }}
         data-testid="photo-input"
       />
-      {uploading && <p className="text-xs text-gray-500">Uploading…</p>}
-      <p className="text-xs text-gray-400">Pending moderation — visible only to you until verified.</p>
+      {uploading && statusLabel && (
+        <p className="text-xs text-gray-500">{statusLabel}</p>
+      )}
+      <p className="text-xs text-gray-400">
+        Photos are scanned for safety before they appear.
+      </p>
     </div>
   );
 }
