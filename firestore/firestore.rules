@@ -133,12 +133,17 @@ service cloud.firestore {
           && (request.resource.data.parentMessageId == null
               || messageExists(gid, request.resource.data.parentMessageId));
 
-        // Author can soft-edit body / mark editedAt / soft-delete. All
-        // other fields (authorUid, createdAt, parentMessageId,
-        // threadReplyCount, mediaRefs, stickerIds) are immutable.
-        allow update: if isGroupMember(gid) && notBanned()
-          && resource.data.authorUid == request.auth.uid
-          && onlyChanges(['body', 'editedAt', 'deletedAt']);
+        // Author can soft-edit body (+ editedAt) within 15 minutes of posting.
+        // Author or group leader can soft-delete at any time (sets deletedAt).
+        // All other fields are immutable via the client.
+        allow update: if isGroupMember(gid) && notBanned() && (
+          (resource.data.authorUid == request.auth.uid
+            && onlyChanges(['body', 'editedAt'])
+            && request.resource.data.editedAt == request.time
+            && request.time < resource.data.createdAt + duration.value(15, 'm'))
+          || ((resource.data.authorUid == request.auth.uid || isGroupLeader(gid))
+            && onlyChanges(['deletedAt']))
+        );
 
         // Soft-delete only.
         allow delete: if false;
