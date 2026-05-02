@@ -1,6 +1,10 @@
 {
   "name": "jacob",
   "private": true,
+  "scripts": {
+    "seed:stickers": "pnpm -F jacob-firestore seed:stickers",
+    "seed:stickers:emulator": "pnpm -F jacob-firestore seed:stickers:emulator"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@firebase/util",
