@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     jacob_search_enabled: bool = False
     typesense_membership_cap: int = 100
 
+    # T29 — BigQuery sticker analytics
+    bq_analytics_dataset: str = "jacob_analytics"
+    bq_project: str = ""  # defaults to GOOGLE_CLOUD_PROJECT at runtime
+    jacob_analytics_enabled: bool = False
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 

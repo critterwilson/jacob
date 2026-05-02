@@ -43,6 +43,8 @@ Engine SA is **not** used by any JACOB workload.
 | `jacob-backup@${project}.iam.gserviceaccount.com`    | `firestore_export` Cloud Run job         |
 | `jacob-scheduler-export@${project}.iam.gserviceaccount.com` | OIDC identity for Cloud Scheduler firestore-export job |
 | `jacob-scheduler-deletions@${project}.iam.gserviceaccount.com` | OIDC identity for Cloud Scheduler finalize-deletions job |
+| `jacob-analytics@${project}.iam.gserviceaccount.com` | BigQuery reader for the FastAPI analytics endpoint (T29) |
+| `jacob-scheduler-analytics@${project}.iam.gserviceaccount.com` | OIDC identity for Cloud Scheduler firestore-to-bigquery job (T29) |
 
 Wire them into `terraform.<env>.tfvars` after the first apply — the module
 emits each email as a Terraform output.
@@ -51,10 +53,11 @@ emits each email as a Terraform output.
 project-wide `roles/iam.serviceAccountUser` so it can act-as any of the
 runtime SAs at deploy time.
 
-## Cloud Scheduler jobs (M4)
+## Cloud Scheduler jobs (M4, T29)
 
-`scheduler.tf` defines `firestore-export-daily` (03:00 UTC) and
-`finalize-deletions-daily` (03:30 UTC). Each invokes its corresponding
+`scheduler.tf` defines `firestore-export-daily` (03:00 UTC),
+`finalize-deletions-daily` (03:30 UTC), and
+`firestore-to-bigquery-daily` (04:30 UTC, T29). Each invokes its corresponding
 Cloud Run Job via OIDC; the OIDC SA has `roles/run.invoker` only on the
 specific job (IAM condition).
 
