@@ -20,6 +20,11 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Literal
 
+try:
+    import sentry_sdk as _sentry_sdk
+except ImportError:  # pragma: no cover
+    _sentry_sdk = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 DISABLE_MODERATION_ENV = "JACOB_DISABLE_MODERATION"
@@ -79,8 +84,11 @@ def check_hash_service(image_hash: str) -> HashCheckResult:
 
     endpoint = os.environ.get(HASH_SERVICE_URL_ENV)
     if not endpoint:
-        logger.warning("CSAM hash service not configured; allowing image without check")
-        return HashCheckResult(matched=False)
+        msg = "CSAM hash service URL unset (JACOB_HASH_SERVICE_URL); rejecting upload"
+        logger.error(msg)
+        if _sentry_sdk is not None:
+            _sentry_sdk.capture_message(msg, level="error")
+        raise RuntimeError(msg)
 
     req = urllib.request.Request(
         endpoint,

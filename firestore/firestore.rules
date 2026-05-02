@@ -57,8 +57,12 @@ service cloud.firestore {
     // The user document holds public-safe fields (displayName, photoURL,
     // schemaVersion, etc.). Anything sensitive lives in the private
     // subcollection below.
+    //
+    // Any authenticated user may read the public doc so that display names
+    // and avatars resolve correctly in group chat. PII lives exclusively in
+    // the private subcollection, which remains owner-only.
     match /users/{uid} {
-      allow read: if isUser(uid);
+      allow read: if isSignedIn();
 
       allow create: if isUser(uid)
         && request.resource.data.schemaVersion == 1

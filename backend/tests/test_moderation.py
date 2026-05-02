@@ -30,11 +30,32 @@ def test_disable_flag_short_circuits_hash_check(monkeypatch) -> None:  # type: i
     assert result.matched is False
 
 
-def test_hash_check_without_endpoint_returns_no_match(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_hash_check_without_endpoint_raises(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Unset JACOB_HASH_SERVICE_URL must fail closed, not pass the image."""
     monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
     monkeypatch.delenv(moderation.HASH_SERVICE_URL_ENV, raising=False)
-    result = moderation.check_hash_service("deadbeef")
-    assert result.matched is False
+    import pytest
+    with pytest.raises(RuntimeError, match="CSAM hash service URL unset"):
+        moderation.check_hash_service("deadbeef")
+
+
+def test_hash_check_without_endpoint_captures_sentry(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Unset URL is surfaced via Sentry so it's visible in the dashboard."""
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.delenv(moderation.HASH_SERVICE_URL_ENV, raising=False)
+
+    captured: list[tuple[str, str]] = []
+
+    class _FakeSentry:
+        @staticmethod
+        def capture_message(msg: str, level: str = "info") -> None:
+            captured.append((msg, level))
+
+    monkeypatch.setattr(moderation, "_sentry_sdk", _FakeSentry)
+    import pytest
+    with pytest.raises(RuntimeError):
+        moderation.check_hash_service("deadbeef")
+    assert captured and captured[0][1] == "error"
 
 
 def test_report_to_ncmec_logs_stub(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]

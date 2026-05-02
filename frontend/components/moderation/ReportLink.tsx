@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import { buildReportUrl, type ContentType } from "@/lib/report-url";
+import { buildReportUrl, isReportFormConfigured, type ContentType } from "@/lib/report-url";
 
 type Props = {
   contentType: ContentType;
@@ -13,12 +13,16 @@ type Props = {
 export function ReportLink({ contentType, contentId, groupId, className }: Props) {
   const { user } = useAuth();
 
+  if (!isReportFormConfigured()) return null;
+
   const href = buildReportUrl({
     contentType,
     contentId,
     groupId,
     reporterUid: user?.uid ?? undefined,
   });
+
+  if (!href) return null;
 
   return (
     <a

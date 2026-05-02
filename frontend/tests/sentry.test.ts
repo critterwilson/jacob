@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render } from "@testing-library/react";
+import React from "react";
 
 vi.mock("@sentry/nextjs", () => ({
   init: vi.fn(),
@@ -6,6 +8,7 @@ vi.mock("@sentry/nextjs", () => ({
 
 import * as SentryMock from "@sentry/nextjs";
 import { initSentry } from "../lib/sentry";
+import { SentryInit } from "../components/SentryInit";
 
 const mockInit = SentryMock.init as ReturnType<typeof vi.fn>;
 
@@ -102,5 +105,31 @@ describe("initSentry", () => {
       };
       expect(result?.exception?.values[0].value).toBe("Connection refused");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SentryInit component
+// ---------------------------------------------------------------------------
+describe("SentryInit", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete process.env.NEXT_PUBLIC_SENTRY_DSN;
+  });
+
+  it("calls initSentry on mount when DSN is set", () => {
+    process.env.NEXT_PUBLIC_SENTRY_DSN = "https://abc@sentry.io/1";
+    render(React.createElement(SentryInit));
+    expect(mockInit).toHaveBeenCalledOnce();
+  });
+
+  it("renders nothing (null) so layout is unaffected", () => {
+    const { container } = render(React.createElement(SentryInit));
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("does not call Sentry.init when DSN is absent", () => {
+    render(React.createElement(SentryInit));
+    expect(mockInit).not.toHaveBeenCalled();
   });
 });
