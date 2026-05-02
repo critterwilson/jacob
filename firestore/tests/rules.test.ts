@@ -117,11 +117,13 @@ describe("users/{uid}", () => {
     await assertSucceeds(getDoc(doc(authed("alice"), "users", "alice")));
   });
 
-  it("denies reading another user's doc", async () => {
+  // C1 fix: any authenticated user can read public user docs so that
+  // display names resolve in group chat (public doc holds no PII).
+  it("any authenticated user can read another user's public doc", async () => {
     await seed(async (db) => {
       await setDoc(doc(db, "users", "alice"), { displayName: "Alice" });
     });
-    await assertFails(getDoc(doc(authed("bob"), "users", "alice")));
+    await assertSucceeds(getDoc(doc(authed("bob"), "users", "alice")));
   });
 
   it("denies unauthenticated read of any user doc", async () => {

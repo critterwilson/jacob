@@ -2,7 +2,17 @@
 
 ## Google Form setup
 
-The report form is created manually in Google Forms. Once created, paste the real form ID and entry IDs into `frontend/lib/report-url.ts` (`FORM_ID` and `ENTRY.*` constants).
+The report form is created manually in Google Forms. Once created, set the form ID and entry IDs as environment variables in Cloud Run (and in `frontend/.env.local` for local development). **Do not commit real IDs to source code.** When the environment variables are absent the Report link is hidden in the UI; no broken URL is produced.
+
+Required env vars (set in Cloud Run / Firebase App Hosting environment):
+```
+NEXT_PUBLIC_REPORT_FORM_ID=<form-id>
+NEXT_PUBLIC_REPORT_ENTRY_CONTENT_TYPE=entry.<id>
+NEXT_PUBLIC_REPORT_ENTRY_CONTENT_ID=entry.<id>
+NEXT_PUBLIC_REPORT_ENTRY_GROUP_ID=entry.<id>
+NEXT_PUBLIC_REPORT_ENTRY_REPORTER_UID=entry.<id>
+NEXT_PUBLIC_REPORT_ENTRY_TIMESTAMP=entry.<id>
+```
 
 ### Finding entry IDs
 

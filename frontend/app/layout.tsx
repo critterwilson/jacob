@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { SentryInit } from "@/components/SentryInit";
 
 export const metadata: Metadata = {
   title: "JACOB",
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <SentryInit />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
