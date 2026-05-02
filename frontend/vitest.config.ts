@@ -9,6 +9,10 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     globals: true,
     passWithNoTests: true,
+    // M9 emulator tests live alongside the rest of the test tree but
+    // require a running emulator and are run via a separate config
+    // (`vitest.integration.config.ts`) inside `firebase emulators:exec`.
+    exclude: ["**/node_modules/**", "**/integration/**"],
   },
   resolve: {
     alias: {

@@ -10,6 +10,8 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "lint": "eslint --ext .ts src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },
@@ -21,6 +23,7 @@
     "@typescript-eslint/eslint-plugin": "^8",
     "@typescript-eslint/parser": "^8",
     "eslint": "^8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }

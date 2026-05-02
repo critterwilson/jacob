@@ -312,3 +312,64 @@ def test_two_uids_are_independent_buckets() -> None:
     mock_bob.state.uid = "uid-bob"
 
     assert _key_by_uid_or_ip(mock_alice) != _key_by_uid_or_ip(mock_bob)
+
+
+# ── M10: rate-limit decorator presence (not just the constant) ─────────────────
+#
+# These tests guard against the decorator being silently dropped during a
+# refactor — a regression that would leave UPLOAD_INIT/REPORT_SUBMIT/etc as
+# dead constants while the route accepts unlimited traffic.
+
+
+def _route_has_slowapi_limit(handler: object) -> bool:
+    """slowapi wraps the route in a closure that captures the Limiter.
+
+    Detection: the wrapper's `__wrapped__` points at the undecorated function
+    and its `__closure__` contains a Limiter instance. If both hold, the
+    `@limiter.limit(...)` decorator was applied at import time.
+    """
+    from slowapi import Limiter
+
+    if not callable(handler):
+        return False
+    inner = getattr(handler, "__wrapped__", None)
+    if inner is None or inner is handler:
+        return False
+    closure = getattr(handler, "__closure__", None)
+    if not closure:
+        return False
+    return any(isinstance(cell.cell_contents, Limiter) for cell in closure)
+
+
+def test_upload_init_route_is_rate_limited() -> None:
+    """create_photo_upload must keep its @limiter.limit(UPLOAD_INIT) decorator."""
+    from app.routers.uploads import create_photo_upload
+
+    assert _route_has_slowapi_limit(create_photo_upload), (
+        "create_photo_upload is missing the @limiter.limit decorator; UPLOAD_INIT "
+        "would become a dead constant."
+    )
+
+
+def test_invite_rotate_route_is_rate_limited() -> None:
+    from app.routers.groups import rotate_invite
+
+    assert _route_has_slowapi_limit(rotate_invite)
+
+
+def test_report_submit_route_is_rate_limited() -> None:
+    from app.routers.reports import post_report
+
+    assert _route_has_slowapi_limit(post_report)
+
+
+def test_admin_resolve_route_is_rate_limited() -> None:
+    from app.routers.admin import resolve_moderation_item
+
+    assert _route_has_slowapi_limit(resolve_moderation_item)
+
+
+def test_admin_bulk_resolve_route_is_rate_limited() -> None:
+    from app.routers.admin import bulk_resolve_moderation_items
+
+    assert _route_has_slowapi_limit(bulk_resolve_moderation_items)

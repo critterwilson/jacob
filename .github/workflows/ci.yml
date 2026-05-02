@@ -85,6 +85,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter jacob-functions build
       - run: pnpm --filter jacob-functions lint
+      - run: pnpm --filter jacob-functions test
 
   rules-test:
     name: "Firestore rules — vitest + emulator"
@@ -110,3 +111,11 @@ jobs:
           --only firestore
           --project demo-jacob
           "pnpm --filter jacob-firestore test"
+      - name: Run frontend integration tests against the emulator (M9)
+        env:
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+        run: >
+          firebase emulators:exec
+          --only firestore
+          --project demo-jacob
+          "pnpm --filter jacob-frontend test:integration"
