@@ -44,6 +44,7 @@ export type Message = {
   announcedAt?: Timestamp | null;
   announcedBy?: string | null;
   reactionCounts?: Record<string, number>;
+  mentions?: string[];
 };
 
 function docToMessage(d: QueryDocumentSnapshot): Message {

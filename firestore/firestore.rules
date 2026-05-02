@@ -269,7 +269,8 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null
           && request.resource.data.keys().hasOnly(
                ['authorUid', 'body', 'stickerIds', 'createdAt', 'editedAt',
-                'deletedAt', 'parentMessageId', 'threadReplyCount', 'mediaRefs'])
+                'deletedAt', 'parentMessageId', 'threadReplyCount', 'mediaRefs',
+                'mentions'])
           && request.resource.data.authorUid == request.auth.uid
           && request.resource.data.createdAt == request.time
           && request.resource.data.threadReplyCount == 0
@@ -284,7 +285,10 @@ service cloud.firestore {
           && request.resource.data.mediaRefs is list
           && request.resource.data.mediaRefs.size() <= 4
           && (request.resource.data.parentMessageId == null
-              || messageExists(gid, request.resource.data.parentMessageId));
+              || messageExists(gid, request.resource.data.parentMessageId))
+          && (!('mentions' in request.resource.data)
+              || (request.resource.data.mentions is list
+                  && request.resource.data.mentions.size() <= 10));
 
         // Author can soft-edit body (+ editedAt) within 15 minutes of posting.
         // Author or group leader can soft-delete at any time (sets deletedAt).

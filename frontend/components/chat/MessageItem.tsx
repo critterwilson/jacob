@@ -9,6 +9,8 @@ import { ReportButton } from "@/components/moderation/ReportButton";
 import { ReactionBar } from "@/components/chat/ReactionBar";
 import { ReactionPicker } from "@/components/chat/ReactionPicker";
 import { useStickers } from "@/lib/hooks/useStickers";
+import type { Member } from "@/lib/hooks/useMembers";
+import { renderBodyWithMentions } from "@/lib/mentions";
 import { firestore } from "@/lib/firebase";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 import type { PinnedMessage } from "@/lib/hooks/usePinnedMessages";
@@ -33,6 +35,7 @@ type Props = {
   archived?: boolean;
   isMyReaction?: (mid: string, slug: string) => boolean;
   onToggleReaction?: (mid: string, slug: string) => void;
+  members?: Member[];
 };
 
 export function MessageItem({
@@ -47,6 +50,7 @@ export function MessageItem({
   archived = false,
   isMyReaction,
   onToggleReaction,
+  members,
 }: Props) {
   const { user } = useAuth();
   const resolvedUid = currentUserUid ?? user?.uid;
@@ -178,7 +182,27 @@ export function MessageItem({
         </div>
       ) : (
         <p className="whitespace-pre-wrap text-sm text-gray-800">
-          {message.body}
+          {renderBodyWithMentions(
+            message.body,
+            message.mentions ?? [],
+            members ?? [],
+            resolvedUid,
+          ).map((part, i) =>
+            typeof part === "string" ? (
+              part
+            ) : (
+              <span
+                key={i}
+                className={`inline-block rounded px-1 text-xs font-medium ${
+                  part.isSelf
+                    ? "bg-yellow-100 text-yellow-900"
+                    : "bg-purple-100 text-purple-700"
+                }`}
+              >
+                @{part.displayName}
+              </span>
+            ),
+          )}
         </p>
       )}
 

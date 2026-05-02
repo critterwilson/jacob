@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 import { useAuth } from "@/lib/auth-context";
+import { useMembers } from "@/lib/hooks/useMembers";
+import { extractMentionedUids } from "@/lib/mentions";
+import { MentionInput } from "@/components/chat/MentionInput";
 import { PhotoAttachButton } from "@/components/chat/PhotoAttachButton";
 import {
   DEFAULT_STICKER_SLUG,
@@ -16,10 +19,6 @@ import { firestore } from "@/lib/firebase";
 
 const MAX_PHOTOS_PER_MESSAGE = 4;
 
-// Body itself is permissive: photo-only messages are allowed, so we only
-// gate on max length here. The "must contain text or a photo" rule is
-// enforced in `onSubmit` because it depends on `mediaRefs` state, which
-// react-hook-form doesn't see.
 const schema = z.object({
   body: z.string().max(4000, "Message must be 4000 characters or less"),
 });
@@ -33,13 +32,14 @@ type Props = {
 
 export function MessageInput({ gid, archived = false }: Props) {
   const { user } = useAuth();
+  const { members } = useMembers(gid);
   const [stickers, setStickers] = useState<string[]>([]);
   const [mediaRefs, setMediaRefs] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const {
-    register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -62,6 +62,8 @@ export function MessageInput({ gid, archived = false }: Props) {
     const finalStickers =
       stickers.length > 0 ? stickers : [DEFAULT_STICKER_SLUG];
 
+    const mentions = extractMentionedUids(trimmedBody, members);
+
     try {
       await addDoc(collection(firestore, "groups", gid, "messages"), {
         authorUid: user.uid,
@@ -73,6 +75,7 @@ export function MessageInput({ gid, archived = false }: Props) {
         parentMessageId: null,
         threadReplyCount: 0,
         mediaRefs,
+        ...(mentions.length > 0 ? { mentions } : {}),
       });
       reset();
       setStickers([]);
@@ -127,13 +130,22 @@ export function MessageInput({ gid, archived = false }: Props) {
       )}
 
       <div className="mt-2 flex gap-2">
-        <textarea
-          {...register("body")}
-          aria-label="Message body"
-          placeholder="Say something…"
-          rows={2}
-          maxLength={4000}
-          className="flex-1 resize-none rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <Controller
+          name="body"
+          control={control}
+          render={({ field }) => (
+            <MentionInput
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              members={members}
+              aria-label="Message body"
+              placeholder="Say something…"
+              rows={2}
+              maxLength={4000}
+              className="flex-1 resize-none rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
         />
         <button
           type="submit"
