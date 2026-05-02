@@ -139,7 +139,7 @@ resource "google_monitoring_alert_policy" "frontend_down" {
 
     condition_threshold {
       # check_passed drops to 0 when the check fails
-      filter     = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.labels.check_id=\"${google_monitoring_uptime_check_config.frontend.uptime_check_id}\""
+      filter     = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND resource.labels.host=\"${var.frontend_host}\""
       duration   = "120s"
       comparison = "COMPARISON_LT"
 
@@ -155,9 +155,7 @@ resource "google_monitoring_alert_policy" "frontend_down" {
   }
 
   alert_strategy {
-    notification_rate_limit {
-      period = "3600s"
-    }
+    auto_close = "604800s"
   }
 }
 
@@ -171,7 +169,7 @@ resource "google_monitoring_alert_policy" "backend_down" {
     display_name = "Backend /health failing"
 
     condition_threshold {
-      filter     = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.labels.check_id=\"${google_monitoring_uptime_check_config.backend_health.uptime_check_id}\""
+      filter     = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND resource.labels.host=\"${var.backend_host}\""
       duration   = "120s"
       comparison = "COMPARISON_LT"
 
@@ -187,9 +185,7 @@ resource "google_monitoring_alert_policy" "backend_down" {
   }
 
   alert_strategy {
-    notification_rate_limit {
-      period = "3600s"
-    }
+    auto_close = "604800s"
   }
 }
 
