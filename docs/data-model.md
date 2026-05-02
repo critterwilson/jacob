@@ -18,13 +18,15 @@ Conventions:
 ```
 users/{uid}
 users/{uid}/private/{docId}
+users/{uid}/mutes/{otherUid}    # T21 — owner-only
+users/{uid}/blocks/{otherUid}   # T21 — owner-only
 groups/{gid}
 groups/{gid}/members/{uid}
 groups/{gid}/messages/{mid}
 stickers/{stickerId}
-moderation_queue/{itemId}      # backend only
-bans/{uid}                     # backend only
-audit_log/{eventId}            # backend only
+moderation_queue/{itemId}       # backend only
+bans/{uid}                      # backend only
+audit_log/{eventId}             # backend only
 ```
 
 ---
@@ -65,6 +67,28 @@ Example `users/{uid}/private/profile`:
   "addressLine1": null,
   "lastSignInIp": "203.0.113.42"
 }
+```
+
+### `users/{uid}/mutes/{otherUid}` and `users/{uid}/blocks/{otherUid}` (T21)
+
+Per-user mute and block lists. Owner-only — no other user can read or
+enumerate them.
+
+- **Mute** is a soft hide: the muted user's messages collapse to a
+  "Muted user · Show" stub. Notifications (T34, T35) consult the same
+  set so muted users don't generate pushes / digest rows.
+- **Block** is stronger: blocked-user messages are hidden entirely; the
+  blocker disappears from the blockee's mention autocomplete (T27); no
+  notifications fire either direction. Block is one-directional —
+  symmetric blocking is a Phase 3 escalation tool.
+- Self-mute and self-block are rejected by the rule (`otherUid != uid`).
+
+```json
+// users/{uid}/mutes/{otherUid}
+{ "mutedAt": "<serverTimestamp>" }
+
+// users/{uid}/blocks/{otherUid}
+{ "blockedAt": "<serverTimestamp>" }
 ```
 
 ---

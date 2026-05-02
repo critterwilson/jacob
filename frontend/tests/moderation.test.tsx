@@ -7,6 +7,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { ReportDialog } from "@/components/moderation/ReportDialog";
+import { MuteButton } from "@/components/moderation/MuteButton";
+import { BlockButton } from "@/components/moderation/BlockButton";
 
 vi.mock("@/lib/auth-context", () => ({
   useAuth: () => ({
@@ -17,6 +19,30 @@ vi.mock("@/lib/auth-context", () => ({
     },
     loading: false,
     signOut: vi.fn(),
+  }),
+}));
+
+const muteFn = vi.fn();
+const unmuteFn = vi.fn();
+const blockFn = vi.fn();
+const unblockFn = vi.fn();
+vi.mock("@/lib/hooks/useMutes", () => ({
+  useMutes: () => ({
+    isMuted: (uid: string) => uid === "muted-uid",
+    mutedSet: new Set(["muted-uid"]),
+    mute: muteFn,
+    unmute: unmuteFn,
+    loading: false,
+  }),
+}));
+vi.mock("@/lib/hooks/useBlocks", () => ({
+  useBlocks: () => ({
+    isBlocked: (uid: string) => uid === "blocked-uid",
+    blockedSet: new Set(["blocked-uid"]),
+    blockedList: ["blocked-uid"],
+    block: blockFn,
+    unblock: unblockFn,
+    loading: false,
   }),
 }));
 
@@ -154,6 +180,54 @@ describe("ReportDialog", () => {
         groupId="grp-1"
       />,
     );
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+// ── T21: MuteButton / BlockButton ────────────────────────────────────────────
+
+describe("MuteButton", () => {
+  it("renders 'Mute' for an unmuted user", () => {
+    render(<MuteButton otherUid="other-uid" />);
+    expect(screen.getByRole("button", { name: /mute user/i })).toBeInTheDocument();
+  });
+
+  it("renders 'Unmute' for an already-muted user", () => {
+    render(<MuteButton otherUid="muted-uid" />);
+    expect(
+      screen.getByRole("button", { name: /unmute user/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the button entirely when otherUid equals current user", () => {
+    const { container } = render(<MuteButton otherUid="user-123" />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("calls mute() when clicked on an unmuted user", async () => {
+    const user = userEvent.setup();
+    render(<MuteButton otherUid="other-uid" />);
+    muteFn.mockClear();
+    await user.click(screen.getByRole("button", { name: /mute user/i }));
+    expect(muteFn).toHaveBeenCalledWith("other-uid");
+  });
+});
+
+describe("BlockButton", () => {
+  it("renders 'Block' for an unblocked user", () => {
+    render(<BlockButton otherUid="other-uid" />);
+    expect(screen.getByRole("button", { name: /block user/i })).toBeInTheDocument();
+  });
+
+  it("renders 'Unblock' for an already-blocked user", () => {
+    render(<BlockButton otherUid="blocked-uid" />);
+    expect(
+      screen.getByRole("button", { name: /unblock user/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the button entirely when otherUid equals current user", () => {
+    const { container } = render(<BlockButton otherUid="user-123" />);
     expect(container.firstChild).toBeNull();
   });
 });

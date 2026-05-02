@@ -98,6 +98,31 @@ service cloud.firestore {
         allow read: if isUser(uid);
         allow write: if isUser(uid) && notBanned();
       }
+
+      // T21 — per-user mute and block lists. Owner-only read+write; no
+      // other user can enumerate or read these. Mute is a soft hide
+      // (collapse messages); block is stronger (hide messages + suppress
+      // mentions + suppress notifications). Both are client-enforced;
+      // notification fan-out (T34, T35) reads them server-side.
+      match /mutes/{otherUid} {
+        allow read: if isUser(uid);
+        allow create: if isUser(uid) && notBanned()
+          && otherUid != uid
+          && request.resource.data.keys().hasOnly(['mutedAt'])
+          && request.resource.data.mutedAt == request.time;
+        allow delete: if isUser(uid);
+        allow update: if false;
+      }
+
+      match /blocks/{otherUid} {
+        allow read: if isUser(uid);
+        allow create: if isUser(uid) && notBanned()
+          && otherUid != uid
+          && request.resource.data.keys().hasOnly(['blockedAt'])
+          && request.resource.data.blockedAt == request.time;
+        allow delete: if isUser(uid);
+        allow update: if false;
+      }
     }
 
     // --- groups ----------------------------------------------------------
