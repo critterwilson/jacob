@@ -310,6 +310,31 @@ service cloud.firestore {
         // Soft-delete only.
         allow delete: if false;
       }
+
+      // --- reactions (T26) ------------------------------------------
+      // groups/{gid}/messages/{mid}/reactions/{stickerSlug}/users/{uid}
+      //
+      // Three get() calls per reaction-create (sticker, group, message).
+      // Cost is acceptable for v1; denormalizing archived/deleted state
+      // onto the message would reduce reads but adds drift risk.
+      match /messages/{mid}/reactions/{stickerSlug}/users/{uid} {
+        allow read: if isGroupMember(gid);
+
+        allow create: if isUser(uid) && notBanned()
+          && isGroupMember(gid)
+          && exists(/databases/$(database)/documents/stickers/$(stickerSlug))
+          && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null
+          && get(/databases/$(database)/documents/groups/$(gid)/messages/$(mid)).data.deletedAt == null
+          && request.resource.data.keys().hasOnly(['reactedAt'])
+          && request.resource.data.reactedAt == request.time;
+
+        // Idempotent toggle-off. No notBanned check — removing a reaction
+        // is a neutral action we don't need to block on ban.
+        allow delete: if isUser(uid);
+
+        // No update — toggle is delete + create.
+        allow update: if false;
+      }
     }
 
     // --- members (collection-group, M11) --------------------------------

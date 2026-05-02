@@ -6,6 +6,8 @@ import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
 import { ReportButton } from "@/components/moderation/ReportButton";
+import { ReactionBar } from "@/components/chat/ReactionBar";
+import { ReactionPicker } from "@/components/chat/ReactionPicker";
 import { useStickers } from "@/lib/hooks/useStickers";
 import { firestore } from "@/lib/firebase";
 import type { Message } from "@/lib/hooks/useGroupMessages";
@@ -28,6 +30,9 @@ type Props = {
   pinnedIds?: string[];
   onTogglePin?: (mid: string) => void;
   onAnnounce?: (mid: string) => void;
+  archived?: boolean;
+  isMyReaction?: (mid: string, slug: string) => boolean;
+  onToggleReaction?: (mid: string, slug: string) => void;
 };
 
 export function MessageItem({
@@ -39,6 +44,9 @@ export function MessageItem({
   pinnedIds = [],
   onTogglePin,
   onAnnounce,
+  archived = false,
+  isMyReaction,
+  onToggleReaction,
 }: Props) {
   const { user } = useAuth();
   const resolvedUid = currentUserUid ?? user?.uid;
@@ -198,6 +206,15 @@ export function MessageItem({
         </ul>
       )}
 
+      {!isDeleted && onToggleReaction && isMyReaction && (
+        <ReactionBar
+          mid={message.id}
+          reactionCounts={message.reactionCounts}
+          isMyReaction={isMyReaction}
+          onToggle={onToggleReaction}
+        />
+      )}
+
       {error && (
         <p role="alert" className="text-xs text-red-600">
           {error}
@@ -268,6 +285,14 @@ export function MessageItem({
             >
               Announce
             </button>
+          )}
+          {onToggleReaction && isMyReaction && (
+            <ReactionPicker
+              mid={message.id}
+              isMyReaction={isMyReaction}
+              onToggle={onToggleReaction}
+              disabled={archived}
+            />
           )}
           {!isAuthor && (
             <ReportButton

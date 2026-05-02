@@ -43,6 +43,7 @@ export type Message = {
   moderation?: ModerationFields | null;
   announcedAt?: Timestamp | null;
   announcedBy?: string | null;
+  reactionCounts?: Record<string, number>;
 };
 
 function docToMessage(d: QueryDocumentSnapshot): Message {
