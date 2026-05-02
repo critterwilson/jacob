@@ -9,7 +9,10 @@ import { useAuth } from "@/lib/auth-context";
 import { firestore } from "@/lib/firebase";
 import { useGroupMessages } from "@/lib/hooks/useGroupMessages";
 import type { Message } from "@/lib/hooks/useGroupMessages";
+import { usePinnedMessages } from "@/lib/hooks/usePinnedMessages";
+import { useAnnounce } from "@/lib/hooks/useAnnounce";
 import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
+import { PinnedBar } from "@/components/chat/PinnedBar";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageList } from "@/components/chat/MessageList";
 import { ThreadPanel } from "@/components/chat/ThreadPanel";
@@ -24,6 +27,9 @@ export default function ChatPage({ params }: Props) {
 
   const { messages, loading, loadingOlder, hasMore, loadOlder } =
     useGroupMessages(user ? gid : undefined);
+
+  const { pinnedIds, togglePin } = usePinnedMessages(gid);
+  const { announce } = useAnnounce(gid);
 
   const [groupName, setGroupName] = useState<string | null>(null);
   const [archivedAt, setArchivedAt] = useState<Timestamp | null>(null);
@@ -105,6 +111,7 @@ export default function ChatPage({ params }: Props) {
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-hidden">
           {archivedAt && <ArchivedBanner />}
+          <PinnedBar gid={gid} isLeader={isLeader} />
           <MessageList
             gid={gid}
             messages={messages}
@@ -112,8 +119,11 @@ export default function ChatPage({ params }: Props) {
             loadingOlder={loadingOlder}
             hasMore={hasMore}
             isLeader={isLeader}
+            pinnedIds={pinnedIds}
             onLoadOlder={() => void loadOlder()}
             onReply={setActiveThread}
+            onTogglePin={(mid) => void togglePin(mid)}
+            onAnnounce={(mid) => void announce(mid)}
           />
           <MessageInput gid={gid} archived={Boolean(archivedAt)} />
         </div>

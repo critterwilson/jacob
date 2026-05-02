@@ -9,6 +9,7 @@ import { ReportButton } from "@/components/moderation/ReportButton";
 import { useStickers } from "@/lib/hooks/useStickers";
 import { firestore } from "@/lib/firebase";
 import type { Message } from "@/lib/hooks/useGroupMessages";
+import type { PinnedMessage } from "@/lib/hooks/usePinnedMessages";
 
 const FIFTEEN_MIN_MS = 15 * 60 * 1000;
 
@@ -24,9 +25,21 @@ type Props = {
   isLeader: boolean;
   onReply?: (message: Message) => void;
   currentUserUid?: string;
+  pinnedIds?: string[];
+  onTogglePin?: (mid: string) => void;
+  onAnnounce?: (mid: string) => void;
 };
 
-export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }: Props) {
+export function MessageItem({
+  gid,
+  message,
+  isLeader,
+  onReply,
+  currentUserUid,
+  pinnedIds = [],
+  onTogglePin,
+  onAnnounce,
+}: Props) {
   const { user } = useAuth();
   const resolvedUid = currentUserUid ?? user?.uid;
   const { stickers } = useStickers();
@@ -236,6 +249,24 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
               className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
             >
               Delete
+            </button>
+          )}
+          {isLeader && onTogglePin && (
+            <button
+              type="button"
+              onClick={() => onTogglePin(message.id)}
+              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+            >
+              {pinnedIds.includes(message.id) ? "Unpin" : "Pin"}
+            </button>
+          )}
+          {isLeader && onAnnounce && !message.announcedAt && (
+            <button
+              type="button"
+              onClick={() => onAnnounce(message.id)}
+              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+            >
+              Announce
             </button>
           )}
           {!isAuthor && (

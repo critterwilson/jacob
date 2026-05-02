@@ -135,11 +135,12 @@ service cloud.firestore {
       // `leaderCount` is system-only — the onMemberWrite trigger sets it
       // and the rule rejects every client write.
       // T23: `avatarUrl` and `archivedAt` are additive fields; absent ≡ null.
+      // T24: `pinnedMessageIds` added; must be empty list on create.
       allow create: if isSignedIn() && notBanned()
         && request.resource.data.keys().hasOnly(
              ['name', 'description', 'isPrivate', 'createdBy', 'founderUid',
               'createdAt', 'inviteCode', 'memberCount', 'stickerSet',
-              'schemaVersion', 'avatarUrl', 'archivedAt'])
+              'schemaVersion', 'avatarUrl', 'archivedAt', 'pinnedMessageIds'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.founderUid == request.auth.uid
         && request.resource.data.createdAt == request.time
@@ -156,17 +157,21 @@ service cloud.firestore {
         && (!('avatarUrl' in request.resource.data)
             || request.resource.data.avatarUrl == null)
         && (!('archivedAt' in request.resource.data)
-            || request.resource.data.archivedAt == null);
+            || request.resource.data.archivedAt == null)
+        && (!('pinnedMessageIds' in request.resource.data)
+            || request.resource.data.pinnedMessageIds == []);
 
       // memberCount, leaderCount, founderUid, and moderationPolicy are all
       // system-only (Admin SDK bypasses these rules). Leaders edit metadata
       // only via the listed fields.
       // T23: avatarUrl, archivedAt, archivedBy, archiveReason added for leader edits.
+      // T24: pinnedMessageIds added; must be list of ≤5 entries.
       // avatarUrl must start with the public bucket prefix or be null.
       // archivedAt transitions: null→request.time (archive) or non-null→null (unarchive).
       allow update: if isGroupLeader(gid) && notBanned()
         && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet',
-                        'avatarUrl', 'archivedAt', 'archivedBy', 'archiveReason'])
+                        'avatarUrl', 'archivedAt', 'archivedBy', 'archiveReason',
+                        'pinnedMessageIds'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 100
@@ -190,7 +195,10 @@ service cloud.firestore {
               || (resource.data.get('archivedAt', null) != null
                 && request.resource.data.archivedAt == null
                 && request.resource.data.archivedBy == null)
-            ));
+            ))
+        && (!('pinnedMessageIds' in changedKeys())
+            || (request.resource.data.pinnedMessageIds is list
+                && request.resource.data.pinnedMessageIds.size() <= 5));
 
       allow delete: if false;
 
@@ -280,6 +288,7 @@ service cloud.firestore {
 
         // Author can soft-edit body (+ editedAt) within 15 minutes of posting.
         // Author or group leader can soft-delete at any time (sets deletedAt).
+        // T24: leader announces — only announcedAt + announcedBy change; one-way.
         // All other fields are immutable via the client.
         allow update: if isGroupMember(gid) && notBanned() && (
           (resource.data.authorUid == request.auth.uid
@@ -290,6 +299,12 @@ service cloud.firestore {
             && onlyChanges(['deletedAt'])
             && request.resource.data.deletedAt == request.time
             && resource.data.deletedAt == null)
+          || (isGroupLeader(gid)
+            && onlyChanges(['announcedAt', 'announcedBy'])
+            && resource.data.get('announcedAt', null) == null
+            && request.resource.data.announcedAt == request.time
+            && request.resource.data.announcedBy == request.auth.uid
+            && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null)
         );
 
         // Soft-delete only.
@@ -340,6 +355,19 @@ service cloud.firestore {
     // and never need to touch this collection.
     match /uploads/{uploadId} {
       allow read, write: if false;
+    }
+
+    // --- notifications (T24) -------------------------------------------
+    // Server-only creates and deletes (Admin SDK). Owner reads and can
+    // mark as read by setting readAt to serverTimestamp; nothing else.
+    match /users/{uid}/notifications/{nid} {
+      allow read: if isUser(uid);
+      allow update: if isUser(uid)
+        && onlyChanges(['readAt'])
+        && request.resource.data.readAt == request.time
+        && resource.data.readAt == null;
+      allow create: if false;
+      allow delete: if false;
     }
 
     // --- default deny (defense in depth) --------------------------------
