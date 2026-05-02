@@ -136,6 +136,14 @@ service cloud.firestore {
       allow delete: if false;
 
       // --- members -----------------------------------------------------
+      // M11: a `uid` field — equal to the doc ID — lets the client run a
+      // collection-group query to find every group it belongs to, in one
+      // round-trip, without needing the legacy `users/{uid}.groupIds`
+      // mirror. The rule below treats `uid` as optional on create (so
+      // older client paths that pre-date M11 still work) but, if present,
+      // forces it to equal the doc ID. The list/get rule reads the path
+      // variable `uid`, which by invariant matches the field; per-doc
+      // evaluation lets the CG query pass for the user's own rows.
       match /members/{uid} {
         allow read: if isGroupMember(gid) || isUser(uid);
 
@@ -145,8 +153,9 @@ service cloud.firestore {
         // `groups/{gid}.createdBy` so it can't be used to self-elevate
         // into someone else's group.
         allow create: if notBanned()
-          && request.resource.data.keys().hasOnly(['role', 'joinedAt'])
+          && request.resource.data.keys().hasOnly(['role', 'joinedAt', 'uid'])
           && request.resource.data.joinedAt == request.time
+          && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
           && (
             (isUser(uid)
               && request.resource.data.role == 'leader'
@@ -205,6 +214,28 @@ service cloud.firestore {
         // Soft-delete only.
         allow delete: if false;
       }
+    }
+
+    // --- members (collection-group, M11) --------------------------------
+    // Subcollection rules are not applied to collection-group queries by
+    // default — Firestore requires an explicit recursive-path match. We
+    // narrow this to "user can read their own membership rows" so the
+    // cross-group permission boundary (CLAUDE.md) isn't weakened: there's
+    // no way to enumerate another user's memberships.
+    //
+    // The predicate references `resource.data.uid` rather than the path
+    // variable so the rules engine can statically prove the rule holds
+    // for any doc satisfying the query `where uid == auth.uid` — which
+    // is exactly the query shape useGroups uses. The create rule above
+    // enforces `resource.data.uid == doc-id`, so a malformed write
+    // can't sneak past this read rule.
+    //
+    // Single-doc gets and per-group lists continue to flow through the
+    // path-scoped `match /groups/{gid}/members/{uid}` block above; this
+    // match adds the CG read path only.
+    match /{path=**}/members/{uid} {
+      allow read: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
     }
 
     // --- stickers --------------------------------------------------------

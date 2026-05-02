@@ -78,7 +78,6 @@ def create_group(
 
     group_ref = db.collection("groups").document(gid)
     member_ref = group_ref.collection("members").document(user.uid)
-    user_ref = db.collection("users").document(user.uid)
 
     batch = db.batch()
     batch.set(
@@ -95,8 +94,16 @@ def create_group(
             "schemaVersion": 1,
         },
     )
-    batch.set(member_ref, {"role": "leader", "joinedAt": fb_firestore.SERVER_TIMESTAMP})
-    batch.set(user_ref, {"groupIds": gcf.ArrayUnion([gid])}, merge=True)
+    batch.set(
+        member_ref,
+        {
+            "role": "leader",
+            "joinedAt": fb_firestore.SERVER_TIMESTAMP,
+            "uid": user.uid,
+        },
+    )
+    # M11: memberships are derived from a collection-group query on the
+    # `members` subcollection. We no longer mirror them onto `users.groupIds`.
     batch.commit()
 
     logger.info("created group gid=%s uid=%s", gid, user.uid)
@@ -132,11 +139,17 @@ def join_group(
             message="You are already a member of this group",
         )
 
-    user_ref = db.collection("users").document(user.uid)
     batch = db.batch()
-    batch.set(member_ref, {"role": "member", "joinedAt": fb_firestore.SERVER_TIMESTAMP})
+    batch.set(
+        member_ref,
+        {
+            "role": "member",
+            "joinedAt": fb_firestore.SERVER_TIMESTAMP,
+            "uid": user.uid,
+        },
+    )
     batch.update(group_ref, {"memberCount": gcf.Increment(1)})
-    batch.set(user_ref, {"groupIds": gcf.ArrayUnion([gid])}, merge=True)
+    # M11: see create_group — memberships derive from members subcollection.
     batch.commit()
 
     logger.info("uid=%s joined gid=%s", user.uid, gid)

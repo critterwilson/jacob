@@ -30,6 +30,15 @@ these can be picked up as discrete Phase 2 tasks.
 - **M6 — Cloud Functions deploy lockfile** — landed in the
   *deferred-misc* PR. `functions/package-lock.json` is committed; Firebase
   deploy reproducibly installs the same dependency tree as local dev.
+- **M11 — `groupIds` schema drift** — landed in the *deferred-data-perf*
+  PR. Memberships now derive from a collection-group query on
+  `members.uid`; ADR 0003 documents the rule pattern; backend stops
+  writing `users/{uid}.groupIds`. `backend/scripts/backfill_member_uid.py`
+  populates the new field on existing docs.
+- **M12 — `useRecentMessages` N+1 reads** — landed in the
+  *deferred-data-perf* PR. Wrapped in SWR with a 60s dedupe window and
+  `keepPreviousData` so navigation doesn't refetch within the window or
+  flash empty.
 
 ## Punted
 
