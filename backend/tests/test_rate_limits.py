@@ -196,17 +196,44 @@ def test_report_submit_creates_moderation_item() -> None:
     with (
         patch("app.routers.reports.init_firebase_admin"),
         patch("app.routers.reports._db") as mock_db,
+        patch("app.services.reports._db") as svc_db,
     ):
         db = MagicMock()
+        # bans collection: not banned
+        bans_ref = MagicMock()
+        bans_ref.get.return_value = MagicMock(exists=False)
+        # moderation_queue dedup query returns nothing
+        modq = MagicMock()
+        modq.where.return_value = modq
+        modq.limit.return_value = modq
+        modq.stream.return_value = []
+        modq.document.return_value = MagicMock()
+
+        bans_col = MagicMock(document=MagicMock(return_value=bans_ref))
+
+        def collection_side_effect(name: str) -> MagicMock:
+            return {"bans": bans_col, "moderation_queue": modq}[name]
+
+        db.collection.side_effect = collection_side_effect
         mock_db.return_value = db
+        svc_db.return_value = db
 
         client = _reports_client()
         r = client.post(
             "/api/reports",
-            json={"resourceRef": "groups/g1/messages/m1", "reason": "Spam content"},
+            json={
+                "resourceType": "message",
+                "resourceId": "m1",
+                "groupId": "g1",
+                "reason": "spam",
+                "context": "this is spam",
+            },
         )
     assert r.status_code == 201
-    assert "reportId" in r.json()
+    body = r.json()
+    assert "reportId" in body
+    assert body["dedup"] is False
+    assert body["severity"] == 1
 
 
 def test_report_submit_requires_auth() -> None:
@@ -217,7 +244,12 @@ def test_report_submit_requires_auth() -> None:
     client = TestClient(app, raise_server_exceptions=False)
     r = client.post(
         "/api/reports",
-        json={"resourceRef": "groups/g1/messages/m1", "reason": "Test"},
+        json={
+            "resourceType": "message",
+            "resourceId": "m1",
+            "groupId": "g1",
+            "reason": "spam",
+        },
     )
     assert r.status_code == 401
 

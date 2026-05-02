@@ -1,146 +1,159 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-import { buildReportUrl, ENTRY, isReportFormConfigured } from "@/lib/report-url";
-import { ReportLink } from "@/components/moderation/ReportLink";
+import { ReportButton } from "@/components/moderation/ReportButton";
+import { ReportDialog } from "@/components/moderation/ReportDialog";
 
-// ── Auth context ─────────────────────────────────────────────────────────────
 vi.mock("@/lib/auth-context", () => ({
   useAuth: () => ({
-    user: { uid: "user-123", email: "test@example.com" },
+    user: {
+      uid: "user-123",
+      email: "test@example.com",
+      getIdToken: vi.fn().mockResolvedValue("fake-token"),
+    },
     loading: false,
     signOut: vi.fn(),
   }),
 }));
 
-// Set the form ID env var so the module behaves as configured.
-const FAKE_FORM_ID = "1FAIpQLSfABCD1234";
+const fetchMock = vi.fn();
 
 beforeEach(() => {
-  process.env.NEXT_PUBLIC_REPORT_FORM_ID = FAKE_FORM_ID;
+  vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockReset();
 });
+
 afterEach(() => {
-  delete process.env.NEXT_PUBLIC_REPORT_FORM_ID;
-  vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
-// ── buildReportUrl ────────────────────────────────────────────────────────────
-describe("buildReportUrl", () => {
-  it("returns null when NEXT_PUBLIC_REPORT_FORM_ID is unset", () => {
-    delete process.env.NEXT_PUBLIC_REPORT_FORM_ID;
-    expect(buildReportUrl({ contentType: "message" })).toBeNull();
+// ── ReportButton ─────────────────────────────────────────────────────────────
+
+describe("ReportButton", () => {
+  it("renders an accessible Report button", () => {
+    render(
+      <ReportButton resourceType="message" resourceId="msg-1" groupId="grp-1" />,
+    );
+    expect(
+      screen.getByRole("button", { name: /report this message/i }),
+    ).toBeInTheDocument();
   });
 
-  it("includes content_id, group_id, and reporter_uid for a message report", () => {
-    const url = buildReportUrl({
-      contentType: "message",
-      contentId: "msg-abc",
-      groupId: "grp-xyz",
-      reporterUid: "user-123",
-    });
-    const parsed = new URL(url!);
-    expect(parsed.searchParams.get(ENTRY.contentType)).toBe("message");
-    expect(parsed.searchParams.get(ENTRY.contentId)).toBe("msg-abc");
-    expect(parsed.searchParams.get(ENTRY.groupId)).toBe("grp-xyz");
-    expect(parsed.searchParams.get(ENTRY.reporterUid)).toBe("user-123");
-    expect(parsed.searchParams.get(ENTRY.timestamp)).toBeTruthy();
-  });
-
-  it("includes group_id and reporter_uid for a group report", () => {
-    const url = buildReportUrl({
-      contentType: "group",
-      groupId: "grp-xyz",
-      reporterUid: "user-123",
-    });
-    const parsed = new URL(url!);
-    expect(parsed.searchParams.get(ENTRY.contentType)).toBe("group");
-    expect(parsed.searchParams.has(ENTRY.contentId)).toBe(false);
-    expect(parsed.searchParams.get(ENTRY.groupId)).toBe("grp-xyz");
-    expect(parsed.searchParams.get(ENTRY.reporterUid)).toBe("user-123");
-  });
-
-  it("omits reporter_uid when undefined (anonymous report)", () => {
-    const url = buildReportUrl({
-      contentType: "message",
-      contentId: "msg-abc",
-      groupId: "grp-xyz",
-    });
-    const parsed = new URL(url!);
-    expect(parsed.searchParams.has(ENTRY.reporterUid)).toBe(false);
-  });
-
-  it("uses the configured FORM_ID in the URL", () => {
-    const url = buildReportUrl({ contentType: "message" });
-    expect(url).toContain(FAKE_FORM_ID);
+  it("opens the dialog when clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <ReportButton resourceType="message" resourceId="msg-1" groupId="grp-1" />,
+    );
+    await user.click(screen.getByRole("button", { name: /report this message/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
 
-// ── isReportFormConfigured ────────────────────────────────────────────────────
-describe("isReportFormConfigured", () => {
-  it("returns true when NEXT_PUBLIC_REPORT_FORM_ID is set", () => {
-    expect(isReportFormConfigured()).toBe(true);
-  });
+// ── ReportDialog: submit flow ────────────────────────────────────────────────
 
-  it("returns false when NEXT_PUBLIC_REPORT_FORM_ID is unset", () => {
-    delete process.env.NEXT_PUBLIC_REPORT_FORM_ID;
-    expect(isReportFormConfigured()).toBe(false);
-  });
-});
-
-// ── ReportLink (form configured) ─────────────────────────────────────────────
-describe("ReportLink", () => {
-  it("renders an accessible Report link", () => {
+describe("ReportDialog", () => {
+  it("posts to /api/reports with the structured shape", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ reportId: "rid-1", dedup: false, severity: 2 }),
+    });
     render(
-      <ReportLink contentType="message" contentId="msg-1" groupId="grp-1" />,
+      <ReportDialog
+        open
+        onClose={() => {}}
+        resourceType="message"
+        resourceId="msg-1"
+        groupId="grp-1"
+      />,
     );
-    expect(screen.getByRole("link", { name: /report/i })).toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByLabelText(/reason/i),
+      "harassment",
+    );
+    await user.type(
+      screen.getByLabelText(/add context/i),
+      "they keep insulting people",
+    );
+    await user.click(screen.getByRole("button", { name: /submit report/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/reports");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toMatchObject({
+      resourceType: "message",
+      resourceId: "msg-1",
+      groupId: "grp-1",
+      reason: "harassment",
+    });
+    expect(body.context).toContain("insulting");
+
+    expect(
+      await screen.findByText(/your report has been sent/i),
+    ).toBeInTheDocument();
   });
 
-  it("prefills reporter_uid from auth context", () => {
+  it("surfaces a dedup acknowledgement when the API returns dedup=true", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ reportId: "rid-1", dedup: true, severity: 1 }),
+    });
     render(
-      <ReportLink contentType="message" contentId="msg-1" groupId="grp-1" />,
+      <ReportDialog
+        open
+        onClose={() => {}}
+        resourceType="message"
+        resourceId="msg-1"
+        groupId="grp-1"
+      />,
     );
-    const href = screen.getByRole("link", { name: /report/i }).getAttribute("href")!;
-    const parsed = new URL(href);
-    expect(parsed.searchParams.get(ENTRY.reporterUid)).toBe("user-123");
+    await user.click(screen.getByRole("button", { name: /submit report/i }));
+
+    expect(
+      await screen.findByText(/we already have this report/i),
+    ).toBeInTheDocument();
   });
 
-  it("opens in a new tab (target=_blank)", () => {
+  it("shows an error message when the request fails", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: { code: "banned", message: "Banned users cannot report" },
+      }),
+    });
     render(
-      <ReportLink contentType="message" contentId="msg-abc" groupId="grp-xyz" />,
+      <ReportDialog
+        open
+        onClose={() => {}}
+        resourceType="group"
+        resourceId="grp-1"
+      />,
     );
-    const link = screen.getByRole("link", { name: /report/i });
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    await user.click(screen.getByRole("button", { name: /submit report/i }));
+    expect(
+      await screen.findByText(/banned users cannot report/i),
+    ).toBeInTheDocument();
   });
 
-  it("renders nothing when NEXT_PUBLIC_REPORT_FORM_ID is unset", () => {
-    delete process.env.NEXT_PUBLIC_REPORT_FORM_ID;
+  it("does not render when open=false", () => {
     const { container } = render(
-      <ReportLink contentType="message" contentId="msg-1" groupId="grp-1" />,
+      <ReportDialog
+        open={false}
+        onClose={() => {}}
+        resourceType="message"
+        resourceId="msg-1"
+        groupId="grp-1"
+      />,
     );
     expect(container.firstChild).toBeNull();
-  });
-});
-
-// ── ReportLink (anonymous) ────────────────────────────────────────────────────
-describe("ReportLink (anonymous)", () => {
-  it("leaves reporter_uid blank when user is not signed in", async () => {
-    vi.resetModules();
-    vi.doMock("@/lib/auth-context", () => ({
-      useAuth: () => ({ user: null, loading: false, signOut: vi.fn() }),
-    }));
-    const { ReportLink: AnonReportLink } = await import(
-      "@/components/moderation/ReportLink"
-    );
-    render(
-      <AnonReportLink contentType="group" groupId="grp-1" />,
-    );
-    const href = screen.getByRole("link", { name: /report/i }).getAttribute("href")!;
-    const parsed = new URL(href);
-    expect(parsed.searchParams.has(ENTRY.reporterUid)).toBe(false);
   });
 });

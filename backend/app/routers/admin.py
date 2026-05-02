@@ -28,6 +28,8 @@ from app.models.admin import (
     AdminUserListResponse,
     BanRequest,
     BanResponse,
+    BulkResolveRequest,
+    BulkResolveResponse,
     ModerationItem,
     ModerationListResponse,
     ResolveRequest,
@@ -102,19 +104,55 @@ def _notify_reported_author(db: Any, item_data: dict[str, Any]) -> None:
 # ── moderation queue ──────────────────────────────────────────────────────────
 
 
+_KNOWN_STATUSES = {"pending", "approved", "rejected"}
+_KNOWN_REASONS = {
+    "harassment",
+    "sexual",
+    "violence",
+    "self-harm",
+    "spam",
+    "other",
+    # legacy free-text reasons (T12 reports). Filtering by these is a no-op
+    # but the queue page still surfaces them.
+}
+_KNOWN_SORTS = {"createdAt", "severity"}
+
+
 @router.get("/moderation", response_model=ModerationListResponse)
 def list_moderation_queue(
     cursor: str | None = Query(default=None),
     limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    status_filter: str = Query(default="pending", alias="status"),
+    reason: str | None = Query(default=None),
+    sort_by: str = Query(default="createdAt", alias="sortBy"),
     admin: CurrentUser = Depends(require_admin),
 ) -> ModerationListResponse:
     db = _db()
-    query = (
-        db.collection("moderation_queue")
-        .where("status", "==", "pending")
-        .order_by("createdAt")
-        .limit(limit + 1)
-    )
+    if status_filter not in _KNOWN_STATUSES:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_status",
+            message=f"status must be one of {sorted(_KNOWN_STATUSES)}",
+        )
+    if sort_by not in _KNOWN_SORTS:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_sort",
+            message=f"sortBy must be one of {sorted(_KNOWN_SORTS)}",
+        )
+
+    query = db.collection("moderation_queue").where("status", "==", status_filter)
+    if reason:
+        query = query.where("reason", "==", reason)
+
+    if sort_by == "severity":
+        query = query.order_by("severity", direction="DESCENDING").order_by(
+            "createdAt", direction="DESCENDING"
+        )
+    else:
+        query = query.order_by("createdAt")
+
+    query = query.limit(limit + 1)
     if cursor:
         cursor_snap = db.collection("moderation_queue").document(cursor).get()
         if cursor_snap.exists:
@@ -124,21 +162,37 @@ def list_moderation_queue(
     has_more = len(docs) > limit
     page = docs[:limit]
 
+    known_keys = {
+        "resourceRef",
+        "reason",
+        "severity",
+        "status",
+        "uploaderUid",
+        "reportedBy",
+        "resourceType",
+        "groupId",
+        "context",
+        "auto",
+        "createdAt",
+    }
+
     items = []
     for doc in page:
         data = doc.to_dict() or {}
-        extra = {
-            k: v
-            for k, v in data.items()
-            if k not in {"resourceRef", "reason", "status", "uploaderUid", "createdAt"}
-        }
+        extra = {k: v for k, v in data.items() if k not in known_keys}
         items.append(
             ModerationItem(
                 itemId=doc.id,
                 resourceRef=data.get("resourceRef", ""),
                 reason=data.get("reason"),
+                severity=data.get("severity"),
                 status=data.get("status", "pending"),
                 uploaderUid=data.get("uploaderUid"),
+                reportedBy=data.get("reportedBy"),
+                resourceType=data.get("resourceType"),
+                groupId=data.get("groupId"),
+                context=data.get("context"),
+                auto=bool(data.get("auto", False)),
                 createdAt=_ts_to_str(data.get("createdAt")),
                 extra=extra,
             )
@@ -195,6 +249,60 @@ def resolve_moderation_item(
         _notify_reported_author(db, item_data)
 
     return ResolveResponse(itemId=item_id, status=new_status)
+
+
+@router.post("/moderation/bulk-resolve", response_model=BulkResolveResponse)
+@limiter.limit(ADMIN_MUTATION)
+def bulk_resolve_moderation_items(
+    request: Request,
+    response: Response,
+    body: BulkResolveRequest,
+    admin: CurrentUser = Depends(require_admin),
+) -> BulkResolveResponse:
+    """Bulk-approve / bulk-reject up to 100 queue items.
+
+    Any items that are missing or already resolved are returned in
+    `skipped`. One audit_log row is written per resolved item.
+    """
+    db = _db()
+    new_status = "approved" if body.resolution == "approve" else "rejected"
+    resolved: list[str] = []
+    skipped: list[str] = []
+
+    for item_id in body.itemIds:
+        item_ref = db.collection("moderation_queue").document(item_id)
+        snap = item_ref.get()
+        if not snap.exists:
+            skipped.append(item_id)
+            continue
+        data = snap.to_dict() or {}
+        if data.get("status") != "pending":
+            skipped.append(item_id)
+            continue
+
+        item_ref.update({"status": new_status, "reviewedBy": admin.uid})
+        write_audit_log(
+            actor_uid=admin.uid,
+            action=f"moderation_{new_status}",
+            target_ref=f"moderation_queue/{item_id}",
+            payload={
+                "resolution": body.resolution,
+                "resourceRef": data.get("resourceRef", ""),
+                "bulk": True,
+            },
+        )
+        if new_status == "rejected":
+            _notify_reported_author(db, data)
+        resolved.append(item_id)
+
+    logger.info(
+        "admin=%s bulk_resolved count=%s as=%s skipped=%s",
+        admin.uid,
+        len(resolved),
+        new_status,
+        len(skipped),
+    )
+    return BulkResolveResponse(resolved=resolved, skipped=skipped)
 
 
 # ── users ──────────────────────────────────────────────────────────────────────

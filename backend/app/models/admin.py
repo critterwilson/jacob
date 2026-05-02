@@ -16,6 +16,11 @@ class ResolveRequest(BaseModel):
     resolution: Literal["approve", "reject"]
 
 
+class BulkResolveRequest(BaseModel):
+    itemIds: list[str] = Field(min_length=1, max_length=100)
+    resolution: Literal["approve", "reject"]
+
+
 # ── response models ────────────────────────────────────────────────────────────
 
 
@@ -34,12 +39,23 @@ class ResolveResponse(BaseModel):
     status: str
 
 
+class BulkResolveResponse(BaseModel):
+    resolved: list[str]
+    skipped: list[str]
+
+
 class ModerationItem(BaseModel):
     itemId: str
     resourceRef: str
     reason: str | None
+    severity: int | None = None
     status: str
     uploaderUid: str | None
+    reportedBy: str | None = None
+    resourceType: str | None = None
+    groupId: str | None = None
+    context: str | None = None
+    auto: bool = False
     createdAt: str | None
     extra: dict[str, Any]
 
