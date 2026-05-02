@@ -18,7 +18,7 @@ from google.cloud import firestore as gcf
 
 from app.deps import get_current_user
 from app.errors import APIError
-from app.limits import INVITE_ROTATE
+from app.limits import GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
 from app.middleware.rate_limit import limiter
 from app.models.group import (
     CreateGroupRequest,
@@ -65,7 +65,10 @@ def _unique_invite_code(db: Any) -> str:
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateGroupResponse)
+@limiter.limit(GROUP_CREATE)
 def create_group(
+    request: Request,
+    response: Response,
     body: CreateGroupRequest,
     user: CurrentUser = Depends(get_current_user),
 ) -> CreateGroupResponse:
@@ -101,7 +104,10 @@ def create_group(
 
 
 @router.post("/join", response_model=JoinGroupResponse)
+@limiter.limit(GROUP_JOIN)
 def join_group(
+    request: Request,
+    response: Response,
     body: JoinGroupRequest,
     user: CurrentUser = Depends(get_current_user),
 ) -> JoinGroupResponse:

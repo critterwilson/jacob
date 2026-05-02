@@ -65,19 +65,40 @@ service cloud.firestore {
       allow read: if isSignedIn();
 
       allow create: if isUser(uid)
+        && request.resource.data.keys().hasOnly(
+             ['displayName', 'photoURL', 'schemaVersion', 'createdAt', 'role', 'isMinor'])
         && request.resource.data.schemaVersion == 1
         && request.resource.data.createdAt == request.time
-        && (!('role' in request.resource.data) || request.resource.data.role == 'member');
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 100
+        && (!('role' in request.resource.data) || request.resource.data.role == 'member')
+        && (!('photoURL' in request.resource.data)
+            || request.resource.data.photoURL == null
+            || (request.resource.data.photoURL is string
+                && request.resource.data.photoURL.size() <= 500));
 
+      // Clients may only update display name, avatar, and minor status.
+      // groupIds, deletion fields, role, and schema fields are backend-only
+      // (written via Admin SDK which bypasses these rules).
       allow update: if isUser(uid) && notBanned()
-        && fieldsLocked(['role', 'createdAt', 'schemaVersion',
-                          'deletionRequestedAt', 'deletionKeepBody']);
+        && changedKeys().hasOnly(['displayName', 'photoURL', 'isMinor'])
+        && (!('displayName' in changedKeys())
+            || (request.resource.data.displayName is string
+                && request.resource.data.displayName.size() >= 1
+                && request.resource.data.displayName.size() <= 100))
+        && (!('photoURL' in changedKeys())
+            || request.resource.data.photoURL == null
+            || (request.resource.data.photoURL is string
+                && request.resource.data.photoURL.size() <= 500));
 
       // Account deletion goes through the backend (T14), never the client.
       allow delete: if false;
 
       // PII: email, leader/mod-only fields, etc. Owner-only.
-      match /private/{docId} {
+      // Only the canonical "profile" document is allowed — arbitrary sub-doc
+      // IDs are rejected by the default-deny rule below.
+      match /private/profile {
         allow read: if isUser(uid);
         allow write: if isUser(uid) && notBanned();
       }
@@ -88,15 +109,33 @@ service cloud.firestore {
       allow read: if isGroupMember(gid);
 
       allow create: if isSignedIn() && notBanned()
+        && request.resource.data.keys().hasOnly(
+             ['name', 'description', 'isPrivate', 'createdBy', 'createdAt',
+              'inviteCode', 'memberCount', 'stickerSet', 'schemaVersion'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.schemaVersion == 1
-        && request.resource.data.memberCount == 1;
+        && request.resource.data.memberCount == 1
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.inviteCode is string
+        && request.resource.data.inviteCode.size() >= 6
+        && (!('description' in request.resource.data)
+            || (request.resource.data.description is string
+                && request.resource.data.description.size() <= 500));
 
       // memberCount is updated only via Cloud Functions (Admin SDK bypasses
       // these rules); leaders edit metadata only.
       allow update: if isGroupLeader(gid) && notBanned()
-        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet']);
+        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.inviteCode is string
+        && request.resource.data.inviteCode.size() >= 6
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 500;
 
       allow delete: if false;
 
@@ -109,18 +148,20 @@ service cloud.firestore {
         // existing leader adding someone. The bootstrap path is gated on
         // `groups/{gid}.createdBy` so it can't be used to self-elevate
         // into someone else's group.
-        allow create: if notBanned() && (
-          (isUser(uid)
-            && request.resource.data.role == 'leader'
-            && request.resource.data.joinedAt == request.time
-            && get(/databases/$(database)/documents/groups/$(gid)).data.createdBy == request.auth.uid)
-          || (isGroupLeader(gid)
-            && request.resource.data.role in ['member', 'leader']
-            && request.resource.data.joinedAt == request.time)
-        );
+        allow create: if notBanned()
+          && request.resource.data.keys().hasOnly(['role', 'joinedAt'])
+          && request.resource.data.joinedAt == request.time
+          && (
+            (isUser(uid)
+              && request.resource.data.role == 'leader'
+              && get(/databases/$(database)/documents/groups/$(gid)).data.createdBy == request.auth.uid)
+            || (isGroupLeader(gid)
+              && request.resource.data.role in ['member', 'leader'])
+          );
 
         allow update: if isGroupLeader(gid) && notBanned()
-          && onlyChanges(['role']);
+          && onlyChanges(['role'])
+          && request.resource.data.role in ['member', 'leader'];
 
         allow delete: if (isGroupLeader(gid) || isUser(uid)) && notBanned();
       }
@@ -130,12 +171,22 @@ service cloud.firestore {
         allow read: if isGroupMember(gid);
 
         allow create: if isGroupMember(gid) && notBanned()
+          && request.resource.data.keys().hasOnly(
+               ['authorUid', 'body', 'stickerIds', 'createdAt', 'editedAt',
+                'deletedAt', 'parentMessageId', 'threadReplyCount', 'mediaRefs'])
           && request.resource.data.authorUid == request.auth.uid
           && request.resource.data.createdAt == request.time
           && request.resource.data.threadReplyCount == 0
           && request.resource.data.deletedAt == null
           && request.resource.data.editedAt == null
           && !('participants' in request.resource.data)
+          && request.resource.data.body is string
+          && request.resource.data.body.size() >= 1
+          && request.resource.data.body.size() <= 4000
+          && request.resource.data.stickerIds is list
+          && request.resource.data.stickerIds.size() <= 5
+          && request.resource.data.mediaRefs is list
+          && request.resource.data.mediaRefs.size() <= 4
           && (request.resource.data.parentMessageId == null
               || messageExists(gid, request.resource.data.parentMessageId));
 
@@ -148,7 +199,9 @@ service cloud.firestore {
             && request.resource.data.editedAt == request.time
             && request.time < resource.data.createdAt + duration.value(15, 'm'))
           || ((resource.data.authorUid == request.auth.uid || isGroupLeader(gid))
-            && onlyChanges(['deletedAt']))
+            && onlyChanges(['deletedAt'])
+            && request.resource.data.deletedAt == request.time
+            && resource.data.deletedAt == null)
         );
 
         // Soft-delete only.

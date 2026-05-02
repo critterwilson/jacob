@@ -262,15 +262,31 @@ def ban_user(
     else:
         expires_at = datetime(2099, 12, 31, tzinfo=UTC)
 
-    db.collection("bans").document(uid).set(
-        {"reason": body.reason, "bannedBy": admin.uid, "expiresAt": expires_at}
-    )
+    ban_ref = db.collection("bans").document(uid)
+    existing_snap = ban_ref.get()
+    existing_data = existing_snap.to_dict() if existing_snap.exists else {}
+    existing_expires = existing_data.get("expiresAt")
+
+    # Refuse to shorten an active ban (admin must explicitly unban first).
+    if existing_snap.exists and existing_expires is not None and existing_expires > expires_at:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="ban_already_longer",
+            message="An existing ban expires later than the requested one; unban first",
+        )
+
+    ban_ref.set({"reason": body.reason, "bannedBy": admin.uid, "expiresAt": expires_at})
+
+    audit_payload: dict[str, object] = {"reason": body.reason, "duration": body.duration}
+    if existing_snap.exists:
+        audit_payload["previousExpiresAt"] = _ts_to_str(existing_expires)
+        audit_payload["previousBannedBy"] = existing_data.get("bannedBy")
 
     write_audit_log(
         actor_uid=admin.uid,
         action="ban_user",
         target_ref=f"users/{uid}",
-        payload={"reason": body.reason, "duration": body.duration},
+        payload=audit_payload,
     )
 
     logger.info("admin=%s banned uid=%s duration=%s", admin.uid, uid, body.duration)

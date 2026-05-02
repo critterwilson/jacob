@@ -83,12 +83,29 @@ resource "google_storage_bucket" "quarantine" {
     enabled = false
   }
 
+  # Only auto-delete abandoned in-progress uploads (H8 fix).
+  # Objects under _held/ are CSAM-evidence and must NOT be auto-deleted;
+  # they are excluded by scoping the rule to the uploads/ prefix only.
   lifecycle_rule {
     condition {
-      age = 90
+      age            = 90
+      matches_prefix = ["uploads/"]
     }
     action {
       type = "Delete"
+    }
+  }
+
+  # Retained evidence objects (CSAM-flagged) move to Coldline after 1 year.
+  # Manual deletion requires legal-counsel sign-off.
+  lifecycle_rule {
+    condition {
+      age            = 365
+      matches_prefix = ["_held/"]
+    }
+    action {
+      type          = "SetStorageClass"
+      storage_class = "COLDLINE"
     }
   }
 }
@@ -142,9 +159,19 @@ resource "google_storage_bucket" "public" {
   }
 }
 
+# Custom role: storage.objects.get only — no storage.objects.list so the
+# bucket cannot be enumerated by the public (H5 fix).
+resource "google_project_iam_custom_role" "public_object_reader" {
+  project     = var.project_id
+  role_id     = "publicObjectReader"
+  title       = "Public Object Reader"
+  description = "Grants storage.objects.get without storage.objects.list."
+  permissions = ["storage.objects.get"]
+}
+
 resource "google_storage_bucket_iam_binding" "public_read" {
   bucket = google_storage_bucket.public.name
-  role   = "roles/storage.objectViewer"
+  role   = google_project_iam_custom_role.public_object_reader.id
   members = [
     "allUsers",
   ]

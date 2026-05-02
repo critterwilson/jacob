@@ -232,6 +232,32 @@ describe("users/{uid}", () => {
     await assertFails(deleteDoc(doc(authed("alice"), "users", "alice")));
   });
 
+  it("denies client setting groupIds directly on update (H12)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice"), {
+        displayName: "Alice",
+        schemaVersion: 1,
+        createdAt: Timestamp.now(),
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "users", "alice"), {
+        groupIds: ["some-group-id"],
+      }),
+    );
+  });
+
+  it("denies user create with unknown extra field (H3)", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "users", "alice"), {
+        displayName: "Alice",
+        schemaVersion: 1,
+        createdAt: serverTimestamp(),
+        hackerField: "evil",
+      }),
+    );
+  });
+
   describe("private subcollection", () => {
     it("owner reads own private profile", async () => {
       await seed(async (db) => {
@@ -287,10 +313,43 @@ describe("groups/{gid}", () => {
         createdBy: "alice",
         createdAt: serverTimestamp(),
         isPrivate: false,
-        inviteCode: "abc",
+        inviteCode: "abc123",
         memberCount: 1,
         stickerSet: "christian",
         schemaVersion: 1,
+      }),
+    );
+  });
+
+  it("denies group create with inviteCode shorter than 6 chars", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1"), {
+        name: "New Group",
+        description: "",
+        createdBy: "alice",
+        createdAt: serverTimestamp(),
+        isPrivate: false,
+        inviteCode: "ab",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+      }),
+    );
+  });
+
+  it("denies group create with unknown extra field", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1"), {
+        name: "New Group",
+        description: "",
+        createdBy: "alice",
+        createdAt: serverTimestamp(),
+        isPrivate: false,
+        inviteCode: "abc123",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        hackedField: "evil",
       }),
     );
   });
@@ -715,6 +774,33 @@ describe("groups/{gid}/messages/{mid}", () => {
     });
     await assertFails(
       deleteDoc(doc(authed("bob"), "groups", "g1", "messages", "m1")),
+    );
+  });
+
+  it("denies undelete — setting deletedAt back to null (H4)", async () => {
+    await seedGroup({
+      gid: "g1",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1", "messages", "m1"), {
+        authorUid: "bob",
+        body: "hello",
+        stickerIds: [],
+        createdAt: Timestamp.now(),
+        editedAt: null,
+        deletedAt: Timestamp.now(), // already soft-deleted
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("bob"), "groups", "g1", "messages", "m1"), {
+        deletedAt: null,
+      }),
     );
   });
 
