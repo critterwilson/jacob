@@ -22,6 +22,7 @@ type Props = {
   pinnedIds?: string[];
   onTogglePin?: (mid: string) => void;
   onAnnounce?: (mid: string) => void;
+  readonly?: boolean;
 };
 
 /**
@@ -44,6 +45,7 @@ export function MessageList({
   pinnedIds,
   onTogglePin,
   onAnnounce,
+  readonly = false,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -124,14 +126,15 @@ export function MessageList({
               gid={gid}
               message={msg}
               isLeader={isLeader}
-              onReply={onReply}
+              onReply={readonly ? undefined : onReply}
               pinnedIds={pinnedIds}
-              onTogglePin={onTogglePin}
-              onAnnounce={onAnnounce}
+              onTogglePin={readonly ? undefined : onTogglePin}
+              onAnnounce={readonly ? undefined : onAnnounce}
               members={members}
               archived={archived}
-              isMyReaction={isMyReaction}
-              onToggleReaction={(mid, slug) => void toggleReaction(mid, slug)}
+              isMyReaction={readonly ? undefined : isMyReaction}
+              onToggleReaction={readonly ? undefined : (mid, slug) => void toggleReaction(mid, slug)}
+              readonly={readonly}
             />
           );
         })}

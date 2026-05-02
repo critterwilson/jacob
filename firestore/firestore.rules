@@ -267,7 +267,16 @@ service cloud.firestore {
 
       // --- messages ----------------------------------------------------
       match /messages/{mid} {
-        allow read: if isGroupMember(gid);
+        // Members can read all messages. Non-members may read top-level,
+        // non-deleted, non-hidden messages in public groups (T31 read-only
+        // browsing). Thread replies (parentMessageId != null) are member-only.
+        allow read: if isGroupMember(gid)
+                    || (isSignedIn()
+                        && get(/databases/$(database)/documents/groups/$(gid)).data.isPrivate == false
+                        && resource.data.parentMessageId == null
+                        && resource.data.deletedAt == null
+                        && (resource.data.get('moderation', null) == null
+                            || resource.data.moderation.get('state', null) != 'hidden'));
 
         // T23: reject writes to an archived group (archivedAt absent/null = not archived).
         allow create: if isGroupMember(gid) && notBanned()
