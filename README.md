@@ -212,9 +212,20 @@ Create these in **Settings → Secrets and variables → Actions** on your GitHu
 | Secret | How to get it |
 |---|---|
 | `GCP_PROJECT_ID` | Your GCP project ID (e.g. `jacob-staging-abc123`) |
-| `GCP_SA_KEY` | Base64-encoded JSON key for a GCP service account with `roles/run.admin`, `roles/iam.serviceAccountUser`, and `roles/artifactregistry.writer`. Generate with `gcloud iam service-accounts keys create key.json --iam-account=SA_EMAIL && base64 -i key.json` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Output of `terraform apply infra/wif.tf` — see `infra/wif.tf` for setup instructions |
+| `GCP_SERVICE_ACCOUNT` | Output of `terraform apply infra/wif.tf` — the deploy SA email |
 
-> The service account also needs `roles/run.invoker` removed if you want the Cloud Run service to be publicly accessible (the default `--allow-unauthenticated` flag handles this at deploy time, but the SA needs `roles/iam.serviceAccountUser` to set the IAM policy).
+> CI authenticates via Workload Identity Federation (no long-lived JSON keys). Run `terraform -chdir=infra apply` once to provision the WIF pool; see `infra/wif.tf` for the full procedure.
+
+#### Required: production environment branch protection
+
+The `production` GitHub Environment **must** be configured to prevent arbitrary branches from deploying to production:
+
+1. Go to **Settings → Environments → production**.
+2. Under **Deployment branches**, select **Selected branches** and add `main`.
+3. Optionally add required reviewers for an approval gate before production deploys.
+
+Without this, any contributor with `write` access can trigger a production deploy from any branch via the `workflow_dispatch` "Run workflow" UI.
 
 ---
 
