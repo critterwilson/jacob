@@ -127,7 +127,11 @@ service cloud.firestore {
 
     // --- groups ----------------------------------------------------------
     match /groups/{gid} {
-      allow read: if isGroupMember(gid);
+      // Members can always read their group. Any signed-in user can read
+      // a public (non-private) group — needed for T30 discovery and T31
+      // cross-group browsing.
+      allow read: if isGroupMember(gid)
+                  || (isSignedIn() && resource.data.isPrivate == false);
 
       // T22: `founderUid` is set on create and matches `createdBy`. The
       // value never changes via the client — founder transfer goes
@@ -140,7 +144,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(
              ['name', 'description', 'isPrivate', 'createdBy', 'founderUid',
               'createdAt', 'inviteCode', 'memberCount', 'stickerSet',
-              'schemaVersion', 'avatarUrl', 'archivedAt', 'pinnedMessageIds'])
+              'schemaVersion', 'avatarUrl', 'archivedAt', 'pinnedMessageIds',
+              'joinMode', 'audience'])
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.founderUid == request.auth.uid
         && request.resource.data.createdAt == request.time
@@ -313,6 +318,29 @@ service cloud.firestore {
 
         // Soft-delete only.
         allow delete: if false;
+      }
+
+      // --- joinRequests (T30) ------------------------------------------
+      // Owner creates (signed in, not banned). Leader reads all + can update
+      // status. Owner can withdraw a pending request.
+      match /joinRequests/{uid} {
+        allow read: if isUser(uid) || isGroupLeader(gid);
+
+        allow create: if isUser(uid) && notBanned()
+          && request.resource.data.keys().hasOnly(['message', 'requestedAt', 'status'])
+          && request.resource.data.requestedAt == request.time
+          && request.resource.data.status == 'pending'
+          && request.resource.data.message is string
+          && request.resource.data.message.size() <= 280;
+
+        allow update: if isGroupLeader(gid) && notBanned()
+          && onlyChanges(['status', 'reviewedAt', 'reviewedBy'])
+          && request.resource.data.reviewedAt == request.time
+          && request.resource.data.reviewedBy == request.auth.uid
+          && request.resource.data.status in ['approved', 'rejected']
+          && resource.data.status == 'pending';
+
+        allow delete: if isUser(uid) && resource.data.status == 'pending';
       }
 
       // --- reactions (T26) ------------------------------------------

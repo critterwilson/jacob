@@ -29,6 +29,8 @@ export type Group = {
   archivedAt?: Timestamp | null;
   archivedBy?: string | null;
   archiveReason?: string | null;
+  joinMode?: "open" | "request";
+  audience?: "christian" | "bjj" | "general";
 };
 
 /**
