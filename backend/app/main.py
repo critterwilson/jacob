@@ -10,7 +10,17 @@ from app.config import get_settings
 from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.logging import StructuredLoggingMiddleware
 from app.middleware.rate_limit import limiter
-from app.routers import account, admin, analytics, groups, invites, reports, search, uploads
+from app.routers import (
+    account,
+    admin,
+    analytics,
+    discover,
+    groups,
+    invites,
+    reports,
+    search,
+    uploads,
+)
 from app.services.sentry import init_sentry
 
 # Emit JSON-formatted logs so Cloud Logging auto-parses them on Cloud Run.
@@ -60,6 +70,7 @@ app.include_router(admin.router)
 app.include_router(account.router)
 app.include_router(search.router)
 app.include_router(analytics.router)
+app.include_router(discover.router)
 
 if settings.debug:
     from app.routers import debug
