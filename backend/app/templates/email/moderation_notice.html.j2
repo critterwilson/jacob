@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>An update on your JACOB content</title>
+  <style>
+    body { font-family: sans-serif; color: #1a1a1a; background: #f9f9f9; margin: 0; padding: 0; }
+    .container { max-width: 560px; margin: 32px auto; background: #fff; border-radius: 8px; padding: 32px; }
+    .logo { font-size: 24px; font-weight: 700; color: #2563eb; margin-bottom: 24px; }
+    p { line-height: 1.6; margin: 0 0 16px; }
+    .footer { margin-top: 32px; font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">JACOB</div>
+    <p>Hi {{ display_name }},</p>
+    <p>
+      A moderator has reviewed a {{ resource_type }} you posted in JACOB and determined
+      that it doesn't meet our community guidelines.
+    </p>
+    {% if reason %}
+    <p><strong>Reason:</strong> {{ reason }}</p>
+    {% endif %}
+    <p>
+      The {{ resource_type }} has been removed. If you believe this was a mistake,
+      please reply to this email or contact us at
+      <a href="mailto:{{ appeal_email }}">{{ appeal_email }}</a>.
+    </p>
+    <p>
+      We want JACOB to remain a safe and encouraging space for everyone.
+      Thank you for understanding.
+    </p>
+    <p>— The JACOB team</p>
+    <div class="footer">
+      You received this email because you have an account on JACOB.
+    </div>
+  </div>
+</body>
+</html>

@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     sentry_environment: str = "development"
     sentry_traces_sample_rate: float = 0.1
 
+    # T18 — Transactional email via SendGrid
+    sendgrid_api_key: str = ""
+    # Full RFC 5322 sender address, e.g. "JACOB <noreply@yourdomain.com>"
+    email_sender: str = "JACOB <noreply@example.com>"
+    # Reply-to address that maps to a monitored inbox
+    email_reply_to: str = ""
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 

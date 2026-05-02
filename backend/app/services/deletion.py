@@ -32,6 +32,7 @@ from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore as fb_firestore
 
 from app.services.audit import write_audit_log
+from app.services.email import send_deletion_confirmation, send_deletion_finalized
 from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,18 @@ def request_deletion(uid: str, *, keep_body: bool) -> dict[str, str]:
     )
 
     logger.info("deletion requested uid=%s keep_body=%s", uid, keep_body)
+
+    user_data = snap.to_dict() or {}
+    try:
+        send_deletion_confirmation(
+            to_email=user_data.get("email", ""),
+            display_name=user_data.get("displayName", ""),
+            grace_days=GRACE_PERIOD_DAYS,
+            finalize_date=finalize_at.strftime("%B %-d, %Y"),
+        )
+    except Exception:
+        logger.exception("deletion_confirmation email failed uid=%s", uid)
+
     return {
         "deletionRequestedAt": now.isoformat(),
         "finalizeAt": finalize_at.isoformat(),
@@ -233,6 +246,10 @@ def finalize_account(uid: str) -> dict[str, Any]:
     tombstoned = _tombstone_messages(db, uid, keep_body=keep_body)
     _delete_avatar(photo_url if isinstance(photo_url, str) else None)
     _delete_private_subcollection(db, uid)
+
+    # Capture email/name before the doc disappears.
+    to_email = data.get("email", "")
+    display_name = data.get("displayName", "")
     user_ref.delete()
 
     write_audit_log(
@@ -243,6 +260,12 @@ def finalize_account(uid: str) -> dict[str, Any]:
     )
 
     logger.info("finalize complete uid=%s tombstoned=%d", uid, tombstoned)
+
+    try:
+        send_deletion_finalized(to_email=to_email, display_name=display_name)
+    except Exception:
+        logger.exception("deletion_finalized email failed uid=%s", uid)
+
     return {"uid": uid, "status": "finalized", "messagesTombstoned": tombstoned}
 
 

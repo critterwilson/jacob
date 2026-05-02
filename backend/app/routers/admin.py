@@ -34,6 +34,7 @@ from app.models.admin import (
 )
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
+from app.services.email import send_moderation_notice
 from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,45 @@ def _ts_to_str(ts: Any) -> str | None:
         return result
     except AttributeError:
         return str(ts)
+
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+
+def _notify_reported_author(db: Any, item_data: dict[str, Any]) -> None:
+    """Best-effort: look up the author of *resourceRef* and send a moderation notice.
+
+    Supports message resources (groups/{gid}/messages/{mid}).
+    Silently skips if the resource path is unrecognised, already deleted,
+    or if the email send fails — moderation action should never be blocked.
+    """
+    resource_ref: str = item_data.get("resourceRef", "")
+    reason: str = item_data.get("reason", "")
+    parts = resource_ref.strip("/").split("/")
+
+    try:
+        if len(parts) == 4 and parts[0] == "groups" and parts[2] == "messages":
+            gid, mid = parts[1], parts[3]
+            msg_snap = (
+                db.collection("groups").document(gid).collection("messages").document(mid).get()
+            )
+            if not msg_snap.exists:
+                return
+            author_uid: str = (msg_snap.to_dict() or {}).get("authorUid", "")
+            if not author_uid:
+                return
+            user_snap = db.collection("users").document(author_uid).get()
+            if not user_snap.exists:
+                return
+            user_data = user_snap.to_dict() or {}
+            send_moderation_notice(
+                to_email=user_data.get("email", ""),
+                display_name=user_data.get("displayName", ""),
+                reason=reason,
+                resource_type="message",
+            )
+    except Exception:
+        logger.exception("moderation_notice email failed resource=%s", resource_ref)
 
 
 # ── moderation queue ──────────────────────────────────────────────────────────
@@ -145,6 +185,10 @@ def resolve_moderation_item(
     )
 
     logger.info("admin=%s resolved item=%s as=%s", admin.uid, item_id, new_status)
+
+    if new_status == "rejected":
+        _notify_reported_author(db, item_data)
+
     return ResolveResponse(itemId=item_id, status=new_status)
 
 
