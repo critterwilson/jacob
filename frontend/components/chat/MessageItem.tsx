@@ -43,6 +43,13 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
     isAuthor && !isDeleted && Date.now() - createdAtMs < FIFTEEN_MIN_MS;
   const canDelete = (isAuthor || isLeader) && !isDeleted;
 
+  // T20 — auto-moderation hidden state. The author always sees their own
+  // message; everyone else sees a placeholder with a "Show anyway" toggle.
+  // The toggle is per-user and client-only — Firestore is unchanged.
+  const isAutoHidden = message.moderation?.state === "hidden";
+  const [showHidden, setShowHidden] = useState(false);
+  const shouldHideBody = isAutoHidden && !isAuthor && !showHidden;
+
   const messageStickers = stickers.filter((s) =>
     message.stickerIds.includes(s.slug),
   );
@@ -104,6 +111,19 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
 
       {isDeleted ? (
         <p className="text-sm italic text-gray-400">[message removed]</p>
+      ) : shouldHideBody ? (
+        <div className="flex items-center gap-2">
+          <p className="text-sm italic text-amber-700">
+            Hidden pending review
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowHidden(true)}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Show anyway
+          </button>
+        </div>
       ) : editing ? (
         <div className="flex flex-col gap-2">
           <textarea
@@ -141,7 +161,7 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
         </p>
       )}
 
-      {messageStickers.length > 0 && !isDeleted && (
+      {messageStickers.length > 0 && !isDeleted && !shouldHideBody && (
         <div className="flex flex-wrap gap-1">
           {messageStickers.map((s) => (
             <StickerBadge key={s.slug} sticker={s} size="sm" />
@@ -149,7 +169,7 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
         </div>
       )}
 
-      {!isDeleted && message.mediaRefs.length > 0 && (
+      {!isDeleted && !shouldHideBody && message.mediaRefs.length > 0 && (
         <ul className="mt-1 flex flex-wrap gap-2" aria-label="Photos">
           {message.mediaRefs.filter(isSafeMediaUrl).map((url) => (
             <li key={url}>

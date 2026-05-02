@@ -17,6 +17,16 @@ import { firestore } from "@/lib/firebase";
 
 const PAGE_SIZE = 50;
 
+export type ModerationState = "scored" | "flagged" | "hidden" | "skipped" | "errored";
+
+export type ModerationFields = {
+  state: ModerationState;
+  reasons: string[];
+  scores: Record<string, number> | null;
+  scoredAt: Timestamp | null;
+  policy?: string;
+};
+
 export type Message = {
   id: string;
   authorUid: string;
@@ -30,6 +40,7 @@ export type Message = {
   mediaRefs: string[];
   participants?: string[];
   repostOfThread?: string | null;
+  moderation?: ModerationFields | null;
 };
 
 function docToMessage(d: QueryDocumentSnapshot): Message {

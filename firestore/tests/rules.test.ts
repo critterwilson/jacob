@@ -460,6 +460,18 @@ describe("groups/{gid}", () => {
     await seedGroup({ gid: "g1", createdBy: "alice", leaderUid: "alice" });
     await assertFails(deleteDoc(doc(authed("alice"), "groups", "g1")));
   });
+
+  // T20 — moderationPolicy is a backend-only field; the
+  // /api/admin/groups/{gid}/moderation-policy endpoint writes it via the
+  // Admin SDK. Clients (even leaders) must not be able to set it directly.
+  it("denies leader writing moderationPolicy directly via the client", async () => {
+    await seedGroup({ gid: "g1", createdBy: "alice", leaderUid: "alice" });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "g1"), {
+        moderationPolicy: "lenient",
+      }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -713,6 +725,59 @@ describe("groups/{gid}/messages/{mid}", () => {
         parentMessageId: "nonexistent",
         threadReplyCount: 0,
         mediaRefs: [],
+      }),
+    );
+  });
+
+  // T20 — `moderation` is a system-only field maintained by onMessageCreate.
+  // Clients may not set it on create or update.
+  it("denies including a moderation field on create", async () => {
+    await seedGroup({
+      gid: "g1",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    await assertFails(
+      setDoc(doc(authed("bob"), "groups", "g1", "messages", "m1"), {
+        authorUid: "bob",
+        body: "hello",
+        stickerIds: [],
+        createdAt: serverTimestamp(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+        moderation: { state: "scored", reasons: [], scores: {}, scoredAt: null },
+      }),
+    );
+  });
+
+  it("denies updating the moderation field after the fact", async () => {
+    await seedGroup({
+      gid: "g1",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1", "messages", "m1"), {
+        authorUid: "bob",
+        body: "hi",
+        stickerIds: [],
+        createdAt: Timestamp.now(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+        moderation: { state: "scored", reasons: [], scores: {}, scoredAt: null },
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("bob"), "groups", "g1", "messages", "m1"), {
+        moderation: { state: "hidden", reasons: ["Toxic"], scores: {}, scoredAt: null },
       }),
     );
   });
