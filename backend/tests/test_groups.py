@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.deps import get_current_user
-from app.errors import http_exception_handler
+from app.errors import APIError, http_exception_handler
 from app.models.user import CurrentUser
 from app.routers.groups import router
 
@@ -128,22 +128,29 @@ def test_create_group_strips_and_stores_name() -> None:
 
 
 def test_join_group_happy_path() -> None:
-    mock_snap = MagicMock()
-    mock_snap.id = "group-abc"
-    mock_db = _make_db(stream_results=[mock_snap], member_exists=False)
-
-    with patch("app.routers.groups._db", return_value=mock_db):
+    mock_db = _make_db()
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.routers.groups.consume_invite", return_value=("group-abc", "inv001")),
+        patch("app.services.audit._db", return_value=mock_db),
+    ):
         res = TestClient(_make_app("bob")).post("/api/groups/join", json={"code": "TESTCODE1"})
 
     assert res.status_code == 200
     assert res.json()["groupId"] == "group-abc"
-    mock_db.batch.return_value.commit.assert_called_once()
 
 
 def test_join_invalid_code_returns_404() -> None:
-    mock_db = _make_db(stream_results=[])
-
-    with patch("app.routers.groups._db", return_value=mock_db):
+    mock_db = _make_db()
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch(
+            "app.routers.groups.consume_invite",
+            side_effect=APIError(
+                status_code=404, code="invalid_invite", message="Invite code not found"
+            ),
+        ),
+    ):
         res = TestClient(_make_app()).post("/api/groups/join", json={"code": "BADCODE1"})
 
     assert res.status_code == 404
@@ -151,11 +158,16 @@ def test_join_invalid_code_returns_404() -> None:
 
 
 def test_join_already_member_returns_409() -> None:
-    mock_snap = MagicMock()
-    mock_snap.id = "group-abc"
-    mock_db = _make_db(stream_results=[mock_snap], member_exists=True)
-
-    with patch("app.routers.groups._db", return_value=mock_db):
+    mock_db = _make_db()
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch(
+            "app.routers.groups.consume_invite",
+            side_effect=APIError(
+                status_code=409, code="already_member", message="Already a member"
+            ),
+        ),
+    ):
         res = TestClient(_make_app()).post("/api/groups/join", json={"code": "TESTCODE1"})
 
     assert res.status_code == 409

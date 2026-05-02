@@ -38,6 +38,7 @@ from app.models.group import (
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
+from app.services.invites import consume_invite
 from app.services.notifications import bulk_write_notifications
 
 logger = logging.getLogger(__name__)
@@ -130,40 +131,14 @@ def join_group(
     user: CurrentUser = Depends(get_current_user),
 ) -> JoinGroupResponse:
     db = _db()
-
-    hits = list(db.collection("groups").where("inviteCode", "==", body.code).limit(1).stream())
-    if not hits:
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="invalid_invite",
-            message="Invite code not found",
-        )
-
-    gid: str = hits[0].id
-    group_ref = db.collection("groups").document(gid)
-    member_ref = group_ref.collection("members").document(user.uid)
-
-    if member_ref.get().exists:
-        raise APIError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="already_member",
-            message="You are already a member of this group",
-        )
-
-    batch = db.batch()
-    batch.set(
-        member_ref,
-        {
-            "role": "member",
-            "joinedAt": fb_firestore.SERVER_TIMESTAMP,
-            "uid": user.uid,
-        },
+    gid, invite_id = consume_invite(db, body.code, user.uid)
+    write_audit_log(
+        actor_uid=user.uid,
+        action="join_group",
+        target_ref=f"groups/{gid}/members/{user.uid}",
+        payload={"inviteId": invite_id},
     )
-    batch.update(group_ref, {"memberCount": gcf.Increment(1)})
-    # M11: see create_group — memberships derive from members subcollection.
-    batch.commit()
-
-    logger.info("uid=%s joined gid=%s", user.uid, gid)
+    logger.info("uid=%s joined gid=%s via invite=%s", user.uid, gid, invite_id)
     return JoinGroupResponse(groupId=gid)
 
 

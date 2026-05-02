@@ -357,6 +357,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- invites (T25) -------------------------------------------------
+    // Group invite subcollection. Created, updated, and revoked by the
+    // backend (Admin SDK) only. Leaders can read the list to display it
+    // in the group settings page; the consume-invite path is backend-only.
+    match /groups/{gid}/invites/{inviteId} {
+      allow read: if isGroupMember(gid);
+      allow create, update, delete: if false;
+    }
+
     // --- notifications (T24) -------------------------------------------
     // Server-only creates and deletes (Admin SDK). Owner reads and can
     // mark as read by setting readAt to serverTimestamp; nothing else.
