@@ -7,7 +7,7 @@ custom-claim check.
 
 from __future__ import annotations
 
-from fastapi import Depends, Header, status
+from fastapi import Depends, Header, Request, status
 from firebase_admin import auth as firebase_auth
 
 from app.errors import APIError
@@ -27,6 +27,7 @@ def _unauthenticated(message: str) -> APIError:
 
 
 def get_current_user(
+    request: Request,
     authorization: str | None = Header(default=None),
 ) -> CurrentUser:
     init_firebase_admin()
@@ -53,11 +54,13 @@ def get_current_user(
         # treat them all as 401 rather than leaking details to the client.
         raise _unauthenticated("Token verification failed") from None
 
-    return CurrentUser(
+    user = CurrentUser(
         uid=decoded["uid"],
         email=decoded.get("email"),
         claims=decoded,
     )
+    request.state.uid = user.uid
+    return user
 
 
 def require_admin(
