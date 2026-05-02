@@ -130,9 +130,7 @@ def test_create_invite_collision_retries() -> None:
             mock_db.collection.side_effect = None
             col = MagicMock()
             chain = col.document.return_value.collection.return_value
-            chain.where.return_value.limit.return_value.stream.return_value = iter(
-                [MagicMock()]
-            )
+            chain.where.return_value.limit.return_value.stream.return_value = iter([MagicMock()])
             return col
         return MagicMock()
 
@@ -261,8 +259,11 @@ def test_consume_invite_expired_returns_410() -> None:
     expired = datetime.now(UTC) - timedelta(hours=2)
     mock_db = _make_join_db(
         invite_data={
-            "code": "EXP", "revokedAt": None,
-            "expiresAt": expired, "maxUses": None, "useCount": 0,
+            "code": "EXP",
+            "revokedAt": None,
+            "expiresAt": expired,
+            "maxUses": None,
+            "useCount": 0,
         }
     )
     with patch("app.routers.groups._db", return_value=mock_db):
@@ -275,8 +276,11 @@ def test_consume_invite_expired_returns_410() -> None:
 def test_consume_invite_maxed_returns_410() -> None:
     mock_db = _make_join_db(
         invite_data={
-            "code": "MAX", "revokedAt": None,
-            "expiresAt": None, "maxUses": 1, "useCount": 1,
+            "code": "MAX",
+            "revokedAt": None,
+            "expiresAt": None,
+            "maxUses": 1,
+            "useCount": 1,
         }
     )
     with patch("app.routers.groups._db", return_value=mock_db):

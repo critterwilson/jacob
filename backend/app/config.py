@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     # T25 — Invite URL base (used in InviteResponse.url)
     app_url: str = "https://jacob.app"
 
+    # T28 — Typesense search sidecar
+    typesense_host: str = ""
+    typesense_api_key: str = ""
+    typesense_collection: str = "messages"
+    typesense_timeout_seconds: float = 5.0
+    jacob_search_enabled: bool = False
+    typesense_membership_cap: int = 100
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 

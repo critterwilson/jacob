@@ -103,9 +103,7 @@ def create_invite(
         "revokedAt": None,
         "revokedBy": None,
     }
-    db.collection("groups").document(gid).collection("invites").document(invite_id).set(
-        doc_data
-    )
+    db.collection("groups").document(gid).collection("invites").document(invite_id).set(doc_data)
     return {
         "inviteId": invite_id,
         "code": code,

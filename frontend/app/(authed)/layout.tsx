@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/nav/AppShell";
+import { SearchBar } from "@/components/search/SearchBar";
 import { useAuth } from "@/lib/auth-context";
 
 export default function AuthedLayout({ children }: { children: ReactNode }) {
@@ -27,5 +28,10 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
 
   if (!user) return null;
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AppShell>
+      <SearchBar />
+      {children}
+    </AppShell>
+  );
 }
