@@ -1,8 +1,7 @@
 /**
- * GCS buckets for the JACOB photo moderation pipeline (T10).
+ * GCS buckets for JACOB.
  *
- * The split is intentional and the IAM here is the security boundary:
- *
+ * Media pipeline buckets (T10):
  *   - jacob-media-quarantine-{env}: receives every direct upload via
  *     signed PUT. No public reads, ever. Objects auto-delete after 90
  *     days (anything not promoted by then is abandoned). Only the API
@@ -14,6 +13,13 @@
  *     account is used exclusively by the SafeSearch-pass code path. The
  *     general API service account does NOT have writer access to this
  *     bucket, which is what prevents "rejected" images from leaking.
+ *     Object versioning is enabled; overwritten/deleted objects are
+ *     retained for 60 days before GCS removes the noncurrent version.
+ *
+ * Backup bucket (T16):
+ *   - jacob-backups-{env}: Firestore exports land here. Objects in
+ *     daily/ are deleted after 30 days; objects in weekly/ after 90 days.
+ *     No public access. Only the backup service account may write/read.
  *
  * Bucket-level size limits exist as defense in depth: even if the API
  * miscalculates, the GCS layer rejects oversize uploads before bytes
@@ -50,9 +56,15 @@ variable "moderation_service_account_email" {
   type        = string
 }
 
+variable "backup_service_account_email" {
+  description = "Service account used by the firestore_export Cloud Run job."
+  type        = string
+}
+
 locals {
   quarantine_bucket = "jacob-media-quarantine-${var.env}"
   public_bucket     = "jacob-media-public-${var.env}"
+  backup_bucket     = "jacob-backups-${var.env}"
   max_object_bytes  = 8 * 1024 * 1024
 }
 
@@ -114,6 +126,20 @@ resource "google_storage_bucket" "public" {
     response_header = ["Content-Type"]
     max_age_seconds = 3600
   }
+
+  versioning {
+    enabled = true
+  }
+
+  # Retain noncurrent (overwritten/deleted) versions for 60 days.
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 60
+    }
+    action {
+      type = "Delete"
+    }
+  }
 }
 
 resource "google_storage_bucket_iam_binding" "public_read" {
@@ -145,4 +171,55 @@ output "public_bucket" {
 
 output "max_object_bytes" {
   value = local.max_object_bytes
+}
+
+output "backup_bucket" {
+  value = google_storage_bucket.backup.name
+}
+
+# ── backup bucket ─────────────────────────────────────────────────────────────
+
+resource "google_storage_bucket" "backup" {
+  name          = local.backup_bucket
+  project       = var.project_id
+  location      = var.region
+  force_destroy = false
+
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+
+  versioning {
+    enabled = false
+  }
+
+  # daily/ prefix: keep for 30 days.
+  lifecycle_rule {
+    condition {
+      age            = 30
+      matches_prefix = ["daily/"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  # weekly/ prefix: keep for 90 days.
+  lifecycle_rule {
+    condition {
+      age            = 90
+      matches_prefix = ["weekly/"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
+}
+
+# Only the backup job's service account may read or write exports.
+resource "google_storage_bucket_iam_binding" "backup_rw" {
+  bucket = google_storage_bucket.backup.name
+  role   = "roles/storage.objectAdmin"
+  members = [
+    "serviceAccount:${var.backup_service_account_email}",
+  ]
 }
