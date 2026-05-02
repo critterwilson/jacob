@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
-import { ReportLink } from "@/components/moderation/ReportLink";
+import { ReportButton } from "@/components/moderation/ReportButton";
 
 type Props = { params: { gid: string } };
 
@@ -87,8 +87,9 @@ export default function GroupPage({ params }: Props) {
       <div className="mb-2 flex items-start justify-between">
         <h1 className="text-2xl font-semibold">{group.name}</h1>
         <div className="flex items-center gap-3">
-          <ReportLink
-            contentType="group"
+          <ReportButton
+            resourceType="group"
+            resourceId={gid}
             groupId={gid}
             className="text-xs text-gray-400 hover:text-gray-600"
           />

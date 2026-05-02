@@ -1,75 +1,99 @@
 # Moderation runbook
 
-## Google Form setup
+## In-app reporting (T19)
 
-The report form is created manually in Google Forms. Once created, set the form ID and entry IDs as environment variables in Cloud Run (and in `frontend/.env.local` for local development). **Do not commit real IDs to source code.** When the environment variables are absent the Report link is hidden in the UI; no broken URL is produced.
+Reports are filed natively in JACOB and land in `moderation_queue/{itemId}` in
+Firestore. The Google Form integration that shipped with T12 has been retired.
 
-Required env vars (set in Cloud Run / Firebase App Hosting environment):
-```
-NEXT_PUBLIC_REPORT_FORM_ID=<form-id>
-NEXT_PUBLIC_REPORT_ENTRY_CONTENT_TYPE=entry.<id>
-NEXT_PUBLIC_REPORT_ENTRY_CONTENT_ID=entry.<id>
-NEXT_PUBLIC_REPORT_ENTRY_GROUP_ID=entry.<id>
-NEXT_PUBLIC_REPORT_ENTRY_REPORTER_UID=entry.<id>
-NEXT_PUBLIC_REPORT_ENTRY_TIMESTAMP=entry.<id>
-```
+### How the flow works
 
-### Finding entry IDs
+1. A signed-in user clicks the Report icon on a message, group, or profile.
+2. `ReportDialog` opens with a structured form: a required reason
+   (`harassment | sexual | violence | self-harm | spam | other`) plus an
+   optional 500-char context box.
+3. The dialog calls `POST /api/reports`. The backend:
+   - Verifies the Firebase ID token (401 if missing/invalid).
+   - Rejects active-ban reporters with 403.
+   - Computes a `severity` (1–3) from the reason.
+   - Dedupes against an existing `(reporterUid, resourceRef, reason)` triple in
+     the past 24h. A duplicate returns `dedup: true` with the existing report
+     id — no second `moderation_queue` doc is written.
+   - Otherwise writes `moderation_queue/{uuid}` with `status: "pending"`.
+4. Moderators triage at `/admin/queue` (admin-only).
 
-1. Open the published form URL.
-2. Right-click the page → **View Page Source**.
-3. Search for `entry.` — each field has a data attribute like `data-params="%.@.[123456789,..."`. The numeric ID after `entry.` is what you need.
-4. Map each ID to the corresponding constant in `ENTRY`:
+### Severity table
 
-| Constant | Form field label |
-|---|---|
-| `ENTRY.contentType` | Content type (message / profile / group / other) |
-| `ENTRY.contentId` | Content ID |
-| `ENTRY.groupId` | Group ID |
-| `ENTRY.reporterUid` | Reporter UID |
-| `ENTRY.timestamp` | Timestamp (ISO 8601) |
+| Reason       | Severity |
+|--------------|----------|
+| `sexual`     | 3        |
+| `self-harm`  | 3        |
+| `violence`   | 3        |
+| `harassment` | 2        |
+| `spam`       | 1        |
+| `other`      | 1        |
 
-### Form fields
-
-Create a Google Form with these fields (all optional so anonymous reports can submit without a reporter UID):
-
-- **Content type** — multiple choice: message, profile, group, other
-- **Content ID** — short answer
-- **Group ID** — short answer
-- **Reporter UID** — short answer
-- **Timestamp** — short answer
-- **Reason** — paragraph (free text; not pre-filled — the reporter types this themselves)
-
-Link the form responses to a Google Sheet via **Responses → Link to Sheets**.
+T20 (automated text moderation) writes additional rows with `auto: true` and
+its own severity. Severity is independent from `status` and is used only to
+sort/filter in the queue UI.
 
 ## Triage process
 
-Moderators review the linked Sheet daily. Suggested SLA:
+Moderators check the queue at `/admin/queue` daily. Filters: status
+(pending / approved / rejected) and reason. Default sort is oldest-first;
+sort by severity to triage high-risk items first.
+
+Suggested SLA:
 
 | Severity | Target response |
-|---|---|
-| Hate speech / CSAM suspicion | Within 1 hour (escalate immediately — see below) |
-| Harassment / threats | Within 4 hours |
-| Spam / off-topic | Within 24 hours |
-| Other | Within 48 hours |
+|----------|-----------------|
+| 3        | Within 1 hour (escalate immediately — see below) |
+| 2        | Within 4 hours  |
+| 1        | Within 48 hours |
 
-**Steps:**
-1. Open the linked Sheet. New responses appear in the last row.
-2. Review the content identified by `Content type` + `Content ID`.
-3. If actionable, use the Admin Dashboard (`/admin/queue`) to approve/reject the item and optionally ban the user.
-4. Mark the Sheet row as reviewed (e.g., add a "Reviewed" column and set it to `✓`).
+### Reviewing one item
+
+1. Open `/admin/queue?status=pending`.
+2. Click the resource link to inspect the message / group / profile.
+3. Decide:
+   - **Approve** — content is fine; mark resolved with `status: "approved"`.
+   - **Reject** — content violates policy; mark resolved with `status:
+     "rejected"`. The author is notified via email (T18).
+   - **Reject + Ban** — same as reject, plus a 24h / 7d / permanent ban for
+     the content's uploader.
+4. Every action writes an `audit_log` entry.
+
+### Bulk actions
+
+Selecting multiple rows and clicking *Reject all* / *Approve all* writes one
+audit entry per resolved row. *Reject + Ban reporters* is meant for false-
+report clusters (one reporter spamming reports across many resources): it
+rejects all selected rows and 24h-bans the unique reporters of those rows.
+
+### Shareable URLs
+
+Filter state lives in the URL query string, e.g.
+`/admin/queue?status=pending&reason=sexual&sortBy=severity`. Paste the URL into
+Slack to point another moderator at the same view.
 
 ## Escalation
 
-- **CSAM suspicion:** immediately report to NCMEC (CyberTipline) and disable the account. Do not investigate further yourself.
-- **Credible threats of violence:** contact local law enforcement if you know the reporter's location; otherwise escalate to the platform owner.
+- **CSAM suspicion:** report to NCMEC (CyberTipline) and disable the account
+  immediately. Do not investigate further yourself.
+- **Credible threats of violence:** contact local law enforcement if you know
+  the reporter's location; otherwise escalate to the platform owner.
 - **Platform owner contact:** christopherwilsontry@gmail.com
 
-## Anonymous reports
+## Reporter privacy
 
-If `Reporter UID` is blank the report is anonymous. Treat it the same as a named report — anonymous reports are allowed by design (see T12 spec).
+Reporter UIDs are only exposed to admins viewing the queue. They are never
+shown to the reported user. Anonymous reporting is not supported in T19 — a
+reporter must be signed in. Phase 3 will surface a "your report was reviewed"
+status to the reporter.
 
-## Notes
+## Kill switch
 
-- The report link opens a pre-filled Google Form in a new tab. No server-side request is made on click; nothing is logged.
-- Phase 2 will replace this with a native in-app reporting flow with status visibility for the reporter.
+If the reports endpoint becomes a vector for abuse (a botnet flooding
+`moderation_queue`), tighten `REPORT_SUBMIT` in `backend/app/limits.py` and
+redeploy. The rate-limit decorator is per-uid; the slowapi in-memory store
+resets on instance restart but the rate floor is short enough that a Cloud
+Run cold start does not buy meaningful additional capacity.

@@ -26,6 +26,7 @@ vi.mock("@/lib/auth-context", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => "/admin/queue",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Minimal Link stub — renders a plain <a> so Next.js router context is not needed.
@@ -80,7 +81,9 @@ describe("ModerationQueuePage", () => {
     });
     render(<ModerationQueuePage />);
     await waitFor(() =>
-      expect(screen.getByText("No pending items.")).toBeInTheDocument(),
+      expect(
+        screen.getByText("No items match the current filters."),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -93,8 +96,14 @@ describe("ModerationQueuePage", () => {
             itemId: "item-1",
             resourceRef: "uploads/abc",
             reason: "safesearch_adult",
+            severity: 2,
             status: "pending",
             uploaderUid: "user-x",
+            reportedBy: null,
+            resourceType: null,
+            groupId: null,
+            context: null,
+            auto: false,
             createdAt: null,
             extra: {},
           },
@@ -119,8 +128,14 @@ describe("ModerationQueuePage", () => {
               itemId: "item-1",
               resourceRef: "uploads/abc",
               reason: "test",
+              severity: 1,
               status: "pending",
               uploaderUid: "user-x",
+              reportedBy: null,
+              resourceType: null,
+              groupId: null,
+              context: null,
+              auto: false,
               createdAt: null,
               extra: {},
             },
@@ -143,6 +158,22 @@ describe("ModerationQueuePage", () => {
       );
       expect(call).toBeDefined();
       expect(JSON.parse(call![1].body as string).resolution).toBe("approve");
+    });
+  });
+
+  it("sends ?status=&reason= query params to /api/admin/moderation", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ items: [], nextCursor: null }),
+    });
+    render(<ModerationQueuePage />);
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find((c) =>
+        String(c[0]).includes("/api/admin/moderation"),
+      );
+      expect(call).toBeDefined();
+      expect(String(call![0])).toContain("status=pending");
+      expect(String(call![0])).toContain("limit=25");
     });
   });
 });
