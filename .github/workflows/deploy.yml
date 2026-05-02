@@ -60,7 +60,7 @@ jobs:
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: Scan image with Trivy (fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           image-ref: ${{ env.IMAGE }}
           format: table
@@ -113,6 +113,7 @@ jobs:
         run: >
           firebase deploy
           --only functions,firestore
+          --force
           --project ${{ needs.setup.outputs.firebase-alias }}
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
