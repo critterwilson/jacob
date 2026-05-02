@@ -1,14 +1,23 @@
 /**
  * T20 — automated text moderation.
+ * T27 — @mention notification fan-out.
  *
- * Fires on `groups/{gid}/messages/{mid}` create events. Reads the
- * group's moderationPolicy (default "standard"), calls Cloud NL
- * `moderateText`, and:
- *   - Sets `messages/{mid}.moderation` with `state: "hidden"` if any
- *     tracked category exceeds the policy's hide threshold; also writes
- *     a `moderation_queue` row with `auto: true` severity 2.
- *   - Writes a `moderation_queue` row with `auto: true` severity 1 if
- *     the message exceeds the flag-only threshold.
+ * Fires on `groups/{gid}/messages/{mid}` create events.
+ *
+ * T20 Moderation:
+ *   Reads the group's moderationPolicy (default "standard"), calls Cloud NL
+ *   `moderateText`, and:
+ *   - Sets `messages/{mid}.moderation` with `state: "hidden"` if any tracked
+ *     category exceeds the policy's hide threshold; also writes a
+ *     `moderation_queue` row with `auto: true` severity 2.
+ *   - Writes a `moderation_queue` row with `auto: true` severity 1 if the
+ *     message exceeds the flag-only threshold.
+ *
+ * T27 Mention fan-out:
+ *   Reads `mentions` (uid[]) from the message doc and writes one
+ *   `users/{uid}/notifications/{nid}` row per mentioned user
+ *   (kind: "mention"). Skips self, skips users who blocked the author,
+ *   skips non-members.
  *
  * Cost guardrails:
  *   - Process-local circuit breaker (5 errors → open 5 min) avoids a
@@ -18,17 +27,13 @@
  *   - Sentry alert at 80% of the cap (a `moderation_quota_warning` log
  *     line that the alert policy in `infra/uptime-checks.tf` matches on).
  *
- * Kill switch: `MODERATION_TEXT_DISABLED=true` makes the trigger a
- * no-op without redeploying.
- *
- * Edits / soft-deletes do not re-score (T20 explicitly defers re-scoring
- * to a Phase 3 task; an edit just clears `moderation` server-side via a
- * future admin tool).
+ * Kill switch: `MODERATION_TEXT_DISABLED=true` makes moderation a no-op
+ * without redeploying (fan-out still runs).
  */
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
-import { FieldValue, getFirestore, Firestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
 
 import {
@@ -68,10 +73,6 @@ function moderationStateRef(db: Firestore, day: string) {
   return db.collection("moderation_state").doc(`text-${day}`);
 }
 
-/**
- * Atomically increment the daily counter and return the new value.
- * Returns null when the cap has already been reached.
- */
 async function tryReserveQuota(db: Firestore, day: string): Promise<number | null> {
   const ref = moderationStateRef(db, day);
   return await db.runTransaction(async (txn) => {
@@ -101,6 +102,191 @@ async function readPolicy(db: Firestore, gid: string): Promise<Policy> {
   return DEFAULT_POLICY;
 }
 
+async function runModeration(
+  db: Firestore,
+  gid: string,
+  mid: string,
+  body: string,
+  eventId: string,
+): Promise<void> {
+  if (process.env.MODERATION_TEXT_DISABLED === "true") {
+    logger.info("moderation_text_disabled", { eventId });
+    return;
+  }
+
+  const messageRef = db.collection("groups").doc(gid).collection("messages").doc(mid);
+
+  if (isCircuitOpen()) {
+    logger.warn("moderation_circuit_open", { gid, mid, eventId });
+    await messageRef.update({
+      moderation: {
+        state: "skipped",
+        reasons: ["circuit_open"],
+        scores: null,
+        scoredAt: FieldValue.serverTimestamp(),
+      },
+    });
+    return;
+  }
+
+  const day = todayKey();
+  const newCount = await tryReserveQuota(db, day);
+  if (newCount === null) {
+    logger.error("moderation_quota_exceeded", { gid, mid, day, cap: DAILY_CALL_CAP });
+    await messageRef.update({
+      moderation: {
+        state: "skipped",
+        reasons: ["quota_exceeded"],
+        scores: null,
+        scoredAt: FieldValue.serverTimestamp(),
+      },
+    });
+    return;
+  }
+  if (newCount === Math.floor(DAILY_CALL_CAP * QUOTA_WARN_RATIO)) {
+    logger.warn("moderation_quota_warning", {
+      day,
+      count: newCount,
+      cap: DAILY_CALL_CAP,
+      threshold: QUOTA_WARN_RATIO,
+    });
+  }
+
+  let scores: CategoryScore[] = [];
+  try {
+    scores = await moderateText(getNLClient() as never, body);
+    recordSuccess();
+  } catch (err) {
+    recordFailure();
+    logger.error("moderation_text_api_failed", {
+      gid,
+      mid,
+      eventId,
+      error: (err as Error).message,
+    });
+    await messageRef.update({
+      moderation: {
+        state: "errored",
+        reasons: ["api_error"],
+        scores: null,
+        scoredAt: FieldValue.serverTimestamp(),
+      },
+    });
+    return;
+  }
+
+  const policy = await readPolicy(db, gid);
+  const { decision, reasons } = decisionFor(scores, policy);
+
+  const trackedScores = Object.fromEntries(
+    scores.filter((s) => TRACKED_CATEGORIES.has(s.name)).map((s) => [s.name, s.confidence]),
+  );
+
+  if (decision === null) {
+    await messageRef.update({
+      moderation: {
+        state: "scored",
+        reasons: [],
+        scores: trackedScores,
+        scoredAt: FieldValue.serverTimestamp(),
+        policy,
+      },
+    });
+    return;
+  }
+
+  if (decision === "hide") {
+    await messageRef.update({
+      moderation: {
+        state: "hidden",
+        reasons,
+        scores: trackedScores,
+        scoredAt: FieldValue.serverTimestamp(),
+        policy,
+      },
+    });
+  } else {
+    await messageRef.update({
+      moderation: {
+        state: "flagged",
+        reasons,
+        scores: trackedScores,
+        scoredAt: FieldValue.serverTimestamp(),
+        policy,
+      },
+    });
+  }
+
+  const severity = decision === "hide" ? 2 : 1;
+  await db.collection("moderation_queue").add({
+    resourceRef: `groups/${gid}/messages/${mid}`,
+    resourceType: "message",
+    groupId: gid,
+    reason: "auto-text-moderation",
+    severity,
+    auto: true,
+    reasons,
+    status: "pending",
+    reportedBy: null,
+    createdAt: FieldValue.serverTimestamp(),
+    policy,
+  });
+
+  logger.info("moderation_text_decision", {
+    gid,
+    mid,
+    eventId,
+    decision,
+    reasons,
+    policy,
+    severity,
+  });
+}
+
+export async function fanOutMentionNotifications(
+  db: Firestore,
+  gid: string,
+  mid: string,
+  authorUid: string,
+  mentions: string[],
+): Promise<void> {
+  const messageRef = `groups/${gid}/messages/${mid}`;
+  const tasks = mentions.map(async (recipientUid) => {
+    if (recipientUid === authorUid) return;
+
+    const blockSnap = await db
+      .collection("users")
+      .doc(recipientUid)
+      .collection("blocks")
+      .doc(authorUid)
+      .get();
+    if (blockSnap.exists) return;
+
+    const memberSnap = await db
+      .collection("groups")
+      .doc(gid)
+      .collection("members")
+      .doc(recipientUid)
+      .get();
+    if (!memberSnap.exists) return;
+
+    await db
+      .collection("users")
+      .doc(recipientUid)
+      .collection("notifications")
+      .add({
+        kind: "mention",
+        messageRef,
+        groupId: gid,
+        fromUid: authorUid,
+        createdAt: FieldValue.serverTimestamp(),
+        readAt: null,
+      });
+  });
+
+  await Promise.all(tasks);
+}
+
 export const onMessageCreate = onDocumentCreated(
   {
     document: "groups/{gid}/messages/{mid}",
@@ -109,152 +295,47 @@ export const onMessageCreate = onDocumentCreated(
     retry: false,
   },
   async (event) => {
-    if (process.env.MODERATION_TEXT_DISABLED === "true") {
-      logger.info("moderation_text_disabled", { eventId: event.id });
-      return;
-    }
-
     const data = event.data?.data();
     if (!data) return;
 
     const body = (data.body as string | undefined) ?? "";
-    if (!body.trim()) return;
-
-    // Skip thread replies — moderate the parent path only? Actually the
-    // spec says onMessageCreate runs on every new message including
-    // replies. Replies share the same risk surface.
     const { gid, mid } = event.params;
     const db = getFirestore();
-    const messageRef = db.collection("groups").doc(gid).collection("messages").doc(mid);
 
-    if (isCircuitOpen()) {
-      logger.warn("moderation_circuit_open", { gid, mid, eventId: event.id });
-      await messageRef.update({
-        moderation: {
-          state: "skipped",
-          reasons: ["circuit_open"],
-          scores: null,
-          scoredAt: FieldValue.serverTimestamp(),
-        },
-      });
-      return;
+    // Moderation (non-fatal: failures are logged; fan-out always runs)
+    if (body.trim()) {
+      try {
+        await runModeration(db, gid, mid, body, event.id);
+      } catch (err) {
+        logger.error("onMessageCreate_moderation_uncaught", {
+          gid,
+          mid,
+          eventId: event.id,
+          error: (err as Error).message,
+        });
+      }
     }
 
-    const day = todayKey();
-    const newCount = await tryReserveQuota(db, day);
-    if (newCount === null) {
-      logger.error("moderation_quota_exceeded", { gid, mid, day, cap: DAILY_CALL_CAP });
-      await messageRef.update({
-        moderation: {
-          state: "skipped",
-          reasons: ["quota_exceeded"],
-          scores: null,
-          scoredAt: FieldValue.serverTimestamp(),
-        },
-      });
-      return;
+    // T27 — mention fan-out (runs regardless of moderation outcome)
+    const mentions = (data.mentions as string[] | undefined) ?? [];
+    const authorUid = (data.authorUid as string | undefined) ?? "";
+    if (mentions.length > 0 && authorUid) {
+      try {
+        await fanOutMentionNotifications(db, gid, mid, authorUid, mentions);
+        logger.info("mention_fanout_done", {
+          gid,
+          mid,
+          eventId: event.id,
+          count: mentions.length,
+        });
+      } catch (err) {
+        logger.error("mention_fanout_failed", {
+          gid,
+          mid,
+          eventId: event.id,
+          error: (err as Error).message,
+        });
+      }
     }
-    if (newCount === Math.floor(DAILY_CALL_CAP * QUOTA_WARN_RATIO)) {
-      logger.warn("moderation_quota_warning", {
-        day,
-        count: newCount,
-        cap: DAILY_CALL_CAP,
-        threshold: QUOTA_WARN_RATIO,
-      });
-    }
-
-    let scores: CategoryScore[] = [];
-    try {
-      scores = await moderateText(getNLClient() as never, body);
-      recordSuccess();
-    } catch (err) {
-      recordFailure();
-      logger.error("moderation_text_api_failed", {
-        gid,
-        mid,
-        eventId: event.id,
-        error: (err as Error).message,
-      });
-      await messageRef.update({
-        moderation: {
-          state: "errored",
-          reasons: ["api_error"],
-          scores: null,
-          scoredAt: FieldValue.serverTimestamp(),
-        },
-      });
-      return;
-    }
-
-    const policy = await readPolicy(db, gid);
-    const { decision, reasons } = decisionFor(scores, policy);
-
-    // Always persist the score snapshot for audit / triage, even when
-    // there is no decision. Limit `scores` to tracked categories so the
-    // doc doesn't bloat.
-    const trackedScores = Object.fromEntries(
-      scores.filter((s) => TRACKED_CATEGORIES.has(s.name)).map((s) => [s.name, s.confidence]),
-    );
-
-    if (decision === null) {
-      await messageRef.update({
-        moderation: {
-          state: "scored",
-          reasons: [],
-          scores: trackedScores,
-          scoredAt: FieldValue.serverTimestamp(),
-          policy,
-        },
-      });
-      return;
-    }
-
-    if (decision === "hide") {
-      await messageRef.update({
-        moderation: {
-          state: "hidden",
-          reasons,
-          scores: trackedScores,
-          scoredAt: FieldValue.serverTimestamp(),
-          policy,
-        },
-      });
-    } else {
-      await messageRef.update({
-        moderation: {
-          state: "flagged",
-          reasons,
-          scores: trackedScores,
-          scoredAt: FieldValue.serverTimestamp(),
-          policy,
-        },
-      });
-    }
-
-    // Write into the moderation queue. Severity 2 for hide, 1 for flag.
-    const severity = decision === "hide" ? 2 : 1;
-    await db.collection("moderation_queue").add({
-      resourceRef: `groups/${gid}/messages/${mid}`,
-      resourceType: "message",
-      groupId: gid,
-      reason: "auto-text-moderation",
-      severity,
-      auto: true,
-      reasons,
-      status: "pending",
-      reportedBy: null,
-      createdAt: FieldValue.serverTimestamp(),
-      policy,
-    });
-
-    logger.info("moderation_text_decision", {
-      gid,
-      mid,
-      eventId: event.id,
-      decision,
-      reasons,
-      policy,
-      severity,
-    });
   },
 );
