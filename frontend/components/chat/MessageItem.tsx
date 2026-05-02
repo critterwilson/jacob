@@ -5,6 +5,7 @@ import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
 import { useAuth } from "@/lib/auth-context";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
+import { ReportLink } from "@/components/moderation/ReportLink";
 import { useStickers } from "@/lib/hooks/useStickers";
 import { firestore } from "@/lib/firebase";
 import type { Message } from "@/lib/hooks/useGroupMessages";
@@ -182,7 +183,7 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
         </button>
       )}
 
-      {!isDeleted && !editing && (canEdit || canDelete || (onReply && message.parentMessageId === null)) && (
+      {!isDeleted && !editing && (
         <div className="absolute right-4 top-2 hidden gap-1 group-hover:flex">
           {onReply && message.parentMessageId === null && (
             <button
@@ -210,6 +211,14 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
             >
               Delete
             </button>
+          )}
+          {!isAuthor && (
+            <ReportLink
+              contentType="message"
+              contentId={message.id}
+              groupId={gid}
+              className="flex items-center rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-400 hover:bg-white hover:text-gray-600"
+            />
           )}
         </div>
       )}
