@@ -83,7 +83,7 @@ function readConfig(): FirebaseClientConfig {
   return config;
 }
 
-const app: FirebaseApp = getApps()[0] ?? initializeApp(readConfig());
+export const app: FirebaseApp = getApps()[0] ?? initializeApp(readConfig());
 
 export const auth: Auth = getAuth(app);
 export const firestore: Firestore = getFirestore(app);
