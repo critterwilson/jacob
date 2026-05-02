@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 
 from app.errors import http_exception_handler, validation_exception_handler
-from app.routers import groups, uploads
+from app.routers import admin, groups, uploads
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler) 
 
 app.include_router(groups.router)
 app.include_router(uploads.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")
