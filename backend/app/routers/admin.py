@@ -14,11 +14,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
 from app.deps import require_admin
 from app.errors import APIError
+from app.limits import ADMIN_MUTATION
+from app.middleware.rate_limit import limiter
 from app.models.admin import (
     AdminGroup,
     AdminGroupListResponse,
@@ -147,8 +149,11 @@ def list_moderation_queue(
 
 
 @router.post("/moderation/{item_id}/resolve", response_model=ResolveResponse)
+@limiter.limit(ADMIN_MUTATION)
 def resolve_moderation_item(
     item_id: str,
+    request: Request,
+    response: Response,
     body: ResolveRequest,
     admin: CurrentUser = Depends(require_admin),
 ) -> ResolveResponse:
@@ -248,8 +253,11 @@ def search_users(
 
 
 @router.post("/users/{uid}/ban", response_model=BanResponse)
+@limiter.limit(ADMIN_MUTATION)
 def ban_user(
     uid: str,
+    request: Request,
+    response: Response,
     body: BanRequest,
     admin: CurrentUser = Depends(require_admin),
 ) -> BanResponse:
@@ -294,8 +302,11 @@ def ban_user(
 
 
 @router.post("/users/{uid}/unban", response_model=UnbanResponse)
+@limiter.limit(ADMIN_MUTATION)
 def unban_user(
     uid: str,
+    request: Request,
+    response: Response,
     admin: CurrentUser = Depends(require_admin),
 ) -> UnbanResponse:
     db = _db()
@@ -328,10 +339,7 @@ def search_groups(
 
     if q:
         groups_query = (
-            db.collection("groups")
-            .where("name", ">=", q)
-            .where("name", "<=", q + "")
-            .limit(limit)
+            db.collection("groups").where("name", ">=", q).where("name", "<=", q + "").limit(limit)
         )
     else:
         groups_query = (

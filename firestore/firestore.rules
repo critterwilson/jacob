@@ -41,10 +41,6 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    function fieldsLocked(locked) {
-      return changedKeys().intersection(locked.toSet()).size() == 0;
-    }
-
     function onlyChanges(allowed) {
       return changedKeys().hasOnly(allowed);
     }
@@ -163,7 +159,9 @@ service cloud.firestore {
           && onlyChanges(['role'])
           && request.resource.data.role in ['member', 'leader'];
 
-        allow delete: if (isGroupLeader(gid) || isUser(uid)) && notBanned();
+        // Leaders must be unbanned to remove others; a banned user may still
+        // leave a group (self-delete their own member doc).
+        allow delete: if (isGroupLeader(gid) && notBanned()) || isUser(uid);
       }
 
       // --- messages ----------------------------------------------------
@@ -233,6 +231,9 @@ service cloud.firestore {
     }
 
     // --- default deny (defense in depth) --------------------------------
+    // Any path not explicitly matched above is silently denied. A denial
+    // here is a signal that a new collection was added without a rule —
+    // not a security guarantee to rely on.
     match /{document=**} {
       allow read, write: if false;
     }

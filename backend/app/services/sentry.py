@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, cast
+from typing import Any
 
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -25,18 +25,16 @@ _EMAIL_RE = re.compile(r"[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-.]+")
 
 
 def _before_send(event: Event, hint: Hint) -> Event | None:
-    ev: dict[str, Any] = cast(dict[str, Any], event)
-
     # Scrub email addresses that may appear in exception messages
-    for exc in ev.get("exception", {}).get("values", []):
+    for exc in (event.get("exception") or {}).get("values", []):
         if exc.get("value"):
             exc["value"] = _EMAIL_RE.sub("[email]", exc["value"])
 
     # Strip request body and sensitive headers
-    req: dict[str, Any] = ev.get("request", {})
+    req: dict[str, Any] = event.get("request") or {}
     req.pop("data", None)
     req.pop("cookies", None)
-    headers: dict[str, Any] = req.get("headers", {})
+    headers: dict[str, Any] = req.get("headers") or {}
     for key in list(headers):
         if key.lower() in {"authorization", "cookie"}:
             del headers[key]
@@ -61,6 +59,4 @@ def init_sentry() -> None:
         before_send=_before_send,
         send_default_pii=False,
     )
-    logger.info(
-        "Sentry initialised for environment '%s'", settings.sentry_environment
-    )
+    logger.info("Sentry initialised for environment '%s'", settings.sentry_environment)

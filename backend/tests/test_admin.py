@@ -17,16 +17,21 @@ from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.deps import get_current_user, require_admin
 from app.errors import http_exception_handler
+from app.middleware.rate_limit import limiter
 from app.models.user import CurrentUser
 from app.routers.admin import router
 
 
 def _admin_app(uid: str = "admin-uid", is_admin: bool = True) -> FastAPI:
     app = FastAPI()
+    app.state.limiter = limiter
     app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.include_router(router)
     user = CurrentUser(
         uid=uid,
@@ -93,12 +98,9 @@ def _make_db(
     item_snap.to_dict.return_value = item_data
     item_ref.get.return_value = item_snap
     queue_col.document.return_value = item_ref
-    (
-        queue_col.where.return_value
-        .order_by.return_value
-        .limit.return_value
-        .stream.return_value
-    ) = iter([])
+    queue_col.where.return_value.order_by.return_value.limit.return_value.stream.return_value = (
+        iter([])
+    )
 
     # audit_log collection
     audit_col = MagicMock()
@@ -296,3 +298,35 @@ def test_ban_writes_audit_log() -> None:
     assert audit_set_call["action"] == "ban_user"
     assert audit_set_call["actorUid"] == "admin-uid"
     assert audit_set_call["targetRef"] == "users/target-uid"
+
+
+# ── M3: BanRequest.reason validation ─────────────────────────────────────────
+
+
+def test_ban_reason_empty_string_returns_422() -> None:
+    res = TestClient(_admin_app()).post(
+        "/api/admin/users/uid-x/ban",
+        json={"reason": "", "duration": "24h"},
+    )
+    assert res.status_code == 422
+
+
+def test_ban_reason_over_500_chars_returns_422() -> None:
+    res = TestClient(_admin_app()).post(
+        "/api/admin/users/uid-x/ban",
+        json={"reason": "x" * 501, "duration": "24h"},
+    )
+    assert res.status_code == 422
+
+
+def test_ban_reason_exactly_500_chars_is_valid() -> None:
+    mock_db = _make_db()
+    with (
+        patch("app.routers.admin._db", return_value=mock_db),
+        patch("app.services.audit._db", return_value=mock_db),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/admin/users/uid-x/ban",
+            json={"reason": "x" * 500, "duration": "24h"},
+        )
+    assert res.status_code == 200

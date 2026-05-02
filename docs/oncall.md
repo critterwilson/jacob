@@ -71,9 +71,12 @@ client-side errors can be correlated with backend logs.
 2. Search Cloud Logging for recent 5xx entries on the affected service.
 3. Open Sentry and filter by the `request_id` if available.
 4. **Cloud Run outage**: inspect the latest revision; roll back via the console or
-   `gcloud run services update-traffic jacob-api --to-revisions=PREV=100`.
-5. **Firebase Hosting outage**: check the latest deploy in the Firebase console;
-   roll back with `firebase hosting:rollback`.
+   `gcloud run services update-traffic jacob-backend --to-revisions=PREV=100`.
+5. **App Hosting outage**: list recent rollouts with
+   `firebase apphosting:rollouts:list --project <PROJECT_ID> --backend <BACKEND_ID>`
+   then delete the bad rollout with
+   `firebase apphosting:rollouts:delete <ROLLOUT_ID> --project <PROJECT_ID>`
+   to revert to the previous revision.
 
 ## Escalation
 

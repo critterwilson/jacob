@@ -125,8 +125,10 @@ def cancel_deletion(uid: str) -> bool:
         return False
 
     now = datetime.now(UTC)
-    if now > _finalize_at(requested_at):
-        # Past the grace window — finalization may already have run or
+    # Cancel window is half-open: [requested_at, finalize_at).
+    # find_users_due uses <= cutoff so the boundary belongs to finalize.
+    if now >= _finalize_at(requested_at):
+        # At or past the grace window — finalization may already have run or
         # be about to run. Don't pretend we cancelled it.
         return False
 
