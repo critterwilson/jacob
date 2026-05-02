@@ -23,6 +23,21 @@ these can be picked up as discrete Phase 2 tasks.
 - **I2 — Custom domain** — documented in `infra/README.md` only; actual
   DNS work deferred until a domain is registered. The Terraform diff is a
   single `google_cloud_run_domain_mapping` resource away.
+- **M5 — Dockerfile base image pinned by digest** — landed in the
+  *deferred-misc* PR. `backend/Dockerfile` now pins `python:3.12-slim` by
+  manifest digest; Dependabot (`/backend` docker ecosystem) already
+  monitors the digest weekly.
+- **M6 — Cloud Functions deploy lockfile** — landed in the
+  *deferred-misc* PR. `functions/package-lock.json` is committed; Firebase
+  deploy reproducibly installs the same dependency tree as local dev.
+
+## Punted
+
+- **M8 — Restore drill timing** — operational task, not a code change.
+  Requires GCP access plus a staging-restore window to fill in the timing
+  table in `docs/runbooks/restore.md`. Owner: project owner. Once the
+  drill is run, append a "Resolved" entry here pointing at the timing
+  commit.
 
 ---
 
