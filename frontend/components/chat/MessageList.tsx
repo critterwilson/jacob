@@ -6,6 +6,7 @@ import { MessageItem } from "@/components/chat/MessageItem";
 import { useBlocks } from "@/lib/hooks/useBlocks";
 import { useMutes } from "@/lib/hooks/useMutes";
 import { useMembers } from "@/lib/hooks/useMembers";
+import { useReactions } from "@/lib/hooks/useReactions";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
   loadingOlder: boolean;
   hasMore: boolean;
   isLeader: boolean;
+  archived?: boolean;
   onLoadOlder: () => void;
   onReply?: (message: Message) => void;
   pinnedIds?: string[];
@@ -36,6 +38,7 @@ export function MessageList({
   loadingOlder,
   hasMore,
   isLeader,
+  archived = false,
   onLoadOlder,
   onReply,
   pinnedIds,
@@ -47,6 +50,7 @@ export function MessageList({
   const { isMuted } = useMutes();
   const { isBlocked } = useBlocks();
   const { members } = useMembers(gid);
+  const { isMyReaction, toggle: toggleReaction } = useReactions(gid);
   const [expandedMutes, setExpandedMutes] = useState<Set<string>>(new Set());
 
   // Scroll to bottom only when new messages arrive (not on older-page loads).
@@ -125,6 +129,9 @@ export function MessageList({
               onTogglePin={onTogglePin}
               onAnnounce={onAnnounce}
               members={members}
+              archived={archived}
+              isMyReaction={isMyReaction}
+              onToggleReaction={(mid, slug) => void toggleReaction(mid, slug)}
             />
           );
         })}
