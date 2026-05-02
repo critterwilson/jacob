@@ -88,6 +88,7 @@ describe("ReportLink", () => {
 // ── anonymous (no user) ───────────────────────────────────────────────────────
 describe("ReportLink (anonymous)", () => {
   it("leaves reporter_uid blank when user is not signed in", async () => {
+    vi.resetModules();
     vi.doMock("@/lib/auth-context", () => ({
       useAuth: () => ({ user: null, loading: false, signOut: vi.fn() }),
     }));
