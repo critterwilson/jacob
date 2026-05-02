@@ -351,6 +351,41 @@ describe("MessageList", () => {
   });
 });
 
+// ── T26 wireup — MessageList renders ReactionBar for messages with counts ──
+
+describe("MessageList — reactions wireup", () => {
+  const defaultProps = {
+    gid: "g1",
+    messages: [] as Message[],
+    loading: false,
+    loadingOlder: false,
+    hasMore: false,
+    isLeader: false,
+    onLoadOlder: vi.fn(),
+  };
+
+  it("renders ReactionBar for messages that have reactionCounts", () => {
+    render(
+      <MessageList
+        {...defaultProps}
+        messages={[
+          makeMessage({
+            id: "m1",
+            body: "with reactions",
+            reactionCounts: { "check-in": 2 },
+          }),
+        ]}
+      />,
+    );
+    // ReactionBar wraps chips with aria-label="Reactions".
+    expect(screen.getByLabelText("Reactions")).toBeInTheDocument();
+    // The chip itself has an aria-label combining sticker name + count.
+    expect(
+      screen.getByRole("button", { name: /check-in 2/i }),
+    ).toBeInTheDocument();
+  });
+});
+
 // ── T21 — MessageList filters muted + blocked authors ───────────────────────
 
 describe("MessageList — mute + block filters", () => {

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useThreadMessages } from "@/lib/hooks/useThreadMessages";
 import { ThreadReplyInput } from "@/components/chat/ThreadReplyInput";
 import { MessageItem } from "@/components/chat/MessageItem";
+import { useReactions } from "@/lib/hooks/useReactions";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
 type Props = {
@@ -12,12 +13,15 @@ type Props = {
   parentMessage: Message;
   isLeader: boolean;
   currentUserUid: string;
+  archived?: boolean;
   onClose: () => void;
 };
 
-export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, onClose }: Props) {
+export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, archived = false, onClose }: Props) {
   const { messages, loading, loadingOlder, hasMore, loadOlder } =
     useThreadMessages(gid, parentMessage.id);
+  const { isMyReaction, toggle: toggleReaction } = useReactions(gid);
+  const onToggleReaction = (mid: string, slug: string) => void toggleReaction(mid, slug);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -64,6 +68,9 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, onCl
           gid={gid}
           message={parentMessage}
           isLeader={isLeader}
+          archived={archived}
+          isMyReaction={isMyReaction}
+          onToggleReaction={onToggleReaction}
         />
       </div>
 
@@ -95,7 +102,15 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, onCl
 
             <div className="flex flex-col">
               {messages.map((msg) => (
-                <MessageItem key={msg.id} gid={gid} message={msg} isLeader={isLeader} />
+                <MessageItem
+                  key={msg.id}
+                  gid={gid}
+                  message={msg}
+                  isLeader={isLeader}
+                  archived={archived}
+                  isMyReaction={isMyReaction}
+                  onToggleReaction={onToggleReaction}
+                />
               ))}
             </div>
 

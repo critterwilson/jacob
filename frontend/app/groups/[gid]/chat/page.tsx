@@ -119,6 +119,7 @@ export default function ChatPage({ params }: Props) {
             loadingOlder={loadingOlder}
             hasMore={hasMore}
             isLeader={isLeader}
+            archived={Boolean(archivedAt)}
             pinnedIds={pinnedIds}
             onLoadOlder={() => void loadOlder()}
             onReply={setActiveThread}
@@ -134,6 +135,7 @@ export default function ChatPage({ params }: Props) {
             parentMessage={activeThread}
             isLeader={isLeader}
             currentUserUid={user.uid}
+            archived={Boolean(archivedAt)}
             onClose={() => setActiveThread(null)}
           />
         )}

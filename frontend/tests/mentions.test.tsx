@@ -199,7 +199,7 @@ describe("MentionInput", () => {
     // fireEvent.mouseDown avoids blur-before-click ordering in jsdom
     fireEvent.mouseDown(bobBtn);
 
-    const allValues = onChange.mock.calls.map(([v]: [string]) => v);
+    const allValues = onChange.mock.calls.map((args) => args[0] as string);
     expect(allValues.some((v) => v.startsWith("@Bob Smith"))).toBe(true);
   });
 
