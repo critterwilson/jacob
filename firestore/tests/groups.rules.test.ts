@@ -18,6 +18,7 @@ import {
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  deleteDoc,
   doc,
   getDoc,
   serverTimestamp,
@@ -216,6 +217,87 @@ describe("member bootstrap path", () => {
         role: "leader",
         joinedAt: serverTimestamp(),
       }),
+    );
+  });
+});
+
+// ── M2: banned user can still leave a group ───────────────────────────────────
+
+describe("banned user group leave (M2)", () => {
+  async function seedGroupWithBannedMember(opts: {
+    gid: string;
+    leaderUid: string;
+    bannedUid: string;
+  }) {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", opts.gid), {
+        name: "Test Group",
+        createdBy: opts.leaderUid,
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE01",
+        memberCount: 2,
+        stickerSet: "christian",
+        schemaVersion: 1,
+      });
+      await setDoc(doc(db, "groups", opts.gid, "members", opts.leaderUid), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", opts.gid, "members", opts.bannedUid), {
+        role: "member",
+        joinedAt: Timestamp.now(),
+      });
+      // Active ban: far-future expiry
+      await setDoc(doc(db, "bans", opts.bannedUid), {
+        reason: "test",
+        bannedBy: opts.leaderUid,
+        expiresAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
+      });
+    });
+  }
+
+  it("allows a banned user to delete their own member doc (leave the group)", async () => {
+    await seedGroupWithBannedMember({
+      gid: "gb1",
+      leaderUid: "alice",
+      bannedUid: "banned-bob",
+    });
+    await assertSucceeds(
+      deleteDoc(doc(authed("banned-bob"), "groups", "gb1", "members", "banned-bob")),
+    );
+  });
+
+  it("denies a banned leader from removing another member", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "gb2"), {
+        name: "g",
+        createdBy: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE02",
+        memberCount: 2,
+        stickerSet: "christian",
+        schemaVersion: 1,
+      });
+      await setDoc(doc(db, "groups", "gb2", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", "gb2", "members", "bob"), {
+        role: "member",
+        joinedAt: Timestamp.now(),
+      });
+      // Alice is banned
+      await setDoc(doc(db, "bans", "alice"), {
+        reason: "test",
+        bannedBy: "system",
+        expiresAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
+      });
+    });
+    // Banned leader cannot kick another member (leader path requires !banned)
+    await assertFails(
+      deleteDoc(doc(authed("alice"), "groups", "gb2", "members", "bob")),
     );
   });
 });

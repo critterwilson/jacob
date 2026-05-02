@@ -43,6 +43,12 @@ export function useUser(uid: string | undefined): UseUserResult {
             profile: { uid, ...(snap.data() as Omit<UserProfile, "uid">) },
           });
           // Best-effort cookie so middleware can short-circuit on protected routes.
+          // Known race: the first SSR pass has no cookie, so middleware may
+          // redirect to /sign-in before the snapshot fires and sets the cookie.
+          // The redirect is transient — on reload the cookie is present and the
+          // user reaches the protected page normally. A proper fix would set
+          // this cookie server-side via an /api/session route keyed to the ID
+          // token, but the UX impact here is low enough to defer.
           if (typeof document !== "undefined") {
             document.cookie = "jacob-has-profile=1; path=/; SameSite=Lax";
           }

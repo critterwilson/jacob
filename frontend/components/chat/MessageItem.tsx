@@ -12,6 +12,12 @@ import type { Message } from "@/lib/hooks/useGroupMessages";
 
 const FIFTEEN_MIN_MS = 15 * 60 * 1000;
 
+const MEDIA_URL_PREFIX = "https://storage.googleapis.com/jacob-media-public-";
+
+function isSafeMediaUrl(url: string): boolean {
+  return url.startsWith(MEDIA_URL_PREFIX);
+}
+
 type Props = {
   gid: string;
   message: Message;
@@ -145,7 +151,7 @@ export function MessageItem({ gid, message, isLeader, onReply, currentUserUid }:
 
       {!isDeleted && message.mediaRefs.length > 0 && (
         <ul className="mt-1 flex flex-wrap gap-2" aria-label="Photos">
-          {message.mediaRefs.map((url) => (
+          {message.mediaRefs.filter(isSafeMediaUrl).map((url) => (
             <li key={url}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

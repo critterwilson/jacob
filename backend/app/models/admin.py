@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ── request models ─────────────────────────────────────────────────────────────
 
 
 class BanRequest(BaseModel):
-    reason: str
+    reason: str = Field(min_length=1, max_length=500)
     duration: Literal["24h", "7d", "permanent"]
 
 

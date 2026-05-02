@@ -49,12 +49,15 @@ def _export(output_uri_prefix: str, label: str) -> None:
 def main() -> int:
     now = datetime.now(UTC)
     date_str = now.strftime("%Y-%m-%d")
+    # Include HH-MM-SS so Cloud Scheduler retries don't collide with the
+    # original run's non-empty output prefix.
+    datetime_str = now.strftime("%Y-%m-%d-%H%M%S")
     week_str = now.strftime("%Y-W%V")
 
     failures = 0
 
     try:
-        _export(f"gs://{_BACKUP_BUCKET}/daily/{date_str}", "daily")
+        _export(f"gs://{_BACKUP_BUCKET}/daily/{datetime_str}", "daily")
     except Exception:
         logger.exception("daily export failed date=%s", date_str)
         failures += 1

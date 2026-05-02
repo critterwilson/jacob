@@ -48,10 +48,13 @@ export function initSentry(): void {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
   if (!dsn) return;
 
+  const rawRate = process.env.NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE;
+  const tracesSampleRate = rawRate !== undefined ? parseFloat(rawRate) : 0.1;
+
   Sentry.init({
     dsn,
     environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ?? "development",
-    tracesSampleRate: 0.1,
+    tracesSampleRate,
     beforeSend,
     sendDefaultPii: false,
   });

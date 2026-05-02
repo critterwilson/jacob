@@ -112,6 +112,11 @@ resource "google_monitoring_uptime_check_config" "backend_health" {
     validate_ssl = true
   }
 
+  content_matchers {
+    content = "ok"
+    matcher = "CONTAINS_STRING"
+  }
+
   monitored_resource {
     type = "uptime_url"
     labels = {

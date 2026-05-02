@@ -18,13 +18,13 @@ Install these tools before running anything locally.
 | Tool | Version | Install |
 |---|---|---|
 | Node.js | 20 LTS | `brew install fnm && fnm install 20` |
-| pnpm | 9.x | `npm install -g pnpm@9` |
+| pnpm | 10.x | `npm install -g pnpm@10` |
 | Python | 3.12 | `brew install python@3.12` |
 | uv | latest | `pip install uv` |
 | Docker Desktop | latest | https://www.docker.com/products/docker-desktop |
 | gcloud CLI | latest | `brew install google-cloud-sdk` |
 | Firebase CLI | latest | `npm install -g firebase-tools` |
-| Java (JDK 17) | 17+ | `brew install openjdk@17` |
+| Java (JDK 21) | 21+ | `brew install openjdk@21` |
 
 > Java is required only for the Firebase emulators.
 
@@ -234,6 +234,7 @@ Without this, any contributor with `write` access can trigger a production deplo
 - Real-time chat and all end-user reads/writes go **directly through the Firestore client SDK** — there is no API gateway in front of Firestore.
 - The FastAPI backend handles only server-trusted work: auth token verification, image moderation, admin actions, account lifecycle.
 - Cloud Functions handle Firestore-triggered fan-out (e.g. `threadReplyCount` increments in T09+).
+- **Storage note**: user uploads use **Cloud Storage** directly via backend-issued signed URLs (see `infra/buckets.tf`). There is no `firebase.json` `storage` block and no `storage.rules` file — those would control Firebase Storage, which is a different product and is not used here. Do not add a `storage.rules` file expecting it to protect the upload buckets.
 - See `CLAUDE.md` for full conventions and `DEV_PLAN.md` for the Phase 1 task list.
 
 ---
