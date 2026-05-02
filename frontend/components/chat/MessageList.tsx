@@ -16,6 +16,9 @@ type Props = {
   isLeader: boolean;
   onLoadOlder: () => void;
   onReply?: (message: Message) => void;
+  pinnedIds?: string[];
+  onTogglePin?: (mid: string) => void;
+  onAnnounce?: (mid: string) => void;
 };
 
 /**
@@ -34,6 +37,9 @@ export function MessageList({
   isLeader,
   onLoadOlder,
   onReply,
+  pinnedIds,
+  onTogglePin,
+  onAnnounce,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -113,6 +119,9 @@ export function MessageList({
               message={msg}
               isLeader={isLeader}
               onReply={onReply}
+              pinnedIds={pinnedIds}
+              onTogglePin={onTogglePin}
+              onAnnounce={onAnnounce}
             />
           );
         })}

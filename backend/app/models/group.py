@@ -52,3 +52,10 @@ class FounderTransferRequest(BaseModel):
 class FounderTransferResponse(BaseModel):
     gid: str
     founderUid: str
+
+
+class AnnounceResponse(BaseModel):
+    gid: str
+    mid: str
+    announcedAt: str  # ISO-8601
+    notifiedCount: int

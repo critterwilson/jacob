@@ -41,6 +41,8 @@ export type Message = {
   participants?: string[];
   repostOfThread?: string | null;
   moderation?: ModerationFields | null;
+  announcedAt?: Timestamp | null;
+  announcedBy?: string | null;
 };
 
 function docToMessage(d: QueryDocumentSnapshot): Message {
