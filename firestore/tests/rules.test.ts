@@ -6,13 +6,17 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
   type Firestore,
 } from "firebase/firestore";
 import { readFileSync } from "fs";
@@ -971,5 +975,122 @@ describe("default deny", () => {
 
   it("denies unauthenticated read of any document", async () => {
     await assertFails(getDoc(doc(anon(), "anything", "doc")));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M11: collection-group query for memberships
+// ---------------------------------------------------------------------------
+describe("members collectionGroup", () => {
+  it("alice can list her own memberships across groups", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1"), {
+        name: "g1",
+        createdBy: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        memberCount: 1,
+        schemaVersion: 1,
+      });
+      await setDoc(doc(db, "groups", "g1", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+      await setDoc(doc(db, "groups", "g2"), {
+        name: "g2",
+        createdBy: "bob",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        memberCount: 2,
+        schemaVersion: 1,
+      });
+      await setDoc(doc(db, "groups", "g2", "members", "alice"), {
+        role: "member",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+      await setDoc(doc(db, "groups", "g2", "members", "bob"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "bob",
+      });
+    });
+
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(authed("alice"), "members"),
+          where("uid", "==", "alice"),
+        ),
+      ),
+    );
+  });
+
+  it("alice cannot enumerate bob's memberships via the same query shape", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1"), {
+        name: "g1",
+        createdBy: "bob",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        memberCount: 1,
+        schemaVersion: 1,
+      });
+      await setDoc(doc(db, "groups", "g1", "members", "bob"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "bob",
+      });
+    });
+
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(authed("alice"), "members"),
+          where("uid", "==", "bob"),
+        ),
+      ),
+    );
+  });
+
+  it("create rule rejects a member doc whose uid field disagrees with doc id", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1"), {
+        name: "g1",
+        createdBy: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        memberCount: 1,
+        schemaVersion: 1,
+      });
+    });
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "members", "alice"), {
+        role: "leader",
+        joinedAt: serverTimestamp(),
+        uid: "spoofed",
+      }),
+    );
+  });
+
+  it("create rule still accepts a member doc with matching uid field", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1"), {
+        name: "g1",
+        createdBy: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        memberCount: 1,
+        schemaVersion: 1,
+      });
+    });
+    await assertSucceeds(
+      setDoc(doc(authed("alice"), "groups", "g1", "members", "alice"), {
+        role: "leader",
+        joinedAt: serverTimestamp(),
+        uid: "alice",
+      }),
+    );
   });
 });

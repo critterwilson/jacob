@@ -1,6 +1,13 @@
 "use client";
 
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import {
+  collectionGroup,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { firestore } from "@/lib/firebase";
 
@@ -17,6 +24,16 @@ export type Group = {
   createdAt: unknown;
 };
 
+/**
+ * Returns every group the user belongs to.
+ *
+ * As of M11, memberships are derived from a collection-group query on
+ * the `members` subcollection (filtered by the `uid` field) rather than
+ * the legacy `users/{uid}.groupIds` mirror. Each member doc is created
+ * by the backend with `uid` equal to the doc ID, and the security rule
+ * still permits per-doc reads via `isUser(uid)` — see
+ * `docs/adr/0003-collection-group-memberships.md`.
+ */
 export function useGroups(uid: string | undefined) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,27 +47,30 @@ export function useGroups(uid: string | undefined) {
 
     setLoading(true);
 
-    // Subscribe to user doc to pick up groupIds changes (backend writes this
-    // via ArrayUnion when a group is created or joined).
-    const unsub = onSnapshot(
-      doc(firestore, "users", uid),
-      async (snap) => {
-        const groupIds: string[] = snap.exists()
-          ? ((snap.data().groupIds as string[] | undefined) ?? [])
-          : [];
+    const membersQuery = query(
+      collectionGroup(firestore, "members"),
+      where("uid", "==", uid),
+    );
 
-        if (groupIds.length === 0) {
+    const unsub = onSnapshot(
+      membersQuery,
+      async (snap) => {
+        const gids = snap.docs
+          .map((d) => d.ref.parent.parent?.id)
+          .filter((id): id is string => Boolean(id));
+
+        if (gids.length === 0) {
           setGroups([]);
           setLoading(false);
           return;
         }
 
-        const snaps = await Promise.all(
-          groupIds.map((gid) => getDoc(doc(firestore, "groups", gid))),
+        const groupSnaps = await Promise.all(
+          gids.map((gid) => getDoc(doc(firestore, "groups", gid))),
         );
 
         setGroups(
-          snaps
+          groupSnaps
             .filter((s) => s.exists())
             .map((s) => ({ id: s.id, ...(s.data() as Omit<Group, "id">) })),
         );

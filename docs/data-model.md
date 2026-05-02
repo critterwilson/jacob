@@ -107,10 +107,17 @@ Membership record. Two creation paths:
 A user may delete their own membership (leave). A leader may delete any
 membership in their group.
 
+The `uid` field is required on writes from the backend (it equals the
+doc ID) and lets clients discover their memberships in one round-trip
+via a collection-group query — see
+[ADR 0003](adr/0003-collection-group-memberships.md). It replaces the
+legacy `users/{uid}.groupIds` mirror, which is no longer written.
+
 ```json
 {
   "role": "leader",
-  "joinedAt": "<serverTimestamp>"
+  "joinedAt": "<serverTimestamp>",
+  "uid": "alice"
 }
 ```
 
