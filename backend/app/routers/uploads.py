@@ -21,11 +21,13 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
 from app.deps import get_current_user
 from app.errors import APIError
+from app.limits import UPLOAD_INIT
+from app.middleware.rate_limit import limiter
 from app.models.upload import (
     CreateUploadRequest,
     CreateUploadResponse,
@@ -70,7 +72,10 @@ def _object_name(uid: str, upload_id: str, mime_type: str) -> str:
     status_code=status.HTTP_201_CREATED,
     response_model=CreateUploadResponse,
 )
+@limiter.limit(UPLOAD_INIT)
 def create_photo_upload(
+    request: Request,
+    response: Response,
     body: CreateUploadRequest,
     user: CurrentUser = Depends(get_current_user),
 ) -> CreateUploadResponse:

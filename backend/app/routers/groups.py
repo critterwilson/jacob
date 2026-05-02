@@ -12,12 +12,14 @@ import string
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 
 from app.deps import get_current_user
 from app.errors import APIError
+from app.limits import INVITE_ROTATE
+from app.middleware.rate_limit import limiter
 from app.models.group import (
     CreateGroupRequest,
     CreateGroupResponse,
@@ -136,7 +138,10 @@ def join_group(
 
 
 @router.post("/{gid}/invite/rotate", response_model=RotateInviteResponse)
+@limiter.limit(INVITE_ROTATE)
 def rotate_invite(
+    request: Request,
+    response: Response,
     gid: str,
     user: CurrentUser = Depends(get_current_user),
 ) -> RotateInviteResponse:

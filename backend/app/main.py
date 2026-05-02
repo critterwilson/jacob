@@ -3,11 +3,14 @@ import logging.config
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
 from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.logging import StructuredLoggingMiddleware
-from app.routers import account, admin, groups, uploads
+from app.middleware.rate_limit import limiter
+from app.routers import account, admin, groups, reports, uploads
 from app.services.sentry import init_sentry
 
 # Emit JSON-formatted logs so Cloud Logging auto-parses them on Cloud Run.
@@ -40,15 +43,18 @@ settings = get_settings()
 
 app: FastAPI = FastAPI(title="JACOB API", version="0.1.0")
 
+app.state.limiter = limiter
 app.add_middleware(StructuredLoggingMiddleware)
 
 # Starlette stubs widen the handler exception type to `Exception`; FastAPI
 # dispatches by class at runtime, so the narrower signatures are safe.
 app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.include_router(groups.router)
 app.include_router(uploads.router)
+app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(account.router)
 
