@@ -3,7 +3,9 @@ FROM python:3.12-slim AS builder
 WORKDIR /build
 RUN pip install --no-cache-dir uv
 COPY pyproject.toml .
-RUN uv pip install --system --no-cache fastapi "uvicorn[standard]"
+# Create a stub package so hatchling resolves all [project.dependencies] from pyproject.toml
+RUN mkdir -p app && touch app/__init__.py
+RUN uv pip install --system --no-cache .
 
 FROM python:3.12-slim
 
