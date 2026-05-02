@@ -68,6 +68,10 @@ vi.mock("@/lib/hooks/useMaintenanceBanner", () => ({
   useMaintenanceBanner: () => ({ maintenance: maintenanceFlag, loading: false }),
 }));
 
+vi.mock("@/lib/hooks/useDeletionStatus", () => ({
+  useDeletionStatus: () => ({ pending: false, finalizeAt: null, keepBody: true }),
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { AppShell } from "@/components/nav/AppShell";

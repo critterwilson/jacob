@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
+import { DeletionBanner } from "@/components/account/DeletionBanner";
+
 const navLinks = [
   { href: "/groups", label: "Chats" },
   { href: "/about", label: "About" },
@@ -113,6 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
 
+        <DeletionBanner />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
