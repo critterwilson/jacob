@@ -16,6 +16,7 @@
     "logs": "firebase functions:log"
   },
   "dependencies": {
+    "@google-cloud/language": "^7.2.2",
     "firebase-admin": "^12",
     "firebase-functions": "^6"
   },

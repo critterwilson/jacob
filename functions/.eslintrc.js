@@ -18,4 +18,8 @@ module.exports = {
   rules: {
     "no-console": "warn",
   },
+  // __tests__ are excluded from the deploy bundle via tsconfig.json's
+  // exclude list; lint them via vitest itself, not the typed-project
+  // parser (which doesn't include them).
+  ignorePatterns: ["lib/**", "node_modules/**", "src/__tests__/**"],
 };

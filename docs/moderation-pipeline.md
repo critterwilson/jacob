@@ -137,3 +137,75 @@ Any item left blank, or marked **PENDING**, blocks public launch.
   removes that path: avatar uploads now go through the same pipeline
   as message photos (`purpose: "avatar"`). The placeholder doc
   `docs/temporary-avatar-flow.md` has been deleted.
+
+
+## Text path (T20)
+
+Text moderation is orthogonal to the image pipeline above — same queue,
+different trigger. New messages are scored by Cloud Natural Language
+`moderateText` and either auto-hidden, flagged, or scored-only depending
+on the per-group `moderationPolicy` (`lenient | standard | strict`).
+
+### Sequence
+
+```
+client (Firestore SDK)        Cloud Function: onMessageCreate     Cloud NL                Firestore
+  │                                    │                              │                       │
+  │  setDoc messages/{mid}             │                              │                       │
+  ├───────────────────────────────────►│                              │                       │
+  │                                    │  read group.moderationPolicy │                       │
+  │                                    │  reserve daily-quota slot    │                       │
+  │                                    │  moderateText(body)          │                       │
+  │                                    ├─────────────────────────────►│                       │
+  │                                    │  scores                      │                       │
+  │                                    │◄─────────────────────────────┤                       │
+  │                                    │  decisionFor(scores, policy) │                       │
+  │                                    │  state: hidden|flagged|scored                       │
+  │                                    │  update messages/{mid}.moderation                   │
+  │                                    │  if hide/flag → moderation_queue.add(auto:true, ...)│
+  │                                    │                                                      │
+```
+
+### Decision table
+
+| Policy   | hide threshold | flag threshold |
+|----------|----------------|----------------|
+| lenient  | 0.95           | 0.85           |
+| standard | 0.85           | 0.70           |
+| strict   | 0.70           | 0.50           |
+
+Tracked categories: `Toxic`, `Insult`, `Profanity`, `Derogatory`,
+`Sexual`, `Violent`. The `Sexual` category is hidden whenever its
+confidence exceeds the *strict* hide threshold (0.70), even on the
+`lenient` policy — this is the platform-wide always-hide rule.
+
+### State written on the message
+
+```json
+"moderation": {
+  "state": "scored | flagged | hidden | skipped | errored",
+  "reasons": ["Toxic"],
+  "scores": { "Toxic": 0.91, "Insult": 0.4, ... },
+  "scoredAt": "<serverTimestamp>",
+  "policy": "standard"
+}
+```
+
+`hidden` messages render a "Hidden pending review · Show anyway" placeholder
+on the frontend (per-user, client-only). Authors always see their own
+messages regardless of state.
+
+### Cost guardrails
+
+- **Daily call cap.** A counter at `moderation_state/text-{YYYY-MM-DD}`
+  is incremented in a transaction before each NL call. When it hits the
+  cap (`JACOB_TEXT_MODERATION_DAILY_CAP`, default 5,000), the trigger
+  no-ops with `state: "skipped" reasons: ["quota_exceeded"]`.
+- **Sentry alert.** A `moderation_quota_warning` log line at 80% of the
+  cap drives the Cloud Logging metric used by the alert policy.
+- **Circuit breaker.** Five consecutive NL failures opens the breaker
+  for 5 minutes. While open, messages are written with
+  `state: "skipped" reasons: ["circuit_open"]` and no API call is made.
+- **Kill switch.** `MODERATION_TEXT_DISABLED=true` makes the trigger a
+  pure no-op — useful when the API is misbehaving and we want to ship
+  without redeploying the function.

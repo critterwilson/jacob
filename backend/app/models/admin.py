@@ -21,6 +21,10 @@ class BulkResolveRequest(BaseModel):
     resolution: Literal["approve", "reject"]
 
 
+class ModerationPolicyRequest(BaseModel):
+    policy: Literal["lenient", "standard", "strict"]
+
+
 # ── response models ────────────────────────────────────────────────────────────
 
 
@@ -86,3 +90,8 @@ class AdminGroup(BaseModel):
 
 class AdminGroupListResponse(BaseModel):
     groups: list[AdminGroup]
+
+
+class ModerationPolicyResponse(BaseModel):
+    gid: str
+    policy: str
