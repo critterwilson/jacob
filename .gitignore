@@ -389,3 +389,4 @@ frontend/next-env.d.ts
 # is itself a checkout of the repo, so it must never be tracked here.
 .claude/
 .claire/
+infra/plan.out

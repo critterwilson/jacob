@@ -4,6 +4,26 @@ Items from the May 2026 codebase review that require design decisions, schema
 migrations, or multi-PR refactors. Each entry records what work is needed so
 these can be picked up as discrete Phase 2 tasks.
 
+## Resolved (Phase 2)
+
+- **M4 — Cloud Scheduler IAM/OIDC Terraform** — landed in the
+  *infra-hardening* PR. `infra/scheduler.tf` defines both jobs with
+  per-job dedicated OIDC SAs (`jacob-scheduler-export`,
+  `jacob-scheduler-deletions`) and `roles/run.invoker` scoped to the
+  specific Cloud Run job via IAM condition.
+- **L7 — Terraform remote state + provider pins** — landed in the
+  *infra-hardening* PR. `infra/backend.tf` (GCS backend) and
+  `infra/versions.tf` (`~> 7.0` provider pins) added; `.terraform.lock.hcl`
+  committed; `infra/README.md` documents bucket creation.
+- **I1 — Dedicated least-privilege SAs** — landed in the *infra-hardening*
+  PR. `infra/service_accounts.tf` defines `jacob-api`, `jacob-moderation`,
+  `jacob-backup`, plus the two scheduler SAs above. Bucket bindings in
+  `buckets.tf` already reference these via tfvars; switch is one tfvars
+  edit + `terraform apply`.
+- **I2 — Custom domain** — documented in `infra/README.md` only; actual
+  DNS work deferred until a domain is registered. The Terraform diff is a
+  single `google_cloud_run_domain_mapping` resource away.
+
 ---
 
 ## M1 — Group can be left leaderless after leader self-demote or leave
