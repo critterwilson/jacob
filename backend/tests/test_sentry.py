@@ -13,9 +13,7 @@ from app.services.sentry import _before_send, init_sentry
 
 def test_before_send_scrubs_email_from_exception_value() -> None:
     event: Event = {
-        "exception": {
-            "values": [{"value": "Token verification failed for user@example.com"}]
-        }
+        "exception": {"values": [{"value": "Token verification failed for user@example.com"}]}
     }
     result = _before_send(event, {})
     assert result is not None
@@ -24,9 +22,7 @@ def test_before_send_scrubs_email_from_exception_value() -> None:
 
 
 def test_before_send_strips_request_body() -> None:
-    event: Event = {
-        "request": {"data": '{"body": "private message text"}', "url": "/api/foo"}
-    }
+    event: Event = {"request": {"data": '{"body": "private message text"}', "url": "/api/foo"}}
     result = _before_send(event, {})
     assert result is not None
     assert "data" not in result["request"]
@@ -49,9 +45,7 @@ def test_before_send_strips_authorization_header() -> None:
 
 
 def test_before_send_strips_cookies() -> None:
-    event: Event = {
-        "request": {"cookies": {"session": "abc123"}, "url": "/"}
-    }
+    event: Event = {"request": {"cookies": {"session": "abc123"}, "url": "/"}}
     result = _before_send(event, {})
     assert result is not None
     assert "cookies" not in result["request"]

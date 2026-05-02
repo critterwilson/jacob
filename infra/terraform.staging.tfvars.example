@@ -1,0 +1,24 @@
+# Copy to terraform.staging.tfvars and fill in real values.
+# terraform.staging.tfvars is gitignored — never commit it.
+#
+# project_id            — GCP project ID (e.g. jacob-staging-494515)
+# env                   — short env label, used in resource names (staging | production)
+# billing_account_id    — bare ID from `gcloud billing accounts list` (XXXXXX-XXXXXX-XXXXXX)
+# github_org            — GitHub org or user that owns the repo (e.g. critterwilson)
+# github_repo           — repo name without org prefix (e.g. jacob)
+# backend_host          — Cloud Run URL or custom domain, no scheme (e.g. api.jacob.app)
+# frontend_host         — Firebase Hosting or App Hosting URL, no scheme (e.g. jacob.app)
+# *_service_account_email — SA emails for backend, backup job, and moderation pipeline.
+#   NOTE: all three currently use the default Compute SA as a placeholder.
+#   Replace with dedicated SAs before production — see I1 in docs/follow-ups/phase-1-deferred.md.
+
+project_id                       = "YOUR_PROJECT_ID"
+env                              = "staging"
+billing_account_id               = "XXXXXX-XXXXXX-XXXXXX"
+github_org                       = "YOUR_GITHUB_ORG"
+github_repo                      = "jacob"
+backend_host                     = "YOUR_CLOUD_RUN_URL_OR_CUSTOM_DOMAIN"
+frontend_host                    = "YOUR_FIREBASE_HOSTING_URL_OR_CUSTOM_DOMAIN"
+api_service_account_email        = "YOUR_API_SA@YOUR_PROJECT.iam.gserviceaccount.com"
+backup_service_account_email     = "YOUR_BACKUP_SA@YOUR_PROJECT.iam.gserviceaccount.com"
+moderation_service_account_email = "YOUR_MODERATION_SA@YOUR_PROJECT.iam.gserviceaccount.com"

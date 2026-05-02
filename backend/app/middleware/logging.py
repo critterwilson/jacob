@@ -30,9 +30,7 @@ _RequestResponseEndpoint = Callable[[Request], Awaitable[Response]]
 
 
 class StructuredLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(
-        self, request: Request, call_next: _RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: _RequestResponseEndpoint) -> Response:
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 

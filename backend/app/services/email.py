@@ -102,9 +102,7 @@ def send_email(
                     response.status_code,
                 )
                 return
-            raise RuntimeError(
-                f"SendGrid returned status {response.status_code}"
-            )
+            raise RuntimeError(f"SendGrid returned status {response.status_code}")
         except Exception as exc:
             last_exc = exc
             if attempt < _MAX_ATTEMPTS - 1:
