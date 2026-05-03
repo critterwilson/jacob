@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { auth } from "@/lib/firebase";
+import { clearCache } from "@/lib/offline-cache";
 
 export type AuthContextValue = {
   user: User | null;
@@ -34,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    await clearCache().catch(() => undefined);
     await fbSignOut(auth);
   }, []);
 

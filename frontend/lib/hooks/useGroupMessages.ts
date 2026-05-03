@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { firestore } from "@/lib/firebase";
+import { cacheMessages, getCachedMessages } from "@/lib/offline-cache";
 
 const PAGE_SIZE = 50;
 
@@ -57,6 +58,7 @@ export function useGroupMessages(gid: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [offline, setOffline] = useState(false);
 
   // Points to the oldest document we have; initialised on first snapshot,
   // then advanced by loadOlder() as older pages are fetched.
@@ -93,11 +95,23 @@ export function useGroupMessages(gid: string | undefined) {
           cursorRef.current = snap.docs[snap.docs.length - 1];
           setHasMore(snap.docs.length === PAGE_SIZE);
         }
-        setRealtimeMessages(snap.docs.map(docToMessage).reverse());
+        const msgs = snap.docs.map(docToMessage).reverse();
+        setRealtimeMessages(msgs);
+        setOffline(false);
         setLoading(false);
+        void cacheMessages(gid, msgs).catch(() => undefined);
       },
       () => {
-        setLoading(false);
+        // Firestore error — likely offline. Fall back to IndexedDB cache.
+        getCachedMessages(gid)
+          .then((cached) => {
+            if (cached) {
+              setRealtimeMessages(cached);
+              setOffline(true);
+            }
+          })
+          .catch(() => undefined)
+          .finally(() => setLoading(false));
       },
     );
   }, [gid]);
@@ -135,5 +149,5 @@ export function useGroupMessages(gid: string | undefined) {
     [olderMessages, realtimeMessages],
   );
 
-  return { messages, loading, loadingOlder, hasMore, loadOlder };
+  return { messages, loading, loadingOlder, hasMore, loadOlder, offline };
 }

@@ -25,7 +25,7 @@ export default function ChatPage({ params }: Props) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
-  const { messages, loading, loadingOlder, hasMore, loadOlder } =
+  const { messages, loading, loadingOlder, hasMore, loadOlder, offline } =
     useGroupMessages(user ? gid : undefined);
 
   const { pinnedIds, togglePin } = usePinnedMessages(gid);
@@ -120,6 +120,7 @@ export default function ChatPage({ params }: Props) {
             hasMore={hasMore}
             isLeader={isLeader}
             archived={Boolean(archivedAt)}
+            offline={offline}
             pinnedIds={pinnedIds}
             onLoadOlder={() => void loadOlder()}
             onReply={setActiveThread}
