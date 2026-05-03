@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
@@ -9,7 +10,7 @@ import { useSearch } from "@/lib/hooks/useSearch";
 
 const PER_PAGE = 20;
 
-export default function SearchPage() {
+function SearchInner() {
   const router = useRouter();
   const params = useSearchParams();
   const { user, loading: authLoading } = useAuth();
@@ -131,5 +132,21 @@ export default function SearchPage() {
         </>
       )}
     </main>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center">
+          <span className="text-sm text-gray-500" role="status">
+            Loading…
+          </span>
+        </main>
+      }
+    >
+      <SearchInner />
+    </Suspense>
   );
 }
