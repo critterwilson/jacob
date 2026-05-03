@@ -1,4 +1,4 @@
-"""Tests for POST /api/admin/groups/{gid}/moderation-policy (T20)."""
+"""Tests for POST /api/groups/{gid}/moderation-policy (T20)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.models.user import CurrentUser
 
 
 def _client(uid: str = "alice", admin_claim: bool = False) -> TestClient:
-    from app.routers.admin import router
+    from app.routers.groups import router
 
     app = FastAPI()
     app.state.limiter = limiter
@@ -62,12 +62,12 @@ def _build_db(*, role: str | None, group_exists: bool = True) -> MagicMock:
 def test_leader_can_set_policy() -> None:
     db = _build_db(role="leader")
     with (
-        patch("app.routers.admin.init_firebase_admin"),
-        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.groups.init_firebase_admin"),
+        patch("app.routers.groups._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
     ):
         r = _client("alice").post(
-            "/api/admin/groups/g1/moderation-policy",
+            "/api/groups/g1/moderation-policy",
             json={"policy": "strict"},
         )
     assert r.status_code == 200
@@ -78,11 +78,11 @@ def test_leader_can_set_policy() -> None:
 def test_member_cannot_set_policy() -> None:
     db = _build_db(role="member")
     with (
-        patch("app.routers.admin.init_firebase_admin"),
-        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.groups.init_firebase_admin"),
+        patch("app.routers.groups._db", return_value=db),
     ):
         r = _client("bob").post(
-            "/api/admin/groups/g1/moderation-policy",
+            "/api/groups/g1/moderation-policy",
             json={"policy": "lenient"},
         )
     assert r.status_code == 403
@@ -91,11 +91,11 @@ def test_member_cannot_set_policy() -> None:
 def test_non_member_cannot_set_policy() -> None:
     db = _build_db(role=None)
     with (
-        patch("app.routers.admin.init_firebase_admin"),
-        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.groups.init_firebase_admin"),
+        patch("app.routers.groups._db", return_value=db),
     ):
         r = _client("eve").post(
-            "/api/admin/groups/g1/moderation-policy",
+            "/api/groups/g1/moderation-policy",
             json={"policy": "lenient"},
         )
     assert r.status_code == 403
@@ -104,12 +104,12 @@ def test_non_member_cannot_set_policy() -> None:
 def test_platform_admin_bypasses_membership_check() -> None:
     db = _build_db(role=None)
     with (
-        patch("app.routers.admin.init_firebase_admin"),
-        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.groups.init_firebase_admin"),
+        patch("app.routers.groups._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
     ):
         r = _client("god", admin_claim=True).post(
-            "/api/admin/groups/g1/moderation-policy",
+            "/api/groups/g1/moderation-policy",
             json={"policy": "lenient"},
         )
     assert r.status_code == 200
@@ -117,7 +117,7 @@ def test_platform_admin_bypasses_membership_check() -> None:
 
 def test_invalid_policy_returns_422() -> None:
     r = _client("alice").post(
-        "/api/admin/groups/g1/moderation-policy",
+        "/api/groups/g1/moderation-policy",
         json={"policy": "extreme"},
     )
     assert r.status_code == 422
@@ -126,11 +126,11 @@ def test_invalid_policy_returns_422() -> None:
 def test_missing_group_returns_404() -> None:
     db = _build_db(role="leader", group_exists=False)
     with (
-        patch("app.routers.admin.init_firebase_admin"),
-        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.groups.init_firebase_admin"),
+        patch("app.routers.groups._db", return_value=db),
     ):
         r = _client("alice").post(
-            "/api/admin/groups/g-missing/moderation-policy",
+            "/api/groups/g-missing/moderation-policy",
             json={"policy": "standard"},
         )
     assert r.status_code == 404

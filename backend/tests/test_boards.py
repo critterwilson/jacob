@@ -102,9 +102,10 @@ def test_admin_create_board_happy_path() -> None:
     db = MagicMock()
     boards_col = MagicMock()
     db.collection.return_value = boards_col
-    boards_col.where.return_value.limit.return_value.stream.return_value = iter([])
     new_ref = MagicMock()
-    new_ref.id = "new-board-id"
+    new_ref.id = "resources"
+    # Document does not yet exist — no conflict.
+    new_ref.get.return_value.exists = False
     boards_col.document.return_value = new_ref
 
     with (
@@ -123,7 +124,7 @@ def test_admin_create_board_happy_path() -> None:
 
     assert res.status_code == 201
     body = res.json()
-    assert body["boardId"] == "new-board-id"
+    assert body["boardId"] == "resources"
     assert body["slug"] == "resources"
     new_ref.set.assert_called_once()
 
@@ -132,9 +133,10 @@ def test_admin_create_board_slug_conflict_returns_409() -> None:
     db = MagicMock()
     boards_col = MagicMock()
     db.collection.return_value = boards_col
-    boards_col.where.return_value.limit.return_value.stream.return_value = iter(
-        [_board_doc(doc_id="existing", slug="resources")]
-    )
+    existing_ref = MagicMock()
+    # Document already exists — conflict.
+    existing_ref.get.return_value.exists = True
+    boards_col.document.return_value = existing_ref
     with patch("app.routers.boards._db", return_value=db):
         res = TestClient(_app(admin=True)).post(
             "/api/admin/boards",

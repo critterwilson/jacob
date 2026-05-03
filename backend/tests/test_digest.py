@@ -5,7 +5,6 @@ from __future__ import annotations
 import time as _time
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
@@ -109,7 +108,16 @@ def _make_db(*, gids: list[str] | None = None) -> MagicMock:
         return MagicMock()
 
     db.collection.side_effect = _collection
-    db.collection_group.return_value.where.return_value.stream.return_value = iter([])
+
+    # CG members query: return one member snap per gid with reference.parent.parent.id == gid.
+    member_cg_snaps = []
+    for gid in gids:
+        snap = MagicMock()
+        snap.reference.parent.parent.id = gid
+        member_cg_snaps.append(snap)
+    db.collection_group.return_value.where.return_value.stream.return_value = iter(
+        member_cg_snaps
+    )
 
     return db
 
@@ -117,10 +125,11 @@ def _make_db(*, gids: list[str] | None = None) -> MagicMock:
 # ── tests ──────────────────────────────────────────────────────────────────────
 
 
-def test_assemble_payload_user_with_groups(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JACOB_DIGEST_ENABLED", "true")
-
+def test_assemble_payload_user_with_groups() -> None:
     from app.services.digest import assemble_user_payload
+
+    settings_mock = MagicMock()
+    settings_mock.jacob_digest_enabled = True
 
     nm_mock = MagicMock()
     nm_mock.__iter__ = lambda s: iter([type("R", (), {"__getitem__": lambda self, k: 2})()])
@@ -132,7 +141,8 @@ def test_assemble_payload_user_with_groups(monkeypatch: pytest.MonkeyPatch) -> N
     bq.query.return_value.result.side_effect = [nm_mock, sticker_mock, nm_mock, sticker_mock]
 
     db = _make_db(gids=["g1"])
-    payload = assemble_user_payload("uid1", db=db, bq_client=bq, dataset="ds")
+    with patch("app.services.digest.get_settings", return_value=settings_mock):
+        payload = assemble_user_payload("uid1", db=db, bq_client=bq, dataset="ds")
 
     assert payload.display_name == "Alice"
     assert payload.email == "alice@example.com"
@@ -141,13 +151,15 @@ def test_assemble_payload_user_with_groups(monkeypatch: pytest.MonkeyPatch) -> N
     assert not payload.quiet_week
 
 
-def test_assemble_payload_user_with_zero_activity(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JACOB_DIGEST_ENABLED", "true")
-
+def test_assemble_payload_user_with_zero_activity() -> None:
     from app.services.digest import assemble_user_payload
 
+    settings_mock = MagicMock()
+    settings_mock.jacob_digest_enabled = True
+
     db = _make_db(gids=["g1"])
-    payload = assemble_user_payload("uid1", db=db, bq_client=None, dataset="ds")
+    with patch("app.services.digest.get_settings", return_value=settings_mock):
+        payload = assemble_user_payload("uid1", db=db, bq_client=None, dataset="ds")
 
     assert payload.quiet_week is True
     assert payload.missed_replies == 0

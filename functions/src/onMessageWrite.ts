@@ -119,9 +119,13 @@ export const onMessageWrite = onDocumentWritten(
 
         if (change === "create") {
           const authorUid = afterData!.authorUid as string;
+          const parentAuthorUid = parentSnap.data()?.authorUid as string | undefined;
           txn.update(parentRef, {
             threadReplyCount: FieldValue.increment(1),
-            participants: FieldValue.arrayUnion(authorUid),
+            participants: FieldValue.arrayUnion(
+              authorUid,
+              ...(parentAuthorUid ? [parentAuthorUid] : []),
+            ),
           });
 
           // C5 fix (a): reply-notification fan-out runs INSIDE the _events
@@ -131,7 +135,10 @@ export const onMessageWrite = onDocumentWritten(
           // set() call idempotent even if the transaction itself is retried.
           const existingParticipants =
             (parentSnap.data()?.participants as string[] | undefined) ?? [];
-          const notifyUids = existingParticipants.filter((p) => p !== authorUid);
+          // Always include the parent author so they are notified on first reply.
+          const notifySet = new Set([...existingParticipants, ...(parentAuthorUid ? [parentAuthorUid] : [])]);
+          notifySet.delete(authorUid);
+          const notifyUids = [...notifySet];
           for (const recipientUid of notifyUids) {
             const notifRef = db
               .collection("users")

@@ -17,6 +17,7 @@ export type MentionNotificationPayload = {
   messageRef: string;
   groupId?: string;
   boardId?: string;
+  body?: string;
 };
 
 export async function fanOutMentions(

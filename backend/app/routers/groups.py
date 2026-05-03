@@ -21,6 +21,7 @@ from app.deps import get_current_user
 from app.errors import APIError
 from app.limits import ADMIN_MUTATION, GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
 from app.middleware.rate_limit import limiter
+from app.models.admin import ModerationPolicyRequest, ModerationPolicyResponse
 from app.models.group import (
     AnnounceResponse,
     ArchiveGroupRequest,
@@ -218,21 +219,30 @@ def promote_member(
     _require_leader(db, gid, user.uid)
 
     target_ref = _members_collection(db, gid).document(target_uid)
-    target_snap = target_ref.get()
-    if not target_snap.exists:
+
+    @gcf.transactional
+    def _promote_txn(txn: Any) -> str:
+        t_snap = txn.get(target_ref)
+        if not t_snap.exists:
+            return "not_found"
+        if (t_snap.to_dict() or {}).get("role") == "leader":
+            return "already_leader"
+        txn.update(target_ref, {"role": "leader"})
+        return "ok"
+
+    outcome = _promote_txn(db.transaction())
+    if outcome == "not_found":
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="member_not_found",
             message="Target user is not a member of this group",
         )
-    current_role = (target_snap.to_dict() or {}).get("role", "member")
-    if current_role == "leader":
+    if outcome == "already_leader":
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
             code="already_leader",
             message="Target user is already a leader",
         )
-    target_ref.update({"role": "leader"})
     write_audit_log(
         actor_uid=user.uid,
         action="promote_member",
@@ -268,31 +278,43 @@ def demote_member(
             message="The founder cannot be demoted; transfer first",
         )
 
+    group_ref = db.collection("groups").document(gid)
     target_ref = _members_collection(db, gid).document(target_uid)
-    target_snap = target_ref.get()
-    if not target_snap.exists:
+
+    @gcf.transactional
+    def _demote_txn(txn: Any) -> str:
+        g_snap = txn.get(group_ref)
+        t_snap = txn.get(target_ref)
+        if not t_snap.exists:
+            return "not_found"
+        if (t_snap.to_dict() or {}).get("role") != "leader":
+            return "not_a_leader"
+        # Re-read leaderCount atomically to prevent concurrent demotes bricking the group.
+        lc = (g_snap.to_dict() or {}).get("leaderCount") or 0
+        if lc <= 1:
+            return "last_leader"
+        txn.update(target_ref, {"role": "member"})
+        return "ok"
+
+    outcome = _demote_txn(db.transaction())
+    if outcome == "not_found":
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="member_not_found",
             message="Target user is not a member of this group",
         )
-    current_role = (target_snap.to_dict() or {}).get("role", "member")
-    if current_role != "leader":
+    if outcome == "not_a_leader":
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
             code="not_a_leader",
             message="Target user is not a leader",
         )
-
-    leader_count = group_data.get("leaderCount") or 0
-    if user.uid == target_uid and leader_count <= 1:
+    if outcome == "last_leader":
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
             code="last_leader",
-            message="You are the only leader; promote someone else first",
+            message="Cannot demote the only remaining leader",
         )
-
-    target_ref.update({"role": "member"})
     write_audit_log(
         actor_uid=user.uid,
         action="demote_member",
@@ -560,3 +582,49 @@ def announce_message(
         announcedAt=datetime.now(UTC).isoformat(),
         notifiedCount=notified,
     )
+
+
+# ── per-group moderation policy (T20) ─────────────────────────────────────────
+
+
+@router.post("/{gid}/moderation-policy", response_model=ModerationPolicyResponse)
+@limiter.limit(ADMIN_MUTATION)
+def set_moderation_policy(
+    gid: str,
+    request: Request,
+    response: Response,
+    body: ModerationPolicyRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> ModerationPolicyResponse:
+    """Set per-group text-moderation sensitivity. Auth: group leader or platform admin."""
+    db = _db()
+
+    is_platform_admin = user.claims.get("admin") == True  # noqa: E712
+    if not is_platform_admin:
+        member_snap = (
+            db.collection("groups").document(gid).collection("members").document(user.uid).get()
+        )
+        if not member_snap.exists or (member_snap.to_dict() or {}).get("role") != "leader":
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="forbidden",
+                message="Only group leaders may set the moderation policy",
+            )
+
+    group_ref = db.collection("groups").document(gid)
+    if not group_ref.get().exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="group_not_found",
+            message="Group not found",
+        )
+
+    group_ref.update({"moderationPolicy": body.policy})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="set_moderation_policy",
+        target_ref=f"groups/{gid}",
+        payload={"policy": body.policy},
+    )
+    logger.info("policy uid=%s gid=%s policy=%s", user.uid, gid, body.policy)
+    return ModerationPolicyResponse(gid=gid, policy=body.policy)

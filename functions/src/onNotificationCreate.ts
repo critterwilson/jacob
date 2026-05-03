@@ -132,7 +132,8 @@ export const onNotificationCreate = onDocumentCreated(
       return;
     }
 
-    const quota = await tryReserveFcmQuota();
+    const deviceCount = devicesSnap.size;
+    const quota = await tryReserveFcmQuota(deviceCount);
     if (quota === null) {
       logger.warn("fcm_quota_exceeded", { uid, nid });
       await notifRef.update({
@@ -143,6 +144,8 @@ export const onNotificationCreate = onDocumentCreated(
     }
 
     const payload = buildPayload(notif, uid);
+    let successCount = 0;
+    let lastFailureReason = "";
     const sends = devicesSnap.docs.map(async (deviceSnap) => {
       const device = deviceSnap.data() as DeviceDoc;
       const token = device.fcmToken;
@@ -150,6 +153,7 @@ export const onNotificationCreate = onDocumentCreated(
 
       try {
         await sendFcm(token, payload);
+        successCount++;
         logger.info("fcm_sent", { uid, nid, deviceId: deviceSnap.id });
       } catch (err) {
         if (err instanceof StaleTokenError) {
@@ -157,18 +161,27 @@ export const onNotificationCreate = onDocumentCreated(
           await deviceSnap.ref.delete();
           return;
         }
-        const reason = (err as Error).message;
-        logger.error("fcm_send_error", { uid, nid, deviceId: deviceSnap.id, error: reason });
-        await notifRef.update({
-          failedAt: FieldValue.serverTimestamp(),
-          failureReason: reason,
-        });
+        lastFailureReason = (err as Error).message;
+        logger.error("fcm_send_error", { uid, nid, deviceId: deviceSnap.id, error: lastFailureReason });
       }
     });
 
     await Promise.allSettled(sends);
 
-    await notifRef.update({ deliveredAt: FieldValue.serverTimestamp() });
-    logger.info("notification_dispatched", { uid, nid, kind: notif.kind });
+    if (successCount > 0) {
+      await notifRef.update({
+        deliveredAt: FieldValue.serverTimestamp(),
+        delivered: successCount,
+        failed: deviceCount - successCount,
+      });
+    } else {
+      await notifRef.update({
+        failedAt: FieldValue.serverTimestamp(),
+        failureReason: lastFailureReason || "all_devices_failed",
+        delivered: 0,
+        failed: deviceCount,
+      });
+    }
+    logger.info("notification_dispatched", { uid, nid, kind: notif.kind, successCount, deviceCount });
   },
 );
