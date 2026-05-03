@@ -4,6 +4,7 @@ import { useState } from "react";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
 import { useAuth } from "@/lib/auth-context";
+import { PhotoView } from "@/components/chat/PhotoView";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { ReactionBar } from "@/components/chat/ReactionBar";
@@ -220,13 +221,7 @@ export function MessageItem({
         <ul className="mt-1 flex flex-wrap gap-2" aria-label="Photos">
           {message.mediaRefs.filter(isSafeMediaUrl).map((url) => (
             <li key={url}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={url}
-                alt=""
-                className="max-h-64 rounded border border-gray-200 object-cover"
-                loading="lazy"
-              />
+              <PhotoView src={url} alt="" className="max-h-64 w-auto" />
             </li>
           ))}
         </ul>

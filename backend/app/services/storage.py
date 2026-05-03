@@ -98,6 +98,19 @@ def promote_to_public(object_name: str, *, content_type: str) -> str:
     return f"https://storage.googleapis.com/{public.name}/{object_name}"
 
 
+def derive_variant_urls(public_url: str) -> dict[str, str]:
+    """Compute derived variant URLs from the original public GCS URL.
+
+    Derived files are stored at derived/{uid}/{id}_{w}.jpg — the same
+    directory structure as uploads/, but under the derived/ prefix.
+    The Cloud Function generates them asynchronously after finalization.
+    """
+    import re
+
+    without_ext = re.sub(r"\.[^/.]+$", "", public_url.replace("/uploads/", "/derived/", 1))
+    return {f"w{w}": f"{without_ext}_{w}.jpg" for w in (320, 640, 1280)}
+
+
 def quarantine_permanently(object_name: str) -> None:
     """Move the object under `_held/` so it stays out of the 90-day TTL.
 

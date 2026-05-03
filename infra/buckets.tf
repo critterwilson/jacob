@@ -157,6 +157,17 @@ resource "google_storage_bucket" "public" {
       type = "Delete"
     }
   }
+
+  # T37 — derived/ variants are cheap to re-generate; expire after 90 days.
+  lifecycle_rule {
+    condition {
+      age            = 90
+      matches_prefix = ["derived/"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
 }
 
 # Custom role: storage.objects.get only — no storage.objects.list so the

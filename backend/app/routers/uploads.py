@@ -24,6 +24,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
+from app.config import get_settings
 from app.deps import get_current_user
 from app.errors import APIError
 from app.limits import UPLOAD_INIT
@@ -32,6 +33,7 @@ from app.models.upload import (
     CreateUploadRequest,
     CreateUploadResponse,
     FinalizeUploadResponse,
+    PhotoVariants,
 )
 from app.models.user import CurrentUser
 from app.services import moderation, storage
@@ -266,4 +268,16 @@ def finalize_upload(
     public_url = storage.promote_to_public(object_name, content_type=content_type)
     doc_ref.update({"status": "approved", "publicUrl": public_url})
     logger.info("upload approved upload_id=%s uid=%s", upload_id, user.uid)
-    return FinalizeUploadResponse(publicUrl=public_url)
+
+    variants: PhotoVariants | None = None
+    thumbnail_url: str | None = None
+    if get_settings().jacob_photo_variants_enabled:
+        raw = storage.derive_variant_urls(public_url)
+        variants = PhotoVariants(w320=raw["w320"], w640=raw["w640"], w1280=raw["w1280"])
+        thumbnail_url = raw["w320"]
+
+    return FinalizeUploadResponse(
+        publicUrl=public_url,
+        thumbnailUrl=thumbnail_url,
+        variants=variants,
+    )
