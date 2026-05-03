@@ -33,18 +33,23 @@ provider versions on every machine.
 
 ## Service accounts (I1)
 
-`service_accounts.tf` defines five least-privilege SAs. The default Compute
-Engine SA is **not** used by any JACOB workload.
+`service_accounts.tf` and `scheduler.tf` define least-privilege SAs. The
+default Compute Engine SA is **not** used by any JACOB workload.
 
-| SA email                                             | Purpose                                  |
-|------------------------------------------------------|------------------------------------------|
-| `jacob-api@${project}.iam.gserviceaccount.com`       | FastAPI Cloud Run service                |
-| `jacob-moderation@${project}.iam.gserviceaccount.com`| Image-moderation pipeline (only writer to public bucket) |
-| `jacob-backup@${project}.iam.gserviceaccount.com`    | `firestore_export` Cloud Run job         |
-| `jacob-scheduler-export@${project}.iam.gserviceaccount.com` | OIDC identity for Cloud Scheduler firestore-export job |
-| `jacob-scheduler-deletions@${project}.iam.gserviceaccount.com` | OIDC identity for Cloud Scheduler finalize-deletions job |
-| `jacob-analytics@${project}.iam.gserviceaccount.com` | BigQuery reader for the FastAPI analytics endpoint (T29) |
-| `jacob-scheduler-analytics@${project}.iam.gserviceaccount.com` | OIDC identity for Cloud Scheduler firestore-to-bigquery job (T29) |
+| SA email                                                        | Purpose                                                       |
+|-----------------------------------------------------------------|---------------------------------------------------------------|
+| `jacob-api@${project}.iam.gserviceaccount.com`                  | FastAPI Cloud Run service                                     |
+| `jacob-moderation@${project}.iam.gserviceaccount.com`           | Image-moderation pipeline (only writer to public bucket)      |
+| `jacob-backup@${project}.iam.gserviceaccount.com`               | `firestore_export` Cloud Run job                              |
+| `jacob-exports@${project}.iam.gserviceaccount.com`              | `process_export_jobs` Cloud Run job (T38)                     |
+| `jacob-analytics@${project}.iam.gserviceaccount.com`            | BigQuery reader for FastAPI analytics endpoint (T29)          |
+| `jacob-scheduler-export@${project}.iam.gserviceaccount.com`     | OIDC identity — Cloud Scheduler firestore-export job          |
+| `jacob-scheduler-deletions@${project}.iam.gserviceaccount.com`  | OIDC identity — Cloud Scheduler finalize-deletions job        |
+| `jacob-scheduler-analytics@${project}.iam.gserviceaccount.com`  | OIDC identity — Cloud Scheduler firestore-to-bigquery job (T29)|
+| `jacob-scheduler-daily-verse@${project}.iam.gserviceaccount.com`| OIDC identity — Cloud Scheduler daily-verse job (T33)         |
+| `jacob-scheduler-weekly-digest@${project}.iam.gserviceaccount.com` | OIDC identity — Cloud Scheduler weekly-digest job (T35)    |
+| `jacob-scheduler-exports@${project}.iam.gserviceaccount.com`    | OIDC identity — Cloud Scheduler process-export-jobs job (T38) |
+| `jacob-scheduler-cleanup-devices@${project}.iam.gserviceaccount.com` | OIDC identity — Cloud Scheduler cleanup-stale-devices job (T34) |
 
 Wire them into `terraform.<env>.tfvars` after the first apply — the module
 emits each email as a Terraform output.
@@ -53,13 +58,20 @@ emits each email as a Terraform output.
 project-wide `roles/iam.serviceAccountUser` so it can act-as any of the
 runtime SAs at deploy time.
 
-## Cloud Scheduler jobs (M4, T29)
+## Cloud Scheduler jobs (M4, T29, T33, T34, T35, T38)
 
-`scheduler.tf` defines `firestore-export-daily` (03:00 UTC),
-`finalize-deletions-daily` (03:30 UTC), and
-`firestore-to-bigquery-daily` (04:30 UTC, T29). Each invokes its corresponding
-Cloud Run Job via OIDC; the OIDC SA has `roles/run.invoker` only on the
-specific job (IAM condition).
+`scheduler.tf` defines all scheduled Cloud Run Jobs. Each has a dedicated OIDC
+SA with `roles/run.invoker` scoped to that job only (IAM condition).
+
+| Scheduler job name              | Schedule (UTC)  | Cloud Run Job               | Task |
+|---------------------------------|-----------------|-----------------------------|------|
+| `firestore-export-daily`        | daily 03:00     | `firestore-export`          | M4   |
+| `finalize-deletions-daily`      | daily 03:30     | `finalize-deletions`        | M4   |
+| `firestore-to-bigquery-daily`   | daily 04:30     | `firestore-to-bigquery`     | T29  |
+| `cleanup-stale-devices-daily`   | daily 05:00     | `cleanup-stale-devices`     | T34  |
+| `daily-verse`                   | daily 07:00     | `daily-verse`               | T33  |
+| `weekly-digest`                 | Sundays 16:00   | `weekly-digest`             | T35  |
+| `process-export-jobs-5min`      | every 5 min     | `process-export-jobs`       | T38  |
 
 **Cloud Run Jobs (not Services)** must be created out-of-band before the
 Scheduler resource can succeed: the scheduler URI references
@@ -71,7 +83,7 @@ gcloud run jobs deploy firestore-export \
   --region us-central1 --service-account jacob-backup@${PROJECT}.iam.gserviceaccount.com
 ```
 
-(see `infra/scheduled/firestore_export.py` for the job code).
+(see `infra/scheduled/` for each job's source code).
 
 ## Custom domain (I2 — deferred)
 
