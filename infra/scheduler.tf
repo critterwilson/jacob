@@ -290,3 +290,66 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
 
   depends_on = [google_project_iam_member.scheduler_weekly_digest_run_invoker]
 }
+
+# ── process-export-jobs (T38, every 5 minutes) ───────────────────────────────
+
+variable "process_exports_job_name" {
+  description = "Cloud Run Job name for the self-serve data-export processor (T38)."
+  type        = string
+  default     = "process-export-jobs"
+}
+
+locals {
+  scheduler_run_invoke_url_exports = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.process_exports_job_name}:run"
+}
+
+resource "google_service_account" "jacob_scheduler_exports" {
+  project      = var.project_id
+  account_id   = "jacob-scheduler-exports"
+  display_name = "JACOB Cloud Scheduler — process-export-jobs invoker"
+}
+
+resource "google_project_iam_member" "scheduler_exports_run_invoker" {
+  project = var.project_id
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.jacob_scheduler_exports.email}"
+
+  condition {
+    title       = "only process-export-jobs Cloud Run job"
+    description = "Restrict run.invoker to the process-export-jobs job (T38)."
+    expression  = "resource.name.endsWith(\"/${var.process_exports_job_name}\")"
+  }
+}
+
+# Process self-serve data-export jobs every 5 minutes. The backend's
+# "1 in-flight per user" guard plus the processor's PROCESSOR_BATCH_CAP
+# (5) bound concurrent assemblies. Retries are bounded so a wedged job
+# can't fan out load.
+resource "google_cloud_scheduler_job" "process_export_jobs" {
+  name        = "process-export-jobs-5min"
+  project     = var.project_id
+  region      = var.scheduler_region
+  description = "Process pending self-serve data-export jobs (T38). Runs every 5 minutes."
+  schedule    = "*/5 * * * *"
+  time_zone   = "Etc/UTC"
+
+  retry_config {
+    retry_count          = 1
+    max_retry_duration   = "0s"
+    min_backoff_duration = "60s"
+    max_backoff_duration = "3600s"
+    max_doublings        = 5
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = local.scheduler_run_invoke_url_exports
+
+    oidc_token {
+      service_account_email = google_service_account.jacob_scheduler_exports.email
+      audience              = "https://${var.scheduler_region}-run.googleapis.com/"
+    }
+  }
+
+  depends_on = [google_project_iam_member.scheduler_exports_run_invoker]
+}

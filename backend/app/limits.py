@@ -17,3 +17,7 @@ ANALYTICS_QUERY: str = "60/hour"
 DISCOVER_LIST: str = "60/minute"
 BOARDS_LIST: str = "60/minute"
 BOARD_ADMIN_MUTATION: str = "10/minute"
+# T38 — self-serve data export. One in-flight job per user is enforced
+# in the service layer; this limiter additionally caps the *request*
+# surface so a retry loop can't fan out into many queued jobs.
+EXPORT_REQUEST: str = "1/hour"

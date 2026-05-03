@@ -190,6 +190,30 @@ def send_deletion_finalized(
     )
 
 
+def send_export_ready(
+    to_email: str,
+    display_name: str,
+    *,
+    download_url: str,
+    expires_at: Any,
+) -> None:
+    """T38 — your data export is ready and downloadable."""
+    if hasattr(expires_at, "strftime"):
+        expires_str = expires_at.strftime("%B %d, %Y at %H:%M UTC")
+    else:
+        expires_str = str(expires_at)
+    send_email(
+        to_email=to_email,
+        display_name=display_name,
+        subject="Your JACOB data export is ready",
+        template_name="export_ready",
+        context={
+            "download_url": download_url,
+            "expires_at": expires_str,
+        },
+    )
+
+
 def send_weekly_digest(
     to_email: str,
     payload: DigestPayload,
