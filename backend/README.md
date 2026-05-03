@@ -72,5 +72,8 @@ mypy app/
 | `TYPESENSE_TIMEOUT_SECONDS` | T28 | Per-request timeout for Typesense calls (default `5`) |
 | `JACOB_SEARCH_ENABLED` | T28 | Feature flag — when `false`, `/api/search` returns `503 search_disabled`. Flip to `true` after the index has been warmed by `infra/scripts/reindex_messages.py` |
 | `JACOB_BOARDS_ENABLED` | T32 | Reserved feature flag for cross-group boards (`/api/boards`, `/boards`). The Firestore rules path is always live; flag is for future server-side gating during incident response |
+| `JACOB_EXPORT_BUCKET` | T38 | GCS bucket for self-serve data export bundles, e.g. `jacob-exports-staging` |
+| `JACOB_EXPORT_SIGNED_URL_TTL_DAYS` | T38 | V4 signed download URL validity window in days (default `7`) |
+| `JACOB_EXPORT_DISABLED` | T38 | Kill-switch — set to `true` to make `POST /api/account/export` return 503 without redeploying |
 
 Add new variables here and to `.env.example` as tasks are implemented.

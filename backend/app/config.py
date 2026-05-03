@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     # When true, the finalize endpoint returns variant URLs in its response.
     jacob_photo_variants_enabled: bool = False
 
+    # T38 — self-serve data export
+    # GCS bucket for export bundles (e.g. "jacob-exports-staging").
+    # Bucket lifecycle deletes objects after 14 days; signed URL TTL is shorter.
+    jacob_export_bucket: str = ""
+    # Validity window for the V4 signed download URL emitted to the user.
+    jacob_export_signed_url_ttl_days: int = 7
+    # Kill-switch — if True, POST /api/account/export returns 503.
+    jacob_export_disabled: bool = False
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 

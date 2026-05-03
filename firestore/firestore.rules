@@ -621,6 +621,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // --- self-serve data exports (T38) ---------------------------------
+    // Owner-only read; the user can poll their own job-doc to drive the
+    // status UI. Creates and updates go through the backend (Admin SDK)
+    // so the signed download URL — which is a credential — never lives
+    // anywhere a client can mint or tamper with. Even job creation is
+    // server-only so the rate limit on POST /api/account/export is
+    // load-bearing.
+    match /users/{uid}/exports/{jobId} {
+      allow read: if isUser(uid);
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
     // --- default deny (defense in depth) --------------------------------
     // Any path not explicitly matched above is silently denied. A denial
     // here is a signal that a new collection was added without a rule —

@@ -136,6 +136,47 @@ resource "google_project_iam_member" "jacob_backup_logging" {
   member  = "serviceAccount:${google_service_account.jacob_backup.email}"
 }
 
+# ── jacob-exports (T38) — runtime SA for process_export_jobs ────────────────
+#
+# Reads user data across the database (collection-group queries on
+# messages/members/audit_log/users) and writes job docs + audit_log
+# entries — datastore.user covers both. Bucket-level storage.objectAdmin
+# is bound in `exports.tf`.
+
+resource "google_service_account" "jacob_exports" {
+  project      = var.project_id
+  account_id   = "jacob-exports"
+  display_name = "JACOB exports (process_export_jobs)"
+  description  = "Runtime SA for the process_export_jobs Cloud Run job. Writes export bundles to the exports bucket."
+}
+
+resource "google_project_iam_member" "jacob_exports_datastore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.jacob_exports.email}"
+}
+
+resource "google_project_iam_member" "jacob_exports_logging" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.jacob_exports.email}"
+}
+
+# Required to mint V4 signed URLs without a key file. The job impersonates
+# itself via IAM signBlob — see https://cloud.google.com/storage/docs/access-control/signed-urls#signing-iam.
+resource "google_project_iam_member" "jacob_exports_token_creator" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountTokenCreator"
+  member  = "serviceAccount:${google_service_account.jacob_exports.email}"
+}
+
+# Allows the exports SA to read SendGrid + other secrets from Secret Manager.
+resource "google_project_iam_member" "jacob_exports_secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.jacob_exports.email}"
+}
+
 # ── outputs (consumed by tfvars + Cloud Run config) ──────────────────────────
 
 output "api_service_account_email" {
@@ -161,4 +202,14 @@ output "scheduler_export_service_account_email" {
 output "scheduler_deletions_service_account_email" {
   value       = google_service_account.jacob_scheduler_deletions.email
   description = "OIDC identity for the Cloud Scheduler finalize_deletions job."
+}
+
+output "exports_service_account_email" {
+  value       = google_service_account.jacob_exports.email
+  description = "Use this for `exports_service_account_email` in tfvars (T38)."
+}
+
+output "scheduler_exports_service_account_email" {
+  value       = google_service_account.jacob_scheduler_exports.email
+  description = "OIDC identity for the Cloud Scheduler process_export_jobs job (T38)."
 }
