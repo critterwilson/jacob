@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -73,17 +74,11 @@ class VerseCircuitBreaker:
 
 
 _circuit = VerseCircuitBreaker()
-_calendar_cache: dict[str, object] | None = None
-
-
+@lru_cache(maxsize=1)
 def _load_calendar() -> dict[str, object]:
-    global _calendar_cache
-    if _calendar_cache is None:
-        if _CALENDAR_PATH.exists():
-            _calendar_cache = json.loads(_CALENDAR_PATH.read_text())
-        else:
-            _calendar_cache = {"calendar": {}, "rotation": []}
-    return _calendar_cache
+    if _CALENDAR_PATH.exists():
+        return dict(json.loads(_CALENDAR_PATH.read_text()))
+    return {"calendar": {}, "rotation": []}
 
 
 def _verse_disabled() -> bool:
@@ -99,7 +94,7 @@ def _fetch_from_api(reference: str, translation: str) -> str:
         if attempt:
             time.sleep(2 ** (attempt - 1))
         try:
-            with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310
+            with urllib.request.urlopen(url, timeout=5) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode())
                 text = data.get("text", "").strip()
                 if not text:

@@ -243,8 +243,11 @@ export const onBoardPostCreate = onDocumentCreated(
             messageRef: `boards/${boardId}/posts/${postId}`,
             boardId,
           },
-          // Boards have no membership; rely on block check only.
-          isMember: async () => true,
+          // Boards have no membership; check user doc exists to avoid orphan notification docs.
+          isMember: async (uid: string) => {
+            const snap = await db.collection("users").doc(uid).get();
+            return snap.exists;
+          },
         });
         logger.info("board_mention_fanout_done", {
           boardId,

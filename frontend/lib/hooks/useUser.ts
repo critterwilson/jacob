@@ -50,13 +50,16 @@ export function useUser(uid: string | undefined): UseUserResult {
           // this cookie server-side via an /api/session route keyed to the ID
           // token, but the UX impact here is low enough to defer.
           if (typeof document !== "undefined") {
-            document.cookie = "jacob-has-profile=1; path=/; SameSite=Lax";
+            const secure =
+              location.protocol === "https:" ? "; Secure" : "";
+            document.cookie = `jacob-has-profile=1; path=/; SameSite=Lax${secure}`;
           }
         } else {
           setState({ loading: false, profile: null });
           if (typeof document !== "undefined") {
-            document.cookie =
-              "jacob-has-profile=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            const secure =
+              location.protocol === "https:" ? "; Secure" : "";
+            document.cookie = `jacob-has-profile=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`;
           }
         }
       },

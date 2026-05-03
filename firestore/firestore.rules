@@ -49,6 +49,16 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/groups/$(gid)/messages/$(mid));
     }
 
+    // Validate that every element in a mediaRefs list is a known GCS public URL.
+    // Enumerates all possible indices (max 4) since CEL has no list iteration.
+    function validMediaRefs(refs) {
+      return refs.size() == 0
+        || (refs[0].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*')
+            && (refs.size() < 2 || refs[1].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*'))
+            && (refs.size() < 3 || refs[2].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*'))
+            && (refs.size() < 4 || refs[3].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*')));
+    }
+
     // --- users -----------------------------------------------------------
     // The user document holds public-safe fields (displayName, photoURL,
     // schemaVersion, etc.). Anything sensitive lives in the private
@@ -68,6 +78,7 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 1
         && request.resource.data.displayName.size() <= 100
+        // `role` is vestigial — admin status uses Firebase custom claims, not this field.
         && (!('role' in request.resource.data) || request.resource.data.role == 'member')
         && (!('photoURL' in request.resource.data)
             || request.resource.data.photoURL == null
@@ -328,6 +339,7 @@ service cloud.firestore {
           && request.resource.data.stickerIds.size() <= 5
           && request.resource.data.mediaRefs is list
           && request.resource.data.mediaRefs.size() <= 4
+          && validMediaRefs(request.resource.data.mediaRefs)
           && (request.resource.data.parentMessageId == null
               || messageExists(gid, request.resource.data.parentMessageId))
           && (!('mentions' in request.resource.data)
@@ -399,9 +411,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['reactedAt'])
           && request.resource.data.reactedAt == request.time;
 
-        // Idempotent toggle-off. No notBanned check — removing a reaction
-        // is a neutral action we don't need to block on ban.
-        allow delete: if isUser(uid);
+        allow delete: if isUser(uid) && notBanned();
 
         // No update — toggle is delete + create.
         allow update: if false;
@@ -445,7 +455,9 @@ service cloud.firestore {
     // per-board admin role. Stickers are required on posts (the only
     // categorisation), optional on replies.
     match /boards/{boardId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && (resource.data.get('archivedAt', null) == null
+            || request.auth.token.admin == true);
       // Boards docs themselves are written exclusively via the Admin SDK.
       allow create, update, delete: if false;
 
@@ -480,6 +492,7 @@ service cloud.firestore {
           && request.resource.data.stickerIds.size() <= 5
           && request.resource.data.mediaRefs is list
           && request.resource.data.mediaRefs.size() <= 4
+          && validMediaRefs(request.resource.data.mediaRefs)
           && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
           && (!('mentions' in request.resource.data)
               || (request.resource.data.mentions is list
@@ -546,6 +559,7 @@ service cloud.firestore {
             && request.resource.data.stickerIds.size() <= 5
             && request.resource.data.mediaRefs is list
             && request.resource.data.mediaRefs.size() <= 4
+            && validMediaRefs(request.resource.data.mediaRefs)
             && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
             && (!('mentions' in request.resource.data)
                 || (request.resource.data.mentions is list
@@ -585,8 +599,7 @@ service cloud.firestore {
             && request.resource.data.keys().hasOnly(['reactedAt'])
             && request.resource.data.reactedAt == request.time;
 
-          // Idempotent toggle-off.
-          allow delete: if isUser(uid);
+          allow delete: if isUser(uid) && notBanned();
           allow update: if false;
         }
       }

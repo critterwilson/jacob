@@ -112,8 +112,9 @@ _KNOWN_REASONS = {
     "self-harm",
     "spam",
     "other",
-    # legacy free-text reasons (T12 reports). Filtering by these is a no-op
-    # but the queue page still surfaces them.
+    # Legacy free-text reason stored verbatim from the T12 report form.
+    # Used as a filter value so operator can surface these queue rows.
+    "legacy",
 }
 _KNOWN_SORTS = {"createdAt", "severity"}
 
@@ -271,8 +272,13 @@ def bulk_resolve_moderation_items(
     new_status = "approved" if body.resolution == "approve" else "rejected"
     resolved: list[str] = []
     skipped: list[str] = []
+    seen: set[str] = set()
 
     for item_id in body.itemIds:
+        if item_id in seen:
+            skipped.append(item_id)
+            continue
+        seen.add(item_id)
         item_ref = db.collection("moderation_queue").document(item_id)
         snap = item_ref.get()
         if not snap.exists:

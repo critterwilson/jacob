@@ -5,8 +5,12 @@ function escapeRegex(s: string): string {
 }
 
 export function extractMentionedUids(body: string, members: Member[]): string[] {
+  // Sort longest name first so "@Alice B" matches before "@Alice".
+  const sorted = [...members].sort(
+    (a, b) => b.displayName.length - a.displayName.length,
+  );
   const uids: string[] = [];
-  for (const member of members) {
+  for (const member of sorted) {
     const pattern = new RegExp(
       `@${escapeRegex(member.displayName)}(?:\\s|$)`,
       "i",
