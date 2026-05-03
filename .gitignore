@@ -290,6 +290,9 @@ web_modules/
 .env
 .env.*
 !.env.example
+# Firebase client config is intentionally public — baked into every JS bundle.
+# .env.production is committed so Next.js can inline NEXT_PUBLIC_* at build time.
+!frontend/.env.production
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
