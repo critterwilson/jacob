@@ -4,13 +4,20 @@ Items from the May 2026 codebase review that require design decisions, schema
 migrations, or multi-PR refactors. Each entry records what work is needed so
 these can be picked up as discrete Phase 2 tasks.
 
-## Resolved (Phase 2)
+## Resolved (Phase 2 — verified and closed in T39)
 
-- **M4 — Cloud Scheduler IAM/OIDC Terraform** — landed in the
-  *infra-hardening* PR. `infra/scheduler.tf` defines both jobs with
-  per-job dedicated OIDC SAs (`jacob-scheduler-export`,
-  `jacob-scheduler-deletions`) and `roles/run.invoker` scoped to the
-  specific Cloud Run job via IAM condition.
+All items below were resolved across Phase 2. T39 (#95) verified each
+item, extended M4 to cover schedulers added by T29/T33/T34/T35/T38, and
+added the missing `cleanup_stale_devices` Terraform resource. The
+`infra/README.md` SA table and scheduler section were updated to reflect
+the full set of jobs.
+
+- **M4 — Cloud Scheduler IAM/OIDC Terraform** — initial two jobs
+  (`firestore_export`, `finalize_deletions`) landed in the
+  *infra-hardening* PR with per-job OIDC SAs. Extended through Phase 2
+  as T29/T33/T35/T38 each added new Scheduler resources. T39 added the
+  final missing job (`cleanup_stale_devices`, T34) and documented all
+  seven jobs in `infra/README.md`.
 - **L7 — Terraform remote state + provider pins** — landed in the
   *infra-hardening* PR. `infra/backend.tf` (GCS backend) and
   `infra/versions.tf` (`~> 7.0` provider pins) added; `.terraform.lock.hcl`
