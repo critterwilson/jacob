@@ -1,0 +1,37 @@
+Hi {{ display_name }},
+
+Here's your weekly JACOB digest.
+
+{% if today_verse %}
+VERSE OF THE WEEK
+"{{ today_verse.text }}" — {{ today_verse.reference }} ({{ today_verse.translation }})
+
+{% endif %}
+{% if quiet_week %}
+🕊️  Quiet week — see you next Sunday!
+
+{% else %}
+YOUR WEEK IN JACOB
+{% if new_members > 0 %}• {{ new_members }} new member{{ 's' if new_members != 1 else '' }} joined your groups
+{% endif %}
+{% if missed_replies > 0 %}• {{ missed_replies }} repl{{ 'ies' if missed_replies != 1 else 'y' }} in threads you're part of
+{% endif %}
+{% if top_stickers %}• Top stickers this week:
+{% for s in top_stickers %}  - {{ s.slug }} ({{ s.count }}×)
+{% endfor %}
+{% endif %}
+{% for group in groups %}
+{{ group.name }}{% if group.new_members %} — {{ group.new_members }} new member{{ 's' if group.new_members != 1 else '' }}{% endif %}
+{% if group.top_stickers %}
+  Top stickers: {% for s in group.top_stickers %}{{ s.slug }} ({{ s.count }}×){% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+Open JACOB: {{ app_url }}
+
+---
+To stop receiving these digests:
+{{ unsubscribe_url }}
+
+You received this email because you are a member of a JACOB small group.

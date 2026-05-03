@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     jacob_verse_translation: str = "web"
     jacob_verse_disabled: bool = False
 
+    # T35 — Weekly digest + one-click unsubscribe
+    # HS256 secret for unsubscribe JWT tokens (Secret Manager in prod).
+    jwt_unsubscribe_secret: str = ""
+    # Kill-switch: set to "true" to enable the digest job.
+    jacob_digest_enabled: bool = False
+    # Set to "true" in CI / local dev — SendGrid will accept but not deliver.
+    sendgrid_sandbox: bool = False
+    # Users processed per batch before a 1-second sleep.
+    digest_batch_size: int = 200
+    # Public URL of the backend API (used in email unsubscribe links).
+    api_url: str = "https://api.jacob.app"
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Your JACOB Week</title>
+<style>
+  body { font-family: sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
+  .wrap { max-width: 520px; margin: 32px auto; background: #fff; border-radius: 8px;
+          border: 1px solid #e5e7eb; overflow: hidden; }
+  .header { background: #1e40af; color: #fff; padding: 24px 32px; }
+  .header h1 { margin: 0; font-size: 22px; }
+  .body { padding: 24px 32px; }
+  .verse { background: #eff6ff; border-left: 3px solid #2563eb; padding: 12px 16px;
+           margin-bottom: 20px; border-radius: 0 4px 4px 0; }
+  .verse p { margin: 0 0 4px; font-style: italic; color: #1e3a8a; font-size: 15px; }
+  .verse small { color: #3b82f6; font-size: 13px; }
+  .stat { font-size: 15px; color: #374151; margin: 6px 0; }
+  .group-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 16px;
+                margin: 12px 0; }
+  .group-name { font-weight: 600; color: #111827; margin: 0 0 4px; }
+  .group-meta { font-size: 13px; color: #6b7280; }
+  .cta { text-align: center; margin: 24px 0; }
+  .cta a { background: #1e40af; color: #fff; padding: 10px 24px; border-radius: 6px;
+            text-decoration: none; font-size: 15px; }
+  .footer { padding: 16px 32px; font-size: 12px; color: #9ca3af; border-top: 1px solid #f3f4f6; }
+  .footer a { color: #6b7280; }
+  .quiet { text-align: center; padding: 24px; color: #6b7280; font-size: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Your JACOB Week</h1>
+    <p style="margin:4px 0 0;color:#bfdbfe;font-size:14px;">Hi {{ display_name }} 👋</p>
+  </div>
+  <div class="body">
+
+    {% if today_verse %}
+    <div class="verse">
+      <p>&ldquo;{{ today_verse.text }}&rdquo;</p>
+      <small>{{ today_verse.reference }} ({{ today_verse.translation }})</small>
+    </div>
+    {% endif %}
+
+    {% if quiet_week %}
+    <div class="quiet">🕊️ Quiet week — see you next Sunday!</div>
+    {% else %}
+
+    <h2 style="font-size:16px;color:#111827;margin:0 0 12px;">This week across your groups</h2>
+    {% if new_members > 0 %}
+    <p class="stat">👥 {{ new_members }} new member{{ 's' if new_members != 1 else '' }}</p>
+    {% endif %}
+    {% if missed_replies > 0 %}
+    <p class="stat">↩️ {{ missed_replies }} repl{{ 'ies' if missed_replies != 1 else 'y' }} in your threads</p>
+    {% endif %}
+    {% if top_stickers %}
+    <p class="stat">🎉 Top stickers:
+      {% for s in top_stickers %}{{ s.slug }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+
+    {% for group in groups %}
+    {% if group.top_stickers or group.new_members %}
+    <div class="group-card">
+      <p class="group-name">{{ group.name }}</p>
+      <p class="group-meta">
+        {% if group.new_members %}{{ group.new_members }} new member{{ 's' if group.new_members != 1 else '' }}{% endif %}
+        {% if group.new_members and group.top_stickers %} · {% endif %}
+        {% if group.top_stickers %}
+          {% for s in group.top_stickers %}{{ s.slug }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    {% endif %}
+
+    <div class="cta">
+      <a href="{{ app_url }}">Open JACOB</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p>You received this email as a member of a JACOB small group.</p>
+    <p><a href="{{ unsubscribe_url }}">Unsubscribe from weekly digests</a></p>
+  </div>
+</div>
+</body>
+</html>
