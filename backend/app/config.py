@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     bq_project: str = ""  # defaults to GOOGLE_CLOUD_PROJECT at runtime
     jacob_analytics_enabled: bool = False
 
+    # T33 — Bible verse feed
+    bible_api_base: str = "https://bible-api.com"
+    jacob_verse_translation: str = "web"
+    jacob_verse_disabled: bool = False
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 
