@@ -13,6 +13,8 @@ export type MessageData = {
   authorUid?: unknown;
   parentMessageId?: unknown;
   deletedAt?: unknown;
+  body?: unknown;
+  participants?: unknown[];
 } & Record<string, unknown>;
 
 export type ChangeKind =
@@ -130,6 +132,48 @@ export const onMessageWrite = onDocumentWritten(
         error: (err as Error).message,
       });
       throw err;
+    }
+
+    // T34 — fan out reply notifications to prior participants (minus author).
+    if (change === "create") {
+      const authorUid = afterData?.authorUid as string | undefined;
+      const parentSnap = await parentRef.get();
+      const participants = (parentSnap.data()?.participants as string[] | undefined) ?? [];
+      const body = String(afterData?.body ?? "").slice(0, 100);
+
+      const fanOuts = participants
+        .filter((uid) => uid !== authorUid)
+        .map(async (uid) => {
+          // Respect block list: don't notify uid if they blocked the author.
+          if (authorUid) {
+            const blockSnap = await db
+              .collection("users")
+              .doc(uid)
+              .collection("blocks")
+              .doc(authorUid)
+              .get();
+            if (blockSnap.exists) return;
+          }
+          await db.collection("users").doc(uid).collection("notifications").add({
+            kind: "reply",
+            messageRef: `groups/${gid}/messages/${parentMessageId as string}`,
+            groupId: gid,
+            fromUid: authorUid ?? null,
+            body,
+            createdAt: FieldValue.serverTimestamp(),
+            readAt: null,
+            deliveredAt: null,
+            failedAt: null,
+          });
+        });
+
+      await Promise.allSettled(fanOuts);
+      logger.info("reply_notifications_fanned", {
+        gid,
+        parentMessageId,
+        recipients: participants.length,
+        eventId: event.id,
+      });
     }
   },
 );

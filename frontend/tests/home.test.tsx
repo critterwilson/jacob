@@ -84,6 +84,19 @@ vi.mock("@/lib/hooks/useDailyVerse", () => ({
   }),
 }));
 
+vi.mock("@/lib/hooks/usePushSetup", () => ({
+  usePushSetup: vi.fn(),
+}));
+
+vi.mock("@/lib/push", () => ({
+  registerPushToken: vi.fn(async () => null),
+  touchDeviceLastSeen: vi.fn(async () => {}),
+}));
+
+vi.mock("@/components/nav/PushPrompt", () => ({
+  PushPrompt: () => null,
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { AppShell } from "@/components/nav/AppShell";

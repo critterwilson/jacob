@@ -7,3 +7,4 @@ export { onBoardPostCreate } from "./onBoardPostCreate";
 export { onBoardPostWrite } from "./onBoardPostWrite";
 export { onBoardReplyWrite } from "./onBoardReplyWrite";
 export { onBoardReactionWrite } from "./onBoardReactionWrite";
+export { onNotificationCreate } from "./onNotificationCreate";
