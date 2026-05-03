@@ -127,7 +127,8 @@ service cloud.firestore {
       // T34 — FCM device registration. Owner-only. The Admin SDK cleanup job
       // also has delete permission (checked via `request.auth.token.admin`).
       match /devices/{deviceId} {
-        allow read, write: if isUser(uid)
+        allow read: if isUser(uid);
+        allow create, update: if isUser(uid)
           && request.resource.data.keys().hasOnly([
                'fcmToken', 'platform', 'createdAt', 'lastSeenAt',
                'userAgent', 'appVersion'])
@@ -373,7 +374,7 @@ service cloud.firestore {
 
         allow update: if isGroupLeader(gid) && notBanned()
           && onlyChanges(['status', 'reviewedAt', 'reviewedBy'])
-          && request.resource.data.reviewedAt == request.time
+          && request.resource.data.reviewedAt is timestamp
           && request.resource.data.reviewedBy == request.auth.uid
           && request.resource.data.status in ['approved', 'rejected']
           && resource.data.status == 'pending';
