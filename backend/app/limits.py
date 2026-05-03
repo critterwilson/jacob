@@ -9,5 +9,10 @@ GROUP_CREATE: str = "5/hour"
 GROUP_JOIN: str = "20/hour"
 UPLOAD_INIT: str = "10/hour"
 INVITE_ROTATE: str = "20/day"
+INVITE_CREATE: str = "20/hour"
 REPORT_SUBMIT: str = "10/day"
 ADMIN_MUTATION: str = "10/minute"
+# T38 — self-serve data export. One in-flight job per user is enforced
+# in the service layer; this limiter additionally caps the *request*
+# surface so a retry loop can't fan out into many queued jobs.
+EXPORT_REQUEST: str = "1/hour"

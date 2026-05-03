@@ -66,5 +66,8 @@ mypy app/
 | `SENDGRID_API_KEY` | T18 | SendGrid API key. Leave empty in local dev to skip email sending (a warning is logged). |
 | `EMAIL_SENDER` | T18 | Full RFC 5322 From address, e.g. `JACOB <noreply@yourdomain.com>` |
 | `EMAIL_REPLY_TO` | T18 | Reply-To address that maps to a monitored inbox |
+| `JACOB_EXPORT_BUCKET` | T38 | GCS bucket for self-serve data export bundles, e.g. `jacob-exports-staging`. |
+| `JACOB_EXPORT_SIGNED_URL_TTL_DAYS` | T38 | V4 signed download URL validity window in days (default 7). |
+| `JACOB_EXPORT_DISABLED` | T38 | Kill-switch — set to `true` to make `POST /api/account/export` return 503 without redeploying. |
 
 Add new variables here and to `.env.example` as tasks are implemented.
