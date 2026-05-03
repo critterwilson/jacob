@@ -1,8 +1,15 @@
 /// <reference lib="webworker" />
-export type {}; // makes this a module so declare doesn't conflict with WebWorker lib
-declare const self: ServiceWorkerGlobalScope;
 
-const SW_VERSION = "1";
+// The SW is registered as a classic script (`register("/sw.js")` without
+// `{ type: "module" }`), so the compiled output must be plain script syntax.
+// Keeping this file free of `import`/`export` statements lets tsc emit it
+// as a script — no trailing `export {};` for the browser to choke on. We
+// reach the ServiceWorkerGlobalScope-typed `self` via a local cast instead
+// of `declare const self`, which would conflict with the WebWorker lib's
+// own declaration in script mode.
+const sw = self as unknown as ServiceWorkerGlobalScope;
+
+const SW_VERSION = "2";
 const CACHE_NAME = `jacob-shell-v${SW_VERSION}`;
 
 // Routes to pre-cache on install so the app shell loads offline.
@@ -10,18 +17,18 @@ const PRECACHE_URLS = ["/home", "/manifest.webmanifest"];
 
 // ── install ────────────────────────────────────────────────────────────────
 
-self.addEventListener("install", (event) => {
+sw.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => undefined))
-      .then(() => self.skipWaiting()),
+      .then(() => sw.skipWaiting()),
   );
 });
 
 // ── activate ───────────────────────────────────────────────────────────────
 
-self.addEventListener("activate", (event) => {
+sw.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
@@ -32,19 +39,19 @@ self.addEventListener("activate", (event) => {
             .map((k) => caches.delete(k)),
         ),
       )
-      .then(() => self.clients.claim()),
+      .then(() => sw.clients.claim()),
   );
 });
 
 // ── fetch ──────────────────────────────────────────────────────────────────
 
-self.addEventListener("fetch", (event) => {
+sw.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
   // Passthrough: cross-origin, Firebase/Firestore SDK, backend API.
   if (
-    url.origin !== self.location.origin ||
+    url.origin !== sw.location.origin ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/__/")
   ) {
