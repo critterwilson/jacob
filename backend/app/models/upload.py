@@ -23,5 +23,13 @@ class CreateUploadResponse(BaseModel):
     expiresAt: str
 
 
+class PhotoVariants(BaseModel):
+    w320: str
+    w640: str
+    w1280: str
+
+
 class FinalizeUploadResponse(BaseModel):
     publicUrl: str
+    thumbnailUrl: str | None = None
+    variants: PhotoVariants | None = None

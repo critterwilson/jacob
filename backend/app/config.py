@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # Public URL of the backend API (used in email unsubscribe links).
     api_url: str = "https://api.jacob.app"
 
+    # T37 — Photo size variants (320/640/1280 JPEGs via Cloud Function).
+    # When true, the finalize endpoint returns variant URLs in its response.
+    jacob_photo_variants_enabled: bool = False
+
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 
