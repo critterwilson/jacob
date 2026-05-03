@@ -55,6 +55,11 @@ resource "google_cloud_run_v2_service" "typesense" {
   name     = "typesense-${var.env}"
   location = "us-central1"
 
+  # C1 fix: restrict to internal traffic so the service is unreachable from
+  # the public internet. The backend Cloud Run service reaches it via VPC
+  # connector; traffic never leaves Google's internal network.
+  ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+
   template {
     scaling {
       min_instance_count = 1
@@ -114,4 +119,15 @@ resource "google_cloud_run_v2_service" "typesense" {
 output "typesense_internal_url" {
   description = "URL the backend + Cloud Function should point TYPESENSE_HOST at"
   value       = google_cloud_run_v2_service.typesense.uri
+}
+
+# C1 fix: grant the backend service account the run.invoker role so its
+# identity-token requests are accepted. Without this binding Cloud Run rejects
+# calls with HTTP 403 even though the token is valid.
+resource "google_cloud_run_v2_service_iam_member" "typesense_invoker_backend" {
+  project  = google_cloud_run_v2_service.typesense.project
+  location = google_cloud_run_v2_service.typesense.location
+  name     = google_cloud_run_v2_service.typesense.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.jacob_api.email}"
 }

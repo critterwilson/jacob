@@ -237,7 +237,16 @@ def _make_assembler_db(
     # plus a top-level users/{uid} doc that should be ignored (no /messages/)
     top_user_snap = _make_snap("alice", {"displayName": "Alice"}, path="users/alice")
     user_cg_snaps.append(top_user_snap)
-    users_cg.stream.return_value = iter(user_cg_snaps)
+
+    # Wire cursor-based pagination: first page yields all snaps, second is empty.
+    _paged_q = MagicMock()
+    _paged_q.stream.return_value = iter(user_cg_snaps)
+    _after_q = MagicMock()
+    _after_q.stream.return_value = iter([])
+    _paged_q.start_after.return_value = _after_q
+    _where_q = MagicMock()
+    _where_q.limit.return_value = _paged_q
+    users_cg.where.return_value = _where_q
 
     def _cg(name: str) -> MagicMock:
         if name == "messages":
@@ -420,22 +429,50 @@ def test_assemble_sanitises_audit_payload_foreign_uids() -> None:
     assert payload.get("newRole") == "leader"
 
 
-def test_assemble_reaction_scan_caps_iteration() -> None:
-    """The reactions scan must bail out before exhausting a runaway CG."""
-    real_cap = export._REACTION_SCAN_CAP
-    try:
-        export._REACTION_SCAN_CAP = 3  # type: ignore[attr-defined]
-        # Build a CG that yields more 'users' docs than the cap.
-        db = _make_assembler_db(
-            user_doc={"displayName": "Alice"},
-            other_users_in_cg=10,
+def test_assemble_reaction_scan_returns_all_pages() -> None:
+    """Reactions spanning multiple pages must all be collected (no silent cap).
+
+    C4 fix (b): the previous cap-at-10k approach broke GDPR Art. 15 completeness.
+    This test verifies the paginated assembler stops when it gets a short page.
+    """
+    from app.services.export import _PAGE_SIZE
+
+    uid = "alice"
+
+    # Build _PAGE_SIZE + 1 reaction snaps so they span two pages.
+    all_snaps = [
+        _make_snap(
+            uid,
+            {"reactedAt": "2025-01-01"},
+            path=f"groups/g1/messages/m{i}/reactions/like/users/{uid}",
         )
-        bundle = export.assemble("alice", db=db)
-        # No alice reactions seeded; with the cap shrunk to 3, the scan
-        # exits before encountering anything matching alice.
-        assert bundle["reactions"] == []
-    finally:
-        export._REACTION_SCAN_CAP = real_cap  # type: ignore[attr-defined]
+        for i in range(_PAGE_SIZE + 1)
+    ]
+    page1 = all_snaps[:_PAGE_SIZE]
+    page2 = all_snaps[_PAGE_SIZE:]
+
+    users_cg = MagicMock()
+    paged_q1 = MagicMock()
+    paged_q1.stream.return_value = iter(page1)
+    paged_q2 = MagicMock()
+    paged_q2.stream.return_value = iter(page2)
+    empty_q = MagicMock()
+    empty_q.stream.return_value = iter([])
+
+    # first call: no start_after; second call: start_after(page1[-1])
+    paged_q1.start_after.return_value = paged_q2
+    paged_q2.start_after.return_value = empty_q
+    where_q = MagicMock()
+    where_q.limit.return_value = paged_q1
+    users_cg.where.return_value = where_q
+
+    db = _make_assembler_db(user_doc={"displayName": "Alice"})
+    db.collection_group.side_effect = lambda name: users_cg if name == "users" else MagicMock()
+
+    bundle = export.assemble(uid, db=db)
+    assert len(bundle["reactions"]) == _PAGE_SIZE + 1, (
+        f"Expected {_PAGE_SIZE + 1} reactions across two pages, got {len(bundle['reactions'])}"
+    )
 
 
 def test_serialize_round_trips_bundle() -> None:

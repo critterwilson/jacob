@@ -104,7 +104,13 @@ export const onMessageWrite = onDocumentWritten(
       await db.runTransaction(async (txn) => {
         // Idempotency guard: skip if we already processed this event.
         const eventRef = parentRef.collection("_events").doc(event.id);
-        const eventSnap = await txn.get(eventRef);
+        // Read the event marker and the parent message in one round-trip.
+        // We always read parentRef so that we have the current participants
+        // list available for the reply-notification fan-out (C5-a fix).
+        const [eventSnap, parentSnap] = await Promise.all([
+          txn.get(eventRef),
+          txn.get(parentRef),
+        ]);
         if (eventSnap.exists) {
           logger.info("duplicate event skipped", { eventId: event.id });
           return;
@@ -112,11 +118,43 @@ export const onMessageWrite = onDocumentWritten(
         txn.set(eventRef, { processedAt: FieldValue.serverTimestamp() });
 
         if (change === "create") {
+          const authorUid = afterData!.authorUid as string;
           txn.update(parentRef, {
             threadReplyCount: FieldValue.increment(1),
-            participants: FieldValue.arrayUnion(afterData!.authorUid as string),
+            participants: FieldValue.arrayUnion(authorUid),
           });
-          logger.info("thread reply counted", { gid, parentMessageId, eventId: event.id });
+
+          // C5 fix (a): reply-notification fan-out runs INSIDE the _events
+          // transaction so a duplicate event delivery sees the existing event
+          // marker and returns early before writing any notification docs.
+          // Using a deterministic doc ID (reply_{eventId}_{uid}) makes the
+          // set() call idempotent even if the transaction itself is retried.
+          const existingParticipants =
+            (parentSnap.data()?.participants as string[] | undefined) ?? [];
+          const notifyUids = existingParticipants.filter((p) => p !== authorUid);
+          for (const recipientUid of notifyUids) {
+            const notifRef = db
+              .collection("users")
+              .doc(recipientUid)
+              .collection("notifications")
+              .doc(`reply_${event.id}_${recipientUid}`);
+            txn.set(notifRef, {
+              kind: "reply",
+              groupId: gid,
+              messageRef: `groups/${gid}/messages/${parentMessageId}`,
+              replyMid: event.params.mid,
+              fromUid: authorUid,
+              createdAt: FieldValue.serverTimestamp(),
+              readAt: null,
+            });
+          }
+
+          logger.info("thread reply counted", {
+            gid,
+            parentMessageId,
+            eventId: event.id,
+            notified: notifyUids.length,
+          });
         } else if (change === "soft-delete") {
           txn.update(parentRef, {
             threadReplyCount: FieldValue.increment(-1),
@@ -134,46 +172,5 @@ export const onMessageWrite = onDocumentWritten(
       throw err;
     }
 
-    // T34 — fan out reply notifications to prior participants (minus author).
-    if (change === "create") {
-      const authorUid = afterData?.authorUid as string | undefined;
-      const parentSnap = await parentRef.get();
-      const participants = (parentSnap.data()?.participants as string[] | undefined) ?? [];
-      const body = String(afterData?.body ?? "").slice(0, 100);
-
-      const fanOuts = participants
-        .filter((uid) => uid !== authorUid)
-        .map(async (uid) => {
-          // Respect block list: don't notify uid if they blocked the author.
-          if (authorUid) {
-            const blockSnap = await db
-              .collection("users")
-              .doc(uid)
-              .collection("blocks")
-              .doc(authorUid)
-              .get();
-            if (blockSnap.exists) return;
-          }
-          await db.collection("users").doc(uid).collection("notifications").add({
-            kind: "reply",
-            messageRef: `groups/${gid}/messages/${parentMessageId as string}`,
-            groupId: gid,
-            fromUid: authorUid ?? null,
-            body,
-            createdAt: FieldValue.serverTimestamp(),
-            readAt: null,
-            deliveredAt: null,
-            failedAt: null,
-          });
-        });
-
-      await Promise.allSettled(fanOuts);
-      logger.info("reply_notifications_fanned", {
-        gid,
-        parentMessageId,
-        recipients: participants.length,
-        eventId: event.id,
-      });
-    }
   },
 );

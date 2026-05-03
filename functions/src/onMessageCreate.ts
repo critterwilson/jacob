@@ -219,7 +219,7 @@ async function runModeration(
   }
 
   const severity = decision === "hide" ? 2 : 1;
-  await db.collection("moderation_queue").add({
+  await db.collection("moderation_queue").doc(`msg_${eventId}`).set({
     resourceRef: `groups/${gid}/messages/${mid}`,
     resourceType: "message",
     groupId: gid,

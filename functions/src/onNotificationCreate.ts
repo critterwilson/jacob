@@ -67,18 +67,27 @@ function truncate(text: string, max: number): string {
 }
 
 /** Exported for unit tests. */
-export function buildPayload(notif: Pick<NotificationDoc, "kind" | "body">): FcmPayload {
+export function buildPayload(
+  notif: Pick<NotificationDoc, "kind" | "body" | "groupId" | "messageRef">,
+  recipientUid: string,
+): FcmPayload {
   const body = truncate(notif.body ?? "", 100);
+  const gid = notif.groupId ?? "unknown";
+  const msgId = notif.messageRef?.split("/").pop() ?? "unknown";
   switch (notif.kind) {
     case "announcement":
-      return { title: "📢 Announcement", body };
+      return { title: "📢 Announcement", body, collapseKey: `announcement:${gid}` };
     case "mention":
     case "board_mention":
-      return { title: "💬 You were mentioned", body };
+      return {
+        title: "💬 You were mentioned",
+        body,
+        collapseKey: `mentionTarget:${recipientUid}:${gid}:${msgId}`,
+      };
     case "reply":
-      return { title: "↩️ New reply to your message", body };
+      return { title: "↩️ New reply to your message", body, collapseKey: `groupId:${gid}` };
     default:
-      return { title: "JACOB", body };
+      return { title: "JACOB", body, collapseKey: `notif:${recipientUid}` };
   }
 }
 
@@ -133,7 +142,7 @@ export const onNotificationCreate = onDocumentCreated(
       return;
     }
 
-    const payload = buildPayload(notif);
+    const payload = buildPayload(notif, uid);
     const sends = devicesSnap.docs.map(async (deviceSnap) => {
       const device = deviceSnap.data() as DeviceDoc;
       const token = device.fcmToken;

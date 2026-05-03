@@ -41,12 +41,9 @@ from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
 
-# Hard cap on the number of `users`-collection-group docs we'll scan when
-# enumerating the user's own reactions. The reactions live at
-# ``groups/{gid}/messages/{mid}/reactions/{slug}/users/{uid}`` — we cannot
-# query directly by document id across a CG, so we stream and filter.
-# The cap exists so a runaway db can't exhaust the job's memory.
-_REACTION_SCAN_CAP = 10_000
+# Page size for cursor-based reaction pagination.  1 000 docs per round-trip
+# keeps memory flat and satisfies GDPR Art. 15 completeness — no silent cap.
+_PAGE_SIZE = 1_000
 
 # Refuse to assemble bundles past this size — they belong on the runbook
 # path, not the automated path.
@@ -208,39 +205,40 @@ def _mentions(db: Any, uid: str) -> list[dict[str, Any]]:
 
 
 def _reactions(db: Any, uid: str) -> list[dict[str, Any]]:
-    """Best-effort: scan the `users`-CG for reaction marker docs.
+    """Paginate all reaction marker docs for *uid* via cursor-based pages.
 
-    Bounded at ``_REACTION_SCAN_CAP`` docs scanned. The reaction shape is
-    ``groups/{gid}/messages/{mid}/reactions/{slug}/users/{uid}`` — we keep
-    only docs whose id matches *uid* and whose path includes the
-    ``/messages/`` and ``/reactions/`` segments.
+    GDPR Art. 15 requires completeness — the previous cap-at-10k approach
+    silently truncated heavy users.  Cursor pagination continues until the
+    server returns a short page, bounding memory at one page at a time.
     """
     out: list[dict[str, Any]] = []
-    scanned = 0
     try:
-        query = db.collection_group("users")
+        base_query = db.collection_group("users").where("__name__", ">=", uid).limit(_PAGE_SIZE)
     except Exception:  # noqa: BLE001
         return out
-    for snap in query.stream():
-        scanned += 1
-        if scanned > _REACTION_SCAN_CAP:
-            logger.warning("export_reactions_cap_hit uid=%s cap=%d", uid, _REACTION_SCAN_CAP)
+
+    query = base_query
+    cursor = None
+    while True:
+        page = list((query.start_after(cursor) if cursor else query).stream())
+        for snap in page:
+            if snap.id != uid:
+                continue
+            path = getattr(snap.reference, "path", "")
+            if "/messages/" not in path or "/reactions/" not in path:
+                continue
+            parts = path.split("/")
+            try:
+                gid = parts[parts.index("groups") + 1]
+                mid = parts[parts.index("messages") + 1]
+                slug = parts[parts.index("reactions") + 1]
+            except (ValueError, IndexError):
+                continue
+            data = _scrub_fb_types(snap.to_dict()) or {}
+            out.append({"groupId": gid, "messageId": mid, "stickerSlug": slug, **data})
+        if len(page) < _PAGE_SIZE:
             break
-        if snap.id != uid:
-            continue
-        path = getattr(snap.reference, "path", "")
-        if "/messages/" not in path or "/reactions/" not in path:
-            continue
-        # path: groups/{gid}/messages/{mid}/reactions/{slug}/users/{uid}
-        parts = path.split("/")
-        try:
-            gid = parts[parts.index("groups") + 1]
-            mid = parts[parts.index("messages") + 1]
-            slug = parts[parts.index("reactions") + 1]
-        except (ValueError, IndexError):
-            continue
-        data = _scrub_fb_types(snap.to_dict()) or {}
-        out.append({"groupId": gid, "messageId": mid, "stickerSlug": slug, **data})
+        cursor = page[-1]
     return out
 
 
