@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Unsubscribed — JACOB</title>
+<style>
+  body { font-family: sans-serif; display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; margin: 0; background: #f9f9f9; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+          padding: 40px 48px; max-width: 400px; text-align: center; }
+  h1 { font-size: 22px; color: #111827; margin: 0 0 12px; }
+  p  { color: #6b7280; font-size: 15px; margin: 0 0 24px; }
+  a  { color: #2563eb; text-decoration: none; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>You&apos;ve been unsubscribed</h1>
+  {% if success %}
+  <p>You won&apos;t receive any more weekly digests from JACOB.</p>
+  <p>Changed your mind? <a href="{{ app_url }}/settings/notifications">Re-enable digests</a> in your notification settings.</p>
+  {% else %}
+  <p>{{ error_message }}</p>
+  {% endif %}
+  <a href="{{ app_url }}">Back to JACOB</a>
+</div>
+</body>
+</html>

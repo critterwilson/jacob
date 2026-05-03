@@ -21,12 +21,15 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import sentry_sdk
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Content, Mail, ReplyTo, To
+from sendgrid.helpers.mail import Content, Header, Mail, ReplyTo, To
+
+if TYPE_CHECKING:
+    from app.services.digest import DigestPayload
 
 from app.config import get_settings
 
@@ -50,6 +53,45 @@ def _render(template_name: str, context: dict[str, Any]) -> tuple[str, str]:
     html = _jinja_env.get_template(f"{template_name}.html.j2").render(**context)
     text = _jinja_env.get_template(f"{template_name}.txt.j2").render(**context)
     return html, text
+
+
+def _send_message(message: Mail, *, label: str, to_email: str) -> None:
+    """Send a pre-built Mail object with retry/backoff. Raises on final failure."""
+    settings = get_settings()
+    last_exc: Exception = RuntimeError("unreachable")
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            sg = SendGridAPIClient(settings.sendgrid_api_key)
+            response = sg.send(message)
+            if response.status_code < 300:
+                logger.info(
+                    "email_sent label=%s to=%s status=%s", label, to_email, response.status_code
+                )
+                return
+            raise RuntimeError(f"SendGrid returned status {response.status_code}")
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _MAX_ATTEMPTS - 1:
+                sleep_s = _BACKOFF_BASE * (2**attempt)
+                logger.warning(
+                    "email_retry attempt=%d/%d label=%s error=%s sleep=%.1fs",
+                    attempt + 1,
+                    _MAX_ATTEMPTS,
+                    label,
+                    exc,
+                    sleep_s,
+                )
+                time.sleep(sleep_s)
+
+    logger.error(
+        "email_failed label=%s to=%s after %d attempts: %s",
+        label,
+        to_email,
+        _MAX_ATTEMPTS,
+        last_exc,
+    )
+    sentry_sdk.capture_exception(last_exc)
+    raise last_exc
 
 
 def send_email(
@@ -89,43 +131,7 @@ def send_email(
     if settings.email_reply_to:
         message.reply_to = ReplyTo(settings.email_reply_to)
 
-    last_exc: Exception = RuntimeError("unreachable")
-    for attempt in range(_MAX_ATTEMPTS):
-        try:
-            sg = SendGridAPIClient(settings.sendgrid_api_key)
-            response = sg.send(message)
-            if response.status_code < 300:
-                logger.info(
-                    "email_sent template=%s to=%s status=%s",
-                    template_name,
-                    to_email,
-                    response.status_code,
-                )
-                return
-            raise RuntimeError(f"SendGrid returned status {response.status_code}")
-        except Exception as exc:
-            last_exc = exc
-            if attempt < _MAX_ATTEMPTS - 1:
-                sleep_s = _BACKOFF_BASE * (2**attempt)
-                logger.warning(
-                    "email_retry attempt=%d/%d template=%s error=%s sleep=%.1fs",
-                    attempt + 1,
-                    _MAX_ATTEMPTS,
-                    template_name,
-                    exc,
-                    sleep_s,
-                )
-                time.sleep(sleep_s)
-
-    logger.error(
-        "email_failed template=%s to=%s after %d attempts: %s",
-        template_name,
-        to_email,
-        _MAX_ATTEMPTS,
-        last_exc,
-    )
-    sentry_sdk.capture_exception(last_exc)
-    raise last_exc
+    _send_message(message, label=template_name, to_email=to_email)
 
 
 # ── convenience helpers ────────────────────────────────────────────────────────
@@ -182,3 +188,60 @@ def send_deletion_finalized(
         template_name="deletion_finalized",
         context={},
     )
+
+
+def send_weekly_digest(
+    to_email: str,
+    payload: DigestPayload,
+    unsub_token: str,
+) -> None:
+    """Send the weekly digest email with RFC 8058 List-Unsubscribe headers.
+
+    Skipped silently when SENDGRID_API_KEY is not set (same as send_email).
+    Raises on final failure after _MAX_ATTEMPTS retries.
+    """
+    settings = get_settings()
+    if not settings.sendgrid_api_key:
+        logger.warning(
+            "email_skipped: SENDGRID_API_KEY not set — would have sent digest to %s",
+            to_email,
+        )
+        return
+
+    unsub_url = f"{settings.api_url}/api/account/unsubscribe?token={unsub_token}"
+    ctx = {
+        "display_name": payload.display_name,
+        "app_url": settings.app_url,
+        "unsubscribe_url": unsub_url,
+        "top_stickers": payload.top_stickers,
+        "missed_replies": payload.missed_replies,
+        "new_members": payload.new_members,
+        "today_verse": payload.today_verse,
+        "groups": payload.groups,
+        "quiet_week": payload.quiet_week,
+    }
+    html_body, text_body = _render("weekly_digest", ctx)
+
+    message = Mail(
+        from_email=settings.email_sender,
+        to_emails=To(email=to_email, name=payload.display_name),
+        subject="Your JACOB Week",
+    )
+    message.content = [
+        Content("text/plain", text_body),
+        Content("text/html", html_body),
+    ]
+    unsub_mailto = "mailto:unsubscribe@jacob.app?subject=unsubscribe"
+    message.header = [
+        Header("List-Unsubscribe", f"<{unsub_mailto}>, <{unsub_url}>"),
+        Header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click"),
+    ]
+
+    if settings.sendgrid_sandbox:
+        from sendgrid.helpers.mail import MailSettings, SandBoxMode
+
+        mail_settings = MailSettings()
+        mail_settings.sandbox_mode = SandBoxMode(True)
+        message.mail_settings = mail_settings
+
+    _send_message(message, label="weekly_digest", to_email=to_email)
