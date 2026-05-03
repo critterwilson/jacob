@@ -174,9 +174,7 @@ def create_join_request(
                 "uid": user.uid,
             }
         )
-        db.collection("groups").document(gid).update(
-            {"memberCount": gcf.Increment(1)}
-        )
+        db.collection("groups").document(gid).update({"memberCount": gcf.Increment(1)})
         write_audit_log(
             actor_uid=user.uid,
             action="join_group",
@@ -188,11 +186,7 @@ def create_join_request(
 
     # request mode — check for existing pending request (idempotent).
     existing_snap = (
-        db.collection("groups")
-        .document(gid)
-        .collection("joinRequests")
-        .document(user.uid)
-        .get()
+        db.collection("groups").document(gid).collection("joinRequests").document(user.uid).get()
     )
     if existing_snap.exists:
         existing = existing_snap.to_dict() or {}
@@ -249,11 +243,7 @@ def list_join_requests(
     )
     if cursor:
         cursor_snap = (
-            db.collection("groups")
-            .document(gid)
-            .collection("joinRequests")
-            .document(cursor)
-            .get()
+            db.collection("groups").document(gid).collection("joinRequests").document(cursor).get()
         )
         if cursor_snap.exists:
             query = query.start_after(cursor_snap)

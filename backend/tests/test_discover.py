@@ -78,9 +78,9 @@ def _make_db(
 
     jr_col = MagicMock()
     jr_col.document.return_value.get.return_value = jr_snap
-    (
-        jr_col.where.return_value.order_by.return_value.limit.return_value.stream
-    ).return_value = iter([])
+    (jr_col.where.return_value.order_by.return_value.limit.return_value.stream).return_value = iter(
+        []
+    )
 
     def _subcol(name: str) -> MagicMock:
         if name == "members":
@@ -94,8 +94,7 @@ def _make_db(
     list_snap = _mock_group_snap()
     list_snap_col = MagicMock()
     (
-        list_snap_col.where.return_value.order_by.return_value
-        .order_by.return_value.limit.return_value.stream
+        list_snap_col.where.return_value.order_by.return_value.order_by.return_value.limit.return_value.stream
     ).return_value = iter([list_snap])
 
     db.collection.side_effect = lambda name: list_snap_col if name == "groups" else MagicMock()
@@ -114,8 +113,7 @@ def test_discover_lists_only_public() -> None:
 
     public_snap = _mock_group_snap("g1", is_private=False)
     (
-        col.where.return_value.order_by.return_value
-        .order_by.return_value.limit.return_value.stream
+        col.where.return_value.order_by.return_value.order_by.return_value.limit.return_value.stream
     ).return_value = iter([public_snap])
     col.document.return_value = MagicMock(get=MagicMock(return_value=public_snap))
     public_snap.id = "g1"
@@ -143,8 +141,7 @@ def test_discover_audience_filter() -> None:
     col = MagicMock()
     db.collection.return_value = col
     (
-        col.where.return_value.order_by.return_value
-        .order_by.return_value.where.return_value.limit.return_value.stream
+        col.where.return_value.order_by.return_value.order_by.return_value.where.return_value.limit.return_value.stream
     ).return_value = iter([])
 
     with patch("app.routers.discover._db", return_value=db):
@@ -164,8 +161,7 @@ def test_discover_pagination_cursor() -> None:
     cursor_snap.exists = True
     col.document.return_value.get.return_value = cursor_snap
     (
-        col.where.return_value.order_by.return_value.order_by.return_value
-        .start_after.return_value.limit.return_value.stream
+        col.where.return_value.order_by.return_value.order_by.return_value.start_after.return_value.limit.return_value.stream
     ).return_value = iter([])
 
     with patch("app.routers.discover._db", return_value=db):

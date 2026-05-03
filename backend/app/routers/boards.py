@@ -63,11 +63,7 @@ def list_boards(
     user: CurrentUser = Depends(get_current_user),
 ) -> BoardListResponse:
     db = _db()
-    query = (
-        db.collection("boards")
-        .order_by("name")
-        .limit(_BOARD_LIST_LIMIT)
-    )
+    query = db.collection("boards").order_by("name").limit(_BOARD_LIST_LIMIT)
     boards: list[BoardResponse] = []
     for doc in query.stream():
         data = doc.to_dict() or {}
@@ -105,9 +101,7 @@ def create_board(
     db = _db()
 
     # Slug uniqueness — boards are listed by slug in URLs.
-    hits = list(
-        db.collection("boards").where("slug", "==", body.slug).limit(1).stream()
-    )
+    hits = list(db.collection("boards").where("slug", "==", body.slug).limit(1).stream())
     if hits:
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
@@ -206,9 +200,7 @@ def pin_board_post(
     user: CurrentUser = Depends(require_admin),
 ) -> PinPostResponse:
     db = _db()
-    post_ref = (
-        db.collection("boards").document(board_id).collection("posts").document(post_id)
-    )
+    post_ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
     snap = post_ref.get()
     if not snap.exists:
         raise APIError(
