@@ -1,29 +1,30 @@
-const SW_VERSION = "1";
+const sw = self;
+const SW_VERSION = "2";
 const CACHE_NAME = `jacob-shell-v${SW_VERSION}`;
 // Routes to pre-cache on install so the app shell loads offline.
 const PRECACHE_URLS = ["/home", "/manifest.webmanifest"];
 // ── install ────────────────────────────────────────────────────────────────
-self.addEventListener("install", (event) => {
+sw.addEventListener("install", (event) => {
     event.waitUntil(caches
         .open(CACHE_NAME)
         .then((cache) => cache.addAll(PRECACHE_URLS).catch(() => undefined))
-        .then(() => self.skipWaiting()));
+        .then(() => sw.skipWaiting()));
 });
 // ── activate ───────────────────────────────────────────────────────────────
-self.addEventListener("activate", (event) => {
+sw.addEventListener("activate", (event) => {
     event.waitUntil(caches
         .keys()
         .then((keys) => Promise.all(keys
         .filter((k) => k.startsWith("jacob-") && k !== CACHE_NAME)
         .map((k) => caches.delete(k))))
-        .then(() => self.clients.claim()));
+        .then(() => sw.clients.claim()));
 });
 // ── fetch ──────────────────────────────────────────────────────────────────
-self.addEventListener("fetch", (event) => {
+sw.addEventListener("fetch", (event) => {
     const { request } = event;
     const url = new URL(request.url);
     // Passthrough: cross-origin, Firebase/Firestore SDK, backend API.
-    if (url.origin !== self.location.origin ||
+    if (url.origin !== sw.location.origin ||
         url.pathname.startsWith("/api/") ||
         url.pathname.startsWith("/__/")) {
         return;
@@ -66,4 +67,3 @@ async function networkFirstWithFallback(request) {
         return shell ?? new Response("Offline", { status: 503, statusText: "Offline" });
     }
 }
-export {};
