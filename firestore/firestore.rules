@@ -406,6 +406,145 @@ service cloud.firestore {
       allow write: if false; // seeded via Admin SDK
     }
 
+    // --- boards (T32) ----------------------------------------------------
+    // Top-level cross-group forums. Anyone signed in can read every board
+    // and post. Boards themselves are admin-only (created via the backend
+    // Admin SDK; archive sets archivedAt). Posts are author-owned with
+    // author edits/deletes within 15 min; soft-delete only. Pinning and
+    // archiving use the platform admin custom claim — there is no
+    // per-board admin role. Stickers are required on posts (the only
+    // categorisation), optional on replies.
+    match /boards/{boardId} {
+      allow read: if isSignedIn();
+      // Boards docs themselves are written exclusively via the Admin SDK.
+      allow create, update, delete: if false;
+
+      match /posts/{postId} {
+        // Any signed-in user can read; non-deleted/non-hidden filtering
+        // is client-side. Hidden posts remain readable to author so that
+        // the moderation banner renders correctly.
+        allow read: if isSignedIn();
+
+        allow create: if isSignedIn() && notBanned()
+          && request.resource.data.keys().hasOnly(
+               ['authorUid','body','stickerIds','mediaRefs',
+                'createdAt','editedAt','deletedAt',
+                'mentions','reactionCounts','replyCount',
+                'pinnedAt','pinnedBy'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.editedAt == null
+          && request.resource.data.deletedAt == null
+          && request.resource.data.replyCount == 0
+          && request.resource.data.body is string
+          && request.resource.data.body.size() >= 1
+          && request.resource.data.body.size() <= 4000
+          && request.resource.data.stickerIds is list
+          && request.resource.data.stickerIds.size() >= 1   // boards REQUIRE a sticker
+          && request.resource.data.stickerIds.size() <= 5
+          && request.resource.data.mediaRefs is list
+          && request.resource.data.mediaRefs.size() <= 4
+          && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
+          && (!('mentions' in request.resource.data)
+              || (request.resource.data.mentions is list
+                  && request.resource.data.mentions.size() <= 10))
+          && (!('pinnedAt' in request.resource.data)
+              || request.resource.data.pinnedAt == null)
+          && (!('pinnedBy' in request.resource.data)
+              || request.resource.data.pinnedBy == null)
+          && request.resource.data.reactionCounts is map
+          && request.resource.data.reactionCounts.size() == 0;
+
+        allow update: if isSignedIn() && notBanned() && (
+          // Author edits body within 15 minutes of posting.
+          (resource.data.authorUid == request.auth.uid
+            && onlyChanges(['body', 'editedAt'])
+            && request.resource.data.editedAt == request.time
+            && request.time < resource.data.createdAt + duration.value(15, 'm')
+            && request.resource.data.body is string
+            && request.resource.data.body.size() >= 1
+            && request.resource.data.body.size() <= 4000)
+          // Author or platform admin soft-delete.
+          || ((resource.data.authorUid == request.auth.uid
+                || (request.auth.token.admin == true))
+            && onlyChanges(['deletedAt'])
+            && request.resource.data.deletedAt == request.time
+            && resource.data.deletedAt == null)
+          // Platform admin pin / unpin.
+          || (request.auth.token.admin == true
+            && onlyChanges(['pinnedAt', 'pinnedBy'])
+            && (
+              (resource.data.get('pinnedAt', null) == null
+                && request.resource.data.pinnedAt == request.time
+                && request.resource.data.pinnedBy == request.auth.uid)
+              || (resource.data.get('pinnedAt', null) != null
+                && request.resource.data.pinnedAt == null
+                && request.resource.data.pinnedBy == null)
+            ))
+        );
+        allow delete: if false;
+
+        // --- replies subcollection ---------------------------------------
+        // Mirrors posts but without pinning, replyCount, or reactionCounts.
+        match /replies/{replyId} {
+          allow read: if isSignedIn();
+
+          allow create: if isSignedIn() && notBanned()
+            && request.resource.data.keys().hasOnly(
+                 ['authorUid','body','stickerIds','mediaRefs',
+                  'createdAt','editedAt','deletedAt','mentions'])
+            && request.resource.data.authorUid == request.auth.uid
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.editedAt == null
+            && request.resource.data.deletedAt == null
+            && request.resource.data.body is string
+            && request.resource.data.body.size() >= 1
+            && request.resource.data.body.size() <= 4000
+            && request.resource.data.stickerIds is list
+            && request.resource.data.stickerIds.size() <= 5
+            && request.resource.data.mediaRefs is list
+            && request.resource.data.mediaRefs.size() <= 4
+            && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
+            && (!('mentions' in request.resource.data)
+                || (request.resource.data.mentions is list
+                    && request.resource.data.mentions.size() <= 10));
+
+          allow update: if isSignedIn() && notBanned() && (
+            (resource.data.authorUid == request.auth.uid
+              && onlyChanges(['body', 'editedAt'])
+              && request.resource.data.editedAt == request.time
+              && request.time < resource.data.createdAt + duration.value(15, 'm')
+              && request.resource.data.body is string
+              && request.resource.data.body.size() >= 1
+              && request.resource.data.body.size() <= 4000)
+            || ((resource.data.authorUid == request.auth.uid
+                  || (request.auth.token.admin == true))
+              && onlyChanges(['deletedAt'])
+              && request.resource.data.deletedAt == request.time
+              && resource.data.deletedAt == null)
+          );
+          allow delete: if false;
+        }
+
+        // --- reactions subcollection (mirrors T26) ----------------------
+        // boards/{boardId}/posts/{postId}/reactions/{stickerSlug}/users/{uid}
+        match /reactions/{stickerSlug}/users/{uid} {
+          allow read: if isSignedIn();
+
+          allow create: if isUser(uid) && notBanned()
+            && exists(/databases/$(database)/documents/stickers/$(stickerSlug))
+            && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
+            && get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.deletedAt == null
+            && request.resource.data.keys().hasOnly(['reactedAt'])
+            && request.resource.data.reactedAt == request.time;
+
+          // Idempotent toggle-off.
+          allow delete: if isUser(uid);
+          allow update: if false;
+        }
+      }
+    }
+
     // --- backend-only collections ---------------------------------------
     match /moderation_queue/{itemId} {
       allow read, write: if false;

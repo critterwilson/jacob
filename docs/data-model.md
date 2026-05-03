@@ -24,6 +24,10 @@ groups/{gid}
 groups/{gid}/members/{uid}
 groups/{gid}/messages/{mid}
 stickers/{stickerId}
+boards/{boardId}                                # T32 — top-level forums
+boards/{boardId}/posts/{postId}                 # T32
+boards/{boardId}/posts/{postId}/replies/{rid}   # T32
+boards/{boardId}/posts/{postId}/reactions/{slug}/users/{uid}  # T32
 moderation_queue/{itemId}       # backend only
 bans/{uid}                      # backend only
 audit_log/{eventId}             # backend only
@@ -257,6 +261,75 @@ exclusively by the backend.
   }
 }
 ```
+
+---
+
+## `boards/{boardId}` (T32)
+
+Top-level cross-group forums. Anyone signed in can read every board and
+post. Boards are created exclusively via the backend (Admin SDK) by a
+platform admin; there is no per-board admin role.
+
+```json
+{
+  "name": "Prayer & praise",
+  "slug": "prayer-praise",
+  "description": "Cross-group prayer requests.",
+  "audience": "christian",
+  "createdAt": "<serverTimestamp>",
+  "archivedAt": null,
+  "postCount": 4,
+  "schemaVersion": 1
+}
+```
+
+- `slug` is globally unique and used in URLs (`/boards/<boardId>`).
+- `archivedAt` is set by `DELETE /api/admin/boards/{id}` and prevents
+  new posts/replies/reactions at the rule level.
+- `postCount` is maintained by `onBoardPostWrite` (idempotent via
+  `_post_events/{eventId}`) and is decremented on soft-delete.
+
+### `boards/{boardId}/posts/{postId}`
+
+```json
+{
+  "authorUid": "alice",
+  "body": "Praying for you all this week.",
+  "stickerIds": ["pray"],
+  "mediaRefs": [],
+  "createdAt": "<serverTimestamp>",
+  "editedAt": null,
+  "deletedAt": null,
+  "pinnedAt": null,
+  "pinnedBy": null,
+  "mentions": [],
+  "reactionCounts": {"pray": 4},
+  "replyCount": 2,
+  "moderation": { "state": "scored", "reasons": [], "scores": {} }
+}
+```
+
+- **Stickers required.** Posts must include ≥1 sticker (the only
+  categorisation on boards). Replies do not require a sticker.
+- **Edit window:** authors can edit `body` within 15 minutes; soft-delete
+  is open to author or platform admin at any time.
+- **Pin / unpin:** platform-admin only via
+  `POST /api/admin/boards/{boardId}/posts/{postId}/pin`.
+- `mediaRefs` reuses the moderated upload pipeline with
+  `purpose: "board_post"`.
+
+### `boards/{boardId}/posts/{postId}/replies/{replyId}`
+
+Same shape as posts, minus `pinnedAt`/`pinnedBy`/`reactionCounts`/
+`replyCount`. Stickers are optional.
+
+### `boards/{boardId}/posts/{postId}/reactions/{slug}/users/{uid}`
+
+Mirrors T26 reactions: one doc per (slug, uid). `reactionCounts` on the
+parent post is maintained by `onBoardReactionWrite` (which reuses the
+shared `reactionDelta` / `runReactionTxn` helpers from
+`onReactionWrite.ts`). Idempotent via `_reaction_events/{eventId}` under
+the parent post.
 
 ---
 

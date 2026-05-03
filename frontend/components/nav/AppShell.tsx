@@ -8,6 +8,7 @@ import { DeletionBanner } from "@/components/account/DeletionBanner";
 
 const navLinks = [
   { href: "/groups", label: "Chats" },
+  { href: "/boards", label: "Boards" },
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
 ];
