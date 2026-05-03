@@ -6260,29 +6260,50 @@ Pull these subsections out for the security-focused review pass.
 
 ## 6. Open questions / DESIGN-OPEN
 
-The following items are flagged as DESIGN-OPEN — the spec resolves
-the engineering shape but a pre-implementation decision is required:
+All six items below have **resolved recommendations** in
+`docs/phase-3-design-decisions.md` (2026-05-03). The
+recommendations are awaiting rubber-stamp before being folded
+into ADRs at implementation time. Each entry below summarizes
+the resolution; see the decisions doc for the *why*, cost
+analysis, reversibility, and vendor pricing citations.
 
-1. **T57 — LiveKit Cloud vs self-hosted.** ADR 0008 must decide
-   before implementation. Cloud is recommended for v1; self-host
-   if regulatory / cost data justifies. **Owner:** platform.
-2. **T59 — PagerDuty vs Opsgenie.** ADR 0009 must decide. Cost +
-   integration parity drives the call. **Owner:** platform.
-3. **T59 — Status page vendor.** Uptime Kuma (self-host) vs
-   StatusPage.io. ADR 0009 covers. **Owner:** platform.
-4. **T63 — NCMEC submission protocol.** SOAP vs HTTPS-XML.
-   Confirm with NCMEC's current operator docs at implementation
-   time (the API has been migrating). ADR 0010. **Owner:**
-   legal + platform.
-5. **T55 — Vanity domain provisioning surface.** Cloud Run domain
-   mapping vs Cloud Load Balancer + managed cert. Cloud Run is
-   simpler for one-off domains; Load Balancer is right at scale.
-   v1 picks Cloud Run; document the upgrade path. **Owner:**
-   platform.
-6. **T47 — Prayer cluster eps tuning.** Default 0.25 in spec;
-   the pilot leader review may push to 0.18 or 0.30. The
-   `prayer_clustering_eps` config setting is intentional.
-   **Owner:** pilot leader + product.
+1. **T57 — LiveKit Cloud vs self-hosted.** **Resolved:**
+   LiveKit Cloud, Build (free) tier. Stay under 5,000 WebRTC
+   minutes/month with a global cap of 4,000 minutes. ADR 0008
+   ratifies. **Owner:** platform.
+2. **T59 — PagerDuty vs Opsgenie.** **Resolved:** PagerDuty
+   Free (5 users, 100 phone+SMS/month, no card). Drop Opsgenie
+   from the spec — its free tier has no voice and Atlassian
+   has announced EOL 2027-04-05. ADR 0009 ratifies.
+   **Owner:** platform.
+3. **T59 — Status page vendor.** **Resolved:** Better Stack
+   Status (free tier; custom domain on `status.jacob.app`).
+   Atlassian Statuspage no longer has a free tier. Self-hosted
+   cstate on Firebase Hosting is the documented Plan B if
+   Better Stack pricing changes. ADR 0009 ratifies.
+   **Owner:** platform.
+4. **T63 — NCMEC submission protocol.** **Resolved:** HTTPS
+   REST + XML at `https://report.cybertip.org/ispws/`. SOAP is
+   not actually offered by NCMEC; the open question dissolved
+   on contact with the current operator docs. ADR 0010
+   ratifies. **Owner:** legal + platform.
+5. **T55 — Vanity domain provisioning surface.** **Resolved:**
+   Two-tier — Firebase Hosting wildcard for `*.jacob.app`
+   subdomains; Cloud Run domain mappings for operator-DNS
+   vanity domains; upgrade to External HTTPS LB only on a
+   forcing function (latency, Cloud Armor need, own-cert
+   requirement). Replace `infra/cloudfront.tf` (no AWS in our
+   stack) with `infra/firebase-hosting-domains.tf` +
+   `infra/cloud-run-domain-mappings.tf` when T55 is picked up.
+   No standalone ADR — captured in the decisions doc.
+   **Owner:** platform.
+6. **T47 — Prayer cluster eps tuning.** **Resolved:** Default
+   `prayer_clustering_eps = 0.18` (down from 0.25 in this
+   spec; theology-first asymmetric-harm posture). Add per-org
+   override `orgs/{orgId}.prayerClusteringEps: number | null`
+   (platform-admin write only, default null). No leader-facing
+   tunability in v1. ADR 0006 ratifies. **Owner:** pilot
+   leader + product.
 
 These are the only open items at the time of writing. Every
 other task pre-decides the architectural shape. If a Sonnet
