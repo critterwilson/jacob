@@ -83,11 +83,52 @@ jobs:
             --allow-unauthenticated \
             --project "${{ secrets.GCP_PROJECT_ID }}"
 
+  # ── Frontend: Next.js static export → Firebase Hosting ───────────────────
+  # Builds the Next.js app (output: 'export') and deploys to Firebase Hosting.
+  # The frontend/out/ directory is the static bundle; rewrites in firebase.json
+  # ensure the SPA router handles all paths.
+  deploy-frontend:
+    name: "Deploy frontend → Firebase Hosting (${{ needs.setup.outputs.target }})"
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build frontend (static export)
+        run: pnpm --filter jacob-frontend build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy to Firebase Hosting
+        run: >
+          firebase deploy
+          --only hosting
+          --project ${{ needs.setup.outputs.firebase-alias }}
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
   # ── Functions + Firestore rules: firebase deploy ──────────────────────────
-  # The frontend deploys via Firebase App Hosting, which builds and rolls
-  # out automatically on pushes to its configured "live" branch (set up
-  # once with `firebase apphosting:backends:create` — see README.md). CI
-  # only deploys the resources that App Hosting doesn't manage.
+  # Deploys Cloud Functions (TypeScript) and Firestore security rules + indexes.
   deploy-firebase:
     name: "Deploy Firebase (${{ needs.setup.outputs.target }})"
     needs: setup
