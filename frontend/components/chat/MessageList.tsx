@@ -17,6 +17,7 @@ type Props = {
   hasMore: boolean;
   isLeader: boolean;
   archived?: boolean;
+  offline?: boolean;
   onLoadOlder: () => void;
   onReply?: (message: Message) => void;
   pinnedIds?: string[];
@@ -40,6 +41,7 @@ export function MessageList({
   hasMore,
   isLeader,
   archived = false,
+  offline = false,
   onLoadOlder,
   onReply,
   pinnedIds,
@@ -79,6 +81,14 @@ export function MessageList({
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
+      {offline && (
+        <div
+          role="status"
+          className="sticky top-0 z-10 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800 border-b border-amber-200"
+        >
+          Offline — showing your last loaded messages.
+        </div>
+      )}
       {hasMore && (
         <div className="flex justify-center py-2">
           <button
