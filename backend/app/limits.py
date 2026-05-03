@@ -21,3 +21,4 @@ BOARD_ADMIN_MUTATION: str = "10/minute"
 # in the service layer; this limiter additionally caps the *request*
 # surface so a retry loop can't fan out into many queued jobs.
 EXPORT_REQUEST: str = "1/hour"
+ADMIN_LIST: str = "60/minute"

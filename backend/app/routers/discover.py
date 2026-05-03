@@ -76,6 +76,7 @@ def list_discover_groups(
     query = (
         db.collection("groups")
         .where("isPrivate", "==", False)
+        .where("archivedAt", "==", None)
         .order_by("memberCount", direction=gcf.Query.DESCENDING)
         .order_by("createdAt", direction=gcf.Query.DESCENDING)
     )
@@ -151,6 +152,13 @@ def create_join_request(
             message="Group not found",
         )
     group = group_snap.to_dict() or {}
+
+    if group.get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="group_archived",
+            message="This group has been archived and is no longer accepting members",
+        )
 
     # 409 if already a member.
     member_snap = (

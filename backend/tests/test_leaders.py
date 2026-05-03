@@ -77,6 +77,11 @@ def _build_db(
         return {"groups": groups_col, "audit_log": audit_col}.get(name, MagicMock())
 
     db.collection.side_effect = _col
+    # Transaction mock: delegate get() to the ref so the transactional
+    # function sees the correct document state.
+    txn = MagicMock()
+    txn.get.side_effect = lambda ref: ref.get()
+    db.transaction.return_value = txn
     return db
 
 
@@ -92,6 +97,7 @@ def test_leader_can_promote_member() -> None:
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("alice").post("/api/groups/g1/leaders/bob/promote")
     assert r.status_code == 200
@@ -107,6 +113,7 @@ def test_non_leader_cannot_promote() -> None:
     with (
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("bob").post("/api/groups/g1/leaders/alice/promote")
     assert r.status_code == 403
@@ -120,6 +127,7 @@ def test_promote_already_leader_returns_409() -> None:
     with (
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("alice").post("/api/groups/g1/leaders/bob/promote")
     assert r.status_code == 409
@@ -133,6 +141,7 @@ def test_promote_non_member_returns_404() -> None:
     with (
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("alice").post("/api/groups/g1/leaders/eve/promote")
     assert r.status_code == 404
@@ -150,6 +159,7 @@ def test_leader_can_demote_other_leader() -> None:
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("alice").post("/api/groups/g1/leaders/bob/demote")
     assert r.status_code == 200
@@ -164,6 +174,7 @@ def test_cannot_demote_founder() -> None:
     with (
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("bob").post("/api/groups/g1/leaders/alice/demote")
     assert r.status_code == 403
@@ -181,6 +192,7 @@ def test_self_demote_blocked_when_only_leader() -> None:
     with (
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("bob").post("/api/groups/g1/leaders/bob/demote")
     assert r.status_code == 409
@@ -196,6 +208,7 @@ def test_self_demote_allowed_when_other_leaders_exist() -> None:
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("bob").post("/api/groups/g1/leaders/bob/demote")
     assert r.status_code == 200
@@ -209,6 +222,7 @@ def test_demote_non_leader_returns_409() -> None:
     with (
         patch("app.routers.groups.init_firebase_admin"),
         patch("app.routers.groups._db", return_value=db),
+        patch("app.routers.groups.gcf.transactional", lambda f: f),
     ):
         r = _client("alice").post("/api/groups/g1/leaders/bob/demote")
     assert r.status_code == 409

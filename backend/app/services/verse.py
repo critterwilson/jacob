@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 import urllib.error
 import urllib.parse
@@ -17,6 +16,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
+
+from app.config import get_settings
 
 try:
     import sentry_sdk
@@ -86,11 +87,11 @@ def _load_calendar() -> dict[str, object]:
 
 
 def _verse_disabled() -> bool:
-    return os.environ.get("JACOB_VERSE_DISABLED", "").lower() in {"1", "true", "yes"}
+    return get_settings().jacob_verse_disabled
 
 
 def _fetch_from_api(reference: str, translation: str) -> str:
-    base = os.environ.get("BIBLE_API_BASE", "https://bible-api.com")
+    base = get_settings().bible_api_base
     url = f"{base}/{urllib.parse.quote(reference)}?translation={translation.lower()}"
 
     last_err: Exception | None = None

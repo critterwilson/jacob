@@ -450,10 +450,16 @@ service cloud.firestore {
       allow create, update, delete: if false;
 
       match /posts/{postId} {
-        // Any signed-in user can read; non-deleted/non-hidden filtering
-        // is client-side. Hidden posts remain readable to author so that
-        // the moderation banner renders correctly.
-        allow read: if isSignedIn();
+        // Non-deleted, non-hidden posts are visible to all signed-in users.
+        // The author can always read their own post (for the moderation banner).
+        // Platform admins see everything.
+        allow read: if isSignedIn() && (
+          resource.data.authorUid == request.auth.uid
+          || (request.auth.token.admin == true)
+          || (resource.data.deletedAt == null
+              && (resource.data.get('moderation', null) == null
+                  || resource.data.moderation.get('state', null) != 'hidden'))
+        );
 
         allow create: if isSignedIn() && notBanned()
           && request.resource.data.keys().hasOnly(
@@ -517,7 +523,13 @@ service cloud.firestore {
         // --- replies subcollection ---------------------------------------
         // Mirrors posts but without pinning, replyCount, or reactionCounts.
         match /replies/{replyId} {
-          allow read: if isSignedIn();
+          allow read: if isSignedIn() && (
+            resource.data.authorUid == request.auth.uid
+            || (request.auth.token.admin == true)
+            || (resource.data.deletedAt == null
+                && (resource.data.get('moderation', null) == null
+                    || resource.data.moderation.get('state', null) != 'hidden'))
+          );
 
           allow create: if isSignedIn() && notBanned()
             && request.resource.data.keys().hasOnly(
@@ -559,7 +571,12 @@ service cloud.firestore {
         // --- reactions subcollection (mirrors T26) ----------------------
         // boards/{boardId}/posts/{postId}/reactions/{stickerSlug}/users/{uid}
         match /reactions/{stickerSlug}/users/{uid} {
-          allow read: if isSignedIn();
+          // Gate on parent post being non-deleted and non-hidden so that
+          // reactions on moderated content are not publicly enumerable.
+          allow read: if isSignedIn()
+            && get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.deletedAt == null
+            && (get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.get('moderation', null) == null
+                || get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.moderation.get('state', null) != 'hidden');
 
           allow create: if isUser(uid) && notBanned()
             && exists(/databases/$(database)/documents/stickers/$(stickerSlug))

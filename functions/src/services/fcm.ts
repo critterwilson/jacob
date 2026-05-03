@@ -39,18 +39,18 @@ function fcmStateRef() {
 }
 
 /**
- * Atomically reserve one send slot in today's quota doc.
- * Returns the new usage count, or null if the cap is reached.
+ * Atomically reserve `slots` send slots in today's quota doc.
+ * Returns the new usage count, or null if the cap would be exceeded.
  */
-export async function tryReserveFcmQuota(): Promise<number | null> {
+export async function tryReserveFcmQuota(slots: number = 1): Promise<number | null> {
   const ref = fcmStateRef();
   return getFirestore().runTransaction(async (txn) => {
     const snap = await txn.get(ref);
     const current = (snap.data()?.count as number | undefined) ?? 0;
-    if (current >= FCM_DAILY_CAP) {
+    if (current + slots > FCM_DAILY_CAP) {
       return null;
     }
-    const next = current + 1;
+    const next = current + slots;
     txn.set(ref, { count: next, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     if (next >= Math.floor(FCM_DAILY_CAP * QUOTA_WARN_RATIO)) {
       logger.warn("fcm_quota_warning", { count: next, cap: FCM_DAILY_CAP });

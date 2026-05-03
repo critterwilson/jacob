@@ -14,10 +14,11 @@ BigQuery views used (T29):
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ def assemble_user_payload(
     now: datetime | None = None,
 ) -> DigestPayload:
     """Build a DigestPayload for one user. Raises DigestDisabledError if analytics unavailable."""
-    if os.environ.get("JACOB_DIGEST_ENABLED", "false").lower() not in {"1", "true", "yes"}:
+    if not get_settings().jacob_digest_enabled:
         raise DigestDisabledError("digest disabled (JACOB_DIGEST_ENABLED not set)")
 
     now = now or datetime.now(UTC)
@@ -77,18 +78,29 @@ def assemble_user_payload(
     )
     email: str = (private_snap.to_dict() or {}).get("email", "")
 
-    # Load group memberships via sub-collection query (authoritative path).
+    # Load group memberships via CG query on the members subcollection.
+    # Uses the M11 `uid` field index to avoid an N+1 scan of all groups.
     gids: list[str] = []
-    for snap in db.collection("groups").stream():
-        member = db.collection("groups").document(snap.id).collection("members").document(uid).get()
-        if member.exists:
-            g = snap.to_dict() or {}
-            archived_at = g.get("archivedAt")
-            if archived_at:
-                cutoff = now - timedelta(days=60)
-                if hasattr(archived_at, "datetime") and archived_at.datetime < cutoff:
+    for snap in db.collection_group("members").where("uid", "==", uid).stream():
+        gid_for_member = snap.reference.parent.parent.id
+        g_snap = db.collection("groups").document(gid_for_member).get()
+        if not g_snap.exists:
+            continue
+        g = g_snap.to_dict() or {}
+        archived_at = g.get("archivedAt")
+        if archived_at:
+            cutoff = now - timedelta(days=60)
+            try:
+                archived_dt = (
+                    archived_at
+                    if isinstance(archived_at, datetime)
+                    else archived_at.ToDatetime(tzinfo=UTC)
+                )
+                if archived_dt < cutoff:
                     continue
-            gids.append(snap.id)
+            except Exception:
+                pass
+        gids.append(gid_for_member)
 
     groups: list[GroupSummary] = []
     total_new_members = 0

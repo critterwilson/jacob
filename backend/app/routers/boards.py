@@ -100,17 +100,16 @@ def create_board(
 ) -> BoardResponse:
     db = _db()
 
-    # Slug uniqueness — boards are listed by slug in URLs.
-    hits = list(db.collection("boards").where("slug", "==", body.slug).limit(1).stream())
-    if hits:
+    # Use slug as document ID — Firestore enforces uniqueness naturally.
+    board_ref = db.collection("boards").document(body.slug)
+    board_id = body.slug
+    if board_ref.get().exists:
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
             code="slug_conflict",
             message="A board with this slug already exists",
         )
 
-    board_ref = db.collection("boards").document()
-    board_id = board_ref.id
     board_ref.set(
         {
             "name": body.name.strip(),

@@ -17,9 +17,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user, require_admin
+from app.deps import require_admin
 from app.errors import APIError
-from app.limits import ADMIN_MUTATION
+from app.limits import ADMIN_LIST, ADMIN_MUTATION
 from app.middleware.rate_limit import limiter
 from app.models.admin import (
     AdminGroup,
@@ -32,8 +32,6 @@ from app.models.admin import (
     BulkResolveResponse,
     ModerationItem,
     ModerationListResponse,
-    ModerationPolicyRequest,
-    ModerationPolicyResponse,
     ResolveRequest,
     ResolveResponse,
     UnbanResponse,
@@ -121,7 +119,10 @@ _KNOWN_SORTS = {"createdAt", "severity"}
 
 
 @router.get("/moderation", response_model=ModerationListResponse)
+@limiter.limit(ADMIN_LIST)
 def list_moderation_queue(
+    request: Request,
+    response: Response,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
     status_filter: str = Query(default="pending", alias="status"),
@@ -311,7 +312,10 @@ def bulk_resolve_moderation_items(
 
 
 @router.get("/users", response_model=AdminUserListResponse)
+@limiter.limit(ADMIN_LIST)
 def search_users(
+    request: Request,
+    response: Response,
     q: str = Query(default=""),
     limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
     admin: CurrentUser = Depends(require_admin),
@@ -440,7 +444,10 @@ def unban_user(
 
 
 @router.get("/groups", response_model=AdminGroupListResponse)
+@limiter.limit(ADMIN_LIST)
 def search_groups(
+    request: Request,
+    response: Response,
     q: str = Query(default=""),
     limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
     admin: CurrentUser = Depends(require_admin),
@@ -472,62 +479,3 @@ def search_groups(
     return AdminGroupListResponse(groups=groups)
 
 
-# ── per-group moderation policy (T20) ─────────────────────────────────────────
-#
-# Set per-group text-moderation sensitivity. Auth: leader of *this* group OR
-# platform admin. Lives under /api/admin/groups/... per the T20 spec; the
-# require_admin dependency would be too restrictive, so we do the auth check
-# inline.
-
-
-@router.post(
-    "/groups/{gid}/moderation-policy",
-    response_model=ModerationPolicyResponse,
-)
-@limiter.limit(ADMIN_MUTATION)
-def set_moderation_policy(
-    gid: str,
-    request: Request,
-    response: Response,
-    body: ModerationPolicyRequest,
-    user: CurrentUser = Depends(get_current_user),
-) -> ModerationPolicyResponse:
-    db = _db()
-
-    # Either the platform admin claim or leader-of-this-group is sufficient.
-    is_platform_admin = user.claims.get("admin") is True
-    if not is_platform_admin:
-        member_snap = (
-            db.collection("groups").document(gid).collection("members").document(user.uid).get()
-        )
-        if not member_snap.exists:
-            raise APIError(
-                status_code=status.HTTP_403_FORBIDDEN,
-                code="forbidden",
-                message="Only group leaders may set the moderation policy",
-            )
-        member_data = member_snap.to_dict() or {}
-        if member_data.get("role") != "leader":
-            raise APIError(
-                status_code=status.HTTP_403_FORBIDDEN,
-                code="forbidden",
-                message="Only group leaders may set the moderation policy",
-            )
-
-    group_ref = db.collection("groups").document(gid)
-    if not group_ref.get().exists:
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="group_not_found",
-            message="Group not found",
-        )
-
-    group_ref.update({"moderationPolicy": body.policy})
-    write_audit_log(
-        actor_uid=user.uid,
-        action="set_moderation_policy",
-        target_ref=f"groups/{gid}",
-        payload={"policy": body.policy},
-    )
-    logger.info("policy uid=%s gid=%s policy=%s", user.uid, gid, body.policy)
-    return ModerationPolicyResponse(gid=gid, policy=body.policy)
