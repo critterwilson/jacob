@@ -89,7 +89,7 @@ export function useExportStatus(uid: string | undefined): ExportJob {
           const data = d.data() as Record<string, unknown>;
           const ts = tsToDate(data.requestedAt);
           const t = ts ? ts.getTime() : 0;
-          if (t >= latestTs) {
+          if (t > latestTs || (t === latestTs && (!latest || d.id > latest.id))) {
             latestTs = t;
             latest = { id: d.id, data };
           }

@@ -64,6 +64,22 @@ export type MessageDoc = {
  *
  * On create or hard-delete the answer is always true.
  */
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => deepEqual(v, b[i]));
+  }
+  if (a !== null && b !== null && typeof a === "object" && typeof b === "object") {
+    const ka = Object.keys(a as object).sort();
+    const kb = Object.keys(b as object).sort();
+    if (!deepEqual(ka, kb)) return false;
+    return ka.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+  }
+  return false;
+}
+
 export function shouldReindex(
   before: MessageDoc | undefined,
   after: MessageDoc | undefined,
@@ -82,7 +98,7 @@ export function shouldReindex(
     "authorUid",
   ];
   for (const f of fields) {
-    if (JSON.stringify(before[f] ?? null) !== JSON.stringify(after[f] ?? null)) {
+    if (!deepEqual(before[f] ?? null, after[f] ?? null)) {
       return true;
     }
   }
@@ -92,7 +108,7 @@ export function shouldReindex(
   return beforeState !== afterState;
 }
 
-export type IndexAction = "upsert" | "delete" | "skip";
+export type IndexAction = "upsert" | "delete";
 
 export function classifyIndexAction(
   beforeExists: boolean,
@@ -101,8 +117,7 @@ export function classifyIndexAction(
 ): IndexAction {
   if (!afterExists) return "delete"; // hard-delete (defensive)
   if (afterDeletedAt != null) return "delete"; // soft-delete
-  if (!beforeExists || afterExists) return "upsert";
-  return "skip";
+  return "upsert"; // create or edit
 }
 
 export function buildIndexedMessage(
@@ -246,8 +261,6 @@ export const onMessageIndex = onDocumentWritten(
         logger.info("search_index_deleted", { gid, mid, eventId: event.id });
         return;
       }
-      if (action === "skip") return;
-
       // Quota — only spent on writes, not deletes (delete cleanup must
       // always succeed regardless of cap).
       const day = todayKey();

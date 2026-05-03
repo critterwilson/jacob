@@ -33,6 +33,7 @@ from typing import Any
 
 import sentry_sdk
 
+from app.config import get_settings
 from app.services import export
 from app.services.sentry import init_sentry
 
@@ -47,6 +48,9 @@ def _job_path(snap: Any) -> str:
 
 def main() -> int:
     init_sentry()
+    if get_settings().jacob_export_disabled:
+        logger.info("export kill-switch active — exiting without processing")
+        return 0
     pending = export.find_pending_jobs(limit=export.PROCESSOR_BATCH_CAP)
     logger.info("found %d pending export job(s)", len(pending))
 

@@ -51,34 +51,28 @@ function readConfig(): FirebaseClientConfig {
     };
   }
 
-  // Placeholder values keep firebase/auth happy during server prerender
-  // when env vars aren't set (e.g. local `next build` without
-  // `.env.local`). Network calls would still fail, but the module loads.
+  const requiredVars = [
+    "NEXT_PUBLIC_FIREBASE_API_KEY",
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+    "NEXT_PUBLIC_FIREBASE_APP_ID",
+  ] as const;
+  const missing = requiredVars.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing Firebase env vars: ${missing.join(", ")}. ` +
+        "Copy frontend/.env.example to .env.local and fill in values.",
+    );
+  }
+
   const config: FirebaseClientConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "missing-api-key",
-    authDomain:
-      process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "missing.firebaseapp.com",
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "missing",
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "missing",
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   };
-
-  if (isBrowser) {
-    const requiredVars = [
-      "NEXT_PUBLIC_FIREBASE_API_KEY",
-      "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-      "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-      "NEXT_PUBLIC_FIREBASE_APP_ID",
-    ] as const;
-    const missing = requiredVars.filter((k) => !process.env[k]);
-    if (missing.length > 0) {
-      throw new Error(
-        `Missing Firebase env vars: ${missing.join(", ")}. ` +
-          "Copy frontend/.env.example to .env.local and fill in values.",
-      );
-    }
-  }
 
   return config;
 }

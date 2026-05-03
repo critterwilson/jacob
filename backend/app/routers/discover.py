@@ -372,20 +372,28 @@ def reject_join_request(
     _require_leader(db, gid, user.uid)
 
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(target_uid)
-    jr_snap = jr_ref.get()
-    if not jr_snap.exists or (jr_snap.to_dict() or {}).get("status") != "pending":
+
+    @gcf.transactional
+    def _reject_txn(txn: Any) -> bool:
+        snap = txn.get(jr_ref)
+        if not snap.exists or (snap.to_dict() or {}).get("status") != "pending":
+            return False
+        txn.update(
+            jr_ref,
+            {
+                "status": "rejected",
+                "reviewedAt": gcf.SERVER_TIMESTAMP,
+                "reviewedBy": user.uid,
+            },
+        )
+        return True
+
+    if not _reject_txn(db.transaction()):
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="not_found",
             message="Pending join request not found",
         )
-    jr_ref.update(
-        {
-            "status": "rejected",
-            "reviewedAt": gcf.SERVER_TIMESTAMP,
-            "reviewedBy": user.uid,
-        }
-    )
     write_audit_log(
         actor_uid=user.uid,
         action="reject_join_request",

@@ -391,24 +391,35 @@ def request_export(uid: str) -> dict[str, Any]:
         raise RuntimeError("export_disabled")
 
     db = _db()
-    in_flight = find_in_flight(db, uid)
-    if in_flight is not None:
-        raise RuntimeError("export_in_flight")
-
     job_id = _new_job_id()
-    _exports_collection(db, uid).document(job_id).set(
-        {
-            "requestedAt": fb_firestore.SERVER_TIMESTAMP,
-            "startedAt": None,
-            "completedAt": None,
-            "failedAt": None,
-            "failureReason": None,
-            "downloadUrl": None,
-            "expiresAt": None,
-            "byteCount": None,
-            "schemaVersion": SCHEMA_VERSION,
-        }
-    )
+    col = _exports_collection(db, uid)
+    new_ref = col.document(job_id)
+
+    @fb_firestore.transactional  # type: ignore[untyped-decorator]
+    def _create_job(txn: Any) -> bool:
+        # Re-check for in-flight inside the transaction (M5 race fix).
+        for snap in col.stream():
+            data = snap.to_dict() or {}
+            if data.get("completedAt") is None and data.get("failedAt") is None:
+                return False
+        txn.set(
+            new_ref,
+            {
+                "requestedAt": fb_firestore.SERVER_TIMESTAMP,
+                "startedAt": None,
+                "completedAt": None,
+                "failedAt": None,
+                "failureReason": None,
+                "downloadUrl": None,
+                "expiresAt": None,
+                "byteCount": None,
+                "schemaVersion": SCHEMA_VERSION,
+            },
+        )
+        return True
+
+    if not _create_job(db.transaction()):
+        raise RuntimeError("export_in_flight")
 
     write_audit_log(
         actor_uid=uid,
@@ -586,22 +597,25 @@ def find_pending_jobs(db: Any | None = None, *, limit: int = PROCESSOR_BATCH_CAP
     return list(query.stream())
 
 
-def _claim(snap: Any) -> bool:
+def _claim(snap: Any, db: Any) -> bool:
     """Mark the job as started. Returns False if it's already claimed.
 
-    The Cloud Run job runs single-instance per scheduler tick (see
-    `infra/scheduler.tf`: retry_count=1, no parallelism), so the read +
-    update is safe without a Firestore transaction. We still re-read to
-    catch the rare case where two ticks overlap because the previous
-    one outran the scheduler interval.
+    Runs inside a Firestore transaction so two concurrent processor
+    instances racing on the same job only one wins (M6 fix).
     """
-    fresh = snap.reference.get()
-    if not fresh.exists:
-        return False
-    if (fresh.to_dict() or {}).get("startedAt") is not None:
-        return False
-    snap.reference.update({"startedAt": fb_firestore.SERVER_TIMESTAMP})
-    return True
+    ref = snap.reference
+
+    @fb_firestore.transactional  # type: ignore[untyped-decorator]
+    def _txn(txn: Any) -> bool:
+        fresh = txn.get(ref)
+        if not fresh.exists:
+            return False
+        if (fresh.to_dict() or {}).get("startedAt") is not None:
+            return False
+        txn.update(ref, {"startedAt": fb_firestore.SERVER_TIMESTAMP})
+        return True
+
+    return bool(_txn(db.transaction()))
 
 
 def process_one(snap: Any) -> dict[str, Any]:
@@ -620,11 +634,10 @@ def process_one(snap: Any) -> dict[str, Any]:
         raise RuntimeError("malformed_export_path")
 
     job_id = snap.id
-
-    if not _claim(snap):
-        return {"jobId": job_id, "status": "skipped", "uid": uid}
-
     db = _db()
+
+    if not _claim(snap, db):
+        return {"jobId": job_id, "status": "skipped", "uid": uid}
     try:
         user_snap = db.collection("users").document(uid).get()
         if not user_snap.exists:

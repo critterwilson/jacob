@@ -66,7 +66,7 @@ def get_current_user(
 def require_admin(
     user: CurrentUser = Depends(get_current_user),
 ) -> CurrentUser:
-    if user.claims.get("admin") is not True:
+    if user.claims.get("admin") is not True:  # strict identity — `admin: 1` must not grant access
         raise APIError(
             status_code=status.HTTP_403_FORBIDDEN,
             code="forbidden",

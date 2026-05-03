@@ -99,7 +99,8 @@ export function useGroupMessages(gid: string | undefined) {
         setRealtimeMessages(msgs);
         setOffline(false);
         setLoading(false);
-        void cacheMessages(gid, msgs).catch(() => undefined);
+        const cacheable = msgs.filter((m) => m.moderation?.state !== "hidden");
+        void cacheMessages(gid, cacheable).catch(() => undefined);
       },
       () => {
         // Firestore error — likely offline. Fall back to IndexedDB cache.

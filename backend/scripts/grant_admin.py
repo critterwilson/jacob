@@ -26,7 +26,7 @@ def main(argv: list[str]) -> int:
     init_firebase_admin()
     user = firebase_auth.get_user(uid)
     existing: dict[str, object] = dict(user.custom_claims or {})
-    existing["admin"] = True
+    existing["admin"] = True  # MUST be boolean True — rules check `== true`, not "true"/1/yes
     firebase_auth.set_custom_user_claims(uid, existing)
     print(f"Granted admin=True to uid={uid}")
     return 0

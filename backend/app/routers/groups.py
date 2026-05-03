@@ -61,15 +61,15 @@ def _new_code() -> str:
 
 
 def _unique_invite_code(db: Any) -> str:
-    for _ in range(5):
+    for _ in range(10):
         code = _new_code()
         hits = list(db.collection("groups").where("inviteCode", "==", code).limit(1).stream())
         if not hits:
             return code
     raise APIError(
         status_code=500,
-        code="internal_error",
-        message="Could not generate a unique invite code",
+        code="code_generation_failed",
+        message="Could not generate a unique invite code; please try again",
     )
 
 

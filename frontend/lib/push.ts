@@ -49,9 +49,22 @@ export async function registerPushToken(uid: string): Promise<string | null> {
   let swReg: ServiceWorkerRegistration;
   try {
     swReg = await navigator.serviceWorker.register(SW_PATH, { scope: "/" });
-    // Send Firebase config to the SW so it can handle background messages.
+    // Wait for the SW to activate before posting config; on first install
+    // swReg.active is null until the installing worker transitions to active.
     const config = (app as unknown as { options: Record<string, unknown> }).options;
-    swReg.active?.postMessage({ type: "FIREBASE_CONFIG", config });
+    const active =
+      swReg.active ??
+      (await new Promise<ServiceWorker>((resolve) => {
+        const worker = swReg.installing ?? swReg.waiting;
+        if (!worker) return;
+        worker.addEventListener("statechange", function handler() {
+          if (worker.state === "activated") {
+            worker.removeEventListener("statechange", handler);
+            resolve(worker);
+          }
+        });
+      }));
+    active?.postMessage({ type: "FIREBASE_CONFIG", config });
   } catch (err) {
     console.warn("[push] SW registration failed:", err);
     return null;

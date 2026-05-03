@@ -148,28 +148,6 @@ def consume_invite(db: Any, code: str, uid: str) -> tuple[str, str]:
     path_parts = invite_ref.path.split("/")
     gid = path_parts[1]
     invite_id = invite_snap.id
-    invite_data = invite_snap.to_dict() or {}
-
-    # Validate: expiry and revoked checks before entering transaction.
-    now = datetime.now(UTC)
-    expires_at = invite_data.get("expiresAt")
-    if expires_at is not None:
-        exp_dt = _to_datetime(expires_at)
-        if exp_dt and exp_dt < now:
-            raise APIError(
-                status_code=status.HTTP_410_GONE,
-                code="invite_expired",
-                message="This invite has expired",
-            )
-
-    max_uses = invite_data.get("maxUses")
-    use_count = invite_data.get("useCount", 0)
-    if max_uses is not None and use_count >= max_uses:
-        raise APIError(
-            status_code=status.HTTP_410_GONE,
-            code="invite_maxed",
-            message="This invite has reached its use limit",
-        )
 
     group_ref = db.collection("groups").document(gid)
     group_snap = group_ref.get()
@@ -186,9 +164,21 @@ def consume_invite(db: Any, code: str, uid: str) -> tuple[str, str]:
 
     @gcf.transactional
     def _run(transaction: Any) -> None:
-        # Re-read inside transaction for optimistic concurrency on useCount.
+        # Re-read inside transaction for optimistic concurrency on useCount
+        # AND to close the expiry race window (M3).
         txn_invite = invite_ref.get(transaction=transaction)
         txn_data = txn_invite.to_dict() or {}
+
+        now = datetime.now(UTC)
+        txn_expires = txn_data.get("expiresAt")
+        if txn_expires is not None:
+            exp_dt = _to_datetime(txn_expires)
+            if exp_dt and exp_dt < now:
+                raise APIError(
+                    status_code=status.HTTP_410_GONE,
+                    code="invite_expired",
+                    message="This invite has expired",
+                )
 
         txn_uses = txn_data.get("useCount", 0)
         txn_max = txn_data.get("maxUses")
