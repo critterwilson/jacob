@@ -585,6 +585,14 @@ service cloud.firestore {
     match /audit_log/{eventId} {
       allow read, write: if false;
     }
+
+    // C3: global invite-code index. Written atomically by the backend
+    // (Admin SDK) when a group is created or its invite code is rotated.
+    // Client reads/writes are never needed — any attempt is a bug or attack.
+    match /inviteCodes/{code} {
+      allow read, write: if false;
+    }
+
     // T10: photo upload pipeline state. Owned and read by the backend
     // Admin SDK; clients receive their public URL in the finalize response
     // and never need to touch this collection.

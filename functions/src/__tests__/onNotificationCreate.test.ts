@@ -55,24 +55,27 @@ describe("kindToPrefKey", () => {
 
 describe("buildPayload", () => {
   it("announcement payload has announcement title", () => {
-    const p = buildPayload({ kind: "announcement", body: "Big news!" });
+    const p = buildPayload({ kind: "announcement", body: "Big news!", groupId: "g1" }, "alice");
     expect(p.title).toMatch(/announcement/i);
     expect(p.body).toBe("Big news!");
+    expect(p.collapseKey).toBe("announcement:g1");
   });
 
   it("mention payload", () => {
-    const p = buildPayload({ kind: "mention", body: "hey @you" });
+    const p = buildPayload({ kind: "mention", body: "hey @you", groupId: "g1" }, "alice");
     expect(p.title).toMatch(/mention/i);
+    expect(p.collapseKey).toContain("mentionTarget:alice");
   });
 
   it("reply payload", () => {
-    const p = buildPayload({ kind: "reply", body: "agreed!" });
+    const p = buildPayload({ kind: "reply", body: "agreed!", groupId: "g1" }, "alice");
     expect(p.title).toMatch(/reply/i);
+    expect(p.collapseKey).toBe("groupId:g1");
   });
 
   it("truncates body at 100 chars", () => {
     const long = "a".repeat(120);
-    const p = buildPayload({ kind: "mention", body: long });
+    const p = buildPayload({ kind: "mention", body: long, groupId: "g1" }, "alice");
     expect(p.body.length).toBeLessThanOrEqual(101); // 100 chars + ellipsis
   });
 });

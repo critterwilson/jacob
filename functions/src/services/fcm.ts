@@ -63,6 +63,15 @@ export type FcmPayload = {
   title: string;
   body: string;
   data?: Record<string, string>;
+  /**
+   * Required collapse key. Ensures retries deduplicate at the device level.
+   * Conventions:
+   *   - Group reply notifications:  `groupId:${gid}`
+   *   - Mention notifications:      `mentionTarget:${uid}:${gid}:${msgId}`
+   *   - Digest emails:              `digest:${uid}:${date}`
+   * A missing collapseKey causes duplicate pushes on function retry (C5 fix).
+   */
+  collapseKey: string;
 };
 
 /**
@@ -92,7 +101,10 @@ export async function sendFcm(token: string, payload: FcmPayload): Promise<void>
         body: payload.body,
       },
       data: payload.data,
+      android: { collapseKey: payload.collapseKey },
+      apns: { headers: { "apns-collapse-id": payload.collapseKey } },
       webpush: {
+        headers: { Topic: payload.collapseKey },
         notification: {
           icon: "/icons/icon-192x192.png",
           badge: "/icons/badge-96x96.png",
