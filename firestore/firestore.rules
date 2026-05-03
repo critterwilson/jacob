@@ -123,6 +123,35 @@ service cloud.firestore {
         allow delete: if isUser(uid);
         allow update: if false;
       }
+
+      // T34 — FCM device registration. Owner-only. The Admin SDK cleanup job
+      // also has delete permission (checked via `request.auth.token.admin`).
+      match /devices/{deviceId} {
+        allow read, write: if isUser(uid)
+          && request.resource.data.keys().hasOnly([
+               'fcmToken', 'platform', 'createdAt', 'lastSeenAt',
+               'userAgent', 'appVersion'])
+          && request.resource.data.fcmToken is string
+          && request.resource.data.fcmToken.size() <= 4096
+          && request.resource.data.platform in ['web', 'ios', 'android']
+          && request.resource.data.userAgent is string
+          && request.resource.data.userAgent.size() <= 256;
+        allow delete: if isUser(uid) || (request.auth.token.admin == true);
+      }
+
+      // T34 — notification preferences. Owner-only; docId must be "main".
+      match /notificationPrefs/{docId} {
+        allow read: if isUser(uid);
+        allow create, update: if isUser(uid)
+          && docId == "main"
+          && request.resource.data.keys().hasOnly([
+               'mentions', 'replies', 'announcements', 'digest', 'schemaVersion'])
+          && request.resource.data.mentions is bool
+          && request.resource.data.replies is bool
+          && request.resource.data.announcements is bool
+          && request.resource.data.digest is bool;
+        allow delete: if false;
+      }
     }
 
     // --- groups ----------------------------------------------------------
