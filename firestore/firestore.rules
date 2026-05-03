@@ -571,6 +571,14 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // --- daily_verse (T33) ---------------------------------------------
+    // Written exclusively by the daily Cloud Run Job via the Admin SDK.
+    // Any signed-in user can read; client writes are always denied.
+    match /daily_verse/{day} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if false;
+    }
+
     // --- notifications (T24) -------------------------------------------
     // Server-only creates and deletes (Admin SDK). Owner reads and can
     // mark as read by setting readAt to serverTimestamp; nothing else.

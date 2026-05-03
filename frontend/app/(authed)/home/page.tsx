@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DailyVerse } from "@/components/home/DailyVerse";
 import { RecentActivity } from "@/components/home/RecentActivity";
 import { useAuth } from "@/lib/auth-context";
 import { useGroups } from "@/lib/hooks/useGroups";
@@ -28,6 +29,10 @@ export default function HomePage() {
       <h1 className="mb-6 text-2xl font-semibold">
         Welcome{user?.displayName ? `, ${user.displayName}` : ""}
       </h1>
+
+      <section className="mb-6">
+        <DailyVerse />
+      </section>
 
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">

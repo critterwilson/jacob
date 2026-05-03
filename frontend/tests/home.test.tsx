@@ -72,6 +72,18 @@ vi.mock("@/lib/hooks/useDeletionStatus", () => ({
   useDeletionStatus: () => ({ pending: false, finalizeAt: null, keepBody: true }),
 }));
 
+vi.mock("@/lib/hooks/useDailyVerse", () => ({
+  useDailyVerse: () => ({
+    verse: {
+      reference: "John 3:16",
+      translation: "WEB",
+      text: "For God so loved the world.",
+      source: "bible-api.com",
+    },
+    loading: false,
+  }),
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { AppShell } from "@/components/nav/AppShell";
