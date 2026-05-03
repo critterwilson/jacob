@@ -51,13 +51,20 @@ function readConfig(): FirebaseClientConfig {
     };
   }
 
-  const requiredVars = [
-    "NEXT_PUBLIC_FIREBASE_API_KEY",
-    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-    "NEXT_PUBLIC_FIREBASE_APP_ID",
-  ] as const;
-  const missing = requiredVars.filter((k) => !process.env[k]);
+  // Each access must be a static `process.env.X` literal — Next.js only
+  // inlines those into the client bundle. `process.env[varName]` with a
+  // dynamic key stays as a runtime lookup against `{}` and reports every
+  // var as missing even when they were inlined elsewhere in the file.
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
+
+  const missing: string[] = [];
+  if (!apiKey) missing.push("NEXT_PUBLIC_FIREBASE_API_KEY");
+  if (!authDomain) missing.push("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
+  if (!projectId) missing.push("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+  if (!appId) missing.push("NEXT_PUBLIC_FIREBASE_APP_ID");
   if (missing.length > 0) {
     throw new Error(
       `Missing Firebase env vars: ${missing.join(", ")}. ` +
@@ -65,16 +72,14 @@ function readConfig(): FirebaseClientConfig {
     );
   }
 
-  const config: FirebaseClientConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+  return {
+    apiKey: apiKey!,
+    authDomain: authDomain!,
+    projectId: projectId!,
+    appId: appId!,
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   };
-
-  return config;
 }
 
 export const app: FirebaseApp = getApps()[0] ?? initializeApp(readConfig());
