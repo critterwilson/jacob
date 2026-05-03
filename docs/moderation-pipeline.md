@@ -209,3 +209,23 @@ messages regardless of state.
 - **Kill switch.** `MODERATION_TEXT_DISABLED=true` makes the trigger a
   pure no-op — useful when the API is misbehaving and we want to ship
   without redeploying the function.
+
+### Boards path (T32)
+
+`onBoardPostCreate` mirrors `onMessageCreate` for the
+`boards/{boardId}/posts/{postId}` host. Differences:
+
+- **Single platform-wide policy.** Boards are not per-group, so they use
+  the `standard` text-moderation policy. There is no per-board override.
+- **Same quota.** The daily counter at
+  `moderation_state/text-{YYYY-MM-DD}` is shared between group messages
+  and board posts; the cap applies to *both* combined.
+- **Same kill switch.** `MODERATION_TEXT_DISABLED=true` no-ops board
+  moderation just like group-message moderation.
+- **Queue rows.** Auto-hidden / flagged board posts produce
+  `moderation_queue` rows with `resourceType: "board_post"` and
+  `boardId` populated; admins triage them via the existing dashboard.
+
+Replies (`boards/{boardId}/posts/{postId}/replies/{replyId}`) are not
+yet text-moderated automatically — only top-level posts are. Reports
+flow through T19's `POST /api/reports` regardless.

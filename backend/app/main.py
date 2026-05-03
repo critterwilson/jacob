@@ -14,6 +14,7 @@ from app.routers import (
     account,
     admin,
     analytics,
+    boards,
     discover,
     groups,
     invites,
@@ -71,6 +72,7 @@ app.include_router(account.router)
 app.include_router(search.router)
 app.include_router(analytics.router)
 app.include_router(discover.router)
+app.include_router(boards.router)
 
 if settings.debug:
     from app.routers import debug

@@ -3,3 +3,7 @@ export { onMessageCreate } from "./onMessageCreate";
 export { onMemberWrite } from "./onMemberWrite";
 export { onReactionWrite } from "./onReactionWrite";
 export { onMessageIndex } from "./onMessageIndex";
+export { onBoardPostCreate } from "./onBoardPostCreate";
+export { onBoardPostWrite } from "./onBoardPostWrite";
+export { onBoardReplyWrite } from "./onBoardReplyWrite";
+export { onBoardReactionWrite } from "./onBoardReactionWrite";

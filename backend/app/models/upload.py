@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-UploadPurpose = Literal["message", "avatar", "group_avatar"]
+UploadPurpose = Literal["message", "avatar", "group_avatar", "board_post"]
 SupportedMimeType = Literal["image/jpeg", "image/png", "image/webp"]
 
 MAX_PHOTO_BYTES = 8 * 1024 * 1024

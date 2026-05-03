@@ -1,34 +1,18 @@
 /**
- * T20 — automated text moderation.
- * T27 — @mention notification fan-out.
+ * T32 — moderation + mention fan-out for boards.
  *
- * Fires on `groups/{gid}/messages/{mid}` create events.
+ * Mirrors `onMessageCreate.ts` but keyed on `boards/{boardId}/posts/{postId}`.
+ * Boards have no membership concept, so:
+ *   - Mention fan-out skips the membership check (`isMember: () => true`),
+ *     but still applies the block check (T21 producer-side suppression).
+ *   - Post counts on `boards/{boardId}.postCount` are maintained via
+ *     `FieldValue.increment(1)` here on create.
  *
- * T20 Moderation:
- *   Reads the group's moderationPolicy (default "standard"), calls Cloud NL
- *   `moderateText`, and:
- *   - Sets `messages/{mid}.moderation` with `state: "hidden"` if any tracked
- *     category exceeds the policy's hide threshold; also writes a
- *     `moderation_queue` row with `auto: true` severity 2.
- *   - Writes a `moderation_queue` row with `auto: true` severity 1 if the
- *     message exceeds the flag-only threshold.
- *
- * T27 Mention fan-out:
- *   Reads `mentions` (uid[]) from the message doc and writes one
- *   `users/{uid}/notifications/{nid}` row per mentioned user
- *   (kind: "mention"). Skips self, skips users who blocked the author,
- *   skips non-members.
- *
- * Cost guardrails:
- *   - Process-local circuit breaker (5 errors → open 5 min) avoids a
- *     runaway-loop scenario where every message hits the API.
- *   - Daily-call cap stored at `moderation_state/text-{YYYY-MM-DD}` —
- *     when reached, the trigger no-ops with `moderation_quota_exceeded`.
- *   - Sentry alert at 80% of the cap (a `moderation_quota_warning` log
- *     line that the alert policy in `infra/uptime-checks.tf` matches on).
- *
- * Kill switch: `MODERATION_TEXT_DISABLED=true` makes moderation a no-op
- * without redeploying (fan-out still runs).
+ * Cost guardrails (P8):
+ *   - Reuses the shared text-moderation circuit breaker.
+ *   - Reuses `moderation_state/text-{YYYY-MM-DD}` daily call counter
+ *     so that group + board moderation share the same daily budget.
+ *   - Honours `MODERATION_TEXT_DISABLED=true`.
  */
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
@@ -52,7 +36,6 @@ if (!getApps().length) {
   initializeApp();
 }
 
-// Lazy-init the NL client so module load does not hit network in tests.
 let _nlClient: import("@google-cloud/language").v2.LanguageServiceClient | null = null;
 function getNLClient() {
   if (_nlClient) return _nlClient;
@@ -62,12 +45,12 @@ function getNLClient() {
   return _nlClient!;
 }
 
-const DEFAULT_POLICY: Policy = "standard";
+const POLICY: Policy = "standard"; // boards are platform-wide; one policy.
 const DAILY_CALL_CAP = parseInt(process.env.JACOB_TEXT_MODERATION_DAILY_CAP ?? "5000", 10);
 const QUOTA_WARN_RATIO = 0.8;
 
 function todayKey(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  return now.toISOString().slice(0, 10);
 }
 
 function moderationStateRef(db: Firestore, day: string) {
@@ -95,18 +78,10 @@ async function tryReserveQuota(db: Firestore, day: string): Promise<number | nul
   });
 }
 
-async function readPolicy(db: Firestore, gid: string): Promise<Policy> {
-  const groupSnap = await db.collection("groups").doc(gid).get();
-  if (!groupSnap.exists) return DEFAULT_POLICY;
-  const raw = groupSnap.data()?.moderationPolicy as string | undefined;
-  if (raw === "lenient" || raw === "standard" || raw === "strict") return raw;
-  return DEFAULT_POLICY;
-}
-
 async function runModeration(
   db: Firestore,
-  gid: string,
-  mid: string,
+  boardId: string,
+  postId: string,
   body: string,
   eventId: string,
 ): Promise<void> {
@@ -115,11 +90,11 @@ async function runModeration(
     return;
   }
 
-  const messageRef = db.collection("groups").doc(gid).collection("messages").doc(mid);
+  const postRef = db.collection("boards").doc(boardId).collection("posts").doc(postId);
 
   if (isCircuitOpen()) {
-    logger.warn("moderation_circuit_open", { gid, mid, eventId });
-    await messageRef.update({
+    logger.warn("moderation_circuit_open", { boardId, postId, eventId });
+    await postRef.update({
       moderation: {
         state: "skipped",
         reasons: ["circuit_open"],
@@ -133,8 +108,8 @@ async function runModeration(
   const day = todayKey();
   const newCount = await tryReserveQuota(db, day);
   if (newCount === null) {
-    logger.error("moderation_quota_exceeded", { gid, mid, day, cap: DAILY_CALL_CAP });
-    await messageRef.update({
+    logger.error("moderation_quota_exceeded", { boardId, postId, day, cap: DAILY_CALL_CAP });
+    await postRef.update({
       moderation: {
         state: "skipped",
         reasons: ["quota_exceeded"],
@@ -160,12 +135,12 @@ async function runModeration(
   } catch (err) {
     recordFailure();
     logger.error("moderation_text_api_failed", {
-      gid,
-      mid,
+      boardId,
+      postId,
       eventId,
       error: (err as Error).message,
     });
-    await messageRef.update({
+    await postRef.update({
       moderation: {
         state: "errored",
         reasons: ["api_error"],
@@ -176,104 +151,61 @@ async function runModeration(
     return;
   }
 
-  const policy = await readPolicy(db, gid);
-  const { decision, reasons } = decisionFor(scores, policy);
-
+  const { decision, reasons } = decisionFor(scores, POLICY);
   const trackedScores = Object.fromEntries(
     scores.filter((s) => TRACKED_CATEGORIES.has(s.name)).map((s) => [s.name, s.confidence]),
   );
 
   if (decision === null) {
-    await messageRef.update({
+    await postRef.update({
       moderation: {
         state: "scored",
         reasons: [],
         scores: trackedScores,
         scoredAt: FieldValue.serverTimestamp(),
-        policy,
+        policy: POLICY,
       },
     });
     return;
   }
 
-  if (decision === "hide") {
-    await messageRef.update({
-      moderation: {
-        state: "hidden",
-        reasons,
-        scores: trackedScores,
-        scoredAt: FieldValue.serverTimestamp(),
-        policy,
-      },
-    });
-  } else {
-    await messageRef.update({
-      moderation: {
-        state: "flagged",
-        reasons,
-        scores: trackedScores,
-        scoredAt: FieldValue.serverTimestamp(),
-        policy,
-      },
-    });
-  }
+  await postRef.update({
+    moderation: {
+      state: decision === "hide" ? "hidden" : "flagged",
+      reasons,
+      scores: trackedScores,
+      scoredAt: FieldValue.serverTimestamp(),
+      policy: POLICY,
+    },
+  });
 
-  const severity = decision === "hide" ? 2 : 1;
   await db.collection("moderation_queue").add({
-    resourceRef: `groups/${gid}/messages/${mid}`,
-    resourceType: "message",
-    groupId: gid,
+    resourceRef: `boards/${boardId}/posts/${postId}`,
+    resourceType: "board_post",
+    boardId,
     reason: "auto-text-moderation",
-    severity,
+    severity: decision === "hide" ? 2 : 1,
     auto: true,
     reasons,
     status: "pending",
     reportedBy: null,
     createdAt: FieldValue.serverTimestamp(),
-    policy,
+    policy: POLICY,
   });
 
   logger.info("moderation_text_decision", {
-    gid,
-    mid,
+    boardId,
+    postId,
     eventId,
     decision,
     reasons,
-    policy,
-    severity,
+    policy: POLICY,
   });
 }
 
-export async function fanOutMentionNotifications(
-  db: Firestore,
-  gid: string,
-  mid: string,
-  authorUid: string,
-  mentions: string[],
-): Promise<void> {
-  await fanOutMentions(db, {
-    authorUid,
-    mentions,
-    payload: {
-      kind: "mention",
-      messageRef: `groups/${gid}/messages/${mid}`,
-      groupId: gid,
-    },
-    isMember: async (uid) => {
-      const snap = await db
-        .collection("groups")
-        .doc(gid)
-        .collection("members")
-        .doc(uid)
-        .get();
-      return snap.exists;
-    },
-  });
-}
-
-export const onMessageCreate = onDocumentCreated(
+export const onBoardPostCreate = onDocumentCreated(
   {
-    document: "groups/{gid}/messages/{mid}",
+    document: "boards/{boardId}/posts/{postId}",
     region: "us-central1",
     maxInstances: 10,
     retry: false,
@@ -283,39 +215,47 @@ export const onMessageCreate = onDocumentCreated(
     if (!data) return;
 
     const body = (data.body as string | undefined) ?? "";
-    const { gid, mid } = event.params;
+    const { boardId, postId } = event.params;
     const db = getFirestore();
 
-    // Moderation (non-fatal: failures are logged; fan-out always runs)
     if (body.trim()) {
       try {
-        await runModeration(db, gid, mid, body, event.id);
+        await runModeration(db, boardId, postId, body, event.id);
       } catch (err) {
-        logger.error("onMessageCreate_moderation_uncaught", {
-          gid,
-          mid,
+        logger.error("onBoardPostCreate_moderation_uncaught", {
+          boardId,
+          postId,
           eventId: event.id,
           error: (err as Error).message,
         });
       }
     }
 
-    // T27 — mention fan-out (runs regardless of moderation outcome)
     const mentions = (data.mentions as string[] | undefined) ?? [];
     const authorUid = (data.authorUid as string | undefined) ?? "";
     if (mentions.length > 0 && authorUid) {
       try {
-        await fanOutMentionNotifications(db, gid, mid, authorUid, mentions);
-        logger.info("mention_fanout_done", {
-          gid,
-          mid,
+        await fanOutMentions(db, {
+          authorUid,
+          mentions,
+          payload: {
+            kind: "board_mention",
+            messageRef: `boards/${boardId}/posts/${postId}`,
+            boardId,
+          },
+          // Boards have no membership; rely on block check only.
+          isMember: async () => true,
+        });
+        logger.info("board_mention_fanout_done", {
+          boardId,
+          postId,
           eventId: event.id,
           count: mentions.length,
         });
       } catch (err) {
-        logger.error("mention_fanout_failed", {
-          gid,
-          mid,
+        logger.error("board_mention_fanout_failed", {
+          boardId,
+          postId,
           eventId: event.id,
           error: (err as Error).message,
         });
