@@ -77,6 +77,7 @@ async function seedGroup(opts: {
   createdBy: string;
   leaderUid: string;
   memberUid?: string;
+  isPrivate?: boolean;
 }) {
   await seed(async (db) => {
     await setDoc(doc(db, "groups", opts.gid), {
@@ -84,7 +85,7 @@ async function seedGroup(opts: {
       description: "",
       createdBy: opts.createdBy,
       createdAt: Timestamp.now(),
-      isPrivate: false,
+      isPrivate: opts.isPrivate ?? false,
       inviteCode: "TESTCODE",
       memberCount: opts.memberUid ? 2 : 1,
       stickerSet: "christian",
@@ -107,7 +108,7 @@ async function seedGroup(opts: {
 
 describe("group read access", () => {
   it("denies non-member reading group doc", async () => {
-    await seedGroup({ gid: "g1", createdBy: "alice", leaderUid: "alice" });
+    await seedGroup({ gid: "g1", createdBy: "alice", leaderUid: "alice", isPrivate: true });
     await assertFails(getDoc(doc(authed("eve"), "groups", "g1")));
   });
 

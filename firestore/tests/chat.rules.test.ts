@@ -70,6 +70,7 @@ async function seedGroupWithMembers(opts: {
   gid: string;
   leaderUid: string;
   memberUid?: string;
+  isPrivate?: boolean;
 }) {
   await seed(async (db) => {
     await setDoc(doc(db, "groups", opts.gid), {
@@ -77,7 +78,7 @@ async function seedGroupWithMembers(opts: {
       description: "",
       createdBy: opts.leaderUid,
       createdAt: Timestamp.now(),
-      isPrivate: false,
+      isPrivate: opts.isPrivate ?? false,
       inviteCode: "TESTCODE",
       memberCount: opts.memberUid ? 2 : 1,
       stickerSet: "christian",
@@ -114,7 +115,7 @@ function freshMessageFields(authorUid: string) {
 
 describe("message read access", () => {
   it("non-member cannot read messages", async () => {
-    await seedGroupWithMembers({ gid: "g1", leaderUid: "alice" });
+    await seedGroupWithMembers({ gid: "g1", leaderUid: "alice", isPrivate: true });
     await seed(async (db) => {
       await setDoc(doc(db, "groups", "g1", "messages", "m1"), {
         authorUid: "alice",

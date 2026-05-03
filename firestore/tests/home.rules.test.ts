@@ -69,6 +69,7 @@ async function seedGroupWithMessage(opts: {
   gid: string;
   memberUid: string;
   messageId: string;
+  isPrivate?: boolean;
 }) {
   await seed(async (db) => {
     await setDoc(doc(db, "groups", opts.gid), {
@@ -76,7 +77,7 @@ async function seedGroupWithMessage(opts: {
       createdBy: opts.memberUid,
       createdAt: Timestamp.now(),
       memberCount: 1,
-      isPrivate: false,
+      isPrivate: opts.isPrivate ?? false,
       schemaVersion: 1,
     });
     await setDoc(doc(db, "groups", opts.gid, "members", opts.memberUid), {
@@ -104,7 +105,7 @@ describe("T11 — recent-messages rule enforcement", () => {
   });
 
   it("non-member cannot read a message from a group they did not join", async () => {
-    await seedGroupWithMessage({ gid: "g1", memberUid: "alice", messageId: "m1" });
+    await seedGroupWithMessage({ gid: "g1", memberUid: "alice", messageId: "m1", isPrivate: true });
     // bob is not a member of g1
     await assertFails(getDoc(doc(authed("bob"), "groups/g1/messages/m1")));
   });

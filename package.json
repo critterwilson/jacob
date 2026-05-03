@@ -3,7 +3,16 @@
   "private": true,
   "scripts": {
     "seed:stickers": "pnpm -F jacob-firestore seed:stickers",
-    "seed:stickers:emulator": "pnpm -F jacob-firestore seed:stickers:emulator"
+    "seed:stickers:emulator": "pnpm -F jacob-firestore seed:stickers:emulator",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "backend/**/*.py": [
+      "black"
+    ],
+    "**/package.json": [
+      "bash -c 'pnpm install && git add pnpm-lock.yaml'"
+    ]
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -12,5 +21,9 @@
       "protobufjs",
       "unrs-resolver"
     ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0"
   }
 }
