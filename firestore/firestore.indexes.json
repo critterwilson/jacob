@@ -53,13 +53,6 @@
       ]
     },
     {
-      "collectionGroup": "invites",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "groups",
       "queryScope": "COLLECTION",
       "fields": [
