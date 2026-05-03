@@ -67,6 +67,19 @@ runConfig:
   memoryMiB: 512
 ```
 
+## Dual lockfile note
+
+`frontend/package-lock.json` exists solely for App Hosting's npm buildpack, which runs `npm ci` from the `frontend/` directory. The monorepo's primary lockfile remains `pnpm-lock.yaml` at the repo root (used by CI and local development).
+
+**Both must be kept in sync when `frontend/package.json` changes.** Run:
+
+```bash
+pnpm install --frozen-lockfile=false   # updates root pnpm-lock.yaml
+cd frontend && npm install --package-lock-only  # updates frontend/package-lock.json
+```
+
+Commit both files together. The Husky lint-staged hook handles `pnpm-lock.yaml` automatically; `package-lock.json` must be regenerated manually.
+
 ## Why not static export?
 
 `output: 'export'` in `next.config.mjs` requires every dynamic route to export `generateStaticParams`. The app has routes like `/boards/[boardId]/[postId]` that fetch data at request time — adding `generateStaticParams` to all of them would require a full data snapshot at build time and break incremental updates. App Hosting (SSR) is the correct deployment target.
