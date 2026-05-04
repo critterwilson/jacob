@@ -108,7 +108,18 @@ export function MessageList({
         </p>
       )}
 
-      <div className="flex flex-col">
+      {/*
+        T62 — `role="log"` + `aria-live="polite"` lets a screen reader
+        announce new messages without interrupting the user. We rely
+        on the default `aria-relevant="additions"` so deletes/edits
+        don't re-trigger announcements.
+      */}
+      <div
+        className="flex flex-col"
+        role="log"
+        aria-live="polite"
+        aria-label="Group chat message log"
+      >
         {visible.map((msg) => {
           const muted = isMuted(msg.authorUid) && !expandedMutes.has(msg.id);
           if (muted) {
