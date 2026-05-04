@@ -34,13 +34,40 @@ export type UseUserResult =
   | { loading: false; profile: null; refresh: () => Promise<void> };
 
 /**
+ * Write the `jacob-has-profile` cookie on the frontend origin.
+ *
+ * The backend also sets this cookie on the bootstrap response, but in
+ * environments where the frontend and API live on different hosts (e.g.
+ * staging — `jacob-frontend--*.hosted.app` vs `jacob-backend-*.run.app`)
+ * the browser saves the API's `Set-Cookie` against the API's origin,
+ * not the frontend's. The Next.js middleware reads cookies from *its*
+ * origin, so without this client-side mirror the user gets stuck on
+ * `/onboarding` even after a successful bootstrap. Closes H3.
+ *
+ * In production (single-origin via App Hosting → Cloud Run rewrite)
+ * this is a harmless duplicate write.
+ */
+export function setHasProfileCookie(hasProfile: boolean): void {
+  if (typeof document === "undefined") return;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  if (hasProfile) {
+    document.cookie = `jacob-has-profile=1; path=/; SameSite=Lax${secure}`;
+  } else {
+    document.cookie = `jacob-has-profile=; path=/; Max-Age=0; SameSite=Lax${secure}`;
+  }
+}
+
+/**
  * One-shot fetch of the authenticated user's profile via
  * `GET /api/users/me/bootstrap`. Replaces the prior Firestore
  * `onSnapshot(users/{uid})` listener.
  *
  * The `jacob-has-profile` cookie that gates `frontend/middleware.ts` is
- * now set server-side from the bootstrap response, so the client no
- * longer manages it directly. See data-layer migration plan §7.M2.5.
+ * mirrored client-side from the bootstrap response. The backend also
+ * sets it (works in same-origin prod), but cross-origin browsers don't
+ * accept the Set-Cookie under the frontend's origin — so we write it
+ * here too. See data-layer migration plan §7.M2.5 and H3 in the M6
+ * review.
  *
  * `refresh()` re-fetches; callers that mutate the profile (the onboarding
  * form, settings page) call it after a successful write.
@@ -68,6 +95,7 @@ export function useUser(uid: string | undefined): UseUserResult {
         signal: ctl.signal,
       });
       if (ctl.signal.aborted) return;
+      setHasProfileCookie(res.hasProfile);
       setState({
         loading: false,
         profile: res.hasProfile && res.profile ? res.profile : null,
