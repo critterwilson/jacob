@@ -56,13 +56,34 @@ JACOB is a small-group messaging web app for Christian small groups (Phase 1). T
  
 ## Architectural rule of thumb
  
-**Decide where each operation lives by trust:**
- 
-- If the client should be trusted to do it (read your own group's messages, write a message you authored, edit your own profile) → **Firestore client SDK + security rules**.
-- If the operation needs server-side trust or external API access (image moderation, account deletion, admin actions, sending email, calling Stripe later) → **FastAPI endpoint** that verifies a Firebase ID token and uses the **Firebase Admin SDK** with elevated privileges.
-When in doubt: prefer security rules. They're the most auditable boundary in the system.
- 
-A third option exists for **Firestore-triggered work** that has to be reactive but server-trusted (e.g., maintaining denormalized counters, fanning writes to the search sidecar): **Cloud Functions for Firebase (v2, TypeScript only).** Firestore triggers in Python are not supported. Functions live in `functions/` (separate workspace) and deploy alongside the rest of Firebase config. Use them only when both the FastAPI backend and security rules are wrong fits — typically denormalization and post-write fan-out.
+**As of M6 of the data-layer migration**, every Firestore read and write
+the frontend performs goes through the FastAPI backend's `/api/*`
+surface. The Firestore client SDK is no longer used for data access —
+Firebase Auth and Firebase Storage are the only client SDKs that
+remain. Security rules are tightened to default-deny on every
+previously-client-accessible collection; the rules file at
+`firestore/firestore.rules` is now mostly defense-in-depth.
+
+**Decide where each operation lives:**
+
+- **Default: a FastAPI endpoint.** Verify the Firebase ID token via
+  `get_current_user`, compose the right access dep
+  (`require_member` / `require_leader` /
+  `require_member_or_public` / `require_not_banned`), and use the
+  Firebase Admin SDK to read or write. This is the rule for every
+  user-facing data access.
+- **Firestore-triggered work** (denormalisation, post-write fan-out,
+  the search sidecar) lives in **Cloud Functions for Firebase (v2,
+  TypeScript only)** — `functions/`. Use it only when reactive
+  server-trusted work needs to follow a write the API just made.
+- **Realtime push** to clients was deferred — chat polls the backend
+  every 10s in the absence of M5 (SSE). M5 reintroduces sub-second
+  push when revisited.
+
+The previous "trust the client when possible" rule no longer applies.
+The migration has shifted the trust boundary fully to the backend
+because Firestore client SDK calls are blocked by adblockers (the
+load-bearing reason for M1–M6). See `docs/data-layer-migration-plan.md`.
  
 ## Firestore conventions
  
