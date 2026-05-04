@@ -265,3 +265,28 @@ def test_delete_message_idempotent_on_already_deleted() -> None:
         res = client.delete("/api/groups/g1/messages/m1")
     assert res.status_code == 200
     audit.assert_not_called()  # no audit on no-op
+
+
+# ── PR12 / H6: 403-banned coverage for edit + delete ──────────────────────
+
+
+def test_edit_message_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(user))
+        res = client.patch("/api/groups/g1/messages/m1", json={"body": "edit"})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_delete_message_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(user))
+        res = client.delete("/api/groups/g1/messages/m1")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

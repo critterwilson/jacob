@@ -319,3 +319,56 @@ def test_unreact_to_post_happy_path() -> None:
         client = TestClient(_app(user))
         res = client.delete("/api/boards/b1/posts/p1/reactions/pray")
     assert res.status_code == 200
+
+
+# ── PR12 / H6: 403-banned coverage for the rest of the board writes ────────
+
+
+def _ban_test_request(method: str, path: str, json_body=None) -> None:
+    """Helper: every banned-write test does the same thing. Builds a banned
+    db, calls the endpoint, expects 403 banned."""
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(user))
+        kwargs = {"json": json_body} if json_body is not None else {}
+        res = client.request(method, path, **kwargs)
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_edit_board_post_403_banned() -> None:
+    _ban_test_request("PATCH", "/api/boards/b1/posts/p1", {"body": "edit"})
+
+
+def test_delete_board_post_403_banned() -> None:
+    _ban_test_request("DELETE", "/api/boards/b1/posts/p1")
+
+
+def test_create_board_reply_403_banned() -> None:
+    _ban_test_request(
+        "POST",
+        "/api/boards/b1/posts/p1/replies",
+        {"body": "reply", "stickerIds": ["pray"]},
+    )
+
+
+def test_edit_board_reply_403_banned() -> None:
+    _ban_test_request(
+        "PATCH",
+        "/api/boards/b1/posts/p1/replies/r1",
+        {"body": "edit"},
+    )
+
+
+def test_delete_board_reply_403_banned() -> None:
+    _ban_test_request("DELETE", "/api/boards/b1/posts/p1/replies/r1")
+
+
+def test_react_to_board_post_403_banned() -> None:
+    _ban_test_request("POST", "/api/boards/b1/posts/p1/reactions/pray")
+
+
+def test_unreact_to_board_post_403_banned() -> None:
+    _ban_test_request("DELETE", "/api/boards/b1/posts/p1/reactions/pray")
