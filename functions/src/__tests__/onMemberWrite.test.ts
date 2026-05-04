@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { leaderDelta } from "../onMemberWrite";
+import { leaderDelta, orgMirrorAction } from "../onMemberWrite";
 
 describe("leaderDelta", () => {
   it("create as leader → +1", () => {
@@ -45,5 +45,23 @@ describe("leaderDelta", () => {
 
   it("write with both sides missing → 0", () => {
     expect(leaderDelta(false, false, undefined, undefined)).toBe(0);
+  });
+});
+
+describe("orgMirrorAction (T54)", () => {
+  it("create → join", () => {
+    expect(orgMirrorAction(false, true)).toBe("join");
+  });
+
+  it("delete → leave", () => {
+    expect(orgMirrorAction(true, false)).toBe("leave");
+  });
+
+  it("update (e.g. promotion) → noop", () => {
+    expect(orgMirrorAction(true, true)).toBe("noop");
+  });
+
+  it("phantom write (both missing) → noop", () => {
+    expect(orgMirrorAction(false, false)).toBe("noop");
   });
 });

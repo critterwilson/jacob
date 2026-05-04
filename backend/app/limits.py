@@ -30,6 +30,14 @@ ADMIN_LIST: str = "60/minute"
 FLAG_MUTATION: str = "30/minute"
 FLAG_READ: str = "60/minute"
 
+# T54 — org model. Org create is platform-admin-rate; org-admin
+# mutations (attach/detach, admin add/remove, settings) are higher
+# but still well below ADMIN_MUTATION because the volume is much
+# lower than per-message moderation activity.
+ORG_CREATE: str = "5/day"
+ORG_ADMIN_MUTATION: str = "30/minute"
+ORG_READ: str = "60/minute"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

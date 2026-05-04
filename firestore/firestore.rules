@@ -127,6 +127,32 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- T54 org model --------------------------------------------------
+    // Top-level orgs collection plus admins/members/invites subcollections,
+    // a slug-reservation collection, and a consent-token collection. Per
+    // M6 every read and write goes through `/api/orgs/*`; clients never
+    // touch these documents directly. The Admin SDK bypasses these rules
+    // by design.
+    match /orgs/{orgId} {
+      allow read, write: if false;
+
+      match /admins/{uid} {
+        allow read, write: if false;
+      }
+      match /members/{uid} {
+        allow read, write: if false;
+      }
+      match /invites/{inviteId} {
+        allow read, write: if false;
+      }
+    }
+    match /org_slugs/{slug} {
+      allow read, write: if false;
+    }
+    match /org_consent_tokens/{token} {
+      allow read, write: if false;
+    }
+
     // --- default deny (defense in depth) --------------------------------
     match /{document=**} {
       allow read, write: if false;

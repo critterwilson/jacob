@@ -441,6 +441,94 @@ describe("M6 default-deny — backend-only collections (unchanged)", () => {
   });
 });
 
+describe("T58 default-deny — feature_flags", () => {
+  it("denies reading feature_flags/{key} (read goes through GET /api/flags)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "feature_flags", "presence_enabled"), {
+        enabled: true,
+        rolloutPercentage: 0,
+        cohorts: { uids: [], orgIds: [], roles: [] },
+        description: "",
+        schemaVersion: 1,
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "feature_flags", "presence_enabled")),
+    );
+  });
+
+  it("denies writing feature_flags/{key}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "feature_flags", "x"), {
+        enabled: true,
+        rolloutPercentage: 0,
+      }),
+    );
+  });
+});
+
+describe("T54 default-deny — orgs + admins + members + invites", () => {
+  it("denies reading orgs/{orgId}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "orgs", "o1"), {
+        name: "Pilot",
+        slug: "pilot",
+        audience: "christian",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "orgs", "o1")));
+  });
+
+  it("denies writing orgs/{orgId}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "orgs", "o1"), { name: "X" }),
+    );
+  });
+
+  it("denies reading orgs/{orgId}/admins/{uid}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "orgs", "o1", "admins", "alice"), {
+        addedBy: "system",
+        addedAt: serverTimestamp(),
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "orgs", "o1", "admins", "alice")),
+    );
+  });
+
+  it("denies reading orgs/{orgId}/members/{uid}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "orgs", "o1", "members", "alice"), {
+        joinedAt: serverTimestamp(),
+        groupIds: ["g1"],
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "orgs", "o1", "members", "alice")),
+    );
+  });
+
+  it("denies reading org_slugs/{slug}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "org_slugs", "pilot"), { orgId: "o1" });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "org_slugs", "pilot")));
+  });
+
+  it("denies reading org_consent_tokens/{token}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "org_consent_tokens", "tok"), {
+        orgId: "o1",
+        gid: "g1",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "org_consent_tokens", "tok")),
+    );
+  });
+});
+
 describe("M6 — collection-group members read", () => {
   // The previous CG-members exception was removed in M6: Firestore
   // rules can't separate doc-level reads from CG queries at the rule
