@@ -38,7 +38,13 @@ def detect_source_type(url: str) -> str:
     host = (parsed.hostname or "").lower()
     if host in _YOUTUBE_HOSTS:
         return "youtube"
-    if host.endswith("podcasts.apple.com") or parsed.path.endswith(".rss"):
+    # CodeQL py/incomplete-url-substring-sanitization: compare the host
+    # with `==` + a leading-dot subdomain check rather than a bare
+    # endswith. Not strictly security-sensitive here (we only pick a
+    # display category), but the safe pattern is no more code.
+    if host == "podcasts.apple.com" or host.endswith(".podcasts.apple.com"):
+        return "podcast"
+    if parsed.path.endswith(".rss"):
         return "podcast"
     return "other"
 

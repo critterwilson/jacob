@@ -150,7 +150,9 @@ def test_create_youtube_pulls_oembed_metadata() -> None:
     assert res.status_code == 201, res.text
     body = res.json()
     assert body["title"] == "Sunday Sermon"
-    assert body["thumbnail"].startswith("https://img.youtube")
+    # `==` rather than startswith to avoid the CodeQL substring-
+    # sanitization warning the latter triggers in trivial test code.
+    assert body["thumbnail"] == "https://img.youtube/abc.jpg"
     assert body["sourceType"] == "youtube"
 
 
