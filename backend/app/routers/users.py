@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -405,8 +406,12 @@ def list_notifications(
                 code="invalid_cursor",
                 message="Cursor is malformed",
             )
-        cursor_ts, _ = decoded
-        query = query.start_after({"createdAt": cursor_ts})
+        cursor_ts, cursor_doc_id = decoded
+        # PR10 / M2: tie-break on __name__ so notifications with identical
+        # createdAt don't drop or duplicate at the page boundary.
+        query = query.order_by("__name__", direction=fb_firestore.Query.DESCENDING).start_after(
+            {"createdAt": cursor_ts, "__name__": cursor_doc_id}
+        )
     query = query.limit(limit + 1)
 
     items: list[Notification] = []
@@ -703,14 +708,14 @@ def recent_messages(
         if getattr(d, "exists", False)
     }
 
-    accumulated: list[RecentMessage] = []
-    for gid in name_by_gid.keys():
+    def _fetch_for_group(gid: str) -> list[RecentMessage]:
         col = db.collection("groups").document(gid).collection("messages")
         q = (
             col.where("parentMessageId", "==", None)
             .order_by("createdAt", direction=fb_firestore.Query.DESCENDING)
             .limit(_RECENT_PER_GROUP)
         )
+        out: list[RecentMessage] = []
         for snap in q.stream():
             data = snap.to_dict() or {}
             if data.get("deletedAt") is not None:
@@ -718,19 +723,32 @@ def recent_messages(
             mod = data.get("moderation") or {}
             if isinstance(mod, dict) and mod.get("state") == "hidden":
                 continue
-            created_at = _ts_to_dt(data.get("createdAt"))
-            accumulated.append(
+            out.append(
                 RecentMessage(
                     id=snap.id,
                     gid=gid,
                     groupName=name_by_gid[gid],
                     authorUid=str(data.get("authorUid") or ""),
                     body=str(data.get("body") or ""),
-                    createdAt=created_at,
+                    createdAt=_ts_to_dt(data.get("createdAt")),
                     deletedAt=None,
                     mediaRefs=list(data.get("mediaRefs") or []),
                 )
             )
+        return out
+
+    # PR10 / M1: per-group queries used to run sequentially. A user in 20
+    # groups paid 20× the round-trip latency. Parallelize them — same total
+    # Firestore reads, much faster wall-clock and lower handler-timeout
+    # risk. Worker cap is generous for typical accounts and bounded so a
+    # user in 100+ groups doesn't blow the pool.
+    accumulated: list[RecentMessage] = []
+    gids = list(name_by_gid.keys())
+    if gids:
+        max_workers = min(10, len(gids))
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            for chunk in ex.map(_fetch_for_group, gids):
+                accumulated.extend(chunk)
 
     accumulated.sort(
         key=lambda m: (m.createdAt or datetime.min.replace(tzinfo=UTC)),
