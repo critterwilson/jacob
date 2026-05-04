@@ -1,611 +1,108 @@
 rules_version = '2';
 
-// JACOB Firestore security rules.
-// Source of truth for who can do what. Every write predicate also calls
-// notBanned() so an active ban silently blocks all client writes.
+// JACOB Firestore security rules — M6 (data-layer migration, Phase F).
+//
+// As of M6, every read and write the frontend performs goes through the
+// FastAPI backend's `/api/*` surface. The Admin SDK bypasses these
+// rules; clients no longer talk to Firestore directly. The rules below
+// therefore default to `allow read, write: if false;` on every
+// previously-client-accessible path. The backend-only rules
+// (moderation_queue, bans, audit_log, inviteCodes, uploads) are
+// unchanged — they were already locked.
+//
+// The previous CG-members exception was removed in M6: Firestore rules
+// can't differentiate a direct document read from a collection-group
+// query at the rule level, so any allow-rule on the members path
+// granted direct doc reads too. Admin tools should use the Admin SDK
+// (which bypasses these rules anyway) — there is no surface that needs
+// the CG read from a client now that `useGroups` calls
+// `GET /api/users/me/groups`.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- helpers ---------------------------------------------------------
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isUser(uid) {
-      return isSignedIn() && request.auth.uid == uid;
-    }
-
-    function isBanned() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/bans/$(request.auth.uid))
-        && get(/databases/$(database)/documents/bans/$(request.auth.uid)).data.expiresAt > request.time;
-    }
-
-    function notBanned() {
-      return !isBanned();
-    }
-
-    function isGroupMember(gid) {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid));
-    }
-
-    function isGroupLeader(gid) {
-      return isGroupMember(gid)
-        && get(/databases/$(database)/documents/groups/$(gid)/members/$(request.auth.uid)).data.role == 'leader';
-    }
-
-    function changedKeys() {
-      return request.resource.data.diff(resource.data).affectedKeys();
-    }
-
-    function onlyChanges(allowed) {
-      return changedKeys().hasOnly(allowed);
-    }
-
-    function messageExists(gid, mid) {
-      return exists(/databases/$(database)/documents/groups/$(gid)/messages/$(mid));
-    }
-
-    // Validate that every element in a mediaRefs list is a known GCS public URL.
-    // Enumerates all possible indices (max 4) since CEL has no list iteration.
-    function validMediaRefs(refs) {
-      return refs.size() == 0
-        || (refs[0].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*')
-            && (refs.size() < 2 || refs[1].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*'))
-            && (refs.size() < 3 || refs[2].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*'))
-            && (refs.size() < 4 || refs[3].matches('https://storage\\.googleapis\\.com/jacob-media-public-.*')));
-    }
-
     // --- users -----------------------------------------------------------
-    // The user document holds public-safe fields (displayName, photoURL,
-    // schemaVersion, etc.). Anything sensitive lives in the private
-    // subcollection below.
-    //
-    // Any authenticated user may read the public doc so that display names
-    // and avatars resolve correctly in group chat. PII lives exclusively in
-    // the private subcollection, which remains owner-only.
+    // All reads/writes flow through `/api/users/me/*` (M2). The user doc,
+    // private subcollection, mutes, blocks, devices, notification prefs,
+    // and notifications inbox are all backend-mediated.
     match /users/{uid} {
-      allow read: if isSignedIn();
+      allow read, write: if false;
 
-      allow create: if isUser(uid)
-        && request.resource.data.keys().hasOnly(
-             ['displayName', 'photoURL', 'schemaVersion', 'createdAt', 'role', 'isMinor'])
-        && request.resource.data.schemaVersion == 1
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.displayName is string
-        && request.resource.data.displayName.size() >= 1
-        && request.resource.data.displayName.size() <= 100
-        // `role` is vestigial — admin status uses Firebase custom claims, not this field.
-        && (!('role' in request.resource.data) || request.resource.data.role == 'member')
-        && (!('photoURL' in request.resource.data)
-            || request.resource.data.photoURL == null
-            || (request.resource.data.photoURL is string
-                && request.resource.data.photoURL.size() <= 500));
-
-      // Clients may only update display name, avatar, and minor status.
-      // groupIds, deletion fields, role, and schema fields are backend-only
-      // (written via Admin SDK which bypasses these rules).
-      allow update: if isUser(uid) && notBanned()
-        && changedKeys().hasOnly(['displayName', 'photoURL', 'isMinor'])
-        && (!('displayName' in changedKeys())
-            || (request.resource.data.displayName is string
-                && request.resource.data.displayName.size() >= 1
-                && request.resource.data.displayName.size() <= 100))
-        && (!('photoURL' in changedKeys())
-            || request.resource.data.photoURL == null
-            || (request.resource.data.photoURL is string
-                && request.resource.data.photoURL.size() <= 500));
-
-      // Account deletion goes through the backend (T14), never the client.
-      allow delete: if false;
-
-      // PII: email, leader/mod-only fields, etc. Owner-only.
-      // Only the canonical "profile" document is allowed — arbitrary sub-doc
-      // IDs are rejected by the default-deny rule below.
-      match /private/profile {
-        allow read: if isUser(uid);
-        allow write: if isUser(uid) && notBanned();
+      match /private/{docId} {
+        allow read, write: if false;
       }
-
-      // T21 — per-user mute and block lists. Owner-only read+write; no
-      // other user can enumerate or read these. Mute is a soft hide
-      // (collapse messages); block is stronger (hide messages + suppress
-      // mentions + suppress notifications). Both are client-enforced;
-      // notification fan-out (T34, T35) reads them server-side.
       match /mutes/{otherUid} {
-        allow read: if isUser(uid);
-        allow create: if isUser(uid) && notBanned()
-          && otherUid != uid
-          && request.resource.data.keys().hasOnly(['mutedAt'])
-          && request.resource.data.mutedAt == request.time;
-        allow delete: if isUser(uid);
-        allow update: if false;
+        allow read, write: if false;
       }
-
       match /blocks/{otherUid} {
-        allow read: if isUser(uid);
-        allow create: if isUser(uid) && notBanned()
-          && otherUid != uid
-          && request.resource.data.keys().hasOnly(['blockedAt'])
-          && request.resource.data.blockedAt == request.time;
-        allow delete: if isUser(uid);
-        allow update: if false;
+        allow read, write: if false;
       }
-
-      // T34 — FCM device registration. Owner-only. The Admin SDK cleanup job
-      // also has delete permission (checked via `request.auth.token.admin`).
       match /devices/{deviceId} {
-        allow read: if isUser(uid);
-        allow create, update: if isUser(uid)
-          && request.resource.data.keys().hasOnly([
-               'fcmToken', 'platform', 'createdAt', 'lastSeenAt',
-               'userAgent', 'appVersion'])
-          && request.resource.data.fcmToken is string
-          && request.resource.data.fcmToken.size() <= 4096
-          && request.resource.data.platform in ['web', 'ios', 'android']
-          && request.resource.data.userAgent is string
-          && request.resource.data.userAgent.size() <= 256;
-        allow delete: if isUser(uid) || (request.auth.token.admin == true);
+        // Admin SDK cleanup job still runs against this collection; the
+        // rule is kept for the auth.token.admin path so a misconfigured
+        // admin key can't accidentally write either.
+        allow read, write: if false;
       }
-
-      // T34 — notification preferences. Owner-only; docId must be "main".
       match /notificationPrefs/{docId} {
-        allow read: if isUser(uid);
-        allow create, update: if isUser(uid)
-          && docId == "main"
-          && request.resource.data.keys().hasOnly([
-               'mentions', 'replies', 'announcements', 'digest', 'schemaVersion'])
-          && request.resource.data.mentions is bool
-          && request.resource.data.replies is bool
-          && request.resource.data.announcements is bool
-          && request.resource.data.digest is bool;
-        allow delete: if false;
+        allow read, write: if false;
+      }
+      match /notifications/{nid} {
+        allow read, write: if false;
+      }
+      match /exports/{jobId} {
+        allow read, write: if false;
       }
     }
 
     // --- groups ----------------------------------------------------------
+    // Group + members + messages + reactions + invites + joinRequests all
+    // flow through the backend (M3 reads, M4 writes).
     match /groups/{gid} {
-      // Members can always read their group. Any signed-in user can read
-      // a public (non-private) group — needed for T30 discovery and T31
-      // cross-group browsing.
-      allow read: if isGroupMember(gid)
-                  || (isSignedIn() && resource.data.isPrivate == false);
+      allow read, write: if false;
 
-      // T22: `founderUid` is set on create and matches `createdBy`. The
-      // value never changes via the client — founder transfer goes
-      // through `POST /api/groups/{gid}/founder/transfer` (Admin SDK).
-      // `leaderCount` is system-only — the onMemberWrite trigger sets it
-      // and the rule rejects every client write.
-      // T23: `avatarUrl` and `archivedAt` are additive fields; absent ≡ null.
-      // T24: `pinnedMessageIds` added; must be empty list on create.
-      allow create: if isSignedIn() && notBanned()
-        && request.resource.data.keys().hasOnly(
-             ['name', 'description', 'isPrivate', 'createdBy', 'founderUid',
-              'createdAt', 'inviteCode', 'memberCount', 'stickerSet',
-              'schemaVersion', 'avatarUrl', 'archivedAt', 'pinnedMessageIds',
-              'joinMode', 'audience'])
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.founderUid == request.auth.uid
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.schemaVersion == 1
-        && request.resource.data.memberCount == 1
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 100
-        && request.resource.data.inviteCode is string
-        && request.resource.data.inviteCode.size() >= 6
-        && (!('description' in request.resource.data)
-            || (request.resource.data.description is string
-                && request.resource.data.description.size() <= 500))
-        && (!('avatarUrl' in request.resource.data)
-            || request.resource.data.avatarUrl == null)
-        && (!('archivedAt' in request.resource.data)
-            || request.resource.data.archivedAt == null)
-        && (!('pinnedMessageIds' in request.resource.data)
-            || request.resource.data.pinnedMessageIds == []);
-
-      // memberCount, leaderCount, founderUid, and moderationPolicy are all
-      // system-only (Admin SDK bypasses these rules). Leaders edit metadata
-      // only via the listed fields.
-      // T23: avatarUrl, archivedAt, archivedBy, archiveReason added for leader edits.
-      // T24: pinnedMessageIds added; must be list of ≤5 entries.
-      // avatarUrl must start with the public bucket prefix or be null.
-      // archivedAt transitions: null→request.time (archive) or non-null→null (unarchive).
-      allow update: if isGroupLeader(gid) && notBanned()
-        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet',
-                        'avatarUrl', 'archivedAt', 'archivedBy', 'archiveReason',
-                        'pinnedMessageIds'])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 100
-        && request.resource.data.inviteCode is string
-        && request.resource.data.inviteCode.size() >= 6
-        && (!('description' in request.resource.data)
-            || (request.resource.data.description is string
-                && request.resource.data.description.size() <= 500))
-        && (!('avatarUrl' in changedKeys())
-            || request.resource.data.avatarUrl == null
-            || (request.resource.data.avatarUrl is string
-                && request.resource.data.avatarUrl.size() <= 500
-                && request.resource.data.avatarUrl.matches('https://storage\\.googleapis\\.com/.*')))
-        && (!('archivedAt' in changedKeys())
-            || (
-              // Archive: null → request.time with archivedBy == auth.uid
-              (resource.data.get('archivedAt', null) == null
-                && request.resource.data.archivedAt == request.time
-                && request.resource.data.archivedBy == request.auth.uid)
-              // Unarchive: non-null → null, clear archivedBy too
-              || (resource.data.get('archivedAt', null) != null
-                && request.resource.data.archivedAt == null
-                && request.resource.data.archivedBy == null)
-            ))
-        && (!('pinnedMessageIds' in changedKeys())
-            || (request.resource.data.pinnedMessageIds is list
-                && request.resource.data.pinnedMessageIds.size() <= 5));
-
-      allow delete: if false;
-
-      // --- members -----------------------------------------------------
-      // M11: a `uid` field — equal to the doc ID — lets the client run a
-      // collection-group query to find every group it belongs to, in one
-      // round-trip, without needing the legacy `users/{uid}.groupIds`
-      // mirror. The rule below treats `uid` as optional on create (so
-      // older client paths that pre-date M11 still work) but, if present,
-      // forces it to equal the doc ID. The list/get rule reads the path
-      // variable `uid`, which by invariant matches the field; per-doc
-      // evaluation lets the CG query pass for the user's own rows.
       match /members/{uid} {
-        allow read: if isGroupMember(gid) || isUser(uid);
-
-        // Two creation paths: bootstrap (the original creator self-adds as
-        // leader, immediately after creating the group doc) and an
-        // existing leader adding someone. The bootstrap path is gated on
-        // `groups/{gid}.createdBy` so it can't be used to self-elevate
-        // into someone else's group.
-        allow create: if notBanned()
-          && request.resource.data.keys().hasOnly(['role', 'joinedAt', 'uid'])
-          && request.resource.data.joinedAt == request.time
-          && (!('uid' in request.resource.data) || request.resource.data.uid == uid)
-          && (
-            (isUser(uid)
-              && request.resource.data.role == 'leader'
-              && get(/databases/$(database)/documents/groups/$(gid)).data.createdBy == request.auth.uid)
-            || (isGroupLeader(gid)
-              && request.resource.data.role in ['member', 'leader'])
-          );
-
-        // T22: clients can no longer flip `role` directly — promotion
-        // and demotion go through the backend (which writes via the
-        // Admin SDK and validates the leader-count invariant). The rule
-        // is left as a hard "no" to prevent a leader from quietly
-        // demoting themselves below the threshold.
-        allow update: if false;
-
-        // Leaders must be unbanned to remove others; a banned user may
-        // still leave a group (self-delete their own member doc) UNLESS
-        // they are the last leader — that path goes through founder
-        // transfer first.
-        //
-        // Leaderless guard (T22): a delete that would drop the leader
-        // count to zero is rejected. The check uses the denormalised
-        // `groups/{gid}.leaderCount` field maintained by onMemberWrite
-        // (the rule cannot do the math itself).
-        allow delete: if (
-            (isGroupLeader(gid) && notBanned())
-            || isUser(uid)
-          )
-          && (
-            resource.data.role != 'leader'
-            || (
-              exists(/databases/$(database)/documents/groups/$(gid))
-              && get(/databases/$(database)/documents/groups/$(gid)).data.leaderCount > 1
-            )
-          );
+        allow read, write: if false;
       }
-
-      // --- messages ----------------------------------------------------
       match /messages/{mid} {
-        // Members can read all messages. Non-members may read top-level,
-        // non-deleted, non-hidden messages in public groups (T31 read-only
-        // browsing). Thread replies (parentMessageId != null) are member-only.
-        allow read: if isGroupMember(gid)
-                    || (isSignedIn()
-                        && get(/databases/$(database)/documents/groups/$(gid)).data.isPrivate == false
-                        && resource.data.parentMessageId == null
-                        && resource.data.deletedAt == null
-                        && (resource.data.get('moderation', null) == null
-                            || resource.data.moderation.get('state', null) != 'hidden'));
-
-        // T23: reject writes to an archived group (archivedAt absent/null = not archived).
-        allow create: if isGroupMember(gid) && notBanned()
-          && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null
-          && request.resource.data.keys().hasOnly(
-               ['authorUid', 'body', 'stickerIds', 'createdAt', 'editedAt',
-                'deletedAt', 'parentMessageId', 'threadReplyCount', 'mediaRefs',
-                'mentions'])
-          && request.resource.data.authorUid == request.auth.uid
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.threadReplyCount == 0
-          && request.resource.data.deletedAt == null
-          && request.resource.data.editedAt == null
-          && !('participants' in request.resource.data)
-          && request.resource.data.body is string
-          && request.resource.data.body.size() >= 1
-          && request.resource.data.body.size() <= 4000
-          && request.resource.data.stickerIds is list
-          && request.resource.data.stickerIds.size() <= 5
-          && request.resource.data.mediaRefs is list
-          && request.resource.data.mediaRefs.size() <= 4
-          && validMediaRefs(request.resource.data.mediaRefs)
-          && (request.resource.data.parentMessageId == null
-              || messageExists(gid, request.resource.data.parentMessageId))
-          && (!('mentions' in request.resource.data)
-              || (request.resource.data.mentions is list
-                  && request.resource.data.mentions.size() <= 10));
-
-        // Author can soft-edit body (+ editedAt) within 15 minutes of posting.
-        // Author or group leader can soft-delete at any time (sets deletedAt).
-        // T24: leader announces — only announcedAt + announcedBy change; one-way.
-        // All other fields are immutable via the client.
-        allow update: if isGroupMember(gid) && notBanned() && (
-          (resource.data.authorUid == request.auth.uid
-            && onlyChanges(['body', 'editedAt'])
-            && request.resource.data.editedAt == request.time
-            && request.time < resource.data.createdAt + duration.value(15, 'm'))
-          || ((resource.data.authorUid == request.auth.uid || isGroupLeader(gid))
-            && onlyChanges(['deletedAt'])
-            && request.resource.data.deletedAt == request.time
-            && resource.data.deletedAt == null)
-          || (isGroupLeader(gid)
-            && onlyChanges(['announcedAt', 'announcedBy'])
-            && resource.data.get('announcedAt', null) == null
-            && request.resource.data.announcedAt == request.time
-            && request.resource.data.announcedBy == request.auth.uid
-            && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null)
-        );
-
-        // Soft-delete only.
-        allow delete: if false;
+        allow read, write: if false;
       }
-
-      // --- joinRequests (T30) ------------------------------------------
-      // Owner creates (signed in, not banned). Leader reads all + can update
-      // status. Owner can withdraw a pending request.
-      match /joinRequests/{uid} {
-        allow read: if isUser(uid) || isGroupLeader(gid);
-
-        allow create: if isUser(uid) && notBanned()
-          && request.resource.data.keys().hasOnly(['message', 'requestedAt', 'status'])
-          && request.resource.data.requestedAt == request.time
-          && request.resource.data.status == 'pending'
-          && request.resource.data.message is string
-          && request.resource.data.message.size() <= 280;
-
-        allow update: if isGroupLeader(gid) && notBanned()
-          && onlyChanges(['status', 'reviewedAt', 'reviewedBy'])
-          && request.resource.data.reviewedAt is timestamp
-          && request.resource.data.reviewedBy == request.auth.uid
-          && request.resource.data.status in ['approved', 'rejected']
-          && resource.data.status == 'pending';
-
-        allow delete: if isUser(uid) && resource.data.status == 'pending';
-      }
-
-      // --- reactions (T26) ------------------------------------------
-      // groups/{gid}/messages/{mid}/reactions/{stickerSlug}/users/{uid}
-      //
-      // Three get() calls per reaction-create (sticker, group, message).
-      // Cost is acceptable for v1; denormalizing archived/deleted state
-      // onto the message would reduce reads but adds drift risk.
       match /messages/{mid}/reactions/{stickerSlug}/users/{uid} {
-        allow read: if isGroupMember(gid);
-
-        allow create: if isUser(uid) && notBanned()
-          && isGroupMember(gid)
-          && exists(/databases/$(database)/documents/stickers/$(stickerSlug))
-          && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null
-          && get(/databases/$(database)/documents/groups/$(gid)/messages/$(mid)).data.deletedAt == null
-          && request.resource.data.keys().hasOnly(['reactedAt'])
-          && request.resource.data.reactedAt == request.time;
-
-        allow delete: if isUser(uid) && notBanned();
-
-        // No update — toggle is delete + create.
-        allow update: if false;
+        allow read, write: if false;
+      }
+      match /joinRequests/{uid} {
+        allow read, write: if false;
+      }
+      match /invites/{inviteId} {
+        allow read, write: if false;
       }
     }
 
-    // --- members (collection-group, M11) --------------------------------
-    // Subcollection rules are not applied to collection-group queries by
-    // default — Firestore requires an explicit recursive-path match. We
-    // narrow this to "user can read their own membership rows" so the
-    // cross-group permission boundary (CLAUDE.md) isn't weakened: there's
-    // no way to enumerate another user's memberships.
-    //
-    // The predicate references `resource.data.uid` rather than the path
-    // variable so the rules engine can statically prove the rule holds
-    // for any doc satisfying the query `where uid == auth.uid` — which
-    // is exactly the query shape useGroups uses. The create rule above
-    // enforces `resource.data.uid == doc-id`, so a malformed write
-    // can't sneak past this read rule.
-    //
-    // Single-doc gets and per-group lists continue to flow through the
-    // path-scoped `match /groups/{gid}/members/{uid}` block above; this
-    // match adds the CG read path only.
-    match /{path=**}/members/{uid} {
-      allow read: if isSignedIn()
-        && resource.data.uid == request.auth.uid;
-    }
-
-    // --- stickers --------------------------------------------------------
+    // --- stickers / daily_verse / boards --------------------------------
     match /stickers/{sid} {
-      allow read: if isSignedIn();
-      allow write: if false; // seeded via Admin SDK
+      allow read, write: if false;
     }
 
-    // --- boards (T32) ----------------------------------------------------
-    // Top-level cross-group forums. Anyone signed in can read every board
-    // and post. Boards themselves are admin-only (created via the backend
-    // Admin SDK; archive sets archivedAt). Posts are author-owned with
-    // author edits/deletes within 15 min; soft-delete only. Pinning and
-    // archiving use the platform admin custom claim — there is no
-    // per-board admin role. Stickers are required on posts (the only
-    // categorisation), optional on replies.
+    match /daily_verse/{day} {
+      allow read, write: if false;
+    }
+
     match /boards/{boardId} {
-      allow read: if isSignedIn()
-        && (resource.data.get('archivedAt', null) == null
-            || request.auth.token.admin == true);
-      // Boards docs themselves are written exclusively via the Admin SDK.
-      allow create, update, delete: if false;
+      allow read, write: if false;
 
       match /posts/{postId} {
-        // Non-deleted, non-hidden posts are visible to all signed-in users.
-        // The author can always read their own post (for the moderation banner).
-        // Platform admins see everything.
-        allow read: if isSignedIn() && (
-          resource.data.authorUid == request.auth.uid
-          || (request.auth.token.admin == true)
-          || (resource.data.deletedAt == null
-              && (resource.data.get('moderation', null) == null
-                  || resource.data.moderation.get('state', null) != 'hidden'))
-        );
+        allow read, write: if false;
 
-        allow create: if isSignedIn() && notBanned()
-          && request.resource.data.keys().hasOnly(
-               ['authorUid','body','stickerIds','mediaRefs',
-                'createdAt','editedAt','deletedAt',
-                'mentions','reactionCounts','replyCount',
-                'pinnedAt','pinnedBy'])
-          && request.resource.data.authorUid == request.auth.uid
-          && request.resource.data.createdAt == request.time
-          && request.resource.data.editedAt == null
-          && request.resource.data.deletedAt == null
-          && request.resource.data.replyCount == 0
-          && request.resource.data.body is string
-          && request.resource.data.body.size() >= 1
-          && request.resource.data.body.size() <= 4000
-          && request.resource.data.stickerIds is list
-          && request.resource.data.stickerIds.size() >= 1   // boards REQUIRE a sticker
-          && request.resource.data.stickerIds.size() <= 5
-          && request.resource.data.mediaRefs is list
-          && request.resource.data.mediaRefs.size() <= 4
-          && validMediaRefs(request.resource.data.mediaRefs)
-          && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
-          && (!('mentions' in request.resource.data)
-              || (request.resource.data.mentions is list
-                  && request.resource.data.mentions.size() <= 10))
-          && (!('pinnedAt' in request.resource.data)
-              || request.resource.data.pinnedAt == null)
-          && (!('pinnedBy' in request.resource.data)
-              || request.resource.data.pinnedBy == null)
-          && request.resource.data.reactionCounts is map
-          && request.resource.data.reactionCounts.size() == 0;
-
-        allow update: if isSignedIn() && notBanned() && (
-          // Author edits body within 15 minutes of posting.
-          (resource.data.authorUid == request.auth.uid
-            && onlyChanges(['body', 'editedAt'])
-            && request.resource.data.editedAt == request.time
-            && request.time < resource.data.createdAt + duration.value(15, 'm')
-            && request.resource.data.body is string
-            && request.resource.data.body.size() >= 1
-            && request.resource.data.body.size() <= 4000)
-          // Author or platform admin soft-delete.
-          || ((resource.data.authorUid == request.auth.uid
-                || (request.auth.token.admin == true))
-            && onlyChanges(['deletedAt'])
-            && request.resource.data.deletedAt == request.time
-            && resource.data.deletedAt == null)
-          // Platform admin pin / unpin.
-          || (request.auth.token.admin == true
-            && onlyChanges(['pinnedAt', 'pinnedBy'])
-            && (
-              (resource.data.get('pinnedAt', null) == null
-                && request.resource.data.pinnedAt == request.time
-                && request.resource.data.pinnedBy == request.auth.uid)
-              || (resource.data.get('pinnedAt', null) != null
-                && request.resource.data.pinnedAt == null
-                && request.resource.data.pinnedBy == null)
-            ))
-        );
-        allow delete: if false;
-
-        // --- replies subcollection ---------------------------------------
-        // Mirrors posts but without pinning, replyCount, or reactionCounts.
         match /replies/{replyId} {
-          allow read: if isSignedIn() && (
-            resource.data.authorUid == request.auth.uid
-            || (request.auth.token.admin == true)
-            || (resource.data.deletedAt == null
-                && (resource.data.get('moderation', null) == null
-                    || resource.data.moderation.get('state', null) != 'hidden'))
-          );
-
-          allow create: if isSignedIn() && notBanned()
-            && request.resource.data.keys().hasOnly(
-                 ['authorUid','body','stickerIds','mediaRefs',
-                  'createdAt','editedAt','deletedAt','mentions'])
-            && request.resource.data.authorUid == request.auth.uid
-            && request.resource.data.createdAt == request.time
-            && request.resource.data.editedAt == null
-            && request.resource.data.deletedAt == null
-            && request.resource.data.body is string
-            && request.resource.data.body.size() >= 1
-            && request.resource.data.body.size() <= 4000
-            && request.resource.data.stickerIds is list
-            && request.resource.data.stickerIds.size() <= 5
-            && request.resource.data.mediaRefs is list
-            && request.resource.data.mediaRefs.size() <= 4
-            && validMediaRefs(request.resource.data.mediaRefs)
-            && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
-            && (!('mentions' in request.resource.data)
-                || (request.resource.data.mentions is list
-                    && request.resource.data.mentions.size() <= 10));
-
-          allow update: if isSignedIn() && notBanned() && (
-            (resource.data.authorUid == request.auth.uid
-              && onlyChanges(['body', 'editedAt'])
-              && request.resource.data.editedAt == request.time
-              && request.time < resource.data.createdAt + duration.value(15, 'm')
-              && request.resource.data.body is string
-              && request.resource.data.body.size() >= 1
-              && request.resource.data.body.size() <= 4000)
-            || ((resource.data.authorUid == request.auth.uid
-                  || (request.auth.token.admin == true))
-              && onlyChanges(['deletedAt'])
-              && request.resource.data.deletedAt == request.time
-              && resource.data.deletedAt == null)
-          );
-          allow delete: if false;
+          allow read, write: if false;
         }
 
-        // --- reactions subcollection (mirrors T26) ----------------------
-        // boards/{boardId}/posts/{postId}/reactions/{stickerSlug}/users/{uid}
         match /reactions/{stickerSlug}/users/{uid} {
-          // Gate on parent post being non-deleted and non-hidden so that
-          // reactions on moderated content are not publicly enumerable.
-          allow read: if isSignedIn()
-            && get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.deletedAt == null
-            && (get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.get('moderation', null) == null
-                || get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.moderation.get('state', null) != 'hidden');
-
-          allow create: if isUser(uid) && notBanned()
-            && exists(/databases/$(database)/documents/stickers/$(stickerSlug))
-            && get(/databases/$(database)/documents/boards/$(boardId)).data.get('archivedAt', null) == null
-            && get(/databases/$(database)/documents/boards/$(boardId)/posts/$(postId)).data.deletedAt == null
-            && request.resource.data.keys().hasOnly(['reactedAt'])
-            && request.resource.data.reactedAt == request.time;
-
-          allow delete: if isUser(uid) && notBanned();
-          allow update: if false;
+          allow read, write: if false;
         }
       }
     }
 
-    // --- backend-only collections ---------------------------------------
+    // --- backend-only collections (unchanged from pre-migration) -------
     match /moderation_queue/{itemId} {
       allow read, write: if false;
     }
@@ -615,69 +112,14 @@ service cloud.firestore {
     match /audit_log/{eventId} {
       allow read, write: if false;
     }
-
-    // C3: global invite-code index. Written atomically by the backend
-    // (Admin SDK) when a group is created or its invite code is rotated.
-    // Client reads/writes are never needed — any attempt is a bug or attack.
     match /inviteCodes/{code} {
       allow read, write: if false;
     }
-
-    // T10: photo upload pipeline state. Owned and read by the backend
-    // Admin SDK; clients receive their public URL in the finalize response
-    // and never need to touch this collection.
     match /uploads/{uploadId} {
       allow read, write: if false;
     }
 
-    // --- invites (T25) -------------------------------------------------
-    // Group invite subcollection. Created, updated, and revoked by the
-    // backend (Admin SDK) only. Leaders can read the list to display it
-    // in the group settings page; the consume-invite path is backend-only.
-    match /groups/{gid}/invites/{inviteId} {
-      allow read: if isGroupMember(gid);
-      allow create, update, delete: if false;
-    }
-
-    // --- daily_verse (T33) ---------------------------------------------
-    // Written exclusively by the daily Cloud Run Job via the Admin SDK.
-    // Any signed-in user can read; client writes are always denied.
-    match /daily_verse/{day} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if false;
-    }
-
-    // --- notifications (T24) -------------------------------------------
-    // Server-only creates and deletes (Admin SDK). Owner reads and can
-    // mark as read by setting readAt to serverTimestamp; nothing else.
-    match /users/{uid}/notifications/{nid} {
-      allow read: if isUser(uid);
-      allow update: if isUser(uid)
-        && onlyChanges(['readAt'])
-        && request.resource.data.readAt == request.time
-        && resource.data.readAt == null;
-      allow create: if false;
-      allow delete: if false;
-    }
-
-    // --- self-serve data exports (T38) ---------------------------------
-    // Owner-only read; the user can poll their own job-doc to drive the
-    // status UI. Creates and updates go through the backend (Admin SDK)
-    // so the signed download URL — which is a credential — never lives
-    // anywhere a client can mint or tamper with. Even job creation is
-    // server-only so the rate limit on POST /api/account/export is
-    // load-bearing.
-    match /users/{uid}/exports/{jobId} {
-      allow read: if isUser(uid);
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
-    }
-
     // --- default deny (defense in depth) --------------------------------
-    // Any path not explicitly matched above is silently denied. A denial
-    // here is a signal that a new collection was added without a rule —
-    // not a security guarantee to rely on.
     match /{document=**} {
       allow read, write: if false;
     }

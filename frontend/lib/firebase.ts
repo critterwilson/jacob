@@ -1,6 +1,7 @@
 // Single Firebase entry-point for the frontend. Per CLAUDE.md, never
-// call initializeApp anywhere else. Real-time data hooks read `auth`
-// and `firestore` from this module; tests mock the module wholesale.
+// call initializeApp anywhere else. After M6 of the data-layer
+// migration, only `auth` and `storage` are exported — every Firestore
+// read/write goes through the FastAPI backend's `/api/*` surface.
 //
 // The module is imported on both the server (during SSR / prerender of
 // any page that pulls in a client component) and the client. Firebase
@@ -15,11 +16,6 @@ import {
   connectAuthEmulator,
   getAuth,
 } from "firebase/auth";
-import {
-  type Firestore,
-  connectFirestoreEmulator,
-  getFirestore,
-} from "firebase/firestore";
 import {
   type FirebaseStorage,
   connectStorageEmulator,
@@ -85,11 +81,9 @@ function readConfig(): FirebaseClientConfig {
 export const app: FirebaseApp = getApps()[0] ?? initializeApp(readConfig());
 
 export const auth: Auth = getAuth(app);
-export const firestore: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
 
 if (useEmulator && isBrowser) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-  connectFirestoreEmulator(firestore, "127.0.0.1", 8080);
   connectStorageEmulator(storage, "127.0.0.1", 9199);
 }
