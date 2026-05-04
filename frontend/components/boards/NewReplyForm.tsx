@@ -1,13 +1,12 @@
 "use client";
 
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
 
 const schema = z.object({
   body: z
@@ -52,21 +51,23 @@ export function NewReplyForm({ boardId, postId, archived = false }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await addDoc(
-        collection(firestore, "boards", boardId, "posts", postId, "replies"),
-        {
-          authorUid: user.uid,
-          body: values.body.trim(),
-          stickerIds: [],
-          mediaRefs: [],
-          createdAt: serverTimestamp(),
-          editedAt: null,
-          deletedAt: null,
-        },
-      );
+      await apiPost(`/api/boards/${boardId}/posts/${postId}/replies`, {
+        body: values.body.trim(),
+        stickerIds: [],
+        mediaRefs: [],
+        mentions: [],
+      });
       reset();
-    } catch {
-      setError("Failed to reply. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "archived") {
+          setError("This board is archived. Replies are disabled.");
+        } else {
+          setError("Failed to reply. Please try again.");
+        }
+      } else {
+        setError("Failed to reply. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

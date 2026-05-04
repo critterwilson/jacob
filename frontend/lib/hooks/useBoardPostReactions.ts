@@ -1,15 +1,21 @@
 "use client";
 
-import { deleteDoc, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useCallback, useRef } from "react";
 
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiDelete, apiPost } from "@/lib/api";
+
+type ReactionResponse = {
+  uid: string;
+  slug: string;
+  reactedAt: string;
+  reactionCounts: Record<string, number>;
+};
 
 /**
- * T32 — sibling of useReactions, keyed on the boards path.
- * The two hooks intentionally share the same surface so components like
- * ReactionBar / ReactionPicker can be passed either set of callbacks.
+ * Board-post reactions. Sibling of `useReactions`, keyed on the boards
+ * path. As of M4 the toggle calls
+ * `POST /api/boards/{bid}/posts/{pid}/reactions/{slug}` (or DELETE).
  */
 export function useBoardPostReactions(boardId: string, postId: string) {
   const { user } = useAuth();
@@ -24,19 +30,19 @@ export function useBoardPostReactions(boardId: string, postId: string) {
   const react = useCallback(
     async (_postId: string, slug: string) => {
       if (!user) return;
-      myReactionsRef.current.add(`${_postId}:${slug}`);
-      const ref = doc(
-        firestore,
-        "boards",
-        boardId,
-        "posts",
-        _postId,
-        "reactions",
-        slug,
-        "users",
-        user.uid,
-      );
-      await setDoc(ref, { reactedAt: serverTimestamp() });
+      const key = `${_postId}:${slug}`;
+      myReactionsRef.current.add(key);
+      try {
+        await apiPost<ReactionResponse, undefined>(
+          `/api/boards/${boardId}/posts/${_postId}/reactions/${slug}`,
+          undefined,
+        );
+      } catch (err) {
+        myReactionsRef.current.delete(key);
+        if (err instanceof ApiError && err.code !== "aborted") {
+          console.warn("board_reaction_failed", err.code, err.status);
+        }
+      }
     },
     [boardId, user],
   );
@@ -44,19 +50,18 @@ export function useBoardPostReactions(boardId: string, postId: string) {
   const unreact = useCallback(
     async (_postId: string, slug: string) => {
       if (!user) return;
-      myReactionsRef.current.delete(`${_postId}:${slug}`);
-      const ref = doc(
-        firestore,
-        "boards",
-        boardId,
-        "posts",
-        _postId,
-        "reactions",
-        slug,
-        "users",
-        user.uid,
-      );
-      await deleteDoc(ref);
+      const key = `${_postId}:${slug}`;
+      myReactionsRef.current.delete(key);
+      try {
+        await apiDelete<{ reactionCounts: Record<string, number> }>(
+          `/api/boards/${boardId}/posts/${_postId}/reactions/${slug}`,
+        );
+      } catch (err) {
+        myReactionsRef.current.add(key);
+        if (err instanceof ApiError && err.code !== "aborted") {
+          console.warn("board_unreaction_failed", err.code, err.status);
+        }
+      }
     },
     [boardId, user],
   );
@@ -69,8 +74,6 @@ export function useBoardPostReactions(boardId: string, postId: string) {
     [isMyReaction, react, unreact],
   );
 
-  // Suppress unused-var by referencing in toggle path
   void postId;
-
   return { react, unreact, toggle, isMyReaction };
 }

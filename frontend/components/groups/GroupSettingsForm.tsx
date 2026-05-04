@@ -1,12 +1,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { doc, updateDoc } from "firebase/firestore";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiPatch } from "@/lib/api";
 import type { Group } from "@/lib/hooks/useGroup";
 
 const settingsSchema = z.object({
@@ -46,14 +45,18 @@ export function GroupSettingsForm({ gid, group }: Props) {
     setServerError(null);
     setSaved(false);
     try {
-      await updateDoc(doc(firestore, "groups", gid), {
+      await apiPatch(`/api/groups/${gid}`, {
         name: values.name.trim(),
         description: values.description.trim(),
         isPrivate: values.isPrivate,
       });
       setSaved(true);
-    } catch {
-      setServerError("Failed to save settings. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setServerError(err.message);
+      } else {
+        setServerError("Failed to save settings. Please try again.");
+      }
     }
   };
 
