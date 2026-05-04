@@ -44,13 +44,23 @@ captured in Sentry dev mode.
 
 ---
 
-## L11 — Typesense Docker image pinned by mutable tag, not digest
+## L11 — Typesense Docker image pinned by mutable tag, not digest — **done**
 
-**Where:** `infra/typesense.tf:18` — `typesense/typesense:0.27.0` (no SHA
-digest).
-**What's needed:** Pin to `typesense/typesense@sha256:<digest>` and configure
-Dependabot to bump the digest. Requires `terraform plan` to verify no drift
-before applying.
+Shipped in `chore: pin Typesense image by SHA digest (L11)`.
+
+`infra/typesense.tf` now requires both `typesense_image_tag` and
+`typesense_image_digest` — terraform refuses to apply without a digest
+matching `^sha256:[0-9a-f]{64}$`. The default in
+`infra/terraform.staging.tfvars.example` is `27.1` pinned to its real
+upstream digest; the previous repo state pinned `0.27.0`, which was a typo
+for `27.x` (Docker Hub has no `0.27.0` tag). Dependabot has a forward-looking
+docker entry on `/infra` with `reviewers: [critterwilson]`, but Dependabot
+doesn't natively scan Terraform image references — the operational mechanism
+is the digest-rotation runbook at `docs/runbooks/typesense-image-pin.md`.
+
+User's manual step: run `terraform plan` + `terraform apply` once the PR
+lands. `plan` should show a single `image` change on the typesense Cloud
+Run service and nothing else.
 
 ---
 

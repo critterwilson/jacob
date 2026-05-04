@@ -12,10 +12,30 @@
 # rotating keys, run `terraform apply` after updating the secret values
 # in GCP Console or via `gcloud secrets versions add`.
 
-variable "typesense_image" {
-  description = "Pinned Typesense Docker image, e.g. typesense/typesense:0.27.0"
+# L11: pin Typesense by digest, not by mutable tag.
+#
+# `typesense_image_tag` is human-readable bookkeeping (shows up in Cloud Run
+# logs and the Terraform plan); `typesense_image_digest` is the trust anchor
+# Cloud Run pulls. Docker treats `repo:tag@sha256:...` references as
+# tag-ignored — the digest wins, so a re-tag of the same version cannot
+# silently swap the image under us.
+#
+# The digest variable is required (no default) so `terraform apply` refuses
+# to deploy without a real digest. See docs/runbooks/typesense-image-pin.md
+# for how to look it up when bumping versions.
+variable "typesense_image_tag" {
+  description = "Human-readable Typesense version tag, e.g. \"28.0\". Paired with typesense_image_digest below — the digest is the trust anchor."
   type        = string
-  default     = "typesense/typesense:0.27.0"
+}
+
+variable "typesense_image_digest" {
+  description = "SHA256 digest of the Typesense image, e.g. \"sha256:6955c0...\". See docs/runbooks/typesense-image-pin.md for how to look it up."
+  type        = string
+
+  validation {
+    condition     = can(regex("^sha256:[0-9a-f]{64}$", var.typesense_image_digest))
+    error_message = "typesense_image_digest must be 'sha256:' followed by exactly 64 hex chars. Look it up with: crane digest typesense/typesense:<tag>"
+  }
 }
 
 variable "typesense_data_bucket" {
@@ -67,7 +87,7 @@ resource "google_cloud_run_v2_service" "typesense" {
     }
 
     containers {
-      image = var.typesense_image
+      image = "typesense/typesense:${var.typesense_image_tag}@${var.typesense_image_digest}"
 
       ports {
         container_port = 8108
