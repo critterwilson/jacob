@@ -1,26 +1,123 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-// Middleware provides a best-effort UX redirect for protected routes.
-// Real access control lives in FastAPI dependencies (`require_member`,
-// `require_leader`, etc.) — not in Firestore security rules, which are
-// default-deny since M6. This middleware only prevents accidental
-// navigation to a group/chat URL before onboarding completes.
+// Middleware does two things:
 //
-// "jacob-has-profile" is set server-side by `GET /api/users/me/bootstrap`
-// (and on profile create). It is NOT a security boundary, just a UX
-// optimisation. See data-layer migration plan §7.M2.5.
+// 1. **Workspace org resolution (T55).** If the host is a `*.jacob.app`
+//    subdomain or a vanity domain that an org has claimed via
+//    `/api/orgs/{orgId}/subdomain` or `/api/orgs/{orgId}/custom-domain`,
+//    look the org up via the unauthenticated `/api/by-host` endpoint
+//    and attach `x-jacob-org-id`, `x-jacob-org-name`,
+//    `x-jacob-org-audience`, `x-jacob-org-logo`, `x-jacob-org-color`
+//    headers to the downstream request. The Next.js `headers()` helper
+//    in `app/layout.tsx` reads them and hydrates the client-side
+//    workspace-org context.
+//
+// 2. **Onboarding gate (existing).** A best-effort UX redirect for
+//    protected routes — real access control lives in FastAPI deps.
+//    `jacob-has-profile` is set by `GET /api/users/me/bootstrap` (M2).
+//
+// The host lookup is short-cached in the edge worker's module scope
+// to keep the latency overhead under ~5ms once warm. TTL is 5 minutes;
+// a longer TTL would mask org changes (logo / brand color) for too
+// long after the operator updates them.
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const hasProfile = request.cookies.get("jacob-has-profile")?.value === "1";
+const HOST_LOOKUP_TTL_MS = 5 * 60 * 1000;
+const BASE_DOMAIN = process.env.JACOB_BASE_DOMAIN ?? "jacob.app";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-  if (!hasProfile) {
-    return NextResponse.redirect(new URL("/onboarding", request.url));
-  }
+type CachedOrg = {
+  orgId: string;
+  name: string;
+  audience: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+};
 
-  return NextResponse.next();
+const _hostCache = new Map<string, { org: CachedOrg | null; at: number }>();
+
+function isReservedHost(host: string): boolean {
+  // Bare apex + www; never look these up.
+  return host === BASE_DOMAIN || host === `www.${BASE_DOMAIN}`;
 }
 
+function isLocalHost(host: string): boolean {
+  return (
+    host === "localhost" ||
+    host.startsWith("localhost:") ||
+    host.startsWith("127.") ||
+    host === "::1"
+  );
+}
+
+async function resolveOrg(host: string): Promise<CachedOrg | null> {
+  const cleaned = host.toLowerCase().split(":")[0];
+  if (!cleaned || isLocalHost(cleaned) || isReservedHost(cleaned)) return null;
+
+  const cached = _hostCache.get(cleaned);
+  if (cached && Date.now() - cached.at < HOST_LOOKUP_TTL_MS) {
+    return cached.org;
+  }
+
+  if (!API_BASE) {
+    // No API configured (local dev without an explicit URL). Skip.
+    _hostCache.set(cleaned, { org: null, at: Date.now() });
+    return null;
+  }
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/by-host?host=${encodeURIComponent(cleaned)}`,
+      { headers: { accept: "application/json" } },
+    );
+    if (!res.ok) {
+      _hostCache.set(cleaned, { org: null, at: Date.now() });
+      return null;
+    }
+    const data = (await res.json()) as CachedOrg;
+    _hostCache.set(cleaned, { org: data, at: Date.now() });
+    return data;
+  } catch {
+    _hostCache.set(cleaned, { org: null, at: Date.now() });
+    return null;
+  }
+}
+
+export async function middleware(request: NextRequest) {
+  const host = request.headers.get("host") ?? "";
+  const org = await resolveOrg(host);
+
+  const requestHeaders = new Headers(request.headers);
+  if (org) {
+    requestHeaders.set("x-jacob-org-id", org.orgId);
+    requestHeaders.set("x-jacob-org-name", org.name);
+    requestHeaders.set("x-jacob-org-audience", org.audience);
+    if (org.logoUrl) requestHeaders.set("x-jacob-org-logo", org.logoUrl);
+    if (org.primaryColor) {
+      requestHeaders.set("x-jacob-org-color", org.primaryColor);
+    }
+  }
+
+  const { pathname } = request.nextUrl;
+  const protectedRoute =
+    pathname.startsWith("/groups/") || pathname.startsWith("/chat/");
+  if (protectedRoute) {
+    const hasProfile =
+      request.cookies.get("jacob-has-profile")?.value === "1";
+    if (!hasProfile) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+  }
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+}
+
+// Run on every page request EXCEPT static assets, the service worker,
+// and Next.js internals. The matcher excludes API routes (those go
+// straight to the backend) and asset paths.
 export const config = {
-  matcher: ["/groups/:path*", "/chat/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icons|sw.js|manifest.webmanifest|api).*)",
+  ],
 };

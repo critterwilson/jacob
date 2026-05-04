@@ -160,3 +160,62 @@ class OrgUpdateRequest(BaseModel):
         pattern=r"^#[0-9A-Fa-f]{6}$",
         description="CSS hex color, six-digit form (e.g. '#0E5CAB')",
     )
+
+
+# ── T55 custom domains ───────────────────────────────────────────────────────
+
+
+class SubdomainClaimRequest(BaseModel):
+    subdomain: Annotated[
+        str,
+        Field(min_length=3, max_length=40, pattern=r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"),
+    ]
+
+
+class SubdomainClaimResponse(BaseModel):
+    orgId: str
+    subdomain: str
+    hostname: str
+
+
+class VanityClaimRequest(BaseModel):
+    hostname: Annotated[
+        str,
+        Field(min_length=4, max_length=253, pattern=r"^[a-z0-9.-]+$"),
+    ]
+
+
+class VanityClaimResponse(BaseModel):
+    orgId: str
+    hostname: str
+    txtRecord: str
+    instructions: str
+
+
+class CustomDomainStatus(BaseModel):
+    hostname: str
+    status: Literal["pending", "verified", "active", "failed"]
+    certStatus: Literal["not_started", "provisioning", "active", "failed"]
+    verifiedAt: str | None
+    txtRecord: str | None
+
+
+class CustomDomainStatusResponse(BaseModel):
+    orgId: str
+    customDomain: CustomDomainStatus | None
+    customSubdomain: str | None
+    customSubdomainHostname: str | None
+    message: str | None = None
+
+
+class DomainReleaseResponse(BaseModel):
+    orgId: str
+    released: bool
+
+
+class OrgByHostResponse(BaseModel):
+    orgId: str
+    name: str
+    audience: OrgAudience
+    logoUrl: str | None
+    primaryColor: str | None

@@ -116,6 +116,7 @@ app.include_router(verse.router)
 app.include_router(flags.router)
 app.include_router(flags.admin_router)
 app.include_router(orgs.router)
+app.include_router(orgs.public_router)
 
 if settings.debug:
     from app.routers import debug

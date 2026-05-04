@@ -89,6 +89,19 @@ class Settings(BaseSettings):
     # (`ENVIRONMENT=staging` etc); local dev leaves it as "development".
     environment: str = "development"
 
+    # T55 — custom domains. Subdomain claims live under
+    # `*.{jacob_base_domain}` (the wildcard mapping itself is a one-time
+    # infra step, see docs/runbooks/custom-domains.md). The reserved
+    # list is comma-separated and includes infrastructure subdomains
+    # we never let an org claim — the deploy default covers the
+    # current Jacob platform; expand the env var when a new system
+    # subdomain goes live.
+    jacob_base_domain: str = "jacob.app"
+    jacob_reserved_subdomains: str = (
+        "api,www,admin,status,dashboard,help,blog,mail,smtp,imap,"
+        "ns1,ns2,app,auth,docs,static,support,internal,platform"
+    )
+
     @property
     def cors_origins_list(self) -> list[str]:
         if self.cors_allowed_origins:

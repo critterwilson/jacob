@@ -529,6 +529,30 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T55 default-deny — domain_claims", () => {
+  it("denies reading domain_claims/{hostname}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "domain_claims", "pilot.jacob.app"), {
+        orgId: "o1",
+        hostname: "pilot.jacob.app",
+        type: "subdomain",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "domain_claims", "pilot.jacob.app")),
+    );
+  });
+
+  it("denies writing domain_claims/{hostname}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "domain_claims", "x.jacob.app"), {
+        orgId: "o1",
+        hostname: "x.jacob.app",
+      }),
+    );
+  });
+});
+
 describe("M6 — collection-group members read", () => {
   // The previous CG-members exception was removed in M6: Firestore
   // rules can't separate doc-level reads from CG queries at the rule

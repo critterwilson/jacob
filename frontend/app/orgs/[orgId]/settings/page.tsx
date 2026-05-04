@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ApiError, apiPatch } from "@/lib/api";
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { useOrg } from "@/lib/hooks/useOrg";
 
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -119,10 +119,266 @@ export default function OrgSettingsPage() {
           {error && <span className="text-xs text-red-600">{error}</span>}
         </div>
         <p className="text-xs text-gray-500">
-          Custom subdomain and logo upload land with T55 (custom domains).
-          AI-policy toggles land with T43–T47 if and when those tickets ship.
+          Logo upload (via the existing moderation pipeline) lands in a
+          follow-up. AI-policy toggles land with T43–T47 if those tickets
+          ship.
         </p>
       </section>
+
+      <BrandingSection orgId={orgId} />
     </div>
+  );
+}
+
+type DomainStatus = {
+  orgId: string;
+  customSubdomain: string | null;
+  customSubdomainHostname: string | null;
+  customDomain:
+    | {
+        hostname: string;
+        status: "pending" | "verified" | "active" | "failed";
+        certStatus: "not_started" | "provisioning" | "active" | "failed";
+        verifiedAt: string | null;
+        txtRecord: string | null;
+      }
+    | null;
+  message: string | null;
+};
+
+function BrandingSection({ orgId }: { orgId: string }) {
+  const [status, setStatus] = useState<DomainStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [subdomain, setSubdomain] = useState("");
+  const [subPending, setSubPending] = useState(false);
+
+  const [vanityHost, setVanityHost] = useState("");
+  const [vanityPending, setVanityPending] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiGet<DomainStatus>(
+        `/api/orgs/${encodeURIComponent(orgId)}/custom-domain/status`,
+      );
+      setStatus(res);
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? `${e.code}: ${e.message}` : "Failed to load",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  const claimSub = async () => {
+    if (!subdomain) return;
+    setSubPending(true);
+    setError(null);
+    try {
+      await apiPost(`/api/orgs/${encodeURIComponent(orgId)}/subdomain`, {
+        subdomain,
+      });
+      setSubdomain("");
+      await load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? `${e.code}: ${e.message}` : "Failed to claim",
+      );
+    } finally {
+      setSubPending(false);
+    }
+  };
+
+  const releaseSub = async () => {
+    if (!confirm("Release the subdomain? It enters a 30-day cooling-off window.")) return;
+    try {
+      await apiDelete(`/api/orgs/${encodeURIComponent(orgId)}/subdomain`);
+      await load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? `${e.code}: ${e.message}` : "Failed to release",
+      );
+    }
+  };
+
+  const claimVanity = async () => {
+    if (!vanityHost) return;
+    setVanityPending(true);
+    setError(null);
+    try {
+      await apiPost<{ txtRecord: string }>(
+        `/api/orgs/${encodeURIComponent(orgId)}/custom-domain`,
+        { hostname: vanityHost },
+      );
+      setVanityHost("");
+      await load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? `${e.code}: ${e.message}` : "Failed to claim",
+      );
+    } finally {
+      setVanityPending(false);
+    }
+  };
+
+  const releaseVanity = async () => {
+    if (!confirm("Release the custom domain?")) return;
+    try {
+      await apiDelete(`/api/orgs/${encodeURIComponent(orgId)}/custom-domain`);
+      await load();
+    } catch (e) {
+      setError(
+        e instanceof ApiError ? `${e.code}: ${e.message}` : "Failed to release",
+      );
+    }
+  };
+
+  return (
+    <section className="space-y-4 rounded border border-gray-200 bg-white p-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+        Branding & domains
+      </h2>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {loading ? (
+        <p className="text-xs text-gray-500">Loading…</p>
+      ) : (
+        <>
+          <div>
+            <h3 className="text-sm font-medium">JACOB subdomain</h3>
+            <p className="text-xs text-gray-500">
+              Claim a `*.jacob.app` host. Members visit
+              `&lt;your-name&gt;.jacob.app`. Claims are unique platform-wide.
+            </p>
+            {status?.customSubdomain ? (
+              <div className="mt-2 flex items-center gap-2 text-sm">
+                <span className="font-mono">
+                  {status.customSubdomainHostname}
+                </span>
+                <button
+                  type="button"
+                  onClick={releaseSub}
+                  className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                >
+                  Release
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={subdomain}
+                  onChange={(e) =>
+                    setSubdomain(e.target.value.toLowerCase().trim())
+                  }
+                  placeholder="our-church"
+                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={claimSub}
+                  disabled={!subdomain || subPending}
+                  className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+                >
+                  {subPending ? "…" : "Claim"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-gray-100 pt-3">
+            <h3 className="text-sm font-medium">Custom domain</h3>
+            <p className="text-xs text-gray-500">
+              Map a domain you already own (e.g. `groups.your-church.org`).
+              Verify via TXT record; an operator provisions the cert
+              (5–30 minutes once verified).
+            </p>
+            {status?.customDomain ? (
+              <div className="mt-2 space-y-1 text-sm">
+                <p>
+                  <span className="font-mono">
+                    {status.customDomain.hostname}
+                  </span>{" "}
+                  —{" "}
+                  <span
+                    className={
+                      status.customDomain.status === "active"
+                        ? "text-green-700"
+                        : status.customDomain.status === "verified"
+                          ? "text-amber-700"
+                          : status.customDomain.status === "failed"
+                            ? "text-red-700"
+                            : "text-gray-700"
+                    }
+                  >
+                    {status.customDomain.status}
+                  </span>{" "}
+                  (cert: {status.customDomain.certStatus})
+                </p>
+                {status.customDomain.txtRecord &&
+                  status.customDomain.status === "pending" && (
+                    <p className="text-xs">
+                      Add a TXT record on{" "}
+                      <span className="font-mono">
+                        {status.customDomain.hostname}
+                      </span>{" "}
+                      with value:
+                      <br />
+                      <code className="mt-1 block break-all rounded bg-gray-100 p-2 text-[11px]">
+                        {status.customDomain.txtRecord}
+                      </code>
+                    </p>
+                  )}
+                {status.message && (
+                  <p className="text-xs text-gray-500">{status.message}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={load}
+                    className="rounded border border-gray-300 px-2 py-0.5 text-xs hover:bg-gray-50"
+                  >
+                    Re-check status
+                  </button>
+                  <button
+                    type="button"
+                    onClick={releaseVanity}
+                    className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                  >
+                    Release
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={vanityHost}
+                  onChange={(e) =>
+                    setVanityHost(e.target.value.toLowerCase().trim())
+                  }
+                  placeholder="groups.your-church.org"
+                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={claimVanity}
+                  disabled={!vanityHost || vanityPending}
+                  className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+                >
+                  {vanityPending ? "…" : "Claim"}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
