@@ -1,13 +1,20 @@
 /**
  * T20 — text moderation via Cloud Natural Language `moderateText`.
  *
- * The exported helpers are pure-ish and easy to unit-test:
+ * Pure helpers (easy to unit-test):
  *   - thresholdsFor(policy)         : returns hide/flag cutoffs for the policy
  *   - decisionFor(scores, policy)   : returns 'hide' | 'flag' | null
  *   - circuit breaker primitives    : recordSuccess / recordFailure / isOpen
  *
- * `moderateText(text)` performs the live API call. The trigger module
- * passes a real client; tests pass a fake.
+ * Live-API helper:
+ *   - moderateText(client, text)    : calls Cloud NL and filters scores.
+ *
+ * Trigger-shared orchestration:
+ *   - runTextModeration({...})      : the full per-resource flow used by
+ *     both `onMessageCreate` (groups/{gid}/messages/{mid}) and
+ *     `onBoardPostCreate` (boards/{boardId}/posts/{postId}). Handles the
+ *     kill switch, circuit breaker, daily-call quota, API call,
+ *     decision write to the resource doc, and `moderation_queue` row.
  *
  * Categories tracked (subset of Cloud NL): Toxic, Insult, Profanity,
  * Derogatory, Sexual, Violent. Other categories returned by the API
@@ -18,9 +25,25 @@
  *     image-side hash check. Text-only sexual content is hidden at the
  *     `lenient` threshold (0.95) to give leaders room while still
  *     escalating clearly explicit content.
+ *
+ * Cost guardrails:
+ *   - Process-local circuit breaker (5 errors → open 5 min).
+ *   - Daily-call cap stored at `moderation_state/text-{YYYY-MM-DD}` —
+ *     when reached, the trigger no-ops with `moderation_quota_exceeded`.
+ *   - Sentry alert at 80% of the cap (a `moderation_quota_warning` log
+ *     line that the alert policy in `infra/uptime-checks.tf` matches on).
+ *
+ * Kill switch: `MODERATION_TEXT_DISABLED=true` makes moderation a no-op
+ * without redeploying.
  */
 
 import type { protos } from "@google-cloud/language";
+import {
+  FieldValue,
+  type DocumentReference,
+  type Firestore,
+} from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 
 export type Policy = "lenient" | "standard" | "strict";
 
@@ -173,4 +196,225 @@ export async function moderateText(
       name: c.name as string,
       confidence: typeof c.confidence === "number" ? c.confidence : 0,
     }));
+}
+
+// ── per-resource orchestration ───────────────────────────────────────────────
+//
+// Shared by onMessageCreate (groups/{gid}/messages/{mid}) and
+// onBoardPostCreate (boards/{boardId}/posts/{postId}). Behaviour is
+// identical to the previous duplicated implementations.
+
+const DAILY_CALL_CAP_DEFAULT = 5000;
+const QUOTA_WARN_RATIO = 0.8;
+
+function dailyCallCap(): number {
+  return parseInt(
+    process.env.JACOB_TEXT_MODERATION_DAILY_CAP ?? String(DAILY_CALL_CAP_DEFAULT),
+    10,
+  );
+}
+
+export function todayKey(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10); // YYYY-MM-DD UTC
+}
+
+function moderationStateRef(db: Firestore, day: string) {
+  return db.collection("moderation_state").doc(`text-${day}`);
+}
+
+export async function tryReserveQuota(
+  db: Firestore,
+  day: string,
+): Promise<number | null> {
+  const cap = dailyCallCap();
+  const ref = moderationStateRef(db, day);
+  return await db.runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    const current = (snap.exists ? snap.data()?.count ?? 0 : 0) as number;
+    if (current >= cap) {
+      return null;
+    }
+    txn.set(
+      ref,
+      {
+        count: FieldValue.increment(1),
+        day,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return current + 1;
+  });
+}
+
+export type ResourceType = "message" | "board_post";
+
+export type RunTextModerationParams = {
+  db: Firestore;
+  /** The Firestore doc that gets the `moderation` field written to it. */
+  resourceDocRef: DocumentReference;
+  /** Canonical path string written into `moderation_queue.resourceRef`. */
+  resourcePath: string;
+  resourceType: ResourceType;
+  /**
+   * Extra FK fields merged into the moderation_queue row (e.g. `{ groupId }`
+   * for messages, `{ boardId }` for board posts).
+   */
+  resourceFkFields: Record<string, string>;
+  eventId: string;
+  body: string;
+  /** Pre-resolved policy. Boards use a constant; messages read per-group. */
+  policy: Policy;
+  /**
+   * When provided, the moderation_queue row is written to a deterministic
+   * doc id `${queueDocIdPrefix}_${eventId}` (idempotent on retried events).
+   * When omitted, the row is `add()`-ed with an auto id.
+   */
+  queueDocIdPrefix?: string;
+  /** Lazy NL client provider — kept per-trigger to preserve existing init. */
+  getNLClient: () => NLClient;
+  /** Extra fields included on every log line for this resource. */
+  logContext: Record<string, unknown>;
+};
+
+export async function runTextModeration(
+  params: RunTextModerationParams,
+): Promise<void> {
+  const {
+    db,
+    resourceDocRef,
+    resourcePath,
+    resourceType,
+    resourceFkFields,
+    eventId,
+    body,
+    policy,
+    queueDocIdPrefix,
+    getNLClient,
+    logContext,
+  } = params;
+
+  if (process.env.MODERATION_TEXT_DISABLED === "true") {
+    logger.info("moderation_text_disabled", { eventId });
+    return;
+  }
+
+  if (isCircuitOpen()) {
+    logger.warn("moderation_circuit_open", { ...logContext, eventId });
+    await resourceDocRef.update({
+      moderation: {
+        state: "skipped",
+        reasons: ["circuit_open"],
+        scores: null,
+        scoredAt: FieldValue.serverTimestamp(),
+      },
+    });
+    return;
+  }
+
+  const day = todayKey();
+  const cap = dailyCallCap();
+  const newCount = await tryReserveQuota(db, day);
+  if (newCount === null) {
+    logger.error("moderation_quota_exceeded", { ...logContext, day, cap });
+    await resourceDocRef.update({
+      moderation: {
+        state: "skipped",
+        reasons: ["quota_exceeded"],
+        scores: null,
+        scoredAt: FieldValue.serverTimestamp(),
+      },
+    });
+    return;
+  }
+  if (newCount === Math.floor(cap * QUOTA_WARN_RATIO)) {
+    logger.warn("moderation_quota_warning", {
+      day,
+      count: newCount,
+      cap,
+      threshold: QUOTA_WARN_RATIO,
+    });
+  }
+
+  let scores: CategoryScore[] = [];
+  try {
+    scores = await moderateText(getNLClient(), body);
+    recordSuccess();
+  } catch (err) {
+    recordFailure();
+    logger.error("moderation_text_api_failed", {
+      ...logContext,
+      eventId,
+      error: (err as Error).message,
+    });
+    await resourceDocRef.update({
+      moderation: {
+        state: "errored",
+        reasons: ["api_error"],
+        scores: null,
+        scoredAt: FieldValue.serverTimestamp(),
+      },
+    });
+    return;
+  }
+
+  const { decision, reasons } = decisionFor(scores, policy);
+  const trackedScores = Object.fromEntries(
+    scores
+      .filter((s) => TRACKED_CATEGORIES.has(s.name))
+      .map((s) => [s.name, s.confidence]),
+  );
+
+  if (decision === null) {
+    await resourceDocRef.update({
+      moderation: {
+        state: "scored",
+        reasons: [],
+        scores: trackedScores,
+        scoredAt: FieldValue.serverTimestamp(),
+        policy,
+      },
+    });
+    return;
+  }
+
+  await resourceDocRef.update({
+    moderation: {
+      state: decision === "hide" ? "hidden" : "flagged",
+      reasons,
+      scores: trackedScores,
+      scoredAt: FieldValue.serverTimestamp(),
+      policy,
+    },
+  });
+
+  const severity = decision === "hide" ? 2 : 1;
+  const queueDoc = {
+    resourceRef: resourcePath,
+    resourceType,
+    ...resourceFkFields,
+    reason: "auto-text-moderation",
+    severity,
+    auto: true,
+    reasons,
+    status: "pending",
+    reportedBy: null,
+    createdAt: FieldValue.serverTimestamp(),
+    policy,
+  };
+  const queueCollection = db.collection("moderation_queue");
+  if (queueDocIdPrefix) {
+    await queueCollection.doc(`${queueDocIdPrefix}_${eventId}`).set(queueDoc);
+  } else {
+    await queueCollection.add(queueDoc);
+  }
+
+  logger.info("moderation_text_decision", {
+    ...logContext,
+    eventId,
+    decision,
+    reasons,
+    policy,
+    severity,
+  });
 }
