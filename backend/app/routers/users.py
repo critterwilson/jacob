@@ -253,7 +253,8 @@ def update_profile(
 
     db = get_firestore()
     user_ref = db.collection("users").document(user.uid)
-    if not getattr(user_ref.get(), "exists", False):
+    existing_snap = user_ref.get()
+    if not getattr(existing_snap, "exists", False):
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="user_not_found",
@@ -268,6 +269,16 @@ def update_profile(
         update["photoURL"] = str(url) if url is not None else None
     if "isMinor" in supplied:
         update["isMinor"] = bool(supplied["isMinor"])
+
+    # PR13 / L3: Firebase Auth lets users change their email. The Firestore
+    # mirror set at create-time then diverges — leaders see stale emails on
+    # the members list, digests email an old address, etc. Sync from the
+    # already-verified ID token whenever the value differs from the doc.
+    # No extra reads — `user.email` comes from the token; the user doc was
+    # just fetched above for the existence check.
+    existing = existing_snap.to_dict() or {}
+    if user.email is not None and existing.get("email") != user.email:
+        update["email"] = user.email
 
     user_ref.update(update)
     write_audit_log(
@@ -645,6 +656,19 @@ def my_groups(
     for doc in group_docs:
         if getattr(doc, "exists", False):
             group_data_by_gid[doc.id] = doc.to_dict() or {}
+
+    # PR13 / L2: log orphan memberships (the `members/{uid}` doc points at a
+    # group that has been deleted). Catches zombie membership rows that
+    # accumulate when group deletes don't fan out cleanly. Logged once per
+    # request for the calling uid.
+    orphan_gids = [gid for gid, _ in pairs if gid not in group_data_by_gid]
+    if orphan_gids:
+        logger.warning(
+            "my_groups_orphan_memberships uid=%s gids=%s count=%d",
+            user.uid,
+            ",".join(sorted(set(orphan_gids))[:20]),
+            len(orphan_gids),
+        )
 
     summaries: list[GroupSummary] = []
     for gid, member_data in pairs:
