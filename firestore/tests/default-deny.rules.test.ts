@@ -14,7 +14,6 @@
 
 import {
   assertFails,
-  assertSucceeds,
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
@@ -442,43 +441,24 @@ describe("M6 default-deny — backend-only collections (unchanged)", () => {
   });
 });
 
-describe("M6 — collection-group members read (the one exception)", () => {
-  it("user can read their OWN membership rows via CG query", async () => {
+describe("M6 — collection-group members read", () => {
+  // The previous CG-members exception was removed in M6: Firestore
+  // rules can't separate doc-level reads from CG queries at the rule
+  // level, so any allow-rule on members granted direct doc reads too.
+  // Admin tools should use the Admin SDK (which bypasses rules anyway).
+  it("denies reading even own membership rows via CG query", async () => {
     await seed(async (db) => {
       await setDoc(doc(db, "groups", "g1", "members", "alice"), {
         role: "member",
         joinedAt: Timestamp.now(),
         uid: "alice",
       });
-      await setDoc(doc(db, "groups", "g2", "members", "alice"), {
-        role: "leader",
-        joinedAt: Timestamp.now(),
-        uid: "alice",
-      });
-    });
-    await assertSucceeds(
-      getDocs(
-        query(
-          collectionGroup(authed("alice"), "members"),
-          where("uid", "==", "alice"),
-        ),
-      ),
-    );
-  });
-
-  it("user cannot read other users' membership rows via CG query", async () => {
-    await seed(async (db) => {
-      await setDoc(doc(db, "groups", "g1", "members", "bob"), {
-        role: "member",
-        joinedAt: Timestamp.now(),
-        uid: "bob",
-      });
     });
     await assertFails(
       getDocs(
         query(
           collectionGroup(authed("alice"), "members"),
-          where("uid", "==", "bob"),
+          where("uid", "==", "alice"),
         ),
       ),
     );

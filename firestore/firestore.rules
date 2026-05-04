@@ -10,20 +10,16 @@ rules_version = '2';
 // (moderation_queue, bans, audit_log, inviteCodes, uploads) are
 // unchanged — they were already locked.
 //
-// One CG-read exception remains: `/{path=**}/members/{uid}` is left at
-// "user can read their own membership rows" so an admin tool or future
-// debug surface can still issue a per-user CG query without a backend
-// round-trip. Per the migration plan §7.6 DESIGN-OPEN this is left
-// intentionally and may be tightened later.
+// The previous CG-members exception was removed in M6: Firestore rules
+// can't differentiate a direct document read from a collection-group
+// query at the rule level, so any allow-rule on the members path
+// granted direct doc reads too. Admin tools should use the Admin SDK
+// (which bypasses these rules anyway) — there is no surface that needs
+// the CG read from a client now that `useGroups` calls
+// `GET /api/users/me/groups`.
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // --- helpers (kept; the CG-members rule still references isSignedIn) ---
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
 
     // --- users -----------------------------------------------------------
     // All reads/writes flow through `/api/users/me/*` (M2). The user doc,
@@ -79,17 +75,6 @@ service cloud.firestore {
       match /invites/{inviteId} {
         allow read, write: if false;
       }
-    }
-
-    // --- members (collection-group, M11) --------------------------------
-    // Kept as the one CG read path: user can list their own membership
-    // rows. Useful for admin tools and any future debug surface; doesn't
-    // weaken the per-group permission boundary because the predicate
-    // requires `resource.data.uid == auth.uid`.
-    match /{path=**}/members/{uid} {
-      allow read: if isSignedIn()
-        && resource.data.uid == request.auth.uid;
-      allow write: if false;
     }
 
     // --- stickers / daily_verse / boards --------------------------------
