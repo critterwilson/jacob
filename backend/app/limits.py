@@ -38,6 +38,14 @@ ORG_CREATE: str = "5/day"
 ORG_ADMIN_MUTATION: str = "30/minute"
 ORG_READ: str = "60/minute"
 
+# T55 — DNS verification. Each call hits the public DNS resolver,
+# which is fast but not free. Cap per IP to keep the resolver from
+# being weaponised against a third party we don't control.
+DOMAIN_VERIFY: str = "10/hour"
+# `by-host` is unauthenticated middleware traffic; cap on IP to keep
+# a runaway middleware loop from melting Firestore.
+DOMAIN_BY_HOST: str = "120/minute"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

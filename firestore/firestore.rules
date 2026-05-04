@@ -153,6 +153,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- T55 custom domains ---------------------------------------------
+    // Backend-only uniqueness index for `*.jacob.app` subdomains and
+    // vanity hostnames. The public lookup goes through the unauthenticated
+    // `GET /api/by-host?host=X` endpoint, which only returns org-public
+    // metadata (id, name, audience, logo, primary color).
+    match /domain_claims/{hostname} {
+      allow read, write: if false;
+    }
+
     // --- default deny (defense in depth) --------------------------------
     match /{document=**} {
       allow read, write: if false;

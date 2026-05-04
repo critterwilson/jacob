@@ -32,6 +32,8 @@ from app.limits import (
     ADMIN_LIST,
     ADMIN_MUTATION,
     ANALYTICS_QUERY,
+    DOMAIN_BY_HOST,
+    DOMAIN_VERIFY,
     ORG_ADMIN_MUTATION,
     ORG_CREATE,
     ORG_READ,
@@ -40,7 +42,10 @@ from app.middleware.rate_limit import limiter
 from app.models.orgs import (
     AttachRequest,
     AttachResponse,
+    CustomDomainStatus,
+    CustomDomainStatusResponse,
     DetachResponse,
+    DomainReleaseResponse,
     Org,
     OrgAdmin,
     OrgAdminAddRequest,
@@ -48,6 +53,7 @@ from app.models.orgs import (
     OrgAdminListResponse,
     OrgAdminRemoveResponse,
     OrgBilling,
+    OrgByHostResponse,
     OrgCreateRequest,
     OrgCreateResponse,
     OrgDashboardResponse,
@@ -55,8 +61,13 @@ from app.models.orgs import (
     OrgGroupSummary,
     OrgListResponse,
     OrgUpdateRequest,
+    SubdomainClaimRequest,
+    SubdomainClaimResponse,
+    VanityClaimRequest,
+    VanityClaimResponse,
 )
 from app.models.user import CurrentUser
+from app.services import domains as domains_service
 from app.services import orgs as orgs_service
 from app.services.audit import write_audit_log
 from app.services.email import send_email
@@ -64,6 +75,11 @@ from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/orgs", tags=["orgs"])
+# Public host-lookup surface lives at /api/by-host so it doesn't
+# collide with `/api/orgs/{org_id}` path matching (FastAPI routes are
+# first-match-wins; `/api/orgs/by-host` would otherwise be captured
+# as `org_id="by-host"`).
+public_router = APIRouter(tags=["orgs"])
 
 
 def _db() -> Any:
@@ -582,6 +598,291 @@ def remove_admin(
             payload={},
         )
     return OrgAdminRemoveResponse(orgId=org_id, uid=uid, removed=removed)
+
+
+# ── T55 custom domains ──────────────────────────────────────────────────────
+
+
+def _custom_domain_status(org_data: dict[str, Any]) -> CustomDomainStatus | None:
+    raw = org_data.get("customDomain")
+    if not raw or not isinstance(raw, dict):
+        return None
+    hostname = raw.get("hostname")
+    if not hostname:
+        return None
+    return CustomDomainStatus(
+        hostname=hostname,
+        status=raw.get("status", "pending"),
+        certStatus=raw.get("certStatus", "not_started"),
+        verifiedAt=_ts_to_str(raw.get("verifiedAt")),
+        txtRecord=raw.get("txtRecord"),
+    )
+
+
+def _domain_status_response(
+    org_id: str,
+    org_data: dict[str, Any],
+    *,
+    message: str | None = None,
+) -> CustomDomainStatusResponse:
+    custom_sub = org_data.get("customSubdomain")
+    return CustomDomainStatusResponse(
+        orgId=org_id,
+        customDomain=_custom_domain_status(org_data),
+        customSubdomain=custom_sub,
+        customSubdomainHostname=(
+            f"{custom_sub}.{domains_service.base_domain()}" if custom_sub else None
+        ),
+        message=message,
+    )
+
+
+@router.post("/{org_id}/subdomain", response_model=SubdomainClaimResponse)
+@limiter.limit(ORG_ADMIN_MUTATION)
+def claim_subdomain(
+    org_id: str,
+    request: Request,
+    response: Response,
+    body: SubdomainClaimRequest,
+    user: CurrentUser = Depends(require_not_banned),
+) -> SubdomainClaimResponse:
+    db = _db()
+    _require_org_admin(db, org_id, user)
+    try:
+        hostname = domains_service.claim_subdomain(
+            db,
+            org_id=org_id,
+            subdomain=body.subdomain,
+            actor_uid=user.uid,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if msg == "invalid":
+            raise APIError(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="invalid_subdomain",
+                message="Subdomain must be 3-40 chars, lowercase letters/digits/hyphens, "
+                "starting and ending with letter/digit",
+            ) from exc
+        if msg == "reserved":
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="reserved_subdomain",
+                message=f"Subdomain {body.subdomain!r} is reserved",
+            ) from exc
+        if msg == "taken":
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="domain_taken",
+                message=f"Subdomain {body.subdomain!r} is already claimed",
+            ) from exc
+        raise
+
+    write_audit_log(
+        actor_uid=user.uid,
+        action="org_subdomain_claim",
+        target_ref=f"orgs/{org_id}",
+        payload={"subdomain": body.subdomain, "hostname": hostname},
+    )
+    return SubdomainClaimResponse(
+        orgId=org_id,
+        subdomain=body.subdomain,
+        hostname=hostname,
+    )
+
+
+@router.delete("/{org_id}/subdomain", response_model=DomainReleaseResponse)
+@limiter.limit(ORG_ADMIN_MUTATION)
+def release_subdomain(
+    org_id: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_not_banned),
+) -> DomainReleaseResponse:
+    db = _db()
+    _require_org_admin(db, org_id, user)
+    released = domains_service.release_subdomain(
+        db,
+        org_id=org_id,
+        actor_uid=user.uid,
+    )
+    if released:
+        write_audit_log(
+            actor_uid=user.uid,
+            action="org_subdomain_release",
+            target_ref=f"orgs/{org_id}",
+            payload={},
+        )
+    return DomainReleaseResponse(orgId=org_id, released=released)
+
+
+@router.post("/{org_id}/custom-domain", response_model=VanityClaimResponse)
+@limiter.limit(ORG_ADMIN_MUTATION)
+def claim_custom_domain(
+    org_id: str,
+    request: Request,
+    response: Response,
+    body: VanityClaimRequest,
+    user: CurrentUser = Depends(require_not_banned),
+) -> VanityClaimResponse:
+    db = _db()
+    _require_org_admin(db, org_id, user)
+    try:
+        token = domains_service.begin_vanity_claim(
+            db,
+            org_id=org_id,
+            hostname=body.hostname,
+            actor_uid=user.uid,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if msg == "invalid":
+            raise APIError(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="invalid_hostname",
+                message="Hostname must look like 'groups.your-domain.org'",
+            ) from exc
+        if msg == "subdomain_required":
+            raise APIError(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="subdomain_required",
+                message="Use the /subdomain endpoint for *.jacob.app names",
+            ) from exc
+        if msg == "taken":
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="domain_taken",
+                message=f"Hostname {body.hostname!r} is already claimed",
+            ) from exc
+        if msg == "already_active":
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="already_active",
+                message=f"Vanity domain {body.hostname!r} is already active for this org",
+            ) from exc
+        raise
+
+    write_audit_log(
+        actor_uid=user.uid,
+        action="org_vanity_claim_begin",
+        target_ref=f"orgs/{org_id}",
+        payload={"hostname": body.hostname},
+    )
+    return VanityClaimResponse(
+        orgId=org_id,
+        hostname=body.hostname,
+        txtRecord=token,
+        instructions=(
+            f"Add a DNS TXT record on {body.hostname} with the value above. "
+            "DNS propagation can take 5–60 min; once visible, call the "
+            "verify endpoint."
+        ),
+    )
+
+
+@router.get(
+    "/{org_id}/custom-domain/status",
+    response_model=CustomDomainStatusResponse,
+)
+@limiter.limit(DOMAIN_VERIFY)
+def verify_custom_domain(
+    org_id: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_not_banned),
+) -> CustomDomainStatusResponse:
+    db = _db()
+    _require_org_admin(db, org_id, user)
+    try:
+        status_str, message = domains_service.verify_vanity_claim(
+            db,
+            org_id=org_id,
+            actor_uid=user.uid,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if msg == "no_pending_claim":
+            # No pending claim is not an error; just report the current state.
+            org_snap = db.collection("orgs").document(org_id).get()
+            return _domain_status_response(
+                org_id,
+                org_snap.to_dict() or {},
+                message="No pending vanity domain claim",
+            )
+        if msg == "org_not_found":
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="org_not_found",
+                message="Org not found",
+            ) from exc
+        raise
+
+    if status_str == "verified":
+        write_audit_log(
+            actor_uid=user.uid,
+            action="org_vanity_verified",
+            target_ref=f"orgs/{org_id}",
+            payload={},
+        )
+
+    org_snap = db.collection("orgs").document(org_id).get()
+    return _domain_status_response(
+        org_id,
+        org_snap.to_dict() or {},
+        message=message,
+    )
+
+
+@router.delete("/{org_id}/custom-domain", response_model=DomainReleaseResponse)
+@limiter.limit(ORG_ADMIN_MUTATION)
+def release_custom_domain(
+    org_id: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_not_banned),
+) -> DomainReleaseResponse:
+    db = _db()
+    _require_org_admin(db, org_id, user)
+    released = domains_service.release_vanity_claim(
+        db,
+        org_id=org_id,
+        actor_uid=user.uid,
+    )
+    if released:
+        write_audit_log(
+            actor_uid=user.uid,
+            action="org_vanity_release",
+            target_ref=f"orgs/{org_id}",
+            payload={},
+        )
+    return DomainReleaseResponse(orgId=org_id, released=released)
+
+
+# ── public host -> org lookup (used by frontend middleware) ─────────────────
+
+
+@public_router.get("/api/by-host", response_model=OrgByHostResponse)
+@limiter.limit(DOMAIN_BY_HOST)
+def get_org_by_host(
+    request: Request,
+    response: Response,
+    host: str,
+) -> OrgByHostResponse:
+    """Resolve a hostname (subdomain or vanity) to its org. No auth.
+
+    Only returns the org-public metadata: id, name, audience, logo,
+    primary color. Used by the Next.js middleware to scope the
+    workspace before any user signs in.
+    """
+    db = _db()
+    org = domains_service.lookup_org_by_host(db, host)
+    if not org:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="not_found",
+            message="No org claims that host",
+        )
+    return OrgByHostResponse(**org)
 
 
 # ── ADMIN_MUTATION re-export so tests stay terse ──────────────────────────────
