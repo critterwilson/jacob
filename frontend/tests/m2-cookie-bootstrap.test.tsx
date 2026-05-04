@@ -89,3 +89,64 @@ describe("M2 cookie-bootstrap migration", () => {
     render(<ProfileForm uid="alice" email="alice@example.com" />);
   });
 });
+
+// PR8 / H3: cross-origin cookie bridge. In staging the API and frontend
+// live on different hosts, so the API's Set-Cookie response header lands
+// on the API origin and the Next.js middleware never sees the cookie. We
+// mirror it client-side from the bootstrap response — these tests
+// simulate the cross-origin failure mode by *not* surfacing any
+// Set-Cookie via fetch at all (jsdom can't propagate it cross-origin
+// anyway), and verify the cookie still appears on document.cookie.
+describe("PR8 cross-origin cookie bridge (H3)", () => {
+  beforeEach(() => {
+    document.cookie = "jacob-has-profile=; path=/; Max-Age=0";
+  });
+
+  it("useUser writes jacob-has-profile=1 when bootstrap reports hasProfile=true", async () => {
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        hasProfile: true,
+        profile: {
+          uid: "alice",
+          displayName: "Alice",
+          email: "a@example.com",
+          photoURL: null,
+          role: "member",
+          schemaVersion: 1,
+          isMinor: false,
+          createdAt: "2026-05-01T00:00:00Z",
+        },
+        claims: { admin: false },
+        deletionRequestedAt: null,
+      }),
+    }));
+    const { useUser } = await import("@/lib/hooks/useUser");
+    const { result } = renderHook(() => useUser("alice"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(document.cookie).toContain("jacob-has-profile=1");
+  });
+
+  it("useUser clears the cookie when bootstrap reports hasProfile=false", async () => {
+    // Pre-seed the cookie as if a previous session had set it.
+    document.cookie = "jacob-has-profile=1; path=/";
+    fetchMock.mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: async () => ({
+        hasProfile: false,
+        profile: null,
+        claims: { admin: false },
+        deletionRequestedAt: null,
+      }),
+    }));
+    const { useUser } = await import("@/lib/hooks/useUser");
+    const { result } = renderHook(() => useUser("alice"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    // Cleared cookies don't appear in document.cookie at all.
+    expect(document.cookie).not.toContain("jacob-has-profile=1");
+  });
+});

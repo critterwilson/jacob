@@ -10,7 +10,7 @@ import { z } from "zod";
 import { PhotoUpload } from "@/components/onboarding/PhotoUpload";
 import { ApiError, apiPost } from "@/lib/api";
 import { auth } from "@/lib/firebase";
-import type { UserProfile } from "@/lib/hooks/useUser";
+import { setHasProfileCookie, type UserProfile } from "@/lib/hooks/useUser";
 
 type CreateProfileRequest = {
   displayName: string;
@@ -90,11 +90,16 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         ...(values.faithBackground ? { faithBackground: values.faithBackground } : {}),
       };
       await apiPost<UserProfile, CreateProfileRequest>("/api/users/me", body);
+      // Mirror the cookie on this origin so the Next.js middleware lets the
+      // /groups navigation through. Backend also Set-Cookies but in
+      // cross-origin staging the browser saves it under the API host. (H3)
+      setHasProfileCookie(true);
       router.push("/groups");
     } catch (err) {
       if (err instanceof ApiError && err.code === "profile_exists") {
         // User already has a profile — treat like a successful onboard
         // and continue. Avoids a stuck banner if the form is double-submitted.
+        setHasProfileCookie(true);
         router.push("/groups");
         return;
       }
