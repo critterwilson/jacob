@@ -67,3 +67,43 @@ def test_simple_request_includes_allow_origin_for_listed_origin() -> None:
     r = client.get("/health", headers={"Origin": _STAGING_ORIGIN})
     assert r.status_code == 200
     assert r.headers["access-control-allow-origin"] == _STAGING_ORIGIN
+
+
+# ── PR6: env-scoped defaults (H4) ─────────────────────────────────────────
+
+
+def test_cors_origins_empty_in_prod_when_env_unset() -> None:
+    """Production with no CORS_ALLOWED_ORIGINS must fail closed (empty)."""
+    from app.config import Settings
+
+    s = Settings(cors_allowed_origins="", environment="production")
+    assert s.cors_origins_list == []
+
+
+def test_cors_origins_empty_in_staging_when_env_unset() -> None:
+    from app.config import Settings
+
+    s = Settings(cors_allowed_origins="", environment="staging")
+    assert s.cors_origins_list == []
+
+
+def test_cors_origins_dev_default_includes_localhost() -> None:
+    """Local dev still gets the localhost shortcut so `uvicorn` works without setup."""
+    from app.config import Settings
+
+    s = Settings(cors_allowed_origins="", environment="development")
+    assert s.cors_origins_list == ["http://localhost:3000"]
+
+
+def test_cors_origins_explicit_overrides_default_in_any_env() -> None:
+    """Setting CORS_ALLOWED_ORIGINS always wins, regardless of environment."""
+    from app.config import Settings
+
+    s = Settings(
+        cors_allowed_origins="https://prod.example.com,https://other.example.com",
+        environment="production",
+    )
+    assert s.cors_origins_list == [
+        "https://prod.example.com",
+        "https://other.example.com",
+    ]

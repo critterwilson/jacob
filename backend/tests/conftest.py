@@ -12,10 +12,23 @@ ban — for 403-banned regression tests on protected write endpoints.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# CORS now defaults to empty in non-development envs (PR6 / H4). The
+# existing test_cors.py suite needs the staging+prod+localhost origins
+# allowed so its cross-origin assertions hold; set the env var BEFORE
+# any test imports `app.main` so `get_settings()`'s @lru_cache picks it
+# up. Local dev with `.env.local` is unaffected.
+os.environ.setdefault(
+    "CORS_ALLOWED_ORIGINS",
+    "https://jacob-frontend--jacob-staging-494515.us-central1.hosted.app,"
+    "https://jacob.app,"
+    "http://localhost:3000",
+)
 
 _ROUTER_DB_MODULES = (
     "app.routers.groups",
