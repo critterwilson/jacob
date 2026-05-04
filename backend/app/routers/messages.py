@@ -258,8 +258,15 @@ def list_messages(
                 code="invalid_cursor",
                 message="Cursor is malformed",
             )
-        cursor_ts, _doc_id = decoded
-        query = query.start_after({"createdAt": cursor_ts})
+        cursor_ts, cursor_doc_id = decoded
+        # PR10 / M2: include __name__ in the order_by chain and pass it as
+        # the second start_after value so messages with identical
+        # createdAt timestamps (bulk seeds, burst writes) are uniquely
+        # broken at the page boundary. Without this, the query would
+        # either skip or duplicate one row when the cursor lands on a tie.
+        query = query.order_by("__name__", direction=direction).start_after(
+            {"createdAt": cursor_ts, "__name__": cursor_doc_id}
+        )
 
     query = query.limit(limit + 1)
 

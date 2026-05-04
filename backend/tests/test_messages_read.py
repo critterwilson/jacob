@@ -486,3 +486,53 @@ def test_list_messages_etag_changes_when_content_changes() -> None:
     ):
         second = TestClient(_app(user)).get("/api/groups/g1/messages")
     assert first.headers["etag"] != second.headers["etag"]
+
+
+# ── PR10 / M2: cursor tie-break (start_after on createdAt + __name__) ───
+
+
+def test_list_messages_cursor_passes_doc_id_for_tie_break() -> None:
+    """When a cursor is provided the query orders by __name__ in addition
+    to createdAt, and start_after gets BOTH fields — so two messages
+    with identical createdAt at the page boundary don't drop or
+    duplicate on page 2."""
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, group_ref = _member_setup(group_exists=True, member_exists=True)
+    base = datetime(2026, 5, 1, tzinfo=UTC)
+    cursor_snap = _msg_snap(mid="m-cursor", created_at=base)
+
+    messages_col = group_ref.collection.return_value
+    where_chain = messages_col.where.return_value.order_by.return_value
+    name_order_chain = where_chain.order_by.return_value
+    name_order_chain.start_after.return_value.limit.return_value.stream.return_value = iter([])
+
+    # Encode a cursor pointing at (base, "m-cursor") — base64(`<iso>|<doc>`).
+    import base64
+
+    cursor_str = (
+        base64.urlsafe_b64encode(f"{base.isoformat()}|m-cursor".encode())
+        .decode("ascii")
+        .rstrip("=")
+    )
+    _ = cursor_snap
+
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get(f"/api/groups/g1/messages?cursor={cursor_str}")
+    assert res.status_code == 200
+
+    # The query chain MUST include order_by("__name__", ...) before start_after.
+    # And start_after MUST receive both createdAt AND __name__.
+    name_order_calls = where_chain.order_by.call_args_list
+    assert any(
+        "__name__" in (call.args + tuple(call.kwargs.values())) for call in name_order_calls
+    ), "expected order_by('__name__', ...) for cursor tie-break"
+    sa_calls = name_order_chain.start_after.call_args_list
+    assert sa_calls, "expected start_after call after the __name__ order_by"
+    arg = sa_calls[0].args[0]
+    assert "createdAt" in arg
+    assert "__name__" in arg
+    assert arg["__name__"] == "m-cursor"
