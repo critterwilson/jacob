@@ -19,6 +19,12 @@ export default defineConfig({
     globals: true,
     include: ["tests/integration/**/*.test.ts"],
     testTimeout: 15_000,
+    // M6 removed the only file in this suite (it exercised client-SDK
+    // reads/writes against the emulator — those are now denied by
+    // default-deny rules). The integration step is kept in CI as a
+    // placeholder for future emulator-driven tests; without this flag
+    // vitest exits non-zero when no files match.
+    passWithNoTests: true,
   },
   resolve: {
     alias: {
