@@ -19,6 +19,7 @@ from app.routers import (
     discover,
     groups,
     invites,
+    messages,
     reports,
     search,
     stickers,
@@ -81,6 +82,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler) 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 app.include_router(groups.router)
+app.include_router(messages.router)
 app.include_router(invites.router)
 app.include_router(uploads.router)
 app.include_router(reports.router)

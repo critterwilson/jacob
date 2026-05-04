@@ -36,3 +36,19 @@ USER_MUTES_LIST: str = "60/minute"
 USER_BLOCKS_LIST: str = "60/minute"
 USER_MUTES_WRITE: str = "30/minute"
 USER_BLOCKS_WRITE: str = "30/minute"
+
+# ── M3 reads ──────────────────────────────────────────────────────────
+# All M3 read surfaces. Higher caps than the writes because these are on
+# the page-load critical path for chat/groups; pagination + polling
+# multiply request count per user.
+MY_GROUPS_LIST: str = "30/minute"
+GROUP_READ: str = "60/minute"
+GROUP_MEMBERSHIP_READ: str = "60/minute"
+MEMBERS_LIST: str = "60/minute"
+PINNED_MESSAGES_READ: str = "60/minute"
+MESSAGES_LIST: str = "60/minute"
+MESSAGE_READ: str = "60/minute"
+RECENT_MESSAGES_READ: str = "30/minute"
+BOARD_POSTS_LIST: str = "60/minute"
+BOARD_POST_READ: str = "60/minute"
+BOARD_REPLIES_LIST: str = "60/minute"
