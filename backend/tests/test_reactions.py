@@ -206,6 +206,32 @@ def test_react_403_for_non_member() -> None:
     assert res.status_code == 403
 
 
+def test_react_403_banned() -> None:
+    """PR12 / H6: banned users get 403 from require_not_banned even if they
+    are members of the group."""
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(user))
+        res = client.post("/api/groups/g1/messages/m1/reactions/check-in")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_unreact_403_banned() -> None:
+    """PR12 / H6: same for unreact — require_not_banned still blocks banned
+    users (PR5 added require_member but kept require_not_banned)."""
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(user))
+        res = client.delete("/api/groups/g1/messages/m1/reactions/check-in")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
 def test_unreact_403_for_non_member() -> None:
     """PR5: non-members get 403 from require_member rather than touching the
     reactions subcollection. Closes the leak where non-members could probe
