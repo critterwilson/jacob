@@ -135,6 +135,35 @@ def _decode_cursor(cursor: str) -> tuple[datetime, str] | None:
         return None
 
 
+def _my_reactions(
+    db: Any,
+    *,
+    gid: str,
+    mid: str,
+    caller_uid: str,
+    reaction_counts: dict[str, int],
+) -> list[str]:
+    """Return the slugs the caller has reacted with on this message.
+
+    Reads `groups/{gid}/messages/{mid}/reactions/{slug}/users/{caller_uid}`
+    once per slug present in `reactionCounts`. Slugs with `count <= 0` are
+    skipped — the parent doc would not exist. Public-read non-members get
+    `[]` from the caller and never hit this path.
+    """
+    if not reaction_counts:
+        return []
+    msgs_col = db.collection("groups").document(gid).collection("messages")
+    reactions_col = msgs_col.document(mid).collection("reactions")
+    out: list[str] = []
+    for slug, count in reaction_counts.items():
+        if count <= 0:
+            continue
+        ref = reactions_col.document(slug).collection("users").document(caller_uid)
+        if getattr(ref.get(), "exists", False):
+            out.append(str(slug))
+    return out
+
+
 def _filter_for_visibility(
     msg: Message,
     *,
@@ -239,13 +268,25 @@ def list_messages(
     snaps = snaps[:limit]
 
     caller_uid = ctx.uid
+    is_member = isinstance(ctx, MembershipContext)
     out: list[Message] = []
     for snap in snaps:
         data = snap.to_dict() or {}
         msg = _doc_to_message(snap.id, data)
         filtered = _filter_for_visibility(msg, ctx=ctx, caller_uid=caller_uid)
-        if filtered is not None:
-            out.append(filtered)
+        if filtered is None:
+            continue
+        if is_member and filtered.reactionCounts:
+            mine = _my_reactions(
+                db,
+                gid=gid,
+                mid=filtered.id,
+                caller_uid=caller_uid,
+                reaction_counts=filtered.reactionCounts,
+            )
+            if mine:
+                filtered = filtered.model_copy(update={"myReactions": mine})
+        out.append(filtered)
 
     next_cursor: str | None = None
     if has_more and snaps:
@@ -293,6 +334,16 @@ def get_message(
             code="message_not_found",
             message="Message not found",
         )
+    if filtered.reactionCounts:
+        mine = _my_reactions(
+            db,
+            gid=gid,
+            mid=filtered.id,
+            caller_uid=membership.uid,
+            reaction_counts=filtered.reactionCounts,
+        )
+        if mine:
+            filtered = filtered.model_copy(update={"myReactions": mine})
     return filtered
 
 
