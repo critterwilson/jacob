@@ -29,12 +29,13 @@ PROJECT_ID="${1:?project-id required, e.g. jacob-staging-494515}"
 # All idempotency-marker collection groups across the function codebase.
 # Discoverable via:  rg "collection\\(\"_[a-z_]*events\"\\)" functions/src
 COLLECTION_GROUPS=(
-  _events            # onMessageWrite
-  _reaction_events   # onReactionWrite + onBoardReactionWrite
-  _index_events      # onMessageIndex
-  _post_events       # onBoardPostWrite
-  _reply_events      # onBoardReplyWrite
-  _member_events     # onMemberWrite
+  _events                  # onMessageWrite
+  _reaction_events         # onReactionWrite + onBoardReactionWrite
+  _index_events            # onMessageIndex
+  _post_events             # onBoardPostWrite
+  _reply_events            # onBoardReplyWrite
+  _member_events           # onMemberWrite
+  moderation_text_events   # text-moderation quota dedupe (PR11 / M3)
 )
 
 for cg in "${COLLECTION_GROUPS[@]}"; do
