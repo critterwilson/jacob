@@ -202,6 +202,16 @@ class FakeQuery:
         v = data.get(field)
         if op == "==":
             return v == value
+        if v is None:
+            return False
+        if op == "<":
+            return bool(v < value)
+        if op == "<=":
+            return bool(v <= value)
+        if op == ">":
+            return bool(v > value)
+        if op == ">=":
+            return bool(v >= value)
         return False
 
 
