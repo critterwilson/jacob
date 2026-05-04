@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiGet } from "@/lib/api";
 
-export const ARCHIVE_HIDE_DAYS = 60;
-
 /**
  * Group summary as returned by `GET /api/users/me/groups`.
  *

@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 // Middleware provides a best-effort UX redirect for protected routes.
-// The real access control is Firestore security rules — this only prevents
-// accidental navigation before onboarding completes.
+// Real access control lives in FastAPI dependencies (`require_member`,
+// `require_leader`, etc.) — not in Firestore security rules, which are
+// default-deny since M6. This middleware only prevents accidental
+// navigation to a group/chat URL before onboarding completes.
 //
 // "jacob-has-profile" is set server-side by `GET /api/users/me/bootstrap`
 // (and on profile create). It is NOT a security boundary, just a UX

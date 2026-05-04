@@ -609,7 +609,7 @@ def set_moderation_policy(
     """Set per-group text-moderation sensitivity. Auth: group leader or platform admin."""
     db = _db()
 
-    is_platform_admin = user.claims.get("admin") == True  # noqa: E712
+    is_platform_admin = user.claims.get("admin") is True
     if not is_platform_admin:
         member_snap = (
             db.collection("groups").document(gid).collection("members").document(user.uid).get()
