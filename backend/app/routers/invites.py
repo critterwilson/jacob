@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
 from app.config import get_settings
-from app.deps import get_current_user
+from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import ADMIN_MUTATION, INVITE_CREATE
 from app.middleware.rate_limit import limiter
@@ -55,7 +55,7 @@ def create_group_invite(
     request: Request,
     response: Response,
     body: CreateInviteRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> InviteResponse:
     """Create a new invite link for a group. Leader-only."""
     db = _db()
@@ -113,7 +113,7 @@ def revoke_invite(
     invite_id: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> None:
     """Revoke an invite link. Soft-delete only — row stays for audit trail."""
     db = _db()

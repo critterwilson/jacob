@@ -295,3 +295,33 @@ def test_transfer_to_self_returns_400() -> None:
             json={"targetUid": "alice"},
         )
     assert r.status_code == 400
+
+
+# ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────
+
+
+def test_promote_member_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        r = _client("alice").post("/api/groups/g1/leaders/bob/promote")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "banned"
+
+
+def test_demote_member_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        r = _client("alice").post("/api/groups/g1/leaders/bob/demote")
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "banned"
+
+
+def test_transfer_founder_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        r = _client("alice").post("/api/groups/g1/founder/transfer", json={"targetUid": "bob"})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "banned"

@@ -20,7 +20,6 @@ from google.cloud import firestore as gcf
 from app.deps import (
     MembershipContext,
     PublicReadContext,
-    get_current_user,
     require_leader,
     require_member,
     require_member_or_public,
@@ -108,7 +107,7 @@ def create_group(
     request: Request,
     response: Response,
     body: CreateGroupRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> CreateGroupResponse:
     db = _db()
     code = _unique_invite_code(db)
@@ -155,7 +154,7 @@ def join_group(
     request: Request,
     response: Response,
     body: JoinGroupRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> JoinGroupResponse:
     db = _db()
     gid, invite_id = consume_invite(db, body.code, user.uid)
@@ -175,7 +174,7 @@ def rotate_invite(
     request: Request,
     response: Response,
     gid: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> RotateInviteResponse:
     db = _db()
 
@@ -238,7 +237,7 @@ def promote_member(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> LeaderActionResponse:
     """Promote a member to leader. Caller must be a leader of this group."""
     db = _db()
@@ -289,7 +288,7 @@ def demote_member(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> LeaderActionResponse:
     """Demote a leader to member. Founder cannot be demoted; self-demote
     requires more than one leader.
@@ -361,7 +360,7 @@ def transfer_founder(
     request: Request,
     response: Response,
     body: FounderTransferRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> FounderTransferResponse:
     """Transfer founder status. Only the current founder may call this;
     the target must already be a leader.
@@ -427,7 +426,7 @@ def archive_group(
     request: Request,
     response: Response,
     body: ArchiveGroupRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> ArchiveResponse:
     """Archive a group. Only the group leader may archive."""
     db = _db()
@@ -465,7 +464,7 @@ def unarchive_group(
     gid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> UnarchiveResponse:
     """Unarchive a group. Only possible within 60 days of archival."""
     db = _db()
@@ -521,7 +520,7 @@ def announce_message(
     mid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> AnnounceResponse:
     """Pin a message and fan-out an announcement notification to all group members."""
     db = _db()
@@ -620,7 +619,7 @@ def set_moderation_policy(
     request: Request,
     response: Response,
     body: ModerationPolicyRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> ModerationPolicyResponse:
     """Set per-group text-moderation sensitivity. Auth: group leader or platform admin."""
     db = _db()

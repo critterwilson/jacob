@@ -270,3 +270,12 @@ def test_announce_audit_log() -> None:
     assert res.status_code == 200
     # Verify audit_log collection was written to
     mock_db.collection.assert_any_call("audit_log")
+
+
+def test_announce_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/messages/m1/announce")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
