@@ -19,19 +19,6 @@ field, updated security rules, emulator test).
 
 ---
 
-## M7 — `onBoardPostCreate` duplicates `onMessageCreate` `runModeration` verbatim
-
-**Where:** `functions/src/onMessageCreate.ts:106-245` vs
-`functions/src/onBoardPostCreate.ts:81-204`.
-**Problem:** ~120 lines of drift-prone moderation logic duplicated across two
-trigger files. Any future change (per-board policy, new content-warning
-category) must land in both.
-**What's needed:** Extract `runTextModeration({ resourceRef, resourceType,
-eventId, body, policyResolver, db })` into `functions/src/services/textModeration.ts`
-and replace both call sites. Full test coverage for the shared helper.
-
----
-
 ## M16 — `_events` / `_reaction_events` idempotency markers grow unbounded
 
 **Where:** `functions/src/onMessageWrite.ts:106`, `onMemberWrite.ts:77`,
