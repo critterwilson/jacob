@@ -1,52 +1,81 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import type { Timestamp } from "firebase/firestore";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
 export type Invite = {
   inviteId: string;
   code: string;
-  createdAt: Timestamp | null;
-  expiresAt: Timestamp | null;
+  url: string;
+  createdAt: string | null;
+  expiresAt: string | null;
   maxUses: number | null;
   useCount: number;
-  lastUsedAt: Timestamp | null;
-  revokedAt: Timestamp | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
 };
 
+type InviteListResponse = {
+  invites: Array<Omit<Invite, "createdAt"> & { createdAt?: string | null }>;
+};
+
+/**
+ * Leader's invite list for a group.
+ *
+ * As of M3 this calls `GET /api/groups/{gid}/invites` once + exposes
+ * `refresh()` for callers to invoke after creating or revoking an
+ * invite. The previous `onSnapshot` is gone.
+ */
 export function useInvites(gid: string) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    if (!gid) return;
-    const q = query(
-      collection(firestore, "groups", gid, "invites"),
-      orderBy("createdAt", "desc"),
-    );
-    return onSnapshot(
-      q,
-      (snap) => {
-        setInvites(
-          snap.docs.map((d) => ({
-            inviteId: d.id,
-            code: d.data().code as string,
-            createdAt: (d.data().createdAt as Timestamp | null) ?? null,
-            expiresAt: (d.data().expiresAt as Timestamp | null) ?? null,
-            maxUses: (d.data().maxUses as number | null) ?? null,
-            useCount: (d.data().useCount as number) ?? 0,
-            lastUsedAt: (d.data().lastUsedAt as Timestamp | null) ?? null,
-            revokedAt: (d.data().revokedAt as Timestamp | null) ?? null,
-          })),
-        );
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
+  const load = useCallback(async () => {
+    if (!gid) {
+      setInvites([]);
+      setLoading(false);
+      return;
+    }
+    abortRef.current?.abort();
+    const ctl = new AbortController();
+    abortRef.current = ctl;
+    setLoading(true);
+    try {
+      const res = await apiGet<InviteListResponse>(
+        `/api/groups/${gid}/invites`,
+        { signal: ctl.signal },
+      );
+      if (ctl.signal.aborted) return;
+      setInvites(
+        res.invites.map((i) => ({
+          inviteId: i.inviteId,
+          code: i.code,
+          url: i.url,
+          createdAt: i.createdAt ?? null,
+          expiresAt: i.expiresAt ?? null,
+          maxUses: i.maxUses,
+          useCount: i.useCount,
+          lastUsedAt: i.lastUsedAt,
+          revokedAt: i.revokedAt,
+        })),
+      );
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("invites_read_failed", err.code, err.status);
+      }
+      setInvites([]);
+    } finally {
+      if (!ctl.signal.aborted) setLoading(false);
+    }
   }, [gid]);
 
-  return { invites, loading };
+  useEffect(() => {
+    void load();
+    return () => abortRef.current?.abort();
+  }, [load]);
+
+  return { invites, loading, refresh: load };
 }

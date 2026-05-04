@@ -10,7 +10,9 @@ import { ReportButton } from "@/components/moderation/ReportButton";
 import { ReactionBar } from "@/components/chat/ReactionBar";
 import { ReactionPicker } from "@/components/chat/ReactionPicker";
 import { useStickers } from "@/lib/hooks/useStickers";
-import type { Member } from "@/lib/hooks/useMembers";
+import type { Member as FullMember } from "@/lib/hooks/useMembers";
+
+type Member = Pick<FullMember, "uid" | "displayName">;
 import { renderBodyWithMentions } from "@/lib/mentions";
 import { firestore } from "@/lib/firebase";
 import type { Message } from "@/lib/hooks/useGroupMessages";
@@ -65,7 +67,7 @@ export function MessageItem({
 
   const isAuthor = resolvedUid === message.authorUid;
   const hasParticipated = message.participants?.includes(resolvedUid ?? "") ?? false;
-  const createdAtMs = message.createdAt?.toMillis() ?? 0;
+  const createdAtMs = message.createdAt ? Date.parse(message.createdAt) || 0 : 0;
   const isDeleted = message.deletedAt != null;
   const canEdit =
     isAuthor && !isDeleted && Date.now() - createdAtMs < FIFTEEN_MIN_MS;

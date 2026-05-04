@@ -1,17 +1,11 @@
 "use client";
 
-import {
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  type Timestamp,
-} from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 import type { BoardPost } from "./useBoardPosts";
+
+const POLL_INTERVAL_MS = 30_000;
 
 export type BoardReply = {
   replyId: string;
@@ -19,49 +13,79 @@ export type BoardReply = {
   body: string;
   stickerIds: string[];
   mediaRefs: string[];
-  createdAt: Timestamp | null;
-  editedAt: Timestamp | null;
-  deletedAt: Timestamp | null;
+  createdAt: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
   mentions?: string[];
-  moderation?: { state?: string; reasons?: string[] };
+  moderation?: { state?: string | null; reasons?: string[] };
 };
 
+type BoardRepliesResponse = {
+  replies: BoardReply[];
+  nextCursor: string | null;
+};
+
+/**
+ * Single board post + its replies. Polls every 30s.
+ */
 export function useBoardPost(boardId: string, postId: string) {
   const [post, setPost] = useState<BoardPost | null>(null);
   const [replies, setReplies] = useState<BoardReply[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchOnce = useCallback(
+    async (signal: AbortSignal) => {
+      if (!boardId || !postId) return;
+      const [postRes, repliesRes] = await Promise.all([
+        apiGet<BoardPost>(`/api/boards/${boardId}/posts/${postId}`, { signal }),
+        apiGet<BoardRepliesResponse>(
+          `/api/boards/${boardId}/posts/${postId}/replies?limit=100`,
+          { signal },
+        ),
+      ]);
+      if (signal.aborted) return;
+      setPost(postRes);
+      setReplies(repliesRes.replies);
+    },
+    [boardId, postId],
+  );
+
   useEffect(() => {
     if (!boardId || !postId) return;
-    const postRef = doc(firestore, "boards", boardId, "posts", postId);
-    const unsubPost = onSnapshot(postRef, (snap) => {
-      if (!snap.exists()) {
-        setPost(null);
-        setLoading(false);
-        return;
+    setLoading(true);
+    const ctl = new AbortController();
+    void (async () => {
+      try {
+        await fetchOnce(ctl.signal);
+      } catch (err) {
+        if (ctl.signal.aborted) return;
+        if (err instanceof ApiError) {
+          if (err.status === 404) {
+            setPost(null);
+          } else if (err.code !== "aborted") {
+            console.warn("board_post_read_failed", err.code, err.status);
+          }
+        }
+      } finally {
+        if (!ctl.signal.aborted) setLoading(false);
       }
-      const data = snap.data() as Omit<BoardPost, "postId">;
-      setPost({ postId: snap.id, ...data });
-      setLoading(false);
-    });
+    })();
 
-    const repliesQ = query(
-      collection(firestore, "boards", boardId, "posts", postId, "replies"),
-      orderBy("createdAt", "asc"),
-    );
-    const unsubReplies = onSnapshot(repliesQ, (snap) => {
-      const next = snap.docs.map((d) => {
-        const data = d.data() as Omit<BoardReply, "replyId">;
-        return { replyId: d.id, ...data };
-      });
-      setReplies(next);
-    });
+    const interval = setInterval(() => {
+      void (async () => {
+        try {
+          await fetchOnce(ctl.signal);
+        } catch {
+          /* swallow */
+        }
+      })();
+    }, POLL_INTERVAL_MS);
 
     return () => {
-      unsubPost();
-      unsubReplies();
+      ctl.abort();
+      clearInterval(interval);
     };
-  }, [boardId, postId]);
+  }, [boardId, postId, fetchOnce]);
 
   return { post, replies, loading };
 }

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
+import { useGroup } from "@/lib/hooks/useGroup";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useGroupMessages } from "@/lib/hooks/useGroupMessages";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 import { usePinnedMessages } from "@/lib/hooks/usePinnedMessages";
@@ -16,7 +16,6 @@ import { PinnedBar } from "@/components/chat/PinnedBar";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageList } from "@/components/chat/MessageList";
 import { ThreadPanel } from "@/components/chat/ThreadPanel";
-import type { Timestamp } from "firebase/firestore";
 
 type Props = { params: { gid: string } };
 
@@ -28,13 +27,14 @@ export default function ChatPage({ params }: Props) {
   const { messages, loading, loadingOlder, hasMore, loadOlder, offline } =
     useGroupMessages(user ? gid : undefined);
 
+  const { group } = useGroup(user ? gid : undefined);
+  const { isLeader, loading: membershipLoading } = useGroupMembership(
+    user?.uid,
+    user ? gid : undefined,
+  );
   const { pinnedIds, togglePin } = usePinnedMessages(gid);
   const { announce } = useAnnounce(gid);
 
-  const [groupName, setGroupName] = useState<string | null>(null);
-  const [archivedAt, setArchivedAt] = useState<Timestamp | null>(null);
-  const [isLeader, setIsLeader] = useState(false);
-  const [membershipLoading, setMembershipLoading] = useState(true);
   const [activeThread, setActiveThread] = useState<Message | null>(null);
 
   useEffect(() => {
@@ -42,41 +42,6 @@ export default function ChatPage({ params }: Props) {
       router.replace("/sign-in");
     }
   }, [user, authLoading, router]);
-
-  // Watch current user's membership doc for leader status.
-  useEffect(() => {
-    if (!user || !gid) {
-      setMembershipLoading(false);
-      return;
-    }
-    return onSnapshot(
-      doc(firestore, "groups", gid, "members", user.uid),
-      (snap) => {
-        setIsLeader(snap.exists() && snap.data()?.role === "leader");
-        setMembershipLoading(false);
-      },
-      () => setMembershipLoading(false),
-    );
-  }, [user, gid]);
-
-  // Watch group doc for name and archived state.
-  useEffect(() => {
-    if (!gid) return;
-    return onSnapshot(
-      doc(firestore, "groups", gid),
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setGroupName(data.name as string);
-          setArchivedAt((data.archivedAt as Timestamp | null) ?? null);
-        } else {
-          setGroupName(null);
-          setArchivedAt(null);
-        }
-      },
-      () => {},
-    );
-  }, [gid]);
 
   // Keep activeThread in sync with live message data so threadReplyCount and
   // participants stay fresh while the panel is open.
@@ -95,6 +60,9 @@ export default function ChatPage({ params }: Props) {
   }
 
   if (!user) return null;
+
+  const groupName = group?.name ?? null;
+  const archivedAt = group?.archivedAt ?? null;
 
   return (
     <main className="flex h-screen flex-col">

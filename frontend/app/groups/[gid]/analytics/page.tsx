@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { doc, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -9,8 +8,8 @@ import { CadenceChart } from "@/components/analytics/CadenceChart";
 import { ContributorList } from "@/components/analytics/ContributorList";
 import { StickerMixChart } from "@/components/analytics/StickerMixChart";
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
 import { useAnalytics } from "@/lib/hooks/useAnalytics";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 
 type Props = { params: { gid: string } };
 type Range = "7d" | "30d";
@@ -19,8 +18,10 @@ export default function AnalyticsPage({ params }: Props) {
   const { gid } = params;
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [isLeader, setIsLeader] = useState(false);
-  const [membershipLoading, setMembershipLoading] = useState(true);
+  const { isLeader, loading: membershipLoading } = useGroupMembership(
+    user?.uid,
+    gid,
+  );
   const [range, setRange] = useState<Range>("7d");
 
   useEffect(() => {
@@ -28,22 +29,6 @@ export default function AnalyticsPage({ params }: Props) {
       router.replace("/sign-in");
     }
   }, [user, authLoading, router]);
-
-  // Real-time membership listener to check leader role.
-  useEffect(() => {
-    if (!user || !gid) {
-      setMembershipLoading(false);
-      return;
-    }
-    return onSnapshot(
-      doc(firestore, "groups", gid, "members", user.uid),
-      (snap) => {
-        setIsLeader(snap.exists() && snap.data()?.role === "leader");
-        setMembershipLoading(false);
-      },
-      () => setMembershipLoading(false),
-    );
-  }, [user, gid]);
 
   // Redirect non-leaders to the group page.
   useEffect(() => {

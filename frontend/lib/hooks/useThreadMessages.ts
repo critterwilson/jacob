@@ -1,108 +1,138 @@
 "use client";
 
-import {
-  collection,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  type QueryDocumentSnapshot,
-  startAfter,
-  where,
-} from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { firestore } from "@/lib/firebase";
+
+import { ApiError, apiGet } from "@/lib/api";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
 const PAGE_SIZE = 50;
+const POLL_INTERVAL_MS = 10_000;
 
-export function useThreadMessages(gid: string | undefined, parentMessageId: string | undefined) {
-  const [realtimeMessages, setRealtimeMessages] = useState<Message[]>([]);
-  const [olderMessages, setOlderMessages] = useState<Message[]>([]);
+type MessagesListResponse = {
+  messages: Message[];
+  nextCursor: string | null;
+};
+
+const createdAtMs = (m: Message): number =>
+  m.createdAt ? Date.parse(m.createdAt) || 0 : 0;
+
+/**
+ * Thread replies under a parent message. Mirrors `useGroupMessages` but
+ * filtered to `?parentMessageId=...`. Backend returns ascending by
+ * createdAt for thread reads (M3); polling cadence matches the parent
+ * chat hook.
+ */
+export function useThreadMessages(
+  gid: string | undefined,
+  parentMessageId: string | undefined,
+) {
+  const [recent, setRecent] = useState<Message[]>([]);
+  const [older, setOlder] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-
-  const cursorRef = useRef<QueryDocumentSnapshot | null>(null);
+  const olderCursorRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
+
+  const fetchFirstPage = useCallback(
+    async (signal: AbortSignal) => {
+      if (!gid || !parentMessageId) return;
+      const url = `/api/groups/${gid}/messages?parentMessageId=${encodeURIComponent(
+        parentMessageId,
+      )}&limit=${PAGE_SIZE}`;
+      const res = await apiGet<MessagesListResponse>(url, { signal });
+      if (signal.aborted) return;
+      // Server returns ascending for threads — preserve order.
+      setRecent(res.messages);
+      olderCursorRef.current = res.nextCursor;
+      setHasMore(Boolean(res.nextCursor));
+    },
+    [gid, parentMessageId],
+  );
 
   useEffect(() => {
     if (!gid || !parentMessageId) {
-      setRealtimeMessages([]);
-      setOlderMessages([]);
+      setRecent([]);
+      setOlder([]);
       setLoading(false);
       setHasMore(false);
       return;
     }
-
-    cursorRef.current = null;
-    setRealtimeMessages([]);
-    setOlderMessages([]);
+    olderCursorRef.current = null;
+    setRecent([]);
+    setOlder([]);
     setLoading(true);
     setHasMore(false);
 
-    const q = query(
-      collection(firestore, "groups", gid, "messages"),
-      where("parentMessageId", "==", parentMessageId),
-      orderBy("createdAt", "desc"),
-      limit(PAGE_SIZE),
-    );
-
-    return onSnapshot(
-      q,
-      (snap) => {
-        if (cursorRef.current === null && snap.docs.length > 0) {
-          cursorRef.current = snap.docs[snap.docs.length - 1];
-          setHasMore(snap.docs.length === PAGE_SIZE);
+    const ctl = new AbortController();
+    void (async () => {
+      try {
+        await fetchFirstPage(ctl.signal);
+      } catch (err) {
+        if (ctl.signal.aborted) return;
+        if (err instanceof ApiError && err.code !== "aborted") {
+          console.warn("thread_read_failed", err.code, err.status);
         }
-        const msgs = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<Message, "id">),
-        }));
-        setRealtimeMessages(msgs.reverse());
-        setLoading(false);
-      },
-      () => {
-        setLoading(false);
-      },
-    );
-  }, [gid, parentMessageId]);
+      } finally {
+        if (!ctl.signal.aborted) setLoading(false);
+      }
+    })();
+
+    const interval = setInterval(() => {
+      void (async () => {
+        try {
+          await fetchFirstPage(ctl.signal);
+        } catch {
+          /* swallow — next tick retries */
+        }
+      })();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      ctl.abort();
+      clearInterval(interval);
+    };
+  }, [gid, parentMessageId, fetchFirstPage]);
 
   const loadOlder = useCallback(async () => {
-    if (!gid || !parentMessageId || !cursorRef.current || loadingOlderRef.current) return;
-
+    if (
+      !gid ||
+      !parentMessageId ||
+      !olderCursorRef.current ||
+      loadingOlderRef.current
+    )
+      return;
     loadingOlderRef.current = true;
     setLoadingOlder(true);
-
-    const q = query(
-      collection(firestore, "groups", gid, "messages"),
-      where("parentMessageId", "==", parentMessageId),
-      orderBy("createdAt", "desc"),
-      startAfter(cursorRef.current),
-      limit(PAGE_SIZE),
-    );
-
-    const snap = await getDocs(q);
-    const msgs = snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as Omit<Message, "id">) }))
-      .reverse();
-
-    if (snap.docs.length > 0) {
-      cursorRef.current = snap.docs[snap.docs.length - 1];
+    try {
+      const cursor = encodeURIComponent(olderCursorRef.current);
+      const url = `/api/groups/${gid}/messages?parentMessageId=${encodeURIComponent(
+        parentMessageId,
+      )}&limit=${PAGE_SIZE}&cursor=${cursor}`;
+      const res = await apiGet<MessagesListResponse>(url);
+      // Older page is appended *before* recent for thread (still ascending overall).
+      setOlder((prev) => [...res.messages, ...prev]);
+      olderCursorRef.current = res.nextCursor;
+      setHasMore(Boolean(res.nextCursor));
+    } catch (err) {
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("thread_load_older_failed", err.code, err.status);
+      }
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
     }
-
-    setHasMore(snap.docs.length === PAGE_SIZE);
-    setOlderMessages((prev) => [...msgs, ...prev]);
-
-    loadingOlderRef.current = false;
-    setLoadingOlder(false);
   }, [gid, parentMessageId]);
 
-  const messages = useMemo(
-    () => [...olderMessages, ...realtimeMessages],
-    [olderMessages, realtimeMessages],
-  );
+  const messages = useMemo(() => {
+    const map = new Map<string, Message>();
+    for (const m of older) map.set(m.id, m);
+    for (const m of recent) map.set(m.id, m);
+    return Array.from(map.values()).sort((a, b) => {
+      const diff = createdAtMs(a) - createdAtMs(b);
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
+    });
+  }, [older, recent]);
 
   return { messages, loading, loadingOlder, hasMore, loadOlder };
 }

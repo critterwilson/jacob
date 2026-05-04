@@ -22,17 +22,6 @@ vi.mock("@/lib/firebase", () => ({
   firestore: {},
 }));
 
-const mockUnsubscribe = vi.fn();
-let memberSnapshotCallback: ((snap: unknown) => void) | null = null;
-
-vi.mock("firebase/firestore", () => ({
-  doc: vi.fn(),
-  onSnapshot: vi.fn((_, cb: (snap: unknown) => void) => {
-    memberSnapshotCallback = cb;
-    return mockUnsubscribe;
-  }),
-}));
-
 // ── Auth context ─────────────────────────────────────────────────────────────
 const mockGetIdToken = vi.fn().mockResolvedValue("fake-token");
 vi.mock("@/lib/auth-context", () => ({
@@ -41,6 +30,27 @@ vi.mock("@/lib/auth-context", () => ({
     loading: false,
   }),
 }));
+
+// ── useGroupMembership (replaces the old onSnapshot membership read) ─────────
+const mockMembershipState: {
+  isLeader: boolean;
+  loading: boolean;
+} = { isLeader: false, loading: false };
+
+vi.mock("@/lib/hooks/useGroupMembership", () => ({
+  useGroupMembership: () => ({
+    membership: null,
+    role: mockMembershipState.isLeader ? "leader" : "member",
+    isLeader: mockMembershipState.isLeader,
+    loading: mockMembershipState.loading,
+    refresh: vi.fn(),
+  }),
+}));
+
+function simulateLeader(isLeader: boolean) {
+  mockMembershipState.isLeader = isLeader;
+  mockMembershipState.loading = false;
+}
 
 // ── recharts (lightweight stub so charts don't crash in jsdom) ───────────────
 vi.mock("recharts", () => ({
@@ -68,22 +78,16 @@ vi.mock("@/lib/hooks/useAnalytics", () => ({
 
 import AnalyticsPage from "@/app/groups/[gid]/analytics/page";
 
-function simulateLeaderSnapshot(isLeader: boolean) {
-  memberSnapshotCallback?.({
-    exists: () => isLeader,
-    data: () => ({ role: isLeader ? "leader" : "member" }),
-  });
-}
-
 beforeEach(() => {
   mockReplace.mockClear();
-  memberSnapshotCallback = null;
+  mockMembershipState.isLeader = false;
+  mockMembershipState.loading = false;
 });
 
 describe("AnalyticsPage", () => {
   it("non-leader is redirected away from analytics", async () => {
     render(<AnalyticsPage params={{ gid: "g1" }} />);
-    simulateLeaderSnapshot(false);
+    simulateLeader(false);
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/groups/g1");
@@ -104,8 +108,8 @@ describe("AnalyticsPage", () => {
       },
     };
 
+    simulateLeader(true);
     render(<AnalyticsPage params={{ gid: "g1" }} />);
-    simulateLeaderSnapshot(true);
 
     await waitFor(() => {
       expect(screen.getByText("Group analytics")).toBeInTheDocument();
@@ -120,8 +124,8 @@ describe("AnalyticsPage", () => {
     const user = userEvent.setup();
     mockAnalyticsState.state = { status: "idle" };
 
+    simulateLeader(true);
     render(<AnalyticsPage params={{ gid: "g1" }} />);
-    simulateLeaderSnapshot(true);
 
     await waitFor(() => screen.getByRole("group"));
 
@@ -145,8 +149,8 @@ describe("AnalyticsPage", () => {
       },
     };
 
+    simulateLeader(true);
     render(<AnalyticsPage params={{ gid: "g1" }} />);
-    simulateLeaderSnapshot(true);
 
     await waitFor(() => {
       expect(screen.getByText(/Quiet week/)).toBeInTheDocument();

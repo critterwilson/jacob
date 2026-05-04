@@ -1,52 +1,66 @@
 "use client";
 
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
-export type Member = { uid: string; displayName: string };
+export type Member = {
+  uid: string;
+  role: "member" | "leader";
+  joinedAt: string | null;
+  displayName: string;
+  photoURL: string | null;
+};
 
-export function useMembers(gid: string): { members: Member[]; loading: boolean } {
+type MembersListResponse = {
+  members: Member[];
+  nextCursor: string | null;
+};
+
+/**
+ * Members of a group.
+ *
+ * As of M3 this calls `GET /api/groups/{gid}/members`. The backend
+ * joins each membership against `users/{uid}` server-side so the
+ * client gets `displayName` + `photoURL` in one round-trip. Mention
+ * pickers and the members page consume this hook.
+ */
+export function useMembers(gid: string) {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!gid) {
       setMembers([]);
       setLoading(false);
       return;
     }
-
+    abortRef.current?.abort();
+    const ctl = new AbortController();
+    abortRef.current = ctl;
     setLoading(true);
-
-    void (async () => {
-      try {
-        const membersSnap = await getDocs(
-          collection(firestore, "groups", gid, "members"),
-        );
-        const uids = membersSnap.docs.map((d) => d.id);
-
-        const userDocs = await Promise.all(
-          uids.map((uid) => getDoc(doc(firestore, "users", uid))),
-        );
-
-        const result: Member[] = userDocs
-          .filter((d) => d.exists())
-          .map((d) => ({
-            uid: d.id,
-            displayName:
-              (d.data()?.displayName as string | undefined) ?? d.id,
-          }));
-
-        setMembers(result);
-      } catch {
-        setMembers([]);
-      } finally {
-        setLoading(false);
+    try {
+      const res = await apiGet<MembersListResponse>(`/api/groups/${gid}/members`, {
+        signal: ctl.signal,
+      });
+      if (ctl.signal.aborted) return;
+      setMembers(res.members);
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("members_read_failed", err.code, err.status);
       }
-    })();
+      setMembers([]);
+    } finally {
+      if (!ctl.signal.aborted) setLoading(false);
+    }
   }, [gid]);
 
-  return { members, loading };
+  useEffect(() => {
+    void load();
+    return () => abortRef.current?.abort();
+  }, [load]);
+
+  return { members, loading, refresh: load };
 }

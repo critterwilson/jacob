@@ -71,7 +71,10 @@ export default function ReadOnlyGroupPage({ params }: Props) {
             </span>
           </p>
         </div>
-        <JoinRequestButton gid={gid} joinMode={group.joinMode ?? "open"} />
+        <JoinRequestButton
+          gid={gid}
+          joinMode={group.joinMode === "request" ? "request" : "open"}
+        />
       </header>
 
       {/* Read-only notice */}

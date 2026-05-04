@@ -39,21 +39,29 @@ vi.mock("@/lib/hooks/useGroup", () => ({
 import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
 import { GroupSettingsForm } from "@/components/groups/GroupSettingsForm";
 import { MessageInput } from "@/components/chat/MessageInput";
-import type { Group } from "@/lib/hooks/useGroups";
+import type { Group } from "@/lib/hooks/useGroup";
 
 const fakeGroup: Group = {
   id: "g1",
+  gid: "g1",
   name: "Test Group",
   description: "A great group",
   isPrivate: false,
-  memberCount: 3,
+  joinMode: null,
+  audience: null,
   stickerSet: "christian",
-  createdBy: "alice",
-  inviteCode: "TESTCODE",
-  schemaVersion: 1,
-  createdAt: null,
   avatarUrl: null,
   archivedAt: null,
+  archivedBy: null,
+  archiveReason: null,
+  pinnedMessageIds: [],
+  memberCount: 3,
+  leaderCount: 1,
+  founderUid: "alice",
+  createdBy: "alice",
+  createdAt: null,
+  inviteCode: "TESTCODE",
+  moderationPolicy: null,
 };
 
 // ── ArchivedBanner ─────────────────────────────────────────────────────────────

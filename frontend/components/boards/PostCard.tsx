@@ -14,12 +14,9 @@ type Props = {
 function formatTime(post: BoardPost): string {
   const ts = post.createdAt;
   if (!ts) return "";
-  try {
-    const d = ts.toDate();
-    return d.toLocaleString();
-  } catch {
-    return "";
-  }
+  const ms = Date.parse(ts);
+  if (!Number.isFinite(ms)) return "";
+  return new Date(ms).toLocaleString();
 }
 
 export function PostCard({ boardId, post }: Props) {

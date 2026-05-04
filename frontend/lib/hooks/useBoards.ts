@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  type Timestamp,
-} from "firebase/firestore";
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
 export type Board = {
   boardId: string;
@@ -17,34 +10,40 @@ export type Board = {
   slug: string;
   description: string;
   audience: "christian" | "general";
-  archivedAt: Timestamp | null;
+  archivedAt: string | null;
   postCount: number;
 };
 
+type BoardListResponse = {
+  boards: Board[];
+};
+
+/**
+ * Boards list.
+ *
+ * As of M3 this calls `GET /api/boards` (which already existed pre-
+ * migration) and caches the response via SWR with a 5-minute
+ * deduping window. Boards are static-ish so the previous `onSnapshot`
+ * was cosmetic.
+ */
 export function useBoards() {
-  const [boards, setBoards] = useState<Board[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading, mutate } = useSWR<BoardListResponse>(
+    "/api/boards",
+    (key: string) => apiGet<BoardListResponse>(key),
+    {
+      dedupingInterval: 5 * 60_000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+      keepPreviousData: true,
+    },
+  );
 
-  useEffect(() => {
-    const q = query(collection(firestore, "boards"), orderBy("name"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const next: Board[] = snap.docs.map((d) => {
-          const data = d.data() as Omit<Board, "boardId">;
-          return { boardId: d.id, ...data };
-        });
-        setBoards(next.filter((b) => b.archivedAt == null));
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message);
-        setLoading(false);
-      },
-    );
-    return () => unsub();
-  }, []);
+  const boards: Board[] = data?.boards.filter((b) => b.archivedAt == null) ?? [];
 
-  return { boards, loading, error };
+  return {
+    boards,
+    loading: isLoading,
+    error: error instanceof ApiError ? error.message : null,
+    refresh: () => void mutate(),
+  };
 }

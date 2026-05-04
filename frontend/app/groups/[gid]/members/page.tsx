@@ -1,25 +1,14 @@
 "use client";
 
-import { collection, onSnapshot, doc as fdoc, getDoc } from "firebase/firestore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
+import { useGroup } from "@/lib/hooks/useGroup";
+import { useMembers } from "@/lib/hooks/useMembers";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-type Member = {
-  uid: string;
-  role: "member" | "leader";
-};
-
-type GroupMeta = {
-  name: string;
-  founderUid: string;
-  leaderCount?: number;
-};
 
 type Props = { params: { gid: string } };
 
@@ -31,8 +20,8 @@ export default function MembersPage({ params }: Props) {
   const { gid } = params;
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [meta, setMeta] = useState<GroupMeta | null>(null);
+  const { members, loading: membersLoading, refresh } = useMembers(gid);
+  const { group } = useGroup(gid);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
 
@@ -41,32 +30,6 @@ export default function MembersPage({ params }: Props) {
       router.replace("/sign-in");
     }
   }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (!user) return;
-    const unsubMembers = onSnapshot(
-      collection(firestore, "groups", gid, "members"),
-      (snap) => {
-        setMembers(
-          snap.docs.map((d) => ({
-            uid: d.id,
-            role: ((d.data().role as string) || "member") as Member["role"],
-          })),
-        );
-      },
-    );
-    void getDoc(fdoc(firestore, "groups", gid)).then((s) => {
-      if (s.exists()) {
-        const data = s.data();
-        setMeta({
-          name: (data.name as string) ?? "",
-          founderUid: (data.founderUid as string) ?? "",
-          leaderCount: data.leaderCount as number | undefined,
-        });
-      }
-    });
-    return unsubMembers;
-  }, [user, gid]);
 
   const callApi = async (path: string, body?: object) => {
     if (!user) return false;
@@ -89,6 +52,8 @@ export default function MembersPage({ params }: Props) {
         setError(err?.error?.message ?? `HTTP ${res.status}`);
         return false;
       }
+      // Refresh the member list so the role badge reflects the change.
+      await refresh();
       return true;
     } finally {
       setPending(null);
@@ -102,17 +67,20 @@ export default function MembersPage({ params }: Props) {
   const transferFounder = (uid: string) =>
     void callApi(`/api/groups/${gid}/founder/transfer`, { targetUid: uid });
 
-  if (authLoading) return <p className="p-4 text-sm text-gray-500">Loading…</p>;
+  if (authLoading || membersLoading) {
+    return <p className="p-4 text-sm text-gray-500">Loading…</p>;
+  }
   if (!user) return null;
 
   const myMember = members.find((m) => m.uid === user.uid);
   const isLeader = myMember?.role === "leader";
-  const isFounder = meta?.founderUid === user.uid;
+  const isFounder = group?.founderUid === user.uid;
+  const leaderCount = members.filter((m) => m.role === "leader").length;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-2 flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold">{meta?.name ?? "Group"} members</h1>
+        <h1 className="text-2xl font-semibold">{group?.name ?? "Group"} members</h1>
         <Link
           href={`/groups/${gid}`}
           className="text-sm text-blue-600 hover:underline"
@@ -121,8 +89,7 @@ export default function MembersPage({ params }: Props) {
         </Link>
       </div>
       <p className="mb-6 text-sm text-gray-500">
-        {meta?.leaderCount ?? 0}{" "}
-        {meta?.leaderCount === 1 ? "leader" : "leaders"} ·{" "}
+        {leaderCount} {leaderCount === 1 ? "leader" : "leaders"} ·{" "}
         {members.length} total
       </p>
 
@@ -137,7 +104,7 @@ export default function MembersPage({ params }: Props) {
 
       <ul className="divide-y divide-gray-200 rounded border border-gray-200">
         {members.map((m) => {
-          const isFounderRow = meta?.founderUid === m.uid;
+          const isFounderRow = group?.founderUid === m.uid;
           const isSelf = m.uid === user.uid;
           return (
             <li
@@ -145,7 +112,8 @@ export default function MembersPage({ params }: Props) {
               className="flex items-center justify-between gap-2 px-4 py-3"
             >
               <div className="min-w-0">
-                <code className="text-xs text-gray-700">{m.uid}</code>
+                <p className="truncate text-sm font-medium">{m.displayName}</p>
+                <code className="text-xs text-gray-500">{m.uid}</code>
                 <div className="mt-1 flex gap-1">
                   <span
                     className={`rounded px-2 py-0.5 text-xs font-medium ${
