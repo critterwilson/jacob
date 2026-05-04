@@ -23,6 +23,13 @@ BOARD_ADMIN_MUTATION: str = "10/minute"
 EXPORT_REQUEST: str = "1/hour"
 ADMIN_LIST: str = "60/minute"
 
+# T58 — feature flags. Admin mutation surface (`/api/admin/flags*`) gets
+# its own bucket so a runaway rollout-tweak loop can't starve the wider
+# admin-mutation budget. Read surface (`/api/flags`) is per-user and on
+# the page-load critical path; SWR revalidates roughly every 60s.
+FLAG_MUTATION: str = "30/minute"
+FLAG_READ: str = "60/minute"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

@@ -17,6 +17,7 @@ from app.routers import (
     analytics,
     boards,
     discover,
+    flags,
     groups,
     invites,
     messages,
@@ -111,6 +112,8 @@ app.include_router(boards.router)
 app.include_router(stickers.router)
 app.include_router(users.router)
 app.include_router(verse.router)
+app.include_router(flags.router)
+app.include_router(flags.admin_router)
 
 if settings.debug:
     from app.routers import debug
