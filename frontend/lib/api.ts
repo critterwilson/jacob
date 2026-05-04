@@ -7,8 +7,12 @@
 //   * Authorization header is attached automatically when a Firebase user
 //     is signed in.
 //   * Errors come back as `ApiError` with the backend's typed `{code, message}`
-//     payload preserved; transport failures surface as a generic
-//     `network_error` ApiError so callers always pattern-match on `.code`.
+//     payload preserved; transport failures surface as one of:
+//       - `cors_blocked` — cross-origin fetch failed at the browser, almost
+//         always a missing CORS header on the server. Promoted from the
+//         generic `network_error` after that bucket misled M1 CORS triage.
+//       - `network_error` — same-origin transport failure (DNS, offline,
+//         server unreachable) or any non-TypeError surface.
 //   * 5xx responses and transient network failures are retried with
 //     exponential backoff (200ms, 400ms) for idempotent verbs (GET).
 //     POST / PATCH / DELETE retries are opt-in via `opts.retry`.
@@ -82,6 +86,22 @@ async function parseError(r: Response): Promise<ApiError> {
   );
 }
 
+// Heuristic: a `TypeError` thrown by `fetch` to a *cross-origin* URL is
+// almost always a CORS preflight rejection (or missing CORS headers on the
+// real response). Same-origin TypeErrors are genuine transport failures.
+// Browsers deliberately make CORS errors indistinguishable from network
+// errors at the JS level — the origin check is the best signal we have.
+function isLikelyCorsError(e: unknown, url: string): boolean {
+  if (typeof window === "undefined") return false;
+  if (!(e instanceof TypeError)) return false;
+  try {
+    const target = new URL(url, window.location.href);
+    return target.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 function shouldRetry(status: number): boolean {
   // 5xx and 429. 502/503/504 in particular are common Cloud Run cold-start
   // transients worth a retry; 500s are rarer but cheap to retry once.
@@ -150,6 +170,17 @@ async function request<T>(
         (e.name === "AbortError" || e.name === "TimeoutError")
       ) {
         throw new ApiError(0, "aborted", "Request aborted");
+      }
+      // CORS failures are not retryable — the server config is wrong, retrying
+      // burns time without changing the outcome and muddies the diagnostic.
+      if (isLikelyCorsError(e, url)) {
+        throw new ApiError(
+          0,
+          "cors_blocked",
+          `Cross-origin request to ${url} was blocked. ` +
+            "This usually means the server is missing CORS headers " +
+            "or rejected a preflight OPTIONS request.",
+        );
       }
       if (attempt < maxRetries) {
         await delay(200 * 2 ** attempt, opts.signal);
