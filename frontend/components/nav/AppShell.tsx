@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { DeletionBanner } from "@/components/account/DeletionBanner";
+import { useAuth } from "@/lib/auth-context";
 
 const navLinks = [
   { href: "/groups", label: "Chats" },
@@ -36,6 +37,35 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function SignOutButton({ onNavigate }: { onNavigate?: () => void }) {
+  const { signOut } = useAuth();
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  const handleClick = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      await signOut();
+      onNavigate?.();
+      router.replace("/sign-in");
+    } catch {
+      setPending(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={pending}
+      className="block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+    >
+      {pending ? "Signing out…" : "Sign out"}
+    </button>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -46,9 +76,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="px-5 py-6">
           <span className="text-lg font-semibold tracking-tight">JACOB</span>
         </div>
-        <nav aria-label="Main navigation">
+        <nav aria-label="Main navigation" className="flex-1">
           <NavLinks />
         </nav>
+        <div className="border-t border-gray-200 px-2 py-3">
+          <SignOutButton />
+        </div>
       </aside>
 
       {/* Mobile header */}
@@ -111,7 +144,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </svg>
                 </button>
               </div>
-              <NavLinks onNavigate={() => setDrawerOpen(false)} />
+              <div className="flex-1">
+                <NavLinks onNavigate={() => setDrawerOpen(false)} />
+              </div>
+              <div className="border-t border-gray-200 px-2 py-3">
+                <SignOutButton onNavigate={() => setDrawerOpen(false)} />
+              </div>
             </nav>
           </div>
         )}
