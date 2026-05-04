@@ -45,6 +45,18 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
       </head>
       <body>
+        {/*
+          T62 — skip-to-content link: visible only on focus, jumps
+          past the banner / nav so a keyboard / screen-reader user
+          lands on the main content directly. Pages that mount a
+          `<main id="main">` element automatically benefit.
+        */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-blue-700 focus:px-3 focus:py-1 focus:text-sm focus:text-white"
+        >
+          Skip to content
+        </a>
         <SentryInit />
         <AuthProvider>
           <WorkspaceOrgProvider org={org}>
