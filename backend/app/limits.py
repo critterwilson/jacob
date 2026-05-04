@@ -66,6 +66,11 @@ UNFURL_FETCH: str = "30/minute"
 EVENT_CREATE: str = "30/hour"
 EVENT_RSVP: str = "60/minute"
 
+# T50 — Watch Together. Start / join / end / transfer all share this
+# bucket; sessions live for ~tens of minutes so member-rate volume
+# stays well under the cap.
+WATCH_SESSION_START: str = "10/hour"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.
