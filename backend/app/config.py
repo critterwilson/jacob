@@ -71,6 +71,23 @@ class Settings(BaseSettings):
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 
+    # CORS — origins allowed to call the API cross-origin. The frontend is
+    # served from Firebase App Hosting (a different host than Cloud Run), so
+    # without an explicit allowlist the browser preflight blocks every
+    # /api/* call from the deployed bundle. Override via env var as a
+    # comma-separated string when adding new environments. Defaults cover
+    # staging, the well-known production app URL, and local dev on the
+    # default Next.js port.
+    cors_allowed_origins: str = (
+        "https://jacob-frontend--jacob-staging-494515.us-central1.hosted.app,"
+        "https://jacob.app,"
+        "http://localhost:3000"
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
 
 @lru_cache
 def get_settings() -> Settings:
