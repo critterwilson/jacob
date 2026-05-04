@@ -106,7 +106,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-type Method = "GET" | "POST" | "PATCH" | "DELETE";
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function request<T>(
   method: Method,
@@ -188,6 +188,14 @@ export function apiPost<T, B = unknown>(
   opts: ApiRequestOpts = {},
 ): Promise<T> {
   return request<T>("POST", path, body, opts);
+}
+
+export function apiPut<T, B = unknown>(
+  path: string,
+  body: B,
+  opts: ApiRequestOpts = {},
+): Promise<T> {
+  return request<T>("PUT", path, body, opts);
 }
 
 export function apiPatch<T, B = unknown>(

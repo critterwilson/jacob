@@ -148,3 +148,13 @@ class MutesResponse(BaseModel):
 
 class BlocksResponse(BaseModel):
     blockedUids: list[str]
+
+
+class MuteResponse(BaseModel):
+    uid: str
+    mutedAt: datetime
+
+
+class BlockResponse(BaseModel):
+    uid: str
+    blockedAt: datetime

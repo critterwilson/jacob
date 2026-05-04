@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { deleteUser } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -9,7 +8,18 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { PhotoUpload } from "@/components/onboarding/PhotoUpload";
-import { auth, firestore } from "@/lib/firebase";
+import { ApiError, apiPost } from "@/lib/api";
+import { auth } from "@/lib/firebase";
+import type { UserProfile } from "@/lib/hooks/useUser";
+
+type CreateProfileRequest = {
+  displayName: string;
+  photoURL: string | null;
+  isMinor: boolean;
+  phone?: string;
+  location?: string;
+  faithBackground?: string;
+};
 
 const AGE_GROUPS = ["18+", "13-17", "under-13"] as const;
 type AgeGroup = (typeof AGE_GROUPS)[number];
@@ -35,7 +45,11 @@ type ProfileFormProps = {
   email: string | null;
 };
 
-export function ProfileForm({ uid, email }: ProfileFormProps) {
+export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
+  // The backend resolves the email server-side from the verified ID
+  // token, so the prop is no longer threaded into the request body.
+  // `uid` is still passed through to the photo-upload helper.
+  void _email;
   const router = useRouter();
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -67,20 +81,23 @@ export function ProfileForm({ uid, email }: ProfileFormProps) {
     setSubmitError(null);
     setSubmitting(true);
     try {
-      await setDoc(doc(firestore, "users", uid), {
+      const body: CreateProfileRequest = {
         displayName: values.displayName,
-        email: email ?? null,
         photoURL: photoURL ?? null,
-        role: "member",
-        schemaVersion: 1,
         isMinor: values.ageGroup === "13-17",
-        createdAt: serverTimestamp(),
         ...(values.phone ? { phone: values.phone } : {}),
         ...(values.location ? { location: values.location } : {}),
         ...(values.faithBackground ? { faithBackground: values.faithBackground } : {}),
-      });
+      };
+      await apiPost<UserProfile, CreateProfileRequest>("/api/users/me", body);
       router.push("/groups");
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "profile_exists") {
+        // User already has a profile — treat like a successful onboard
+        // and continue. Avoids a stuck banner if the form is double-submitted.
+        router.push("/groups");
+        return;
+      }
       setSubmitError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);

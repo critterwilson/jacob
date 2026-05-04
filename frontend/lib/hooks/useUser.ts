@@ -1,9 +1,12 @@
 "use client";
 
-import { doc, onSnapshot } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { firestore } from "@/lib/firebase";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ApiError, apiGet } from "@/lib/api";
+
+// Public profile shape returned by the bootstrap endpoint. Mirrors
+// `backend/app/models/users.py:UserProfile` and the previous Firestore
+// document layout so callers don't need to change.
 export type UserProfile = {
   uid: string;
   displayName: string;
@@ -12,64 +15,88 @@ export type UserProfile = {
   role: string;
   schemaVersion: number;
   isMinor: boolean;
-  createdAt: unknown;
-  phone?: string;
-  location?: string;
-  faithBackground?: string;
+  createdAt: string | null;
+  phone?: string | null;
+  location?: string | null;
+  faithBackground?: string | null;
+};
+
+export type BootstrapResponse = {
+  profile: UserProfile | null;
+  hasProfile: boolean;
+  claims: { admin: boolean };
+  deletionRequestedAt: string | null;
 };
 
 export type UseUserResult =
-  | { loading: true; profile: null }
-  | { loading: false; profile: UserProfile }
-  | { loading: false; profile: null };
+  | { loading: true; profile: null; refresh: () => Promise<void> }
+  | { loading: false; profile: UserProfile; refresh: () => Promise<void> }
+  | { loading: false; profile: null; refresh: () => Promise<void> };
 
+/**
+ * One-shot fetch of the authenticated user's profile via
+ * `GET /api/users/me/bootstrap`. Replaces the prior Firestore
+ * `onSnapshot(users/{uid})` listener.
+ *
+ * The `jacob-has-profile` cookie that gates `frontend/middleware.ts` is
+ * now set server-side from the bootstrap response, so the client no
+ * longer manages it directly. See data-layer migration plan §7.M2.5.
+ *
+ * `refresh()` re-fetches; callers that mutate the profile (the onboarding
+ * form, settings page) call it after a successful write.
+ */
 export function useUser(uid: string | undefined): UseUserResult {
-  const [state, setState] = useState<UseUserResult>({ loading: true, profile: null });
+  const [state, setState] = useState<{
+    loading: boolean;
+    profile: UserProfile | null;
+  }>({ loading: true, profile: null });
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!uid) {
       setState({ loading: false, profile: null });
       return;
     }
 
-    setState({ loading: true, profile: null });
+    abortRef.current?.abort();
+    const ctl = new AbortController();
+    abortRef.current = ctl;
 
-    const unsub = onSnapshot(
-      doc(firestore, "users", uid),
-      (snap) => {
-        if (snap.exists()) {
-          setState({
-            loading: false,
-            profile: { uid, ...(snap.data() as Omit<UserProfile, "uid">) },
-          });
-          // Best-effort cookie so middleware can short-circuit on protected routes.
-          // Known race: the first SSR pass has no cookie, so middleware may
-          // redirect to /sign-in before the snapshot fires and sets the cookie.
-          // The redirect is transient — on reload the cookie is present and the
-          // user reaches the protected page normally. A proper fix would set
-          // this cookie server-side via an /api/session route keyed to the ID
-          // token, but the UX impact here is low enough to defer.
-          if (typeof document !== "undefined") {
-            const secure =
-              location.protocol === "https:" ? "; Secure" : "";
-            document.cookie = `jacob-has-profile=1; path=/; SameSite=Lax${secure}`;
-          }
-        } else {
-          setState({ loading: false, profile: null });
-          if (typeof document !== "undefined") {
-            const secure =
-              location.protocol === "https:" ? "; Secure" : "";
-            document.cookie = `jacob-has-profile=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT${secure}`;
-          }
+    setState((prev) => ({ loading: true, profile: prev.profile }));
+    try {
+      const res = await apiGet<BootstrapResponse>("/api/users/me/bootstrap", {
+        signal: ctl.signal,
+      });
+      if (ctl.signal.aborted) return;
+      setState({
+        loading: false,
+        profile: res.hasProfile && res.profile ? res.profile : null,
+      });
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      // ApiError is the canonical shape; transport failures surface as
+      // ApiError(0, "network_error", ...) and are treated identically to
+      // "no profile" so the onboarding redirect still fires. The 401
+      // case (token revoked / sign-out race) also lands here.
+      if (err instanceof ApiError) {
+        // Surfaced for diagnostics; the SPA recovers by retrying on the
+        // next mount.
+        if (err.code !== "aborted") {
+          console.warn("user_bootstrap_failed", err.code, err.status);
         }
-      },
-      () => {
-        setState({ loading: false, profile: null });
-      },
-    );
-
-    return unsub;
+      }
+      setState({ loading: false, profile: null });
+    }
   }, [uid]);
 
-  return state;
+  useEffect(() => {
+    void load();
+    return () => abortRef.current?.abort();
+  }, [load]);
+
+  return {
+    loading: state.loading,
+    profile: state.profile,
+    refresh: load,
+  } as UseUserResult;
 }

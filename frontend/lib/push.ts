@@ -5,10 +5,13 @@
  * The function:
  *   1. Registers the Firebase Messaging service worker.
  *   2. Calls `getToken` with the VAPID key.
- *   3. Writes / updates `users/{uid}/devices/{deviceId}` in Firestore.
+ *   3. Sends the token to `POST /api/users/me/devices`, which dedupes
+ *      against the user's existing devices and writes the doc with the
+ *      Admin SDK (M2 of the data-layer migration).
  *
- * `deviceId` is the first 16 hex chars of SHA-256(fcmToken) — stable across
- * token refreshes only if the token is unchanged.
+ * The backend returns the canonical `deviceId`. Token-rotation is
+ * handled server-side via the dedupe-on-fcmToken path so a client
+ * re-registering after a token refresh always gets back the same id.
  *
  * Disabled gracefully when:
  *   - `Notification` API unavailable (SSR, old browser).
@@ -16,24 +19,29 @@
  *   - User denies permission.
  */
 
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiPost } from "@/lib/api";
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY ?? "";
 const SW_PATH = "/firebase-messaging-sw.js";
 
-function sha256hex(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  return crypto.subtle
-    .digest("SHA-256", encoder.encode(input))
-    .then((buf) =>
-      Array.from(new Uint8Array(buf))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join(""),
-    );
-}
+type RegisterDeviceRequest = {
+  fcmToken: string;
+  platform: "web" | "ios" | "android";
+  userAgent: string;
+  appVersion: string | null;
+};
+
+type DeviceResponse = {
+  deviceId: string;
+  registeredAt: string;
+};
 
 export async function registerPushToken(uid: string): Promise<string | null> {
+  // uid is part of the public API; the backend resolves the caller from
+  // the verified ID token, so the parameter is no longer threaded into
+  // the request body. Kept for callers and to make the intent clear.
+  void uid;
+
   if (typeof window === "undefined") return null;
   if (!("Notification" in window)) return null;
   if (!VAPID_KEY) {
@@ -79,32 +87,35 @@ export async function registerPushToken(uid: string): Promise<string | null> {
     return null;
   }
 
-  const hash = await sha256hex(token);
-  const deviceId = hash.slice(0, 16);
-
-  await setDoc(
-    doc(firestore, "users", uid, "devices", deviceId),
-    {
-      fcmToken: token,
-      platform: "web",
-      createdAt: serverTimestamp(),
-      lastSeenAt: serverTimestamp(),
-      userAgent: navigator.userAgent.slice(0, 256),
-      appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
-    },
-    { merge: true },
-  );
-
-  return deviceId;
+  try {
+    const res = await apiPost<DeviceResponse, RegisterDeviceRequest>(
+      "/api/users/me/devices",
+      {
+        fcmToken: token,
+        platform: "web",
+        userAgent: navigator.userAgent.slice(0, 256),
+        appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
+      },
+    );
+    return res.deviceId;
+  } catch (err) {
+    if (err instanceof ApiError) {
+      console.warn("[push] device register failed:", err.code, err.status);
+    } else {
+      console.warn("[push] device register failed:", err);
+    }
+    return null;
+  }
 }
 
 /**
- * Update `lastSeenAt` for an existing device doc (debounced by caller).
+ * Re-register the device to refresh `lastSeenAt`. The backend updates
+ * the existing doc when it sees a known fcmToken, so calling
+ * `registerPushToken` again is the canonical "touch" — but the original
+ * helper's caller (`usePushSetup`) still needs a stable shape, so we
+ * keep it as a thin re-entry wrapper.
  */
 export async function touchDeviceLastSeen(uid: string, deviceId: string): Promise<void> {
-  await setDoc(
-    doc(firestore, "users", uid, "devices", deviceId),
-    { lastSeenAt: serverTimestamp() },
-    { merge: true },
-  );
+  void deviceId; // back-compat parameter; the backend keys by fcmToken
+  await registerPushToken(uid);
 }

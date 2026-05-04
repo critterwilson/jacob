@@ -26,8 +26,10 @@ from firebase_admin import firestore as fb_firestore
 from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import (
+    USER_BLOCKS_WRITE,
     USER_BOOTSTRAP,
     USER_DEVICE_REGISTER,
+    USER_MUTES_WRITE,
     USER_NOTIFICATION_PREFS_WRITE,
     USER_NOTIFICATIONS_LIST,
     USER_PROFILE_CREATE,
@@ -36,11 +38,13 @@ from app.limits import (
 from app.middleware.rate_limit import limiter
 from app.models.user import CurrentUser
 from app.models.users import (
+    BlockResponse,
     BlocksResponse,
     BootstrapClaims,
     BootstrapResponse,
     CreateProfileRequest,
     DeviceResponse,
+    MuteResponse,
     MutesResponse,
     Notification,
     NotificationPrefs,
@@ -427,7 +431,7 @@ def list_notifications(
     return NotificationsListResponse(items=items, nextCursor=next_cursor)
 
 
-# ── mutes / blocks (M2 reads only — writes ship in M4) ──────────────────
+# ── mutes ────────────────────────────────────────────────────────────────
 
 
 @router.get("/mutes", response_model=MutesResponse)
@@ -439,6 +443,48 @@ def list_mutes(
     return MutesResponse(mutedUids=[snap.id for snap in col.stream()])
 
 
+@router.post(
+    "/mutes/{other_uid}",
+    response_model=MuteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(USER_MUTES_WRITE)
+def create_mute(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(require_not_banned),
+) -> MuteResponse:
+    if other_uid == user.uid:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="self_mute",
+            message="Cannot mute yourself",
+        )
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("mutes").document(other_uid)
+    now = datetime.now(UTC)
+    ref.set({"mutedAt": fb_firestore.SERVER_TIMESTAMP})
+    return MuteResponse(uid=other_uid, mutedAt=now)
+
+
+@router.delete("/mutes/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(USER_MUTES_WRITE)
+def delete_mute(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("mutes").document(other_uid)
+    ref.delete()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── blocks ───────────────────────────────────────────────────────────────
+
+
 @router.get("/blocks", response_model=BlocksResponse)
 def list_blocks(
     user: CurrentUser = Depends(get_current_user),
@@ -446,6 +492,45 @@ def list_blocks(
     db = get_firestore()
     col = db.collection("users").document(user.uid).collection("blocks")
     return BlocksResponse(blockedUids=[snap.id for snap in col.stream()])
+
+
+@router.post(
+    "/blocks/{other_uid}",
+    response_model=BlockResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(USER_BLOCKS_WRITE)
+def create_block(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(require_not_banned),
+) -> BlockResponse:
+    if other_uid == user.uid:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="self_block",
+            message="Cannot block yourself",
+        )
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("blocks").document(other_uid)
+    now = datetime.now(UTC)
+    ref.set({"blockedAt": fb_firestore.SERVER_TIMESTAMP})
+    return BlockResponse(uid=other_uid, blockedAt=now)
+
+
+@router.delete("/blocks/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(USER_BLOCKS_WRITE)
+def delete_block(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("blocks").document(other_uid)
+    ref.delete()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 __all__ = ["router"]

@@ -25,6 +25,7 @@ def _app(user: CurrentUser | None = None) -> FastAPI:
     app.include_router(users_router)
     if user is not None:
         app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[require_not_banned] = lambda: user
     return app
 
 
@@ -85,6 +86,91 @@ def test_list_blocks_returns_uid_list() -> None:
 def test_list_blocks_requires_auth() -> None:
     client = TestClient(_app(user=None))
     res = client.get("/api/users/me/blocks")
+    assert res.status_code == 401
+
+
+# ── mute / block writes ───────────────────────────────────────────────────
+
+
+def _doc_db() -> tuple[MagicMock, MagicMock]:
+    db = MagicMock()
+    ref = MagicMock()
+    users_col = db.collection.return_value
+    users_col.document.return_value.collection.return_value.document.return_value = ref
+    return db, ref
+
+
+def test_create_mute_writes_doc() -> None:
+    db, ref = _doc_db()
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.post("/api/users/me/mutes/bob")
+    assert res.status_code == 201
+    body = res.json()
+    assert body["uid"] == "bob"
+    ref.set.assert_called_once()
+    payload = ref.set.call_args[0][0]
+    assert "mutedAt" in payload
+
+
+def test_create_mute_rejects_self() -> None:
+    user = CurrentUser(uid="alice", claims={})
+    client = TestClient(_app(user))
+    res = client.post("/api/users/me/mutes/alice")
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "self_mute"
+
+
+def test_delete_mute_204() -> None:
+    db, ref = _doc_db()
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.delete("/api/users/me/mutes/bob")
+    assert res.status_code == 204
+    ref.delete.assert_called_once()
+
+
+def test_create_block_writes_doc() -> None:
+    db, ref = _doc_db()
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.post("/api/users/me/blocks/bob")
+    assert res.status_code == 201
+    body = res.json()
+    assert body["uid"] == "bob"
+    ref.set.assert_called_once()
+
+
+def test_create_block_rejects_self() -> None:
+    user = CurrentUser(uid="alice", claims={})
+    client = TestClient(_app(user))
+    res = client.post("/api/users/me/blocks/alice")
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "self_block"
+
+
+def test_delete_block_204() -> None:
+    db, ref = _doc_db()
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.delete("/api/users/me/blocks/bob")
+    assert res.status_code == 204
+    ref.delete.assert_called_once()
+
+
+def test_create_mute_requires_auth() -> None:
+    client = TestClient(_app(user=None))
+    res = client.post("/api/users/me/mutes/bob")
+    assert res.status_code == 401
+
+
+def test_delete_block_requires_auth() -> None:
+    client = TestClient(_app(user=None))
+    res = client.delete("/api/users/me/blocks/bob")
     assert res.status_code == 401
 
 
