@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   type Mock,
@@ -34,14 +34,6 @@ vi.mock("firebase/auth", () => ({
   deleteUser: vi.fn(),
 }));
 
-// --- firebase/firestore ----------------------------------------------------
-vi.mock("firebase/firestore", () => ({
-  doc: vi.fn(),
-  onSnapshot: vi.fn(),
-  setDoc: vi.fn(),
-  serverTimestamp: vi.fn(() => ({ _type: "serverTimestamp" })),
-}));
-
 // --- firebase/storage ------------------------------------------------------
 vi.mock("firebase/storage", () => ({
   ref: vi.fn(),
@@ -71,16 +63,42 @@ vi.mock("@/lib/hooks/useUploadPhoto", () => ({
 }));
 
 import * as fbAuth from "firebase/auth";
-import * as fbFirestore from "firebase/firestore";
-import * as fbStorage from "firebase/storage";
 
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
 import { AuthProvider } from "@/lib/auth-context";
 import OnboardingPage from "@/app/onboarding/page";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Fetch mock — covers the bootstrap GET that `useUser` now performs and
+// the POST /api/users/me that `ProfileForm` submits. Per-test handlers
+// override the default via `pushHandler`.
 // ---------------------------------------------------------------------------
+type Reply = {
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  json: () => Promise<unknown>;
+};
+type BootstrapBody = {
+  hasProfile: boolean;
+  profile: Record<string, unknown> | null;
+  claims?: { admin?: boolean };
+  deletionRequestedAt?: string | null;
+};
+
+let nextBootstrap: BootstrapBody = { hasProfile: false, profile: null };
+const fetchMock: Mock = vi.fn();
+const handlers: Array<{
+  match: (url: string, method: string) => boolean;
+  reply: () => Reply;
+}> = [];
+
+function pushHandler(
+  match: (url: string, method: string) => boolean,
+  reply: () => Reply,
+): void {
+  handlers.push({ match, reply });
+}
 
 function mockAuthState(user: { uid: string; email: string } | null) {
   vi.mocked(fbAuth.onAuthStateChanged).mockImplementation(
@@ -91,28 +109,36 @@ function mockAuthState(user: { uid: string; email: string } | null) {
   );
 }
 
-function mockProfileSnapshot(exists: boolean, data: Record<string, unknown> = {}) {
-  vi.mocked(fbFirestore.doc).mockReturnValue({} as ReturnType<typeof fbFirestore.doc>);
-  vi.mocked(fbFirestore.onSnapshot).mockImplementation(
-    ((_ref: unknown, cb: (snap: unknown) => void) => {
-      cb({ exists: () => exists, data: () => data });
-      return () => {};
-    }) as unknown as typeof fbFirestore.onSnapshot,
-  );
-}
-
 beforeEach(() => {
+  vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockReset();
+  handlers.length = 0;
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(typeof input === "string" ? input : input);
+    const method = (init?.method || "GET").toUpperCase();
+    for (const { match, reply } of handlers) {
+      if (match(url, method)) return reply();
+    }
+    if (url.includes("/api/users/me/bootstrap") && method === "GET") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => nextBootstrap,
+      };
+    }
+    throw new Error(`unexpected fetch in test: ${method} ${url}`);
+  });
+  nextBootstrap = { hasProfile: false, profile: null };
   mockReplace.mockClear();
   mockPush.mockClear();
   vi.mocked(fbAuth.onAuthStateChanged).mockReset();
   vi.mocked(fbAuth.deleteUser).mockReset();
-  vi.mocked(fbFirestore.doc).mockReset();
-  vi.mocked(fbFirestore.onSnapshot).mockReset();
-  vi.mocked(fbFirestore.setDoc).mockReset();
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -121,7 +147,7 @@ afterEach(() => {
 describe("OnboardingPage redirect logic", () => {
   it("redirects to /sign-in when not authenticated", async () => {
     mockAuthState(null);
-    mockProfileSnapshot(false);
+    nextBootstrap = { hasProfile: false, profile: null };
 
     render(
       <AuthProvider>
@@ -136,7 +162,19 @@ describe("OnboardingPage redirect logic", () => {
 
   it("redirects to /groups when user already has a profile", async () => {
     mockAuthState({ uid: "uid-1", email: "user@example.com" });
-    mockProfileSnapshot(true, { displayName: "Alice", role: "member", schemaVersion: 1 });
+    nextBootstrap = {
+      hasProfile: true,
+      profile: {
+        uid: "uid-1",
+        displayName: "Alice",
+        email: "user@example.com",
+        photoURL: null,
+        role: "member",
+        schemaVersion: 1,
+        isMinor: false,
+        createdAt: null,
+      },
+    };
 
     render(
       <AuthProvider>
@@ -151,7 +189,7 @@ describe("OnboardingPage redirect logic", () => {
 
   it("renders the profile form when user has no profile", async () => {
     mockAuthState({ uid: "uid-1", email: "user@example.com" });
-    mockProfileSnapshot(false);
+    nextBootstrap = { hasProfile: false, profile: null };
 
     render(
       <AuthProvider>
@@ -214,9 +252,24 @@ describe("ProfileForm validation", () => {
     });
   });
 
-  it("calls setDoc and navigates to /groups on valid submission", async () => {
-    vi.mocked(fbFirestore.setDoc).mockResolvedValue(undefined);
-    vi.mocked(fbFirestore.doc).mockReturnValue({} as ReturnType<typeof fbFirestore.doc>);
+  it("posts to /api/users/me and navigates to /groups on valid submission", async () => {
+    pushHandler(
+      (url, method) => url.includes("/api/users/me") && method === "POST",
+      () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          uid: "uid-1",
+          displayName: "Alice",
+          email: "user@example.com",
+          photoURL: null,
+          role: "member",
+          schemaVersion: 1,
+          isMinor: false,
+          createdAt: null,
+        }),
+      }),
+    );
 
     const user = userEvent.setup();
     renderForm();
@@ -227,14 +280,28 @@ describe("ProfileForm validation", () => {
     await user.click(screen.getByRole("button", { name: /complete profile/i }));
 
     await waitFor(() => {
-      expect(fbFirestore.setDoc).toHaveBeenCalledOnce();
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          String(c[0]).includes("/api/users/me") &&
+          (c[1] as RequestInit | undefined)?.method === "POST",
+      );
+      expect(calls.length).toBeGreaterThan(0);
+      const body = JSON.parse((calls[0][1] as RequestInit).body as string);
+      expect(body).toMatchObject({ displayName: "Alice", isMinor: false });
     });
     expect(mockPush).toHaveBeenCalledWith("/groups");
   });
 
-  it("shows error message when setDoc throws", async () => {
-    vi.mocked(fbFirestore.setDoc).mockRejectedValue(new Error("network"));
-    vi.mocked(fbFirestore.doc).mockReturnValue({} as ReturnType<typeof fbFirestore.doc>);
+  it("shows error message when the create-profile request fails", async () => {
+    pushHandler(
+      (url, method) => url.includes("/api/users/me") && method === "POST",
+      () => ({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        json: async () => ({ error: { code: "internal_error", message: "boom" } }),
+      }),
+    );
 
     const user = userEvent.setup();
     renderForm();
@@ -284,12 +351,30 @@ describe("Under-13 path", () => {
 });
 
 // ---------------------------------------------------------------------------
-// useUser cookie side-effect
+// useUser bootstrap (M2 of the data-layer migration)
+//
+// The cookie that gates `frontend/middleware.ts` is now set server-side
+// from `GET /api/users/me/bootstrap` and from `POST /api/users/me`, so
+// this hook no longer manages it. The tests below assert the new
+// contract: hook returns the profile from the bootstrap response and
+// does not import `firebase/firestore`.
 // ---------------------------------------------------------------------------
-describe("useUser cookie", () => {
-  it("sets jacob-has-profile cookie when profile exists", async () => {
+describe("useUser", () => {
+  it("returns the profile from the bootstrap response", async () => {
     const { useUser } = await import("@/lib/hooks/useUser");
-    mockProfileSnapshot(true, { displayName: "Alice", role: "member", schemaVersion: 1 });
+    nextBootstrap = {
+      hasProfile: true,
+      profile: {
+        uid: "uid-1",
+        displayName: "Alice",
+        email: "alice@example.com",
+        photoURL: null,
+        role: "member",
+        schemaVersion: 1,
+        isMinor: false,
+        createdAt: null,
+      },
+    };
 
     let result: ReturnType<typeof useUser> | undefined;
     function Probe() {
@@ -298,49 +383,13 @@ describe("useUser cookie", () => {
     }
     render(<Probe />);
 
-    await waitFor(() => {
-      expect(result?.loading).toBe(false);
-    });
-    expect(document.cookie).toContain("jacob-has-profile=1");
+    await waitFor(() => expect(result?.loading).toBe(false));
+    expect(result?.profile?.displayName).toBe("Alice");
   });
 
-  // M10 — auth-state-change cookie race coverage gap
-  it("starts in loading state with the cookie unchanged before the snapshot fires", async () => {
-    // Document the *known* race: useUser is mounted with a uid before the
-    // snapshot has fired. Initial state must be `loading: true` and the
-    // cookie should not yet be set by this hook on this render. (The
-    // production race lives between the SSR middleware run and the
-    // first snapshot — see the comment in `useUser.ts`.)
-    document.cookie = "jacob-has-profile=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-
-    // Mock onSnapshot so the callback is *captured* but never fired.
-    vi.mocked(fbFirestore.doc).mockReturnValue({} as ReturnType<typeof fbFirestore.doc>);
-    vi.mocked(fbFirestore.onSnapshot).mockImplementation(
-      (() => {
-        return () => {};
-      }) as unknown as typeof fbFirestore.onSnapshot,
-    );
-
+  it("returns profile=null when hasProfile is false", async () => {
     const { useUser } = await import("@/lib/hooks/useUser");
-
-    let result: ReturnType<typeof useUser> | undefined;
-    function Probe() {
-      result = useUser("uid-pending");
-      return null;
-    }
-    render(<Probe />);
-    // Right after render, before the mocked snapshot has been delivered,
-    // the hook is in its loading state and document.cookie does not yet
-    // contain the flag.
-    expect(result?.loading).toBe(true);
-    expect(document.cookie).not.toContain("jacob-has-profile=1");
-  });
-
-  it("clears the cookie when the user doc does not exist (signed-out / deleted)", async () => {
-    const { useUser } = await import("@/lib/hooks/useUser");
-    document.cookie = "jacob-has-profile=1; path=/";
-
-    mockProfileSnapshot(false);
+    nextBootstrap = { hasProfile: false, profile: null };
 
     let result: ReturnType<typeof useUser> | undefined;
     function Probe() {
@@ -349,9 +398,41 @@ describe("useUser cookie", () => {
     }
     render(<Probe />);
 
-    await waitFor(() => {
-      expect(result?.loading).toBe(false);
-    });
-    expect(document.cookie).not.toContain("jacob-has-profile=1");
+    await waitFor(() => expect(result?.loading).toBe(false));
+    expect(result?.profile).toBeNull();
+  });
+
+  it("starts in loading state before the bootstrap response arrives", async () => {
+    const { useUser } = await import("@/lib/hooks/useUser");
+
+    let result: ReturnType<typeof useUser> | undefined;
+    function Probe() {
+      result = useUser("uid-pending");
+      return null;
+    }
+    render(<Probe />);
+    expect(result?.loading).toBe(true);
+  });
+
+  it("refresh() re-fetches the bootstrap endpoint", async () => {
+    const { useUser } = await import("@/lib/hooks/useUser");
+    nextBootstrap = { hasProfile: false, profile: null };
+
+    let hook: ReturnType<typeof useUser> | undefined;
+    function Probe() {
+      hook = useUser("uid-1");
+      return null;
+    }
+    render(<Probe />);
+    await waitFor(() => expect(hook?.loading).toBe(false));
+
+    const before = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("/api/users/me/bootstrap"),
+    ).length;
+    await hook!.refresh();
+    const after = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("/api/users/me/bootstrap"),
+    ).length;
+    expect(after).toBeGreaterThan(before);
   });
 });

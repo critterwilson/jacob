@@ -1,0 +1,536 @@
+"""Users router — M2 of the data-layer migration.
+
+Owns every `users/{uid}` and `users/{uid}/...` read/write that the
+frontend used to perform via the Firestore SDK. Every endpoint scopes to
+the calling user (`me`) — administrative reads on other users live
+elsewhere.
+
+The cookie-bootstrap (`GET /api/users/me/bootstrap`) is the load-bearing
+endpoint for the onboarding redirect: `frontend/middleware.ts` keys off
+the `jacob-has-profile` cookie, and after M2 the cookie is set
+server-side from the bootstrap response (and from `POST /api/users/me`).
+See `docs/data-layer-migration-plan.md` §7.M2.5.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import logging
+from datetime import UTC, datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+from firebase_admin import firestore as fb_firestore
+
+from app.deps import get_current_user, require_not_banned
+from app.errors import APIError
+from app.limits import (
+    USER_BLOCKS_WRITE,
+    USER_BOOTSTRAP,
+    USER_DEVICE_REGISTER,
+    USER_MUTES_WRITE,
+    USER_NOTIFICATION_PREFS_WRITE,
+    USER_NOTIFICATIONS_LIST,
+    USER_PROFILE_CREATE,
+    USER_PROFILE_UPDATE,
+)
+from app.middleware.rate_limit import limiter
+from app.models.user import CurrentUser
+from app.models.users import (
+    BlockResponse,
+    BlocksResponse,
+    BootstrapClaims,
+    BootstrapResponse,
+    CreateProfileRequest,
+    DeviceResponse,
+    MuteResponse,
+    MutesResponse,
+    Notification,
+    NotificationPrefs,
+    NotificationsListResponse,
+    RegisterDeviceRequest,
+    UpdateProfileRequest,
+    UserProfile,
+)
+from app.services.audit import write_audit_log
+from app.services.firebase import get_firestore
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/users/me", tags=["users"])
+
+_DEFAULT_NOTIFICATION_PREFS = NotificationPrefs()
+_NOTIFICATIONS_PAGE_DEFAULT = 50
+_NOTIFICATIONS_PAGE_MAX = 100
+
+
+# ── helpers ────────────────────────────────────────────────────────────────
+
+
+def _ts_to_dt(value: Any) -> datetime | None:
+    """Convert Firestore Timestamp / datetime / None to a datetime."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    converter = getattr(value, "ToDatetime", None)
+    if callable(converter):
+        try:
+            result = converter(tzinfo=UTC)
+        except TypeError:
+            result = converter()
+        if isinstance(result, datetime):
+            return result if result.tzinfo else result.replace(tzinfo=UTC)
+    return None
+
+
+def _user_doc_to_profile(uid: str, data: dict[str, Any]) -> UserProfile:
+    """Hydrate a `UserProfile` from a `users/{uid}` snapshot dict."""
+    return UserProfile(
+        uid=uid,
+        displayName=str(data.get("displayName") or ""),
+        email=data.get("email"),
+        photoURL=data.get("photoURL"),
+        role=str(data.get("role") or "member"),
+        schemaVersion=int(data.get("schemaVersion") or 1),
+        isMinor=bool(data.get("isMinor") or False),
+        createdAt=_ts_to_dt(data.get("createdAt")),
+        phone=data.get("phone"),
+        location=data.get("location"),
+        faithBackground=data.get("faithBackground"),
+    )
+
+
+def _set_profile_cookie(response: Response, request: Request, *, has_profile: bool) -> None:
+    """Set or clear the `jacob-has-profile` cookie used by the Next.js middleware."""
+    secure = request.url.scheme == "https"
+    if has_profile:
+        response.set_cookie(
+            "jacob-has-profile",
+            "1",
+            path="/",
+            samesite="lax",
+            secure=secure,
+            httponly=False,
+        )
+    else:
+        # Clear the cookie. Browsers expect Max-Age=0 alongside the same
+        # Path/SameSite attributes the original cookie was written with.
+        response.set_cookie(
+            "jacob-has-profile",
+            "",
+            path="/",
+            max_age=0,
+            samesite="lax",
+            secure=secure,
+            httponly=False,
+        )
+
+
+def _device_id_from_token(token: str) -> str:
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return digest[:16]
+
+
+def _encode_cursor(created_at: datetime, doc_id: str) -> str:
+    payload = f"{created_at.isoformat()}|{doc_id}".encode()
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, str] | None:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+        ts_str, doc_id = raw.split("|", 1)
+        return datetime.fromisoformat(ts_str), doc_id
+    except Exception:  # noqa: BLE001
+        return None
+
+
+# ── bootstrap ──────────────────────────────────────────────────────────────
+
+
+@router.get("/bootstrap", response_model=BootstrapResponse)
+@limiter.limit(USER_BOOTSTRAP)
+def bootstrap(
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> BootstrapResponse:
+    db = get_firestore()
+    snap = db.collection("users").document(user.uid).get()
+    has_profile = bool(getattr(snap, "exists", False))
+    profile: UserProfile | None = None
+    deletion_requested_at: datetime | None = None
+    if has_profile:
+        data = snap.to_dict() or {}
+        profile = _user_doc_to_profile(user.uid, data)
+        deletion_requested_at = _ts_to_dt(data.get("deletionRequestedAt"))
+
+    _set_profile_cookie(response, request, has_profile=has_profile)
+
+    return BootstrapResponse(
+        profile=profile,
+        hasProfile=has_profile,
+        claims=BootstrapClaims(admin=user.claims.get("admin") is True),
+        deletionRequestedAt=deletion_requested_at,
+    )
+
+
+# ── profile create / update ───────────────────────────────────────────────
+
+
+@router.post("", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
+@limiter.limit(USER_PROFILE_CREATE)
+def create_profile(
+    request: Request,
+    response: Response,
+    body: CreateProfileRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> UserProfile:
+    db = get_firestore()
+    user_ref = db.collection("users").document(user.uid)
+    snap = user_ref.get()
+    if getattr(snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="profile_exists",
+            message="Profile already exists",
+        )
+
+    photo_url = str(body.photoURL) if body.photoURL is not None else None
+    payload: dict[str, Any] = {
+        "displayName": body.displayName,
+        "email": user.email,
+        "photoURL": photo_url,
+        "role": "member",
+        "schemaVersion": 1,
+        "isMinor": body.isMinor,
+        "createdAt": fb_firestore.SERVER_TIMESTAMP,
+    }
+    if body.phone:
+        payload["phone"] = body.phone
+    if body.location:
+        payload["location"] = body.location
+    if body.faithBackground:
+        payload["faithBackground"] = body.faithBackground
+
+    user_ref.set(payload)
+    write_audit_log(
+        actor_uid=user.uid,
+        action="account.create_profile",
+        target_ref=f"users/{user.uid}",
+        payload={"isMinor": body.isMinor},
+    )
+
+    fresh = user_ref.get()
+    profile = _user_doc_to_profile(user.uid, fresh.to_dict() or {})
+    _set_profile_cookie(response, request, has_profile=True)
+    return profile
+
+
+@router.patch("", response_model=UserProfile)
+@limiter.limit(USER_PROFILE_UPDATE)
+def update_profile(
+    request: Request,
+    response: Response,
+    body: UpdateProfileRequest,
+    user: CurrentUser = Depends(require_not_banned),
+) -> UserProfile:
+    supplied = body.model_dump(exclude_unset=True)
+    if not supplied:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="empty_update",
+            message="At least one field must be supplied",
+        )
+
+    db = get_firestore()
+    user_ref = db.collection("users").document(user.uid)
+    if not getattr(user_ref.get(), "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="user_not_found",
+            message="Profile does not exist",
+        )
+
+    update: dict[str, Any] = {}
+    if "displayName" in supplied:
+        update["displayName"] = supplied["displayName"]
+    if "photoURL" in supplied:
+        url = supplied["photoURL"]
+        update["photoURL"] = str(url) if url is not None else None
+    if "isMinor" in supplied:
+        update["isMinor"] = bool(supplied["isMinor"])
+
+    user_ref.update(update)
+    write_audit_log(
+        actor_uid=user.uid,
+        action="account.update_profile",
+        target_ref=f"users/{user.uid}",
+        payload={"changedKeys": sorted(update.keys())},
+    )
+
+    fresh = user_ref.get()
+    profile = _user_doc_to_profile(user.uid, fresh.to_dict() or {})
+    return profile
+
+
+# ── notification preferences ─────────────────────────────────────────────
+
+
+@router.get("/notification-prefs", response_model=NotificationPrefs)
+def get_notification_prefs(
+    user: CurrentUser = Depends(get_current_user),
+) -> NotificationPrefs:
+    db = get_firestore()
+    snap = (
+        db.collection("users")
+        .document(user.uid)
+        .collection("notificationPrefs")
+        .document("main")
+        .get()
+    )
+    if not getattr(snap, "exists", False):
+        return _DEFAULT_NOTIFICATION_PREFS
+    data = snap.to_dict() or {}
+    # Merge with defaults — older docs may pre-date a new flag.
+    merged = _DEFAULT_NOTIFICATION_PREFS.model_copy(
+        update={
+            k: v for k, v in data.items() if k in NotificationPrefs.model_fields and v is not None
+        }
+    )
+    return merged
+
+
+@router.put("/notification-prefs", response_model=NotificationPrefs)
+@limiter.limit(USER_NOTIFICATION_PREFS_WRITE)
+def put_notification_prefs(
+    request: Request,
+    response: Response,
+    body: NotificationPrefs,
+    user: CurrentUser = Depends(require_not_banned),
+) -> NotificationPrefs:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("notificationPrefs").document("main")
+    ref.set(body.model_dump())
+    return body
+
+
+# ── FCM device registration ───────────────────────────────────────────────
+
+
+@router.post("/devices", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(USER_DEVICE_REGISTER)
+def register_device(
+    request: Request,
+    response: Response,
+    body: RegisterDeviceRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> DeviceResponse:
+    db = get_firestore()
+    devices_col = db.collection("users").document(user.uid).collection("devices")
+
+    # Dedupe: if this fcmToken already exists for the user, return the
+    # existing deviceId rather than spawn a duplicate doc. The original
+    # client logic hashed the token to derive a stable id so duplicates
+    # were already collapsed; the backend matches that contract.
+    existing = list(devices_col.where("fcmToken", "==", body.fcmToken).limit(1).stream())
+    if existing:
+        snap = existing[0]
+        snap.reference.update({"lastSeenAt": fb_firestore.SERVER_TIMESTAMP})
+        registered = _ts_to_dt((snap.to_dict() or {}).get("createdAt")) or datetime.now(UTC)
+        return DeviceResponse(deviceId=snap.id, registeredAt=registered)
+
+    device_id = _device_id_from_token(body.fcmToken)
+    now = datetime.now(UTC)
+    devices_col.document(device_id).set(
+        {
+            "fcmToken": body.fcmToken,
+            "platform": body.platform,
+            "userAgent": body.userAgent,
+            "appVersion": body.appVersion,
+            "createdAt": fb_firestore.SERVER_TIMESTAMP,
+            "lastSeenAt": fb_firestore.SERVER_TIMESTAMP,
+        }
+    )
+    return DeviceResponse(deviceId=device_id, registeredAt=now)
+
+
+@router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_device(
+    device_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("devices").document(device_id)
+    if not getattr(ref.get(), "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="device_not_found",
+            message="Device not registered",
+        )
+    ref.delete()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── notifications inbox ──────────────────────────────────────────────────
+
+
+@router.get("/notifications", response_model=NotificationsListResponse)
+@limiter.limit(USER_NOTIFICATIONS_LIST)
+def list_notifications(
+    request: Request,
+    response: Response,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=_NOTIFICATIONS_PAGE_DEFAULT, ge=1, le=_NOTIFICATIONS_PAGE_MAX),
+    unread_only: bool = Query(default=False, alias="unreadOnly"),
+    user: CurrentUser = Depends(get_current_user),
+) -> NotificationsListResponse:
+    db = get_firestore()
+    col = db.collection("users").document(user.uid).collection("notifications")
+    query = col.order_by("createdAt", direction=fb_firestore.Query.DESCENDING)
+    if unread_only:
+        query = query.where("readAt", "==", None)
+    if cursor:
+        decoded = _decode_cursor(cursor)
+        if decoded is None:
+            raise APIError(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="invalid_cursor",
+                message="Cursor is malformed",
+            )
+        cursor_ts, _ = decoded
+        query = query.start_after({"createdAt": cursor_ts})
+    query = query.limit(limit + 1)
+
+    items: list[Notification] = []
+    snaps = list(query.stream())
+    has_more = len(snaps) > limit
+    snaps = snaps[:limit]
+    for snap in snaps:
+        data = snap.to_dict() or {}
+        created_at = _ts_to_dt(data.get("createdAt"))
+        if created_at is None:
+            continue
+        items.append(
+            Notification(
+                id=snap.id,
+                kind=str(data.get("kind") or "unknown"),
+                createdAt=created_at,
+                readAt=_ts_to_dt(data.get("readAt")),
+                payload=dict(data.get("payload") or {}),
+            )
+        )
+
+    next_cursor: str | None = None
+    if has_more and items:
+        last = items[-1]
+        next_cursor = _encode_cursor(last.createdAt, last.id)
+
+    return NotificationsListResponse(items=items, nextCursor=next_cursor)
+
+
+# ── mutes ────────────────────────────────────────────────────────────────
+
+
+@router.get("/mutes", response_model=MutesResponse)
+def list_mutes(
+    user: CurrentUser = Depends(get_current_user),
+) -> MutesResponse:
+    db = get_firestore()
+    col = db.collection("users").document(user.uid).collection("mutes")
+    return MutesResponse(mutedUids=[snap.id for snap in col.stream()])
+
+
+@router.post(
+    "/mutes/{other_uid}",
+    response_model=MuteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(USER_MUTES_WRITE)
+def create_mute(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(require_not_banned),
+) -> MuteResponse:
+    if other_uid == user.uid:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="self_mute",
+            message="Cannot mute yourself",
+        )
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("mutes").document(other_uid)
+    now = datetime.now(UTC)
+    ref.set({"mutedAt": fb_firestore.SERVER_TIMESTAMP})
+    return MuteResponse(uid=other_uid, mutedAt=now)
+
+
+@router.delete("/mutes/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(USER_MUTES_WRITE)
+def delete_mute(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("mutes").document(other_uid)
+    ref.delete()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── blocks ───────────────────────────────────────────────────────────────
+
+
+@router.get("/blocks", response_model=BlocksResponse)
+def list_blocks(
+    user: CurrentUser = Depends(get_current_user),
+) -> BlocksResponse:
+    db = get_firestore()
+    col = db.collection("users").document(user.uid).collection("blocks")
+    return BlocksResponse(blockedUids=[snap.id for snap in col.stream()])
+
+
+@router.post(
+    "/blocks/{other_uid}",
+    response_model=BlockResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(USER_BLOCKS_WRITE)
+def create_block(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(require_not_banned),
+) -> BlockResponse:
+    if other_uid == user.uid:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="self_block",
+            message="Cannot block yourself",
+        )
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("blocks").document(other_uid)
+    now = datetime.now(UTC)
+    ref.set({"blockedAt": fb_firestore.SERVER_TIMESTAMP})
+    return BlockResponse(uid=other_uid, blockedAt=now)
+
+
+@router.delete("/blocks/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(USER_BLOCKS_WRITE)
+def delete_block(
+    request: Request,
+    response: Response,
+    other_uid: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("blocks").document(other_uid)
+    ref.delete()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+__all__ = ["router"]

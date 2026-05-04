@@ -1,11 +1,17 @@
 "use client";
 
-import { doc, onSnapshot, Timestamp } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
-const GRACE_PERIOD_DAYS = 14;
+const POLL_INTERVAL_MS = 60_000;
+
+type DeleteStatusResponse = {
+  status: "none" | "pending";
+  deletionRequestedAt?: string | null;
+  finalizeAt?: string | null;
+  keepBody?: boolean | null;
+};
 
 export type DeletionStatus = {
   pending: boolean;
@@ -13,54 +19,67 @@ export type DeletionStatus = {
   keepBody: boolean;
 };
 
-function tsToDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (value instanceof Timestamp) return value.toDate();
-  if (typeof value === "object" && value !== null && "toDate" in value) {
-    const fn = (value as { toDate: () => Date }).toDate;
-    if (typeof fn === "function") return fn.call(value);
-  }
-  return null;
-}
+const EMPTY: DeletionStatus = {
+  pending: false,
+  finalizeAt: null,
+  keepBody: true,
+};
 
+/**
+ * Replaces the prior `onSnapshot(users/{uid})` listener with a poll
+ * against `GET /api/account/delete/status`. Polls every 60s while the
+ * hook is mounted; the deletion-banner / delete-account page mounts the
+ * hook for as long as the user is on those views, which is enough — a
+ * grace-window state change is already on the order of seconds-to-minutes.
+ */
 export function useDeletionStatus(uid: string | undefined): DeletionStatus {
-  const [status, setStatus] = useState<DeletionStatus>({
-    pending: false,
-    finalizeAt: null,
-    keepBody: true,
-  });
+  const [status, setStatus] = useState<DeletionStatus>(EMPTY);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!uid) {
-      setStatus({ pending: false, finalizeAt: null, keepBody: true });
+      setStatus(EMPTY);
       return;
     }
+    let cancelled = false;
 
-    const unsub = onSnapshot(
-      doc(firestore, "users", uid),
-      (snap) => {
-        const data = snap.exists() ? snap.data() : null;
-        const requestedAt = tsToDate(data?.deletionRequestedAt);
-        if (!requestedAt) {
-          setStatus({ pending: false, finalizeAt: null, keepBody: true });
-          return;
-        }
-        const finalizeAt = new Date(
-          requestedAt.getTime() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000,
+    const fetchOnce = async () => {
+      abortRef.current?.abort();
+      const ctl = new AbortController();
+      abortRef.current = ctl;
+      try {
+        const res = await apiGet<DeleteStatusResponse>(
+          "/api/account/delete/status",
+          { signal: ctl.signal },
         );
-        setStatus({
-          pending: true,
-          finalizeAt,
-          keepBody: data?.deletionKeepBody !== false,
-        });
-      },
-      () => {
-        setStatus({ pending: false, finalizeAt: null, keepBody: true });
-      },
-    );
+        if (cancelled) return;
+        if (res.status === "pending" && res.finalizeAt) {
+          setStatus({
+            pending: true,
+            finalizeAt: new Date(res.finalizeAt),
+            keepBody: res.keepBody !== false,
+          });
+        } else {
+          setStatus(EMPTY);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.code !== "aborted") {
+          // Treat any error as "no pending" — better to under-show the
+          // banner than to render a stale one against the wrong state.
+          console.warn("deletion_status_fetch_failed", err.code, err.status);
+        }
+        setStatus(EMPTY);
+      }
+    };
 
-    return unsub;
+    void fetchOnce();
+    const handle = setInterval(fetchOnce, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+      abortRef.current?.abort();
+    };
   }, [uid]);
 
   return status;

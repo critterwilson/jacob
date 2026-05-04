@@ -34,60 +34,89 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/export",
 }));
 
-// Snapshot to feed the Firestore listener. Keys are doc ids; values
-// are doc data shapes that mimic Firestore Timestamps via toDate().
-type Job = {
-  requestedAt?: { toDate: () => Date };
-  startedAt?: { toDate: () => Date } | null;
-  completedAt?: { toDate: () => Date } | null;
-  failedAt?: { toDate: () => Date } | null;
-  expiresAt?: { toDate: () => Date } | null;
-  downloadUrl?: string | null;
-  byteCount?: number | null;
-  failureReason?: string | null;
-  schemaVersion?: number;
+// After M2 the export page reads `useExportStatus` which polls
+// `/api/account/export/status` instead of subscribing to Firestore.
+// Tests configure `nextStatus` to control what the GET returns.
+type ExportStatusResponse = {
+  jobId: string;
+  status: "none" | "queued" | "processing" | "ready" | "failed" | "expired";
+  requestedAt: string | null;
+  completedAt: string | null;
+  expiresAt: string | null;
+  failureReason: string | null;
+  byteCount: number | null;
+  schemaVersion: number;
+  downloadUrl: string | null;
 };
 
-let nextDocs: Record<string, Job> = {};
-
-vi.mock("firebase/firestore", async () => {
-  const actual = await vi.importActual<typeof import("firebase/firestore")>(
-    "firebase/firestore",
-  );
-  return {
-    ...actual,
-    collection: vi.fn(() => ({})),
-    onSnapshot: vi.fn(
-      (_ref: unknown, onNext: (snap: unknown) => void) => {
-        const docs = Object.entries(nextDocs);
-        const snap = {
-          empty: docs.length === 0,
-          forEach: (fn: (d: { id: string; data: () => Job }) => void) => {
-            docs.forEach(([id, data]) =>
-              fn({ id, data: () => data }),
-            );
-          },
-        };
-        onNext(snap);
-        return () => undefined;
-      },
-    ),
-  };
-});
+let nextStatus: ExportStatusResponse = {
+  jobId: "",
+  status: "none",
+  requestedAt: null,
+  completedAt: null,
+  expiresAt: null,
+  failureReason: null,
+  byteCount: null,
+  schemaVersion: 1,
+  downloadUrl: null,
+};
 
 vi.mock("@/lib/firebase", () => ({
   firestore: {},
   app: {},
-  auth: {},
+  auth: { currentUser: null },
   storage: {},
 }));
 
 const fetchMock: Mock = vi.fn();
 
+type Handler = () => {
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  json: () => Promise<unknown>;
+};
+const handlers: Array<{ match: (url: string, method: string) => boolean; reply: Handler }> = [];
+
+function pushHandler(match: (url: string, method: string) => boolean, reply: Handler): void {
+  handlers.push({ match, reply });
+}
+
+function matchesUrl(substring: string, method?: string) {
+  return (url: string, m: string) => url.includes(substring) && (!method || m === method);
+}
+
 beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
-  nextDocs = {};
+  handlers.length = 0;
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(typeof input === "string" ? input : input);
+    const method = (init?.method || "GET").toUpperCase();
+    for (const { match, reply } of handlers) {
+      if (match(url, method)) return reply();
+    }
+    if (url.includes("/api/account/export/status") && method === "GET") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => nextStatus,
+      };
+    }
+    throw new Error(`unexpected fetch in test: ${method} ${url}`);
+  });
+  nextStatus = {
+    jobId: "",
+    status: "none",
+    requestedAt: null,
+    completedAt: null,
+    expiresAt: null,
+    failureReason: null,
+    byteCount: null,
+    schemaVersion: 1,
+    downloadUrl: null,
+  };
 });
 
 afterEach(() => {
@@ -105,21 +134,39 @@ describe("ExportPage", () => {
   });
 
   it("posts /api/account/export when the user clicks Request", async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    pushHandler(
+      (url, method) =>
+        url.includes("/api/account/export") &&
+        !url.includes("/status") &&
+        method === "POST",
+      () => ({ ok: true, status: 200, json: async () => ({}) }),
+    );
     render(<ExportPage />);
     fireEvent.click(screen.getByRole("button", { name: /Request export/ }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain("/api/account/export");
-    expect((init as RequestInit).method).toBe("POST");
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          String(c[0]).includes("/api/account/export") &&
+          !String(c[0]).includes("/status") &&
+          (c[1] as RequestInit | undefined)?.method === "POST",
+      );
+      expect(calls.length).toBeGreaterThan(0);
+    });
   });
 
   it("shows export_in_flight error message on 409", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 409,
-      json: async () => ({ error: { code: "export_in_flight" } }),
-    });
+    pushHandler(
+      (url, method) =>
+        url.includes("/api/account/export") &&
+        !url.includes("/status") &&
+        method === "POST",
+      () => ({
+        ok: false,
+        status: 409,
+        statusText: "Conflict",
+        json: async () => ({ error: { code: "export_in_flight" } }),
+      }),
+    );
     render(<ExportPage />);
     fireEvent.click(screen.getByRole("button", { name: /Request export/ }));
     await waitFor(() =>
@@ -130,18 +177,16 @@ describe("ExportPage", () => {
   });
 
   it("shows the download button and signed URL when status is ready", async () => {
-    nextDocs = {
-      jobx: {
-        requestedAt: { toDate: () => new Date("2026-05-01T12:00:00Z") },
-        startedAt: { toDate: () => new Date("2026-05-01T12:01:00Z") },
-        completedAt: { toDate: () => new Date("2026-05-01T12:02:00Z") },
-        expiresAt: {
-          toDate: () => new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
-        },
-        downloadUrl: "https://example.com/signed-url-abc",
-        byteCount: 2048,
-        schemaVersion: 1,
-      },
+    nextStatus = {
+      jobId: "jobx",
+      status: "ready",
+      requestedAt: "2026-05-01T12:00:00Z",
+      completedAt: "2026-05-01T12:02:00Z",
+      expiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+      failureReason: null,
+      byteCount: 2048,
+      schemaVersion: 1,
+      downloadUrl: "https://example.com/signed-url-abc",
     };
     render(<ExportPage />);
     await waitFor(() =>
@@ -156,18 +201,16 @@ describe("ExportPage", () => {
   });
 
   it("marks expired jobs and lets the user request a new one", async () => {
-    nextDocs = {
-      jobx: {
-        requestedAt: { toDate: () => new Date(Date.now() - 9 * 24 * 60 * 60 * 1000) },
-        startedAt: { toDate: () => new Date(Date.now() - 9 * 24 * 60 * 60 * 1000) },
-        completedAt: { toDate: () => new Date(Date.now() - 9 * 24 * 60 * 60 * 1000) },
-        expiresAt: {
-          toDate: () => new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        },
-        downloadUrl: "https://example.com/signed-old",
-        byteCount: 100,
-        schemaVersion: 1,
-      },
+    nextStatus = {
+      jobId: "jobx",
+      status: "expired",
+      requestedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+      completedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      failureReason: null,
+      byteCount: 100,
+      schemaVersion: 1,
+      downloadUrl: "https://example.com/signed-old",
     };
     render(<ExportPage />);
     await waitFor(() =>
@@ -176,7 +219,6 @@ describe("ExportPage", () => {
     expect(
       screen.getByRole("button", { name: /Request a new export/ }),
     ).toBeInTheDocument();
-    // No live download button when expired.
     expect(
       screen.queryByRole("button", { name: /Download my data/ }),
     ).not.toBeInTheDocument();

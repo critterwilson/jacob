@@ -4,8 +4,9 @@ import { type NextRequest, NextResponse } from "next/server";
 // The real access control is Firestore security rules — this only prevents
 // accidental navigation before onboarding completes.
 //
-// "jacob-has-profile" is set by useUser.ts (client-side) once a users/{uid}
-// document is confirmed in Firestore. It is NOT a security boundary.
+// "jacob-has-profile" is set server-side by `GET /api/users/me/bootstrap`
+// (and on profile create). It is NOT a security boundary, just a UX
+// optimisation. See data-layer migration plan §7.M2.5.
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -1,17 +1,17 @@
 "use client";
 
-import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
 /**
  * T38 — live status of the user's most recent self-serve export job.
  *
- * Listens directly to `users/{uid}/exports`. The collection is
- * server-only-write (rules tested in `firestore/tests/exports.rules.test.ts`),
- * so the listener can never be tricked into seeing a job written by
- * anyone other than the backend processor.
+ * After M2 of the data-layer migration, the hook polls
+ * `GET /api/account/export/status` every 5s while a job is in flight
+ * (queued or processing) and every 30s otherwise. The previous Firestore
+ * listener tracked field-level changes; the polling cadence here is
+ * tight enough that ready/failed transitions still feel snappy.
  */
 
 export type ExportStatus =
@@ -34,6 +34,18 @@ export type ExportJob = {
   schemaVersion: number;
 };
 
+type ExportJobResponse = {
+  jobId: string;
+  status: ExportStatus;
+  requestedAt: string | null;
+  completedAt: string | null;
+  expiresAt: string | null;
+  failureReason: string | null;
+  byteCount: number | null;
+  schemaVersion: number;
+  downloadUrl: string | null;
+};
+
 const DEFAULT: ExportJob = {
   jobId: "",
   status: "none",
@@ -46,93 +58,72 @@ const DEFAULT: ExportJob = {
   schemaVersion: 1,
 };
 
-function tsToDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const ts = value as Partial<Timestamp> & { toDate?: () => Date };
-  if (typeof ts.toDate === "function") return ts.toDate();
-  return null;
+const ACTIVE_INTERVAL_MS = 5_000;
+const IDLE_INTERVAL_MS = 30_000;
+
+function isInFlight(s: ExportStatus): boolean {
+  return s === "queued" || s === "processing";
 }
 
-function deriveStatus(data: Record<string, unknown>): ExportStatus {
-  if (data.failedAt) return "failed";
-  if (data.completedAt) {
-    const expiresAt = tsToDate(data.expiresAt);
-    if (expiresAt && expiresAt.getTime() <= Date.now()) return "expired";
-    return "ready";
-  }
-  if (data.startedAt) return "processing";
-  return "queued";
+function toJob(res: ExportJobResponse): ExportJob {
+  return {
+    jobId: res.jobId,
+    status: res.status,
+    requestedAt: res.requestedAt ? new Date(res.requestedAt) : null,
+    completedAt: res.completedAt ? new Date(res.completedAt) : null,
+    expiresAt: res.expiresAt ? new Date(res.expiresAt) : null,
+    failureReason: res.failureReason ?? null,
+    byteCount: res.byteCount ?? null,
+    downloadUrl: res.downloadUrl ?? null,
+    schemaVersion: res.schemaVersion ?? 1,
+  };
 }
 
 export function useExportStatus(uid: string | undefined): ExportJob {
   const [job, setJob] = useState<ExportJob>(DEFAULT);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!uid) {
       setJob(DEFAULT);
       return;
     }
+    let cancelled = false;
+    let handle: ReturnType<typeof setTimeout> | null = null;
+    let lastStatus: ExportStatus = "none";
 
-    const exportsCol = collection(firestore, "users", uid, "exports");
-    const unsub = onSnapshot(
-      exportsCol,
-      (snap) => {
-        if (snap.empty) {
-          setJob(DEFAULT);
-          return;
-        }
-        // Pick the most recent job by `requestedAt`.
-        let latest: { id: string; data: Record<string, unknown> } | null = null;
-        let latestTs = -Infinity;
-        snap.forEach((d) => {
-          const data = d.data() as Record<string, unknown>;
-          const ts = tsToDate(data.requestedAt);
-          const t = ts ? ts.getTime() : 0;
-          if (t > latestTs || (t === latestTs && (!latest || d.id > latest.id))) {
-            latestTs = t;
-            latest = { id: d.id, data };
-          }
+    const tick = async () => {
+      abortRef.current?.abort();
+      const ctl = new AbortController();
+      abortRef.current = ctl;
+      try {
+        const res = await apiGet<ExportJobResponse>("/api/account/export/status", {
+          signal: ctl.signal,
         });
-        if (!latest) {
-          setJob(DEFAULT);
-          return;
+        if (cancelled) return;
+        const next = toJob(res);
+        lastStatus = next.status;
+        setJob(next);
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.code !== "aborted") {
+          console.warn("export_status_fetch_failed", err.code, err.status);
         }
-        const { id: jobId, data } = latest as {
-          id: string;
-          data: Record<string, unknown>;
-        };
-        const completedAt = tsToDate(data.completedAt);
-        const downloadUrlRaw = data.downloadUrl;
-        const downloadUrl =
-          typeof downloadUrlRaw === "string" && downloadUrlRaw ? downloadUrlRaw : null;
-        const failureReasonRaw = data.failureReason;
-        const failureReason =
-          typeof failureReasonRaw === "string" ? failureReasonRaw : null;
-        const byteCountRaw = data.byteCount;
-        const byteCount =
-          typeof byteCountRaw === "number" ? byteCountRaw : null;
-        const schemaVersionRaw = data.schemaVersion;
-        const schemaVersion =
-          typeof schemaVersionRaw === "number" ? schemaVersionRaw : 1;
-        setJob({
-          jobId,
-          status: deriveStatus(data),
-          requestedAt: tsToDate(data.requestedAt),
-          completedAt,
-          expiresAt: tsToDate(data.expiresAt),
-          failureReason,
-          byteCount,
-          downloadUrl,
-          schemaVersion,
-        });
-      },
-      () => {
-        setJob(DEFAULT);
-      },
-    );
+        // Don't clobber a known job state with DEFAULT on a transient
+        // error — keep showing what we last knew until the next tick.
+      } finally {
+        if (cancelled) return;
+        const ms = isInFlight(lastStatus) ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
+        handle = setTimeout(tick, ms);
+      }
+    };
 
-    return unsub;
+    void tick();
+    return () => {
+      cancelled = true;
+      if (handle) clearTimeout(handle);
+      abortRef.current?.abort();
+    };
   }, [uid]);
 
   return job;

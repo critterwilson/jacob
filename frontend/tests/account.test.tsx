@@ -55,45 +55,72 @@ vi.mock("next/link", async () => {
   };
 });
 
-// Configurable Firestore snapshot — set before each test.
-type SnapData = Record<string, unknown> | null;
-let nextSnapshot: SnapData = null;
-
-vi.mock("firebase/firestore", async () => {
-  const actual = await vi.importActual<typeof import("firebase/firestore")>(
-    "firebase/firestore",
-  );
-  return {
-    ...actual,
-    doc: vi.fn(() => ({})),
-    onSnapshot: vi.fn(
-      (_ref: unknown, onNext: (snap: unknown) => void) => {
-        const data = nextSnapshot;
-        onNext({
-          exists: () => data !== null,
-          data: () => data ?? {},
-        });
-        return () => undefined;
-      },
-    ),
-  };
-});
+// Configurable status response for `useDeletionStatus`. After M2 of the
+// data-layer migration the hook polls `/api/account/delete/status`
+// instead of subscribing to Firestore, so the tests configure the
+// mocked fetch reply rather than a snapshot.
+type DeletionStatus =
+  | { status: "none" }
+  | {
+      status: "pending";
+      deletionRequestedAt: string;
+      finalizeAt: string;
+      keepBody: boolean;
+    };
+let nextStatus: DeletionStatus = { status: "none" };
 
 vi.mock("@/lib/firebase", () => ({
   firestore: {},
   app: {},
-  auth: {},
+  auth: { currentUser: null },
   storage: {},
 }));
 
 const fetchMock: Mock = vi.fn();
 
+// Lookup of handlers keyed by URL substring + HTTP method. The module's
+// `apiGet`/`apiPost` calls land here via the global `fetch` stub. Tests
+// register handlers per case; a default GET /status handler responds
+// from `nextStatus` so the polling hook never blocks the test.
+type Handler = (init: RequestInit | undefined) => {
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  json: () => Promise<unknown>;
+};
+const handlers: Array<{ match: (url: string, method: string) => boolean; reply: Handler }> = [];
+
+function pushHandler(match: (url: string, method: string) => boolean, reply: Handler): void {
+  handlers.push({ match, reply });
+}
+
+function matchesUrl(substring: string, method?: string) {
+  return (url: string, m: string) => url.includes(substring) && (!method || m === method);
+}
+
 beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
+  handlers.length = 0;
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(typeof input === "string" ? input : input);
+    const method = (init?.method || "GET").toUpperCase();
+    for (const { match, reply } of handlers) {
+      if (match(url, method)) return reply(init);
+    }
+    if (url.includes("/api/account/delete/status") && method === "GET") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => nextStatus,
+      };
+    }
+    throw new Error(`unexpected fetch in test: ${method} ${url}`);
+  });
   signOut.mockClear();
   replace.mockClear();
-  nextSnapshot = null;
+  nextStatus = { status: "none" };
 });
 
 afterEach(() => {
@@ -112,23 +139,30 @@ describe("DeleteAccountPage — confirm flow", () => {
   });
 
   it("submits POST /api/account/delete with keepBody=true and signs out", async () => {
-    fetchMock.mockResolvedValueOnce({
+    pushHandler(matchesUrl("/api/account/delete", "POST"), () => ({
       ok: true,
+      status: 200,
       json: async () => ({
         deletionRequestedAt: "2026-05-01T00:00:00+00:00",
         finalizeAt: "2026-05-15T00:00:00+00:00",
         keepBody: true,
       }),
-    });
+    }));
     render(<DeleteAccountPage />);
     fireEvent.click(
       screen.getByRole("button", { name: /Schedule account deletion/ }),
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toContain("/api/account/delete");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) => String(c[0]).includes("/api/account/delete") && !String(c[0]).includes("/status"),
+      );
+      expect(calls.length).toBeGreaterThan(0);
+    });
+    const postCall = fetchMock.mock.calls.find(
+      (c) => String(c[0]).includes("/api/account/delete") && !String(c[0]).includes("/status"),
+    )!;
+    expect(JSON.parse((postCall[1] as RequestInit).body as string)).toEqual({
       keepBody: true,
     });
     await waitFor(() => expect(signOut).toHaveBeenCalled());
@@ -139,11 +173,15 @@ describe("DeleteAccountPage — confirm flow", () => {
 // ── Pending-state view ────────────────────────────────────────────────────────
 
 describe("DeleteAccountPage — pending state", () => {
+  const pendingStatus: DeletionStatus = {
+    status: "pending",
+    deletionRequestedAt: "2026-04-25T00:00:00Z",
+    finalizeAt: "2026-05-09T00:00:00Z",
+    keepBody: true,
+  };
+
   it("shows the cancel button when deletion is already pending", async () => {
-    nextSnapshot = {
-      deletionRequestedAt: { toDate: () => new Date("2026-04-25T00:00:00Z") },
-      deletionKeepBody: true,
-    };
+    nextStatus = pendingStatus;
     render(<DeleteAccountPage />);
     await waitFor(() =>
       expect(screen.getByText(/Account deletion pending/)).toBeInTheDocument(),
@@ -154,21 +192,24 @@ describe("DeleteAccountPage — pending state", () => {
   });
 
   it("calls cancel API and routes home on success", async () => {
-    nextSnapshot = {
-      deletionRequestedAt: { toDate: () => new Date("2026-04-25T00:00:00Z") },
-      deletionKeepBody: true,
-    };
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    nextStatus = pendingStatus;
+    pushHandler(matchesUrl("/api/account/delete/cancel", "POST"), () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ cancelled: true }),
+    }));
     render(<DeleteAccountPage />);
     const cancelBtn = await screen.findByRole("button", {
       name: /Cancel deletion/,
     });
     fireEvent.click(cancelBtn);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(String(fetchMock.mock.calls[0][0])).toContain(
-      "/api/account/delete/cancel",
-    );
+    await waitFor(() => {
+      const cancelCalls = fetchMock.mock.calls.filter((c) =>
+        String(c[0]).includes("/api/account/delete/cancel"),
+      );
+      expect(cancelCalls.length).toBeGreaterThan(0);
+    });
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/home"));
   });
 });
@@ -177,15 +218,17 @@ describe("DeleteAccountPage — pending state", () => {
 
 describe("DeletionBanner", () => {
   it("renders nothing when no deletion is pending", () => {
-    nextSnapshot = null;
+    nextStatus = { status: "none" };
     const { container } = render(<DeletionBanner />);
     expect(container.firstChild).toBeNull();
   });
 
   it("renders banner with finalize date when deletion is pending", async () => {
-    nextSnapshot = {
-      deletionRequestedAt: { toDate: () => new Date("2026-04-25T00:00:00Z") },
-      deletionKeepBody: true,
+    nextStatus = {
+      status: "pending",
+      deletionRequestedAt: "2026-04-25T00:00:00Z",
+      finalizeAt: "2026-05-09T00:00:00Z",
+      keepBody: true,
     };
     render(<DeletionBanner />);
     await waitFor(() =>
