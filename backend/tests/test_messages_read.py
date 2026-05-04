@@ -413,6 +413,54 @@ def test_list_messages_if_none_match_returns_304() -> None:
     assert second.headers["etag"] == etag
 
 
+def test_list_messages_includes_my_reactions_for_member() -> None:
+    """Member sees `myReactions` populated for slugs they reacted with."""
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, group_ref = _member_setup(group_exists=True, member_exists=True)
+    snap = _msg_snap(mid="m1", body="hi")
+    snap.to_dict.return_value = {
+        **snap.to_dict.return_value,
+        "reactionCounts": {"pray": 1, "amen": 2},
+    }
+    messages_col = group_ref.collection.return_value
+    chain = messages_col.where.return_value.order_by.return_value
+    chain.limit.return_value.stream.return_value = iter([snap])
+
+    # Reactions chain: messages_col.document(mid).collection("reactions")
+    # .document(slug).collection("users").document(uid).get().exists
+    msg_doc = MagicMock()
+    reactions_col = MagicMock()
+
+    def _reactions_doc(slug: str) -> MagicMock:
+        slug_doc = MagicMock()
+        users_col = MagicMock()
+
+        def _users_doc(uid: str) -> MagicMock:
+            user_doc = MagicMock()
+            user_snap = MagicMock()
+            user_snap.exists = slug == "pray" and uid == "alice"
+            user_doc.get.return_value = user_snap
+            return user_doc
+
+        users_col.document.side_effect = _users_doc
+        slug_doc.collection.return_value = users_col
+        return slug_doc
+
+    reactions_col.document.side_effect = _reactions_doc
+    msg_doc.collection.return_value = reactions_col
+    messages_col.document.return_value = msg_doc
+
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get("/api/groups/g1/messages")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["messages"][0]["myReactions"] == ["pray"]
+
+
 def test_list_messages_etag_changes_when_content_changes() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
 

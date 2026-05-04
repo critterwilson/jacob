@@ -49,6 +49,11 @@ class Message(BaseModel):
     announcedAt: datetime | None = None
     announcedBy: str | None = None
     reactionCounts: dict[str, int] = Field(default_factory=dict)
+    # Slugs the *caller* has reacted with on this message. Populated by
+    # the messages router for authenticated members so the client can
+    # render an "I reacted" affordance after a refresh — see PR4 / C4.
+    # Empty for public-read non-members (they cannot react anyway).
+    myReactions: list[str] = Field(default_factory=list)
     moderation: ModerationFields | None = None
     repostOfThread: str | None = None
 

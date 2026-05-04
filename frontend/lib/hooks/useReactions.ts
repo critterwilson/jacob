@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, apiDelete, apiPost } from "@/lib/api";
+import type { Message } from "@/lib/hooks/useGroupMessages";
 
 type ReactionResponse = {
   uid: string;
@@ -15,15 +16,46 @@ type ReactionResponse = {
 /**
  * Group-message reactions.
  *
- * As of M4 the toggle calls `POST /api/groups/{gid}/messages/{mid}/reactions/{slug}`
- * (or DELETE) instead of the prior `setDoc / deleteDoc` Firestore client
- * calls. Optimistic local state is kept on `myReactionsRef`; backend
- * errors are swallowed (the UI's reactionCounts is sourced from the
- * message doc which the polling refresh will catch up to).
+ * Toggle calls `POST/DELETE /api/groups/{gid}/messages/{mid}/reactions/{slug}`.
+ * Optimistic local state lives in `myReactionsRef`. The ref is hydrated
+ * from each message's server-supplied `myReactions` whenever `messages`
+ * changes — that's the bit fixing the bug where, after a refresh, the
+ * "I reacted" state was lost and the toggle treated the user's existing
+ * reaction as a new one (see PR4 / C4).
+ *
+ * Optimistic adds set during a toggle are preserved across re-hydrations
+ * via the `optimisticDeltaRef` overlay until the next server response
+ * lands them — the server is then authoritative.
  */
-export function useReactions(gid: string) {
+export function useReactions(gid: string, messages?: readonly Message[]) {
   const { user } = useAuth();
   const myReactionsRef = useRef<Set<string>>(new Set());
+  // Tracks slugs added/removed locally that haven't been observed in the
+  // server response yet, so a post-toggle hydrate doesn't snap them away
+  // before the next poll merges the change in.
+  const optimisticAddRef = useRef<Set<string>>(new Set());
+  const optimisticRemoveRef = useRef<Set<string>>(new Set());
+
+  // Re-seed from the message stream whenever it changes. Server is
+  // authoritative; local optimistic deltas overlay on top.
+  useEffect(() => {
+    if (!messages) return;
+    const next = new Set<string>();
+    for (const m of messages) {
+      if (!m.myReactions) continue;
+      for (const slug of m.myReactions) next.add(`${m.id}:${slug}`);
+    }
+    // Apply optimistic overlay; clear entries the server now confirms.
+    optimisticAddRef.current.forEach((key) => {
+      if (next.has(key)) optimisticAddRef.current.delete(key);
+      else next.add(key);
+    });
+    optimisticRemoveRef.current.forEach((key) => {
+      if (!next.has(key)) optimisticRemoveRef.current.delete(key);
+      else next.delete(key);
+    });
+    myReactionsRef.current = next;
+  }, [messages]);
 
   const isMyReaction = useCallback(
     (mid: string, slug: string): boolean =>
@@ -36,6 +68,8 @@ export function useReactions(gid: string) {
       if (!user) return;
       const key = `${mid}:${slug}`;
       myReactionsRef.current.add(key);
+      optimisticAddRef.current.add(key);
+      optimisticRemoveRef.current.delete(key);
       try {
         await apiPost<ReactionResponse, undefined>(
           `/api/groups/${gid}/messages/${mid}/reactions/${slug}`,
@@ -43,6 +77,7 @@ export function useReactions(gid: string) {
         );
       } catch (err) {
         myReactionsRef.current.delete(key);
+        optimisticAddRef.current.delete(key);
         if (err instanceof ApiError && err.code !== "aborted") {
           console.warn("reaction_failed", err.code, err.status);
         }
@@ -56,12 +91,15 @@ export function useReactions(gid: string) {
       if (!user) return;
       const key = `${mid}:${slug}`;
       myReactionsRef.current.delete(key);
+      optimisticRemoveRef.current.add(key);
+      optimisticAddRef.current.delete(key);
       try {
         await apiDelete<{ reactionCounts: Record<string, number> }>(
           `/api/groups/${gid}/messages/${mid}/reactions/${slug}`,
         );
       } catch (err) {
         myReactionsRef.current.add(key);
+        optimisticRemoveRef.current.delete(key);
         if (err instanceof ApiError && err.code !== "aborted") {
           console.warn("unreaction_failed", err.code, err.status);
         }

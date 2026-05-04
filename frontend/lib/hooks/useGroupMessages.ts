@@ -41,6 +41,12 @@ export type Message = {
   announcedAt?: string | null;
   announcedBy?: string | null;
   reactionCounts?: Record<string, number>;
+  /**
+   * Slugs the *current user* has reacted with on this message. Populated
+   * by the backend per request so `useReactions.isMyReaction` keeps
+   * working after a refresh (see PR4 / C4).
+   */
+  myReactions?: string[];
   mentions?: string[];
 };
 

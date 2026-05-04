@@ -20,7 +20,10 @@ type Props = {
 export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, archived = false, onClose }: Props) {
   const { messages, loading, loadingOlder, hasMore, loadOlder } =
     useThreadMessages(gid, parentMessage.id);
-  const { isMyReaction, toggle: toggleReaction } = useReactions(gid);
+  // Include the parent message in hydration so reactions on the parent are
+  // also recovered after a refresh (the parent isn't in `messages`).
+  const allForReactions: Message[] = [parentMessage, ...messages];
+  const { isMyReaction, toggle: toggleReaction } = useReactions(gid, allForReactions);
   const onToggleReaction = (mid: string, slug: string) => void toggleReaction(mid, slug);
 
   const bottomRef = useRef<HTMLDivElement>(null);

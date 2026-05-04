@@ -54,7 +54,7 @@ export function MessageList({
   const { isMuted } = useMutes();
   const { isBlocked } = useBlocks();
   const { members } = useMembers(gid);
-  const { isMyReaction, toggle: toggleReaction } = useReactions(gid);
+  const { isMyReaction, toggle: toggleReaction } = useReactions(gid, messages);
   const [expandedMutes, setExpandedMutes] = useState<Set<string>>(new Set());
 
   // Scroll to bottom only when new messages arrive (not on older-page loads).
