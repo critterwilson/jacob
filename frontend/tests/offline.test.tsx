@@ -1,29 +1,14 @@
 /**
- * T36 — PWA offline shell tests.
+ * Sign-out cache cleanup + PWA install prompt tests.
  *
- * Uses fake-indexeddb to provide an in-memory IDB implementation.
- * A fresh IDBFactory is installed before each test so deleteDatabase
- * and subsequent opens don't interfere across cases.
+ * The per-group message cache that lived here pre-M3 was retired in PR7
+ * along with its read-side helpers; only `clearCache` is still wired in
+ * (called from `auth-context` on sign-out).
  */
 
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
-
-import type { Message } from "@/lib/hooks/useGroupMessages";
-
-const FAKE_MSG: Message = {
-  id: "m1",
-  authorUid: "u1",
-  body: "Hello offline world",
-  stickerIds: [],
-  createdAt: null,
-  editedAt: null,
-  deletedAt: null,
-  parentMessageId: null,
-  threadReplyCount: 0,
-  mediaRefs: [],
-};
 
 // ── localStorage shim (jsdom doesn't wire it up properly) ─────────────────
 
@@ -42,7 +27,6 @@ const mockLocalStorage = {
 };
 
 beforeEach(() => {
-  // Fresh IDB instance per test — prevents delete+open races across tests.
   vi.stubGlobal("indexedDB", new IDBFactory());
   vi.stubGlobal("localStorage", mockLocalStorage);
   mockLocalStorage.clear();
@@ -50,65 +34,19 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  // Re-import cache module on next test so it re-opens a fresh DB.
   vi.resetModules();
 });
 
-// ── helpers ───────────────────────────────────────────────────────────────
-
-async function importCache() {
-  return import("@/lib/offline-cache");
-}
-
-// ── tests ─────────────────────────────────────────────────────────────────
-
 describe("offline-cache", () => {
-  it("cache hit returns cached messages when offline detected", async () => {
-    const { cacheMessages, getCachedMessages } = await importCache();
-    await cacheMessages("g1", [FAKE_MSG]);
-    const cached = await getCachedMessages("g1");
-    expect(cached).toHaveLength(1);
-    expect(cached?.[0].id).toBe("m1");
-  });
-
-  it("returns null for a group with no cached messages", async () => {
-    const { getCachedMessages } = await importCache();
-    const cached = await getCachedMessages("unknown-group");
-    expect(cached).toBeNull();
-  });
-
-  it("sign-out clears IndexedDB", async () => {
-    const { cacheMessages, clearCache, getCachedMessages } = await importCache();
-    await cacheMessages("g1", [FAKE_MSG]);
-
-    // Install a fresh IDB so the delete+reopen sequence works cleanly.
+  it("clearCache deletes the legacy jacob-cache database", async () => {
     const freshFactory = new IDBFactory();
     vi.stubGlobal("indexedDB", freshFactory);
-
-    // Spy to confirm deleteDatabase is called.
     const deleteSpy = vi.spyOn(freshFactory, "deleteDatabase");
 
+    const { clearCache } = await import("@/lib/offline-cache");
     await clearCache();
+
     expect(deleteSpy).toHaveBeenCalledWith("jacob-cache");
-
-    // After clearing, a fresh get on a new IDB returns null.
-    vi.stubGlobal("indexedDB", new IDBFactory());
-    const { getCachedMessages: getCachedMessages2 } = await import("@/lib/offline-cache");
-    const cached = await getCachedMessages2("g1");
-    expect(cached).toBeNull();
-  });
-
-  it("caps the cache at 50 messages", async () => {
-    const { cacheMessages, getCachedMessages } = await importCache();
-    const many = Array.from({ length: 60 }, (_, i) => ({
-      ...FAKE_MSG,
-      id: `m${i}`,
-    }));
-    await cacheMessages("g1", many);
-    const cached = await getCachedMessages("g1");
-    expect(cached).toHaveLength(50);
-    // Slice(-50) keeps the last 50 — index 10..59.
-    expect(cached?.[0].id).toBe("m10");
   });
 });
 
