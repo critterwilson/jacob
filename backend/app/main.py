@@ -15,6 +15,7 @@ from app.routers import (
     account,
     admin,
     analytics,
+    appeals,
     boards,
     devotionals,
     discover,
@@ -133,6 +134,8 @@ app.include_router(unfurl.router)
 app.include_router(events.router)
 app.include_router(watch.router)
 app.include_router(ncmec.router)
+app.include_router(appeals.appellant_router)
+app.include_router(appeals.admin_router)
 
 if settings.debug:
     from app.routers import debug

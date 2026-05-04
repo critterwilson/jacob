@@ -199,7 +199,15 @@ class FakeQuery:
 
     @staticmethod
     def _match(data: dict[str, Any], field: str, op: str, value: Any) -> bool:
-        v = data.get(field)
+        # Dotted paths walk into nested maps, matching real Firestore.
+        cur: Any = data
+        for part in field.split("."):
+            if isinstance(cur, dict):
+                cur = cur.get(part)
+            else:
+                cur = None
+                break
+        v = cur
         if op == "==":
             return v == value
         if v is None:

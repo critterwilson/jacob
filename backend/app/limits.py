@@ -76,6 +76,10 @@ WATCH_SESSION_START: str = "10/hour"
 # in a minute.
 NCMEC_SUBMIT: str = "10/hour"
 
+# T64 — appeals. Per-user cap to keep the admin queue actionable;
+# 3/day matches the spec.
+APPEAL_SUBMIT: str = "3/day"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

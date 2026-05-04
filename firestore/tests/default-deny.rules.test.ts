@@ -546,6 +546,27 @@ describe("T63 default-deny — ncmec_cases", () => {
   });
 });
 
+describe("T64 default-deny — appeals", () => {
+  it("denies reading appeals/{appealId} (even by appellant)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "appeals", "a1"), {
+        appellantUid: "alice",
+        decision: "pending",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "appeals", "a1")));
+  });
+
+  it("denies writing appeals/{appealId}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "appeals", "a1"), {
+        appellantUid: "alice",
+        decision: "pending",
+      }),
+    );
+  });
+});
+
 describe("T50 default-deny — watch_sessions", () => {
   it("denies reading groups/{gid}/watch_sessions/{sid}", async () => {
     await seed(async (db) => {
