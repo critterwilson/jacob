@@ -61,6 +61,12 @@ export default function OrgDashboardPage() {
             Admins
           </Link>
           <Link
+            href={`/orgs/${orgId}/analytics`}
+            className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+          >
+            Analytics
+          </Link>
+          <Link
             href={`/orgs/${orgId}/settings`}
             className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
           >
