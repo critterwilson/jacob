@@ -2,6 +2,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -115,7 +116,7 @@ export const onMessageWrite = onDocumentWritten(
           logger.info("duplicate event skipped", { eventId: event.id });
           return;
         }
-        txn.set(eventRef, { processedAt: FieldValue.serverTimestamp() });
+        txn.set(eventRef, eventMarker());
 
         if (change === "create") {
           const authorUid = afterData!.authorUid as string;

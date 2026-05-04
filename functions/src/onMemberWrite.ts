@@ -22,6 +22,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -83,7 +84,7 @@ export const onMemberWrite = onDocumentWritten(
           });
           return;
         }
-        txn.set(eventRef, { processedAt: FieldValue.serverTimestamp(), delta });
+        txn.set(eventRef, eventMarker({ delta }));
         txn.set(
           groupRef,
           { leaderCount: FieldValue.increment(delta) },

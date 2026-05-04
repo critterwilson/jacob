@@ -14,6 +14,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore, type Transaction, type DocumentReference } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -37,7 +38,7 @@ export async function runReactionTxn(
   if (eventSnap.exists) {
     return false;
   }
-  txn.set(eventRef, { processedAt: FieldValue.serverTimestamp(), delta });
+  txn.set(eventRef, eventMarker({ delta }));
   txn.set(
     messageRef,
     { reactionCounts: { [stickerSlug]: FieldValue.increment(delta) } },

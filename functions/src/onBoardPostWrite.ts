@@ -9,6 +9,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -80,10 +81,7 @@ export const onBoardPostWrite = onDocumentWritten(
           });
           return;
         }
-        txn.set(eventRef, {
-          processedAt: FieldValue.serverTimestamp(),
-          change,
-        });
+        txn.set(eventRef, eventMarker({ change }));
 
         const delta = change === "create" ? 1 : -1;
         txn.update(boardRef, {
