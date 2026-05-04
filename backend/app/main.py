@@ -24,6 +24,7 @@ from app.routers import (
     incidents,
     invites,
     messages,
+    ncmec,
     orgs,
     reports,
     search,
@@ -131,6 +132,7 @@ app.include_router(sermons.router)
 app.include_router(unfurl.router)
 app.include_router(events.router)
 app.include_router(watch.router)
+app.include_router(ncmec.router)
 
 if settings.debug:
     from app.routers import debug

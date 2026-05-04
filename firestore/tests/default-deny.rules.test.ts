@@ -529,6 +529,23 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T63 default-deny — ncmec_cases", () => {
+  it("denies reading ncmec_cases/{caseId}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "ncmec_cases", "c1"), {
+        status: "pending",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "ncmec_cases", "c1")));
+  });
+
+  it("denies writing ncmec_cases/{caseId}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "ncmec_cases", "c1"), { status: "x" }),
+    );
+  });
+});
+
 describe("T50 default-deny — watch_sessions", () => {
   it("denies reading groups/{gid}/watch_sessions/{sid}", async () => {
     await seed(async (db) => {
