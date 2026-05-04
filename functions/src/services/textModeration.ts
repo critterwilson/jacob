@@ -40,6 +40,7 @@
 import type { protos } from "@google-cloud/language";
 import {
   FieldValue,
+  Timestamp,
   type DocumentReference,
   type Firestore,
 } from "firebase-admin/firestore";
@@ -222,20 +223,60 @@ function moderationStateRef(db: Firestore, day: string) {
   return db.collection("moderation_state").doc(`text-${day}`);
 }
 
+function moderationEventMarkerRef(db: Firestore, eventId: string) {
+  return db.collection("moderation_text_events").doc(eventId);
+}
+
+/**
+ * Reserve one slot of the daily text-moderation quota, idempotent on
+ * `eventId`. Cloud Function v2 Firestore triggers are at-least-once;
+ * without an event-level dedupe a container crash between the quota
+ * debit and the result write would burn another slot on retry. Closes
+ * PR11 / M3.
+ *
+ * Returns:
+ *   - { ok: true, count: N }  — slot reserved, this is delivery #1.
+ *   - { ok: false, alreadyProcessed: true }  — eventId was processed
+ *     before; caller must skip the moderation flow entirely.
+ *   - { ok: false, capExceeded: true }  — daily cap hit; caller writes
+ *     a `quota_exceeded` skip on the resource.
+ */
+export type QuotaReservation =
+  | { ok: true; count: number }
+  | { ok: false; alreadyProcessed: true }
+  | { ok: false; capExceeded: true };
+
 export async function tryReserveQuota(
   db: Firestore,
   day: string,
-): Promise<number | null> {
+  eventId: string,
+): Promise<QuotaReservation> {
   const cap = dailyCallCap();
-  const ref = moderationStateRef(db, day);
+  const stateRef = moderationStateRef(db, day);
+  const markerRef = moderationEventMarkerRef(db, eventId);
   return await db.runTransaction(async (txn) => {
-    const snap = await txn.get(ref);
-    const current = (snap.exists ? snap.data()?.count ?? 0 : 0) as number;
-    if (current >= cap) {
-      return null;
+    const markerSnap = await txn.get(markerRef);
+    if (markerSnap.exists) {
+      return { ok: false, alreadyProcessed: true };
     }
+    const stateSnap = await txn.get(stateRef);
+    const current = (stateSnap.exists ? (stateSnap.data()?.count ?? 0) : 0) as number;
+    if (current >= cap) {
+      // Don't write the marker here — a future delivery still has a
+      // chance to claim the slot if cap rolls over (next day) before
+      // re-delivery. Caller writes a `quota_exceeded` skip regardless.
+      return { ok: false, capExceeded: true };
+    }
+    // Marker + quota debit in the same transaction — atomic, so a crash
+    // either commits both or neither.
+    txn.set(markerRef, {
+      processedAt: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      day,
+      kind: "text_moderation_quota",
+    });
     txn.set(
-      ref,
+      stateRef,
       {
         count: FieldValue.increment(1),
         day,
@@ -243,7 +284,7 @@ export async function tryReserveQuota(
       },
       { merge: true },
     );
-    return current + 1;
+    return { ok: true, count: current + 1 };
   });
 }
 
@@ -314,8 +355,16 @@ export async function runTextModeration(
 
   const day = todayKey();
   const cap = dailyCallCap();
-  const newCount = await tryReserveQuota(db, day);
-  if (newCount === null) {
+  const reservation = await tryReserveQuota(db, day, eventId);
+  if (!reservation.ok && "alreadyProcessed" in reservation) {
+    // PR11 / M3 — re-delivery of an event we've already processed.
+    // Skip the quota debit AND the API call — both already happened on
+    // delivery #1, and the resource doc was either updated or the
+    // function crashed in a window the marker can no longer reopen.
+    logger.info("moderation_text_event_already_processed", { ...logContext, eventId, day });
+    return;
+  }
+  if (!reservation.ok && "capExceeded" in reservation) {
     logger.error("moderation_quota_exceeded", { ...logContext, day, cap });
     await resourceDocRef.update({
       moderation: {
@@ -327,6 +376,7 @@ export async function runTextModeration(
     });
     return;
   }
+  const newCount = reservation.ok ? reservation.count : 0;
   if (newCount === Math.floor(cap * QUOTA_WARN_RATIO)) {
     logger.warn("moderation_quota_warning", {
       day,

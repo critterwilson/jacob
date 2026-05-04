@@ -189,6 +189,16 @@ function makeFakeDb(opts: { quota: { current: number; cap?: number } } = {
   // The "moderation_state" doc the quota txn reads/writes.
   let quotaCount = opts.quota.current;
 
+  // PR11 / M3 — eventIds whose moderation_text_events marker has been
+  // committed. A second-delivery attempt for the same eventId sees the
+  // marker as exists=true and short-circuits.
+  const seenEventIds = new Set<string>();
+
+  // Refs are plain objects with a `__kind` discriminator so the txn mock
+  // can route get/set by collection without re-encoding the path.
+  type Ref = { __kind: "state" | "marker"; id: string };
+  const stateRef: Ref = { __kind: "state", id: "text-2026-05-04" };
+
   const txnFn = async (
     fn: (txn: {
       get: Mock;
@@ -196,12 +206,18 @@ function makeFakeDb(opts: { quota: { current: number; cap?: number } } = {
     }) => Promise<unknown>,
   ) => {
     const txn = {
-      get: vi.fn().mockResolvedValue({
-        exists: true,
-        data: () => ({ count: quotaCount }),
+      get: vi.fn().mockImplementation(async (ref: Ref) => {
+        if (ref.__kind === "marker") {
+          return { exists: seenEventIds.has(ref.id) };
+        }
+        return { exists: true, data: () => ({ count: quotaCount }) };
       }),
-      set: vi.fn().mockImplementation(() => {
-        quotaCount += 1;
+      set: vi.fn().mockImplementation((ref: Ref) => {
+        if (ref.__kind === "marker") {
+          seenEventIds.add(ref.id);
+        } else {
+          quotaCount += 1;
+        }
       }),
     };
     return await fn(txn);
@@ -214,7 +230,15 @@ function makeFakeDb(opts: { quota: { current: number; cap?: number } } = {
   const collection = vi.fn().mockImplementation((col: string) => {
     if (col === "moderation_state") {
       return {
-        doc: vi.fn().mockReturnValue({ id: "text-2026-05-04" }),
+        doc: vi.fn().mockReturnValue(stateRef),
+      };
+    }
+    if (col === "moderation_text_events") {
+      return {
+        doc: vi.fn().mockImplementation((eventId: string) => ({
+          __kind: "marker" as const,
+          id: eventId,
+        })),
       };
     }
     if (col === "moderation_queue") {
@@ -500,5 +524,66 @@ describe("runTextModeration", () => {
     });
     // groupId must NOT be present on board rows.
     expect(harness.queueWrites[0].data).not.toHaveProperty("groupId");
+  });
+
+  it("PR11 / M3: re-delivery of same eventId does not double-debit quota", async () => {
+    const harness = makeFakeDb({ quota: { current: 0 } });
+    const eventId = "evt-redelivery";
+
+    // Delivery #1 — debits one slot, writes the marker.
+    await runTextModeration({
+      db: harness.db,
+      resourceDocRef: harness.resourceDocRef,
+      resourcePath: "groups/g1/messages/m1",
+      resourceType: "message",
+      resourceFkFields: { groupId: "g1" },
+      eventId,
+      body: "hello",
+      policy: "standard",
+      queueDocIdPrefix: "msg",
+      getNLClient: () => lowScoresClient as never,
+      logContext: { gid: "g1", mid: "m1" },
+    });
+    expect(harness.getQuotaCount()).toBe(1);
+    const writesAfterFirst = harness.resourceWrites.length;
+
+    // Delivery #2 — same eventId, marker present → must skip
+    // both quota and the API call. No new writes on the resource.
+    await runTextModeration({
+      db: harness.db,
+      resourceDocRef: harness.resourceDocRef,
+      resourcePath: "groups/g1/messages/m1",
+      resourceType: "message",
+      resourceFkFields: { groupId: "g1" },
+      eventId,
+      body: "hello",
+      policy: "standard",
+      queueDocIdPrefix: "msg",
+      getNLClient: () => lowScoresClient as never,
+      logContext: { gid: "g1", mid: "m1" },
+    });
+    // Still 1 — the second delivery did not increment.
+    expect(harness.getQuotaCount()).toBe(1);
+    expect(harness.resourceWrites.length).toBe(writesAfterFirst);
+  });
+
+  it("PR11 / M3: distinct eventIds debit separately", async () => {
+    const harness = makeFakeDb({ quota: { current: 0 } });
+    for (const eventId of ["evt-a", "evt-b", "evt-c"]) {
+      await runTextModeration({
+        db: harness.db,
+        resourceDocRef: harness.resourceDocRef,
+        resourcePath: "groups/g1/messages/m1",
+        resourceType: "message",
+        resourceFkFields: { groupId: "g1" },
+        eventId,
+        body: "hello",
+        policy: "standard",
+        queueDocIdPrefix: "msg",
+        getNLClient: () => lowScoresClient as never,
+        logContext: { gid: "g1", mid: "m1" },
+      });
+    }
+    expect(harness.getQuotaCount()).toBe(3);
   });
 });
