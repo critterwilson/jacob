@@ -52,6 +52,10 @@ service cloud.firestore {
       match /exports/{jobId} {
         allow read, write: if false;
       }
+      // T51 — reading-plan progress per user (devotionals).
+      match /plan_progress/{planSlug} {
+        allow read, write: if false;
+      }
     }
 
     // --- groups ----------------------------------------------------------
@@ -166,6 +170,17 @@ service cloud.firestore {
     // Read via `GET /api/incidents` (server filters by displayUntil);
     // declared / cleared via `/api/admin/incidents*`. M6 backend-mediated.
     match /active_incidents/{incidentId} {
+      allow read, write: if false;
+    }
+
+    // --- T51 devotionals + reading plans -------------------------------
+    // Read via `/api/devotionals*` and `/api/reading-plans*`; per-user
+    // progress mutated via `/api/reading-plans/{slug}/progress/mark`.
+    // M6 default-deny on every direct path.
+    match /devotionals/{slug} {
+      allow read, write: if false;
+    }
+    match /reading_plans/{slug} {
       allow read, write: if false;
     }
 

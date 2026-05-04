@@ -46,6 +46,12 @@ DOMAIN_VERIFY: str = "10/hour"
 # a runaway middleware loop from melting Firestore.
 DOMAIN_BY_HOST: str = "120/minute"
 
+# T51 — devotionals + reading plans. Content list is small + heavily
+# cached client-side; mark-complete is per-user low-rate.
+DEVOTIONAL_LIST: str = "60/minute"
+PLAN_PROGRESS_READ: str = "60/minute"
+PLAN_PROGRESS_WRITE: str = "30/hour"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

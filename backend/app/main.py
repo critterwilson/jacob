@@ -16,6 +16,7 @@ from app.routers import (
     admin,
     analytics,
     boards,
+    devotionals,
     discover,
     flags,
     groups,
@@ -120,6 +121,7 @@ app.include_router(orgs.router)
 app.include_router(orgs.public_router)
 app.include_router(incidents.router)
 app.include_router(incidents.admin_router)
+app.include_router(devotionals.router)
 
 if settings.debug:
     from app.routers import debug
