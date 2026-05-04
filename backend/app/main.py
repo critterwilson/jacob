@@ -20,7 +20,9 @@ from app.routers import (
     invites,
     reports,
     search,
+    stickers,
     uploads,
+    verse,
 )
 from app.services.sentry import init_sentry
 
@@ -73,6 +75,8 @@ app.include_router(search.router)
 app.include_router(analytics.router)
 app.include_router(discover.router)
 app.include_router(boards.router)
+app.include_router(stickers.router)
+app.include_router(verse.router)
 
 if settings.debug:
     from app.routers import debug

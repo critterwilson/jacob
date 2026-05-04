@@ -1,12 +1,18 @@
-"""Tests for backend/app/services/verse.py (T33)."""
+"""Tests for backend/app/services/verse.py (T33) and the daily-verse router (M1)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
+from app.deps import get_current_user
+from app.errors import http_exception_handler
+from app.models.user import CurrentUser
+from app.routers.verse import router as verse_router
 from app.services import verse as verse_svc
 
 
@@ -123,3 +129,119 @@ def test_verse_disabled_raises():
     with patch.object(verse_svc, "_verse_disabled", return_value=True):
         with pytest.raises(RuntimeError, match="disabled"):
             verse_svc.fetch_verse_for_today()
+
+
+# ── /api/daily-verse router ─────────────────────────────────────────────
+
+
+def _verse_app(*, authed: bool = True) -> FastAPI:
+    app = FastAPI()
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
+    app.include_router(verse_router)
+    if authed:
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+            uid="alice", email="alice@example.com", claims={}
+        )
+    return app
+
+
+def _verse_doc_snap(
+    *,
+    exists: bool = True,
+    reference: str = "John 3:16",
+    translation: str = "WEB",
+    text: str = "For God so loved the world.",
+    source: str = "bible-api.com",
+) -> MagicMock:
+    snap = MagicMock()
+    snap.exists = exists
+    snap.to_dict.return_value = {
+        "reference": reference,
+        "translation": translation,
+        "text": text,
+        "source": source,
+    }
+    return snap
+
+
+def _verse_db(snap: MagicMock) -> MagicMock:
+    db = MagicMock()
+    db.collection.return_value.document.return_value.get.return_value = snap
+    return db
+
+
+def test_daily_verse_happy_path() -> None:
+    snap = _verse_doc_snap()
+    with patch("app.routers.verse.get_firestore", return_value=_verse_db(snap)):
+        client = TestClient(_verse_app())
+        res = client.get(
+            "/api/daily-verse?day=2026-05-03",
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 200
+    body = res.json()
+    assert body == {
+        "day": "2026-05-03",
+        "reference": "John 3:16",
+        "translation": "WEB",
+        "text": "For God so loved the world.",
+        "source": "bible-api.com",
+    }
+
+
+def test_daily_verse_defaults_to_today() -> None:
+    snap = _verse_doc_snap()
+    db = _verse_db(snap)
+    with patch("app.routers.verse.get_firestore", return_value=db):
+        client = TestClient(_verse_app())
+        res = client.get("/api/daily-verse", headers={"Authorization": "Bearer t"})
+    assert res.status_code == 200
+    # Document key must match today's UTC date — verify the lookup path.
+    expected_day = datetime.now(UTC).strftime("%Y-%m-%d")
+    db.collection.assert_called_once_with("daily_verse")
+    db.collection.return_value.document.assert_called_once_with(expected_day)
+    assert res.json()["day"] == expected_day
+
+
+def test_daily_verse_404_when_doc_missing() -> None:
+    snap = _verse_doc_snap(exists=False)
+    with patch("app.routers.verse.get_firestore", return_value=_verse_db(snap)):
+        client = TestClient(_verse_app())
+        res = client.get(
+            "/api/daily-verse?day=2026-05-03",
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 404
+    assert res.json()["error"]["code"] == "verse_not_found"
+    assert res.json()["error"]["details"] == {"day": "2026-05-03"}
+
+
+def test_daily_verse_requires_auth() -> None:
+    client = TestClient(_verse_app(authed=False))
+    res = client.get("/api/daily-verse")
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "unauthenticated"
+
+
+def test_daily_verse_invalid_day_param() -> None:
+    client = TestClient(_verse_app())
+    res = client.get(
+        "/api/daily-verse?day=2026/05/03",
+        headers={"Authorization": "Bearer t"},
+    )
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "invalid_day"
+
+
+def test_daily_verse_normalises_unexpected_translation() -> None:
+    snap = _verse_doc_snap(translation="ESV", source="other")
+    with patch("app.routers.verse.get_firestore", return_value=_verse_db(snap)):
+        client = TestClient(_verse_app())
+        res = client.get(
+            "/api/daily-verse?day=2026-05-03",
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["translation"] == "WEB"
+    assert body["source"] == "bible-api.com"

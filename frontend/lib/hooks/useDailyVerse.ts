@@ -1,37 +1,46 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
-import type { Timestamp } from "firebase/firestore";
-
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
 export type DailyVerse = {
   reference: string;
   translation: "WEB" | "KJV";
   text: string;
   source: "bible-api.com" | "calendar-override";
-  fetchedAt: Timestamp;
 };
+
+type DailyVerseResponse = DailyVerse & { day: string };
 
 export function useDailyVerse() {
   const [verse, setVerse] = useState<DailyVerse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return onSnapshot(
-      doc(firestore, "daily_verse", today),
-      (snap) => {
-        if (snap.exists()) {
-          setVerse(snap.data() as DailyVerse);
-        } else {
-          setVerse(null);
-        }
+    const ctrl = new AbortController();
+
+    apiGet<DailyVerseResponse>("/api/daily-verse", { signal: ctrl.signal })
+      .then((res) => {
+        // Drop the server-only `day` field — components only consume the
+        // verse content itself.
+        const { day: _day, ...rest } = res;
+        setVerse(rest);
         setLoading(false);
-      },
-      () => setLoading(false),
-    );
+      })
+      .catch((err: unknown) => {
+        if (err instanceof ApiError) {
+          if (err.code === "aborted") return;
+          // 404 = no verse published yet for today (Cloud Run job hasn't
+          // run). Match the prior listener behaviour: render the placeholder.
+          if (err.status !== 404) {
+            console.warn("daily_verse_load_failed", err.code, err.status);
+          }
+        }
+        setVerse(null);
+        setLoading(false);
+      });
+
+    return () => ctrl.abort();
   }, []);
 
   return { verse, loading };
