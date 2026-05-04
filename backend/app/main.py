@@ -28,6 +28,7 @@ from app.routers import (
     search,
     sermons,
     stickers,
+    unfurl,
     uploads,
     users,
     verse,
@@ -124,6 +125,7 @@ app.include_router(incidents.router)
 app.include_router(incidents.admin_router)
 app.include_router(devotionals.router)
 app.include_router(sermons.router)
+app.include_router(unfurl.router)
 
 if settings.debug:
     from app.routers import debug

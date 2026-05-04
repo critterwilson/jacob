@@ -177,6 +177,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- T53 unfurl cache -----------------------------------------------
+    // 24h TTL cache of OG metadata; backend-only.
+    match /unfurl_cache/{urlHash} {
+      allow read, write: if false;
+    }
+
     // --- T51 devotionals + reading plans -------------------------------
     // Read via `/api/devotionals*` and `/api/reading-plans*`; per-user
     // progress mutated via `/api/reading-plans/{slug}/progress/mark`.

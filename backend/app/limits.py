@@ -55,6 +55,11 @@ PLAN_PROGRESS_WRITE: str = "30/hour"
 # T52 — sermon archive. Leaders add sermons; volume is low.
 SERMON_MUTATION: str = "20/hour"
 
+# T53 — unfurl. Per-IP cap on the SSRF-guarded fetch surface so it
+# can't be turned into a generic egress hop. The cache absorbs most
+# repeat requests so 30/min/IP is comfortable for typical chat use.
+UNFURL_FETCH: str = "30/minute"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.
