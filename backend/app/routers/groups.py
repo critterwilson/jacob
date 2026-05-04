@@ -128,7 +128,12 @@ def create_group(
             "createdAt": fb_firestore.SERVER_TIMESTAMP,
             "inviteCode": code,
             "memberCount": 1,
-            "stickerSet": "christian",
+            # T56 — `audience` pins the sticker set + brand voice;
+            # `stickerSet` mirrors it for back-compat with the existing
+            # discover/picker code that reads stickerSet directly.
+            "audience": body.audience,
+            "stickerSet": body.audience,
+            "orgId": None,
             "schemaVersion": 1,
         },
     )

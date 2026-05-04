@@ -9,10 +9,22 @@ export const DEFAULT_STICKER_SLUG = "check-in";
 type Props = {
   value: string[];
   onChange: (slugs: string[]) => void;
+  /**
+   * T56 — when set, only stickers whose `audience` matches OR equals
+   * `general` are surfaced. Pass the parent group's audience so a BJJ
+   * group can't surface christian-only stickers and vice versa. Omit
+   * to show every sticker (legacy behaviour).
+   */
+  groupAudience?: "christian" | "bjj" | "general";
 };
 
-export function StickerPicker({ value, onChange }: Props) {
+export function StickerPicker({ value, onChange, groupAudience }: Props) {
   const { stickers, loading } = useStickers();
+  const visible = groupAudience
+    ? stickers.filter(
+        (s) => s.audience === groupAudience || s.audience === "general",
+      )
+    : stickers;
 
   const toggle = (slug: string) => {
     if (value.includes(slug)) {
@@ -37,7 +49,7 @@ export function StickerPicker({ value, onChange }: Props) {
       aria-label="Select stickers (up to 2)"
       className="flex flex-wrap gap-2"
     >
-      {stickers.map((sticker) => {
+      {visible.map((sticker) => {
         const selected = value.includes(sticker.slug);
         const atMax = value.length >= 2;
         return (
