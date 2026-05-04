@@ -529,6 +529,25 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T53 default-deny — unfurl_cache", () => {
+  it("denies reading unfurl_cache/{urlHash}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "unfurl_cache", "abc123"), {
+        title: "Cached",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "unfurl_cache", "abc123")));
+  });
+
+  it("denies writing unfurl_cache/{urlHash}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "unfurl_cache", "abc123"), {
+        title: "x",
+      }),
+    );
+  });
+});
+
 describe("T52 default-deny — sermons", () => {
   it("denies reading groups/{gid}/sermons/{sermonId}", async () => {
     await seed(async (db) => {
