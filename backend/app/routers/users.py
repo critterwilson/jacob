@@ -17,8 +17,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
-from datetime import UTC, datetime
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
@@ -26,6 +26,8 @@ from firebase_admin import firestore as fb_firestore
 from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import (
+    MY_GROUPS_LIST,
+    RECENT_MESSAGES_READ,
     USER_BLOCKS_WRITE,
     USER_BOOTSTRAP,
     USER_DEVICE_REGISTER,
@@ -36,6 +38,8 @@ from app.limits import (
     USER_PROFILE_UPDATE,
 )
 from app.middleware.rate_limit import limiter
+from app.models.members import GroupSummary, MyGroupsResponse
+from app.models.messages import RecentMessage, RecentMessagesResponse
 from app.models.user import CurrentUser
 from app.models.users import (
     BlockResponse,
@@ -531,6 +535,161 @@ def delete_block(
     ref = db.collection("users").document(user.uid).collection("blocks").document(other_uid)
     ref.delete()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── M3: groups list + recent-messages feed ────────────────────────────────
+
+
+_ARCHIVE_HIDE_DAYS = 60
+_RECENT_FEED_LIMIT = 10
+_RECENT_PER_GROUP = 6
+
+
+def _archived_after_cutoff(archived_at: datetime | None) -> bool:
+    """`useGroups` filtered out groups archived more than 60 days ago.
+    Mirror that filter server-side so the frontend doesn't have to.
+    """
+    if archived_at is None:
+        return True
+    cutoff = datetime.now(UTC) - timedelta(days=_ARCHIVE_HIDE_DAYS)
+    archived_aware = archived_at if archived_at.tzinfo else archived_at.replace(tzinfo=UTC)
+    return archived_aware >= cutoff
+
+
+@router.get("/groups", response_model=MyGroupsResponse)
+@limiter.limit(MY_GROUPS_LIST)
+def my_groups(
+    request: Request,
+    response: Response,
+    archived: str = Query(default="exclude", pattern="^(include|exclude)$"),
+    user: CurrentUser = Depends(get_current_user),
+) -> MyGroupsResponse:
+    """Replaces the frontend collection-group `members` query.
+
+    For each membership doc the caller owns, joins against the parent
+    group doc to return a `GroupSummary`. Groups archived more than 60
+    days ago are excluded by default (matches the prior client filter).
+    """
+    db = get_firestore()
+    cg = db.collection_group("members").where("uid", "==", user.uid)
+    member_snaps = list(cg.stream())
+
+    # Pull each membership's parent group via batched get_all().
+    pairs: list[tuple[str, dict[str, Any]]] = []
+    group_ref_by_gid: dict[str, Any] = {}
+    for snap in member_snaps:
+        parent_group = snap.reference.parent.parent
+        if parent_group is None:
+            continue
+        gid = parent_group.id
+        member_data = snap.to_dict() or {}
+        pairs.append((gid, member_data))
+        group_ref_by_gid.setdefault(gid, parent_group)
+
+    group_docs: list[Any] = []
+    if group_ref_by_gid:
+        group_docs = list(db.get_all(list(group_ref_by_gid.values())))
+    group_data_by_gid: dict[str, dict[str, Any]] = {}
+    for doc in group_docs:
+        if getattr(doc, "exists", False):
+            group_data_by_gid[doc.id] = doc.to_dict() or {}
+
+    summaries: list[GroupSummary] = []
+    for gid, member_data in pairs:
+        group_data = group_data_by_gid.get(gid)
+        if group_data is None:
+            continue
+        archived_at = _ts_to_dt(group_data.get("archivedAt"))
+        if archived == "exclude" and not _archived_after_cutoff(archived_at):
+            continue
+        role_raw = str(member_data.get("role") or "member")
+        role: Literal["member", "leader"] = "leader" if role_raw == "leader" else "member"
+        summaries.append(
+            GroupSummary(
+                gid=gid,
+                name=str(group_data.get("name") or ""),
+                description=str(group_data.get("description") or ""),
+                avatarUrl=group_data.get("avatarUrl"),
+                isPrivate=bool(group_data.get("isPrivate") or False),
+                archivedAt=archived_at,
+                role=role,
+                joinedAt=_ts_to_dt(member_data.get("joinedAt")),
+                memberCount=int(group_data.get("memberCount") or 0),
+                lastMessageAt=_ts_to_dt(group_data.get("lastMessageAt")),
+            )
+        )
+    return MyGroupsResponse(groups=summaries)
+
+
+@router.get("/recent-messages", response_model=RecentMessagesResponse)
+@limiter.limit(RECENT_MESSAGES_READ)
+def recent_messages(
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> RecentMessagesResponse:
+    """Cross-group recent-messages feed for the authenticated user.
+
+    Mirrors the prior `useRecentMessages` hook: per-group N most-recent
+    top-level non-deleted messages, merged + sorted server-side. Returns
+    at most `_RECENT_FEED_LIMIT` items.
+    """
+    db = get_firestore()
+    cg = db.collection_group("members").where("uid", "==", user.uid)
+    pairs: list[tuple[str, dict[str, Any]]] = []
+    group_refs: dict[str, Any] = {}
+    for snap in cg.stream():
+        parent_group = snap.reference.parent.parent
+        if parent_group is None:
+            continue
+        gid = parent_group.id
+        pairs.append((gid, snap.to_dict() or {}))
+        group_refs.setdefault(gid, parent_group)
+
+    if not group_refs:
+        return RecentMessagesResponse(messages=[])
+
+    group_docs = list(db.get_all(list(group_refs.values())))
+    name_by_gid = {
+        d.id: str((d.to_dict() or {}).get("name") or "")
+        for d in group_docs
+        if getattr(d, "exists", False)
+    }
+
+    accumulated: list[RecentMessage] = []
+    for gid in name_by_gid.keys():
+        col = db.collection("groups").document(gid).collection("messages")
+        q = (
+            col.where("parentMessageId", "==", None)
+            .order_by("createdAt", direction=fb_firestore.Query.DESCENDING)
+            .limit(_RECENT_PER_GROUP)
+        )
+        for snap in q.stream():
+            data = snap.to_dict() or {}
+            if data.get("deletedAt") is not None:
+                continue
+            mod = data.get("moderation") or {}
+            if isinstance(mod, dict) and mod.get("state") == "hidden":
+                continue
+            created_at = _ts_to_dt(data.get("createdAt"))
+            accumulated.append(
+                RecentMessage(
+                    id=snap.id,
+                    gid=gid,
+                    groupName=name_by_gid[gid],
+                    authorUid=str(data.get("authorUid") or ""),
+                    body=str(data.get("body") or ""),
+                    createdAt=created_at,
+                    deletedAt=None,
+                    mediaRefs=list(data.get("mediaRefs") or []),
+                )
+            )
+
+    accumulated.sort(
+        key=lambda m: (m.createdAt or datetime.min.replace(tzinfo=UTC)),
+        reverse=True,
+    )
+    return RecentMessagesResponse(messages=accumulated[:_RECENT_FEED_LIMIT])
 
 
 __all__ = ["router"]

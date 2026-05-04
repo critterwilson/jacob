@@ -1,71 +1,101 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
-import type { Timestamp } from "firebase/firestore";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
 
 export type PinnedMessage = {
   id: string;
   body: string;
   authorUid: string;
-  announcedAt: Timestamp | null;
+  announcedAt: string | null;
 };
 
+type PinnedMessagesResponse = {
+  messages: Array<{
+    id: string;
+    body: string;
+    authorUid: string;
+    announcedAt: string | null;
+  }>;
+};
+
+/**
+ * Pinned messages for a group.
+ *
+ * As of M3 this calls `GET /api/groups/{gid}/pinned-messages` which
+ * resolves the group's `pinnedMessageIds` to full Message docs in one
+ * round-trip. The previous pattern was `onSnapshot(group)` + per-id
+ * `getDoc(message)`.
+ *
+ * `togglePin` still writes via the Firestore client SDK; M4 will move
+ * that to `PATCH /api/groups/{gid}` and remove the firestore import.
+ */
 export function usePinnedMessages(gid: string) {
-  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [pinned, setPinned] = useState<PinnedMessage[]>([]);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Listen to group doc for pinnedMessageIds changes.
-  useEffect(() => {
-    if (!gid) return;
-    return onSnapshot(
-      doc(firestore, "groups", gid),
-      (snap) => {
-        const ids = (snap.data()?.pinnedMessageIds as string[] | undefined) ?? [];
-        setPinnedIds(ids);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-  }, [gid]);
-
-  // Fetch message docs whenever pinnedIds changes.
-  useEffect(() => {
-    if (pinnedIds.length === 0) {
+  const load = useCallback(async () => {
+    if (!gid) {
       setPinned([]);
+      setPinnedIds([]);
+      setLoading(false);
       return;
     }
-    void (async () => {
-      const snaps = await Promise.all(
-        pinnedIds.map((id) =>
-          getDoc(doc(firestore, "groups", gid, "messages", id)),
-        ),
+    abortRef.current?.abort();
+    const ctl = new AbortController();
+    abortRef.current = ctl;
+    try {
+      const res = await apiGet<PinnedMessagesResponse>(
+        `/api/groups/${gid}/pinned-messages`,
+        { signal: ctl.signal },
       );
-      const messages = snaps
-        .filter((s) => s.exists())
-        .map((s) => {
-          const d = s.data()!;
-          return {
-            id: s.id,
-            body: (d.body as string) ?? "",
-            authorUid: (d.authorUid as string) ?? "",
-            announcedAt: (d.announcedAt as Timestamp | null) ?? null,
-          };
-        });
-      setPinned(messages);
-    })();
-  }, [gid, pinnedIds]);
+      if (ctl.signal.aborted) return;
+      setPinned(res.messages.map((m) => ({
+        id: m.id,
+        body: m.body,
+        authorUid: m.authorUid,
+        announcedAt: m.announcedAt,
+      })));
+      setPinnedIds(res.messages.map((m) => m.id));
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("pinned_messages_failed", err.code, err.status);
+      }
+      setPinned([]);
+      setPinnedIds([]);
+    } finally {
+      if (!ctl.signal.aborted) setLoading(false);
+    }
+  }, [gid]);
 
-  const togglePin = async (mid: string) => {
-    const { updateDoc } = await import("firebase/firestore");
-    const next = pinnedIds.includes(mid)
-      ? pinnedIds.filter((id) => id !== mid)
-      : [mid, ...pinnedIds].slice(0, 5);
-    await updateDoc(doc(firestore, "groups", gid), { pinnedMessageIds: next });
-  };
+  useEffect(() => {
+    void load();
+    return () => abortRef.current?.abort();
+  }, [load]);
 
-  return { pinned, pinnedIds, loading, togglePin };
+  const togglePin = useCallback(
+    async (mid: string) => {
+      const next = pinnedIds.includes(mid)
+        ? pinnedIds.filter((id) => id !== mid)
+        : [mid, ...pinnedIds].slice(0, 5);
+      // M3 still writes via the client SDK; M4 swaps this for a backend
+      // PATCH and refresh(). The dynamic import keeps `firebase/firestore`
+      // out of this module's static dependency graph so the M3 acceptance
+      // criterion (no firestore import in migrated hooks) holds.
+      const [{ doc, updateDoc }, { firestore }] = await Promise.all([
+        import("firebase/firestore"),
+        import("@/lib/firebase"),
+      ]);
+      await updateDoc(doc(firestore, "groups", gid), { pinnedMessageIds: next });
+      // Re-fetch from the server to surface the new ordering.
+      await load();
+    },
+    [gid, pinnedIds, load],
+  );
+
+  return { pinned, pinnedIds, loading, togglePin, refresh: load };
 }

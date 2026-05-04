@@ -11,15 +11,30 @@ import secrets
 import string
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 
-from app.deps import get_current_user
+from app.deps import (
+    MembershipContext,
+    PublicReadContext,
+    get_current_user,
+    require_member,
+    require_member_or_public,
+)
 from app.errors import APIError
-from app.limits import ADMIN_MUTATION, GROUP_CREATE, GROUP_JOIN, INVITE_ROTATE
+from app.limits import (
+    ADMIN_MUTATION,
+    GROUP_CREATE,
+    GROUP_JOIN,
+    GROUP_MEMBERSHIP_READ,
+    GROUP_READ,
+    INVITE_ROTATE,
+    MEMBERS_LIST,
+    PINNED_MESSAGES_READ,
+)
 from app.middleware.rate_limit import limiter
 from app.models.admin import ModerationPolicyRequest, ModerationPolicyResponse
 from app.models.group import (
@@ -36,9 +51,16 @@ from app.models.group import (
     RotateInviteResponse,
     UnarchiveResponse,
 )
+from app.models.members import (
+    GroupDetail,
+    Member,
+    MembersListResponse,
+    MyMembership,
+)
+from app.models.messages import Message, ModerationFields, PinnedMessagesResponse
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
-from app.services.firebase import init_firebase_admin
+from app.services.firebase import get_firestore, init_firebase_admin
 from app.services.invites import consume_invite
 from app.services.notifications import bulk_write_notifications
 
@@ -628,3 +650,203 @@ def set_moderation_policy(
     )
     logger.info("policy uid=%s gid=%s policy=%s", user.uid, gid, body.policy)
     return ModerationPolicyResponse(gid=gid, policy=body.policy)
+
+
+# ── M3 reads ─────────────────────────────────────────────────────────────
+
+
+def _ts_to_dt(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    converter = getattr(value, "ToDatetime", None)
+    if callable(converter):
+        try:
+            result = converter(tzinfo=UTC)
+        except TypeError:
+            result = converter()
+        if isinstance(result, datetime):
+            return result if result.tzinfo else result.replace(tzinfo=UTC)
+    return None
+
+
+def _group_to_detail(gid: str, data: dict[str, Any], *, include_invite_code: bool) -> GroupDetail:
+    return GroupDetail(
+        gid=gid,
+        name=str(data.get("name") or ""),
+        description=str(data.get("description") or ""),
+        isPrivate=bool(data.get("isPrivate") or False),
+        joinMode=data.get("joinMode"),
+        audience=data.get("audience"),
+        stickerSet=str(data.get("stickerSet") or "christian"),
+        avatarUrl=data.get("avatarUrl"),
+        archivedAt=_ts_to_dt(data.get("archivedAt")),
+        archivedBy=data.get("archivedBy"),
+        archiveReason=data.get("archiveReason"),
+        pinnedMessageIds=list(data.get("pinnedMessageIds") or []),
+        memberCount=int(data.get("memberCount") or 0),
+        leaderCount=int(data.get("leaderCount") or 0),
+        founderUid=data.get("founderUid"),
+        createdBy=data.get("createdBy"),
+        createdAt=_ts_to_dt(data.get("createdAt")),
+        inviteCode=(data.get("inviteCode") if include_invite_code else None),
+        moderationPolicy=data.get("moderationPolicy"),
+    )
+
+
+def _moderation_to_model(value: Any) -> ModerationFields | None:
+    if not value or not isinstance(value, dict):
+        return None
+    state = value.get("state")
+    return ModerationFields(
+        state=state if state in {"scored", "flagged", "hidden", "skipped", "errored"} else None,
+        reasons=list(value.get("reasons") or []),
+        scores=dict(value["scores"]) if isinstance(value.get("scores"), dict) else None,
+        scoredAt=_ts_to_dt(value.get("scoredAt")),
+        policy=value.get("policy"),
+    )
+
+
+def _doc_to_message(doc_id: str, data: dict[str, Any]) -> Message:
+    return Message(
+        id=doc_id,
+        authorUid=str(data.get("authorUid") or ""),
+        body=str(data.get("body") or ""),
+        stickerIds=list(data.get("stickerIds") or []),
+        mediaRefs=list(data.get("mediaRefs") or []),
+        mentions=list(data.get("mentions") or []),
+        parentMessageId=data.get("parentMessageId"),
+        threadReplyCount=int(data.get("threadReplyCount") or 0),
+        createdAt=_ts_to_dt(data.get("createdAt")),
+        editedAt=_ts_to_dt(data.get("editedAt")),
+        deletedAt=_ts_to_dt(data.get("deletedAt")),
+        announcedAt=_ts_to_dt(data.get("announcedAt")),
+        announcedBy=data.get("announcedBy"),
+        reactionCounts={str(k): int(v) for k, v in (data.get("reactionCounts") or {}).items()},
+        moderation=_moderation_to_model(data.get("moderation")),
+        repostOfThread=data.get("repostOfThread"),
+    )
+
+
+@router.get("/{gid}", response_model=GroupDetail)
+@limiter.limit(GROUP_READ)
+def get_group(
+    request: Request,
+    response: Response,
+    gid: str,
+    ctx: MembershipContext | PublicReadContext = Depends(require_member_or_public),
+) -> GroupDetail:
+    """Per-group read. Members see the full doc; public-group non-members
+    see the same doc with `inviteCode` redacted to None.
+    """
+    include_invite_code = isinstance(ctx, MembershipContext)
+    return _group_to_detail(gid, ctx.group, include_invite_code=include_invite_code)
+
+
+@router.get("/{gid}/me", response_model=MyMembership)
+@limiter.limit(GROUP_MEMBERSHIP_READ)
+def get_my_membership(
+    request: Request,
+    response: Response,
+    gid: str,
+    membership: MembershipContext = Depends(require_member),
+) -> MyMembership:
+    db = get_firestore()
+    snap = (
+        db.collection("groups").document(gid).collection("members").document(membership.uid).get()
+    )
+    data = snap.to_dict() or {}
+    return MyMembership(
+        gid=gid,
+        uid=membership.uid,
+        role=membership.role,
+        joinedAt=_ts_to_dt(data.get("joinedAt")),
+    )
+
+
+@router.get("/{gid}/members", response_model=MembersListResponse)
+@limiter.limit(MEMBERS_LIST)
+def list_members(
+    request: Request,
+    response: Response,
+    gid: str,
+    membership: MembershipContext = Depends(require_member),
+) -> MembersListResponse:
+    """Members of a group, joined with `users/{uid}` profile fields.
+
+    M3 ships without pagination because group sizes are small in v1
+    (<= ~50). The pluggable cursor field reserved by the contract
+    remains None until we hit a group big enough to warrant paging.
+    """
+    db = get_firestore()
+    members_col = db.collection("groups").document(gid).collection("members")
+    member_snaps = list(members_col.stream())
+
+    # Bulk-read user docs in one round-trip.
+    user_refs = [db.collection("users").document(s.id) for s in member_snaps]
+    user_docs = list(db.get_all(user_refs)) if user_refs else []
+    profiles_by_uid: dict[str, dict[str, Any]] = {}
+    for doc in user_docs:
+        if getattr(doc, "exists", False):
+            profiles_by_uid[doc.id] = doc.to_dict() or {}
+
+    members: list[Member] = []
+    for snap in member_snaps:
+        data = snap.to_dict() or {}
+        role_raw = str(data.get("role") or "member")
+        role: Literal["member", "leader"] = "leader" if role_raw == "leader" else "member"
+        profile = profiles_by_uid.get(snap.id, {})
+        display = str(profile.get("displayName") or "") or snap.id
+        members.append(
+            Member(
+                uid=snap.id,
+                role=role,
+                joinedAt=_ts_to_dt(data.get("joinedAt")),
+                displayName=display,
+                photoURL=profile.get("photoURL"),
+            )
+        )
+
+    return MembersListResponse(members=members)
+
+
+@router.get("/{gid}/pinned-messages", response_model=PinnedMessagesResponse)
+@limiter.limit(PINNED_MESSAGES_READ)
+def get_pinned_messages(
+    request: Request,
+    response: Response,
+    gid: str,
+    membership: MembershipContext = Depends(require_member),
+) -> PinnedMessagesResponse:
+    """Resolve the group's `pinnedMessageIds` to full Message docs.
+
+    Replaces the prior pattern of `onSnapshot(group)` + per-id
+    `getDoc(message)` round-trips on the frontend.
+    """
+    db = get_firestore()
+    pinned_ids: list[str] = list(membership.group.get("pinnedMessageIds") or [])
+    if not pinned_ids:
+        return PinnedMessagesResponse(messages=[])
+
+    msg_refs = [
+        db.collection("groups").document(gid).collection("messages").document(mid)
+        for mid in pinned_ids
+    ]
+    docs = list(db.get_all(msg_refs))
+    by_id: dict[str, dict[str, Any]] = {
+        d.id: d.to_dict() or {} for d in docs if getattr(d, "exists", False)
+    }
+    messages: list[Message] = []
+    for mid in pinned_ids:
+        data = by_id.get(mid)
+        if data is None:
+            continue
+        msg = _doc_to_message(mid, data)
+        if msg.deletedAt is not None:
+            continue
+        if msg.moderation and msg.moderation.state == "hidden":
+            continue
+        messages.append(msg)
+
+    return PinnedMessagesResponse(messages=messages)

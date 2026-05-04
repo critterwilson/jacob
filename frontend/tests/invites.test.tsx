@@ -43,14 +43,15 @@ Object.defineProperty(global.navigator, "clipboard", {
   configurable: true,
 });
 
-function makeTimestamp(date: Date) {
-  return { toDate: () => date };
+function makeIso(date: Date): string {
+  return date.toISOString();
 }
 
 function makeInvite(overrides: Partial<Invite> = {}): Invite {
   return {
     inviteId: "inv1",
     code: "ABCD1234",
+    url: "https://example.com/join/ABCD1234",
     createdAt: null,
     expiresAt: null,
     maxUses: null,
@@ -163,7 +164,7 @@ describe("InviteList", () => {
     render(
       <InviteList
         gid="g1"
-        invites={[makeInvite({ revokedAt: makeTimestamp(past) as unknown as import("firebase/firestore").Timestamp })]}
+        invites={[makeInvite({ revokedAt: makeIso(past) })]}
       />,
     );
     expect(screen.getByText("Revoked")).toBeInTheDocument();
@@ -177,7 +178,7 @@ describe("InviteList", () => {
         gid="g1"
         invites={[
           makeInvite({
-            expiresAt: makeTimestamp(past) as unknown as import("firebase/firestore").Timestamp,
+            expiresAt: makeIso(past),
           }),
         ]}
       />,

@@ -1,107 +1,85 @@
 "use client";
 
-import {
-  Timestamp,
-  collectionGroup,
-  doc,
-  getDoc,
-  onSnapshot,
-  query,
-  where,
-} from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { firestore } from "@/lib/firebase";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { ApiError, apiGet } from "@/lib/api";
 
 export const ARCHIVE_HIDE_DAYS = 60;
 
+/**
+ * Group summary as returned by `GET /api/users/me/groups`.
+ *
+ * After M3 of the data-layer migration the frontend no longer issues a
+ * collection-group query — the backend joins each membership against
+ * its parent group server-side and returns this slimmer projection.
+ * Callers that previously read e.g. `inviteCode` off the full Firestore
+ * doc must instead call `useGroup(gid)` (per-group endpoint) which
+ * returns the full GroupDetail (and redacts `inviteCode` for public
+ * non-members).
+ */
 export type Group = {
   id: string;
+  gid: string;
   name: string;
   description: string;
+  avatarUrl: string | null;
   isPrivate: boolean;
+  archivedAt: string | null;
+  role: "member" | "leader";
+  joinedAt: string | null;
   memberCount: number;
-  stickerSet: string;
-  createdBy: string;
-  inviteCode: string;
-  schemaVersion: number;
-  createdAt: unknown;
-  avatarUrl?: string | null;
-  archivedAt?: Timestamp | null;
-  archivedBy?: string | null;
-  archiveReason?: string | null;
-  joinMode?: "open" | "request";
-  audience?: "christian" | "bjj" | "general";
+  lastMessageAt: string | null;
+};
+
+type MyGroupsResponse = {
+  groups: Array<Omit<Group, "id">>;
 };
 
 /**
  * Returns every group the user belongs to.
  *
- * As of M11, memberships are derived from a collection-group query on
- * the `members` subcollection (filtered by the `uid` field) rather than
- * the legacy `users/{uid}.groupIds` mirror. Each member doc is created
- * by the backend with `uid` equal to the doc ID, and the security rule
- * still permits per-doc reads via `isUser(uid)` — see
- * `docs/adr/0003-collection-group-memberships.md`.
+ * As of M3 this calls `GET /api/users/me/groups`; the previous
+ * collection-group `onSnapshot` is gone. The cookie-bootstrap flow in
+ * `useUser` already establishes session at session start, so the hook
+ * does a one-shot fetch and exposes `refresh()` for callers to invoke
+ * after a write (group create, group leave, etc.).
  */
 export function useGroups(uid: string | undefined) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!uid) {
       setGroups([]);
       setLoading(false);
       return;
     }
-
+    abortRef.current?.abort();
+    const ctl = new AbortController();
+    abortRef.current = ctl;
     setLoading(true);
-
-    const membersQuery = query(
-      collectionGroup(firestore, "members"),
-      where("uid", "==", uid),
-    );
-
-    const unsub = onSnapshot(
-      membersQuery,
-      async (snap) => {
-        const gids = snap.docs
-          .map((d) => d.ref.parent.parent?.id)
-          .filter((id): id is string => Boolean(id));
-
-        if (gids.length === 0) {
-          setGroups([]);
-          setLoading(false);
-          return;
-        }
-
-        const groupSnaps = await Promise.all(
-          gids.map((gid) => getDoc(doc(firestore, "groups", gid))),
-        );
-
-        const cutoff = Date.now() - ARCHIVE_HIDE_DAYS * 24 * 60 * 60 * 1000;
-        setGroups(
-          groupSnaps
-            .filter((s) => s.exists())
-            .map((s) => ({ id: s.id, ...(s.data() as Omit<Group, "id">) }))
-            .filter((g) => {
-              if (!g.archivedAt) return true;
-              const archivedMs =
-                g.archivedAt instanceof Timestamp
-                  ? g.archivedAt.toMillis()
-                  : Number(g.archivedAt);
-              return archivedMs >= cutoff;
-            }),
-        );
-        setLoading(false);
-      },
-      () => {
-        setGroups([]);
-        setLoading(false);
-      },
-    );
-
-    return unsub;
+    try {
+      const res = await apiGet<MyGroupsResponse>("/api/users/me/groups", {
+        signal: ctl.signal,
+      });
+      if (ctl.signal.aborted) return;
+      setGroups(res.groups.map((g) => ({ ...g, id: g.gid })));
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("my_groups_failed", err.code, err.status);
+      }
+      setGroups([]);
+    } finally {
+      if (!ctl.signal.aborted) setLoading(false);
+    }
   }, [uid]);
 
-  return { groups, loading };
+  useEffect(() => {
+    void load();
+    return () => abortRef.current?.abort();
+  }, [load]);
+
+  return { groups, loading, refresh: load };
 }

@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  collection,
-  limit as fbLimit,
-  onSnapshot,
-  orderBy,
-  query,
-  type Timestamp,
-  where,
-} from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { ApiError, apiGet } from "@/lib/api";
+
+const POLL_INTERVAL_MS = 30_000;
 
 export type BoardPost = {
   postId: string;
@@ -19,44 +12,79 @@ export type BoardPost = {
   body: string;
   stickerIds: string[];
   mediaRefs: string[];
-  createdAt: Timestamp | null;
-  editedAt: Timestamp | null;
-  deletedAt: Timestamp | null;
-  pinnedAt: Timestamp | null;
+  createdAt: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  pinnedAt: string | null;
   pinnedBy: string | null;
   mentions?: string[];
   reactionCounts?: Record<string, number>;
   replyCount: number;
-  moderation?: { state?: string; reasons?: string[] };
+  moderation?: { state?: string | null; reasons?: string[] };
 };
 
-const PAGE_SIZE = 50;
+type BoardPostsResponse = {
+  posts: BoardPost[];
+  nextCursor: string | null;
+};
 
+/**
+ * Posts on a board. Polls every 30s — boards are far less hot than
+ * chat, so SSE is unjustified (per migration plan §6.2).
+ *
+ * Note: this hook fetches only the first page (`useBoardPosts` was
+ * also single-page pre-M3). Future paged scrollback can be added by
+ * exposing `loadOlder`.
+ */
 export function useBoardPosts(boardId: string) {
   const [posts, setPosts] = useState<BoardPost[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchOnce = useCallback(
+    async (signal: AbortSignal) => {
+      if (!boardId) return;
+      const res = await apiGet<BoardPostsResponse>(
+        `/api/boards/${boardId}/posts?limit=50`,
+        { signal },
+      );
+      if (signal.aborted) return;
+      setPosts(res.posts);
+    },
+    [boardId],
+  );
+
   useEffect(() => {
     if (!boardId) return;
-    // Filter out client-side soft-deleted; ordering goes pinned-first then
-    // by createdAt desc.
-    const q = query(
-      collection(firestore, "boards", boardId, "posts"),
-      where("deletedAt", "==", null),
-      orderBy("pinnedAt", "desc"),
-      orderBy("createdAt", "desc"),
-      fbLimit(PAGE_SIZE),
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      const next: BoardPost[] = snap.docs.map((d) => {
-        const data = d.data() as Omit<BoardPost, "postId">;
-        return { postId: d.id, ...data };
-      });
-      setPosts(next);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [boardId]);
+    setLoading(true);
+    const ctl = new AbortController();
+    void (async () => {
+      try {
+        await fetchOnce(ctl.signal);
+      } catch (err) {
+        if (ctl.signal.aborted) return;
+        if (err instanceof ApiError && err.code !== "aborted") {
+          console.warn("board_posts_failed", err.code, err.status);
+        }
+      } finally {
+        if (!ctl.signal.aborted) setLoading(false);
+      }
+    })();
+
+    const interval = setInterval(() => {
+      void (async () => {
+        try {
+          await fetchOnce(ctl.signal);
+        } catch {
+          /* swallow */
+        }
+      })();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      ctl.abort();
+      clearInterval(interval);
+    };
+  }, [boardId, fetchOnce]);
 
   return { posts, loading };
 }

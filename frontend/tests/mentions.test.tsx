@@ -48,14 +48,16 @@ vi.mock("@/lib/hooks/useMembers", () => ({
 import { useState } from "react";
 import { extractMentionedUids, renderBodyWithMentions } from "@/lib/mentions";
 import { MentionInput } from "@/components/chat/MentionInput";
-import type { Member } from "@/lib/hooks/useMembers";
+
+// MentionInput accepts a narrower projection (just `uid`+`displayName`).
+type MentionMember = { uid: string; displayName: string };
 
 // Stateful wrapper so MentionInput re-renders with each onChange call.
 function ControlledMention({
   members,
   onChangeSpy,
 }: {
-  members: Member[];
+  members: MentionMember[];
   onChangeSpy?: (v: string) => void;
 }) {
   const [value, setValue] = useState("");

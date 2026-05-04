@@ -162,7 +162,7 @@ describe("ReplyList", () => {
     body: "Amen.",
     stickerIds: [],
     mediaRefs: [],
-    createdAt: { toDate: () => new Date(0) } as never,
+    createdAt: new Date(0).toISOString(),
     editedAt: null,
     deletedAt: null,
     ...over,
@@ -181,7 +181,7 @@ describe("ReplyList", () => {
           baseReply({
             replyId: "r2",
             body: "Hidden",
-            deletedAt: { toDate: () => new Date(0) } as never,
+            deletedAt: new Date(0).toISOString(),
           }),
         ]}
       />,

@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { doc, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { InviteForm } from "@/components/groups/InviteForm";
 import { InviteList } from "@/components/groups/InviteList";
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useInvites } from "@/lib/hooks/useInvites";
 
 type Props = { params: { gid: string } };
@@ -17,8 +16,10 @@ export default function GroupInvitesPage({ params }: Props) {
   const { gid } = params;
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [isLeader, setIsLeader] = useState(false);
-  const [membershipLoading, setMembershipLoading] = useState(true);
+  const { isLeader, loading: membershipLoading } = useGroupMembership(
+    user?.uid,
+    gid,
+  );
   const { invites, loading: invitesLoading } = useInvites(gid);
 
   useEffect(() => {
@@ -26,21 +27,6 @@ export default function GroupInvitesPage({ params }: Props) {
       router.replace("/sign-in");
     }
   }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (!user || !gid) {
-      setMembershipLoading(false);
-      return;
-    }
-    return onSnapshot(
-      doc(firestore, "groups", gid, "members", user.uid),
-      (snap) => {
-        setIsLeader(snap.exists() && snap.data()?.role === "leader");
-        setMembershipLoading(false);
-      },
-      () => setMembershipLoading(false),
-    );
-  }, [user, gid]);
 
   if (authLoading || membershipLoading) {
     return (

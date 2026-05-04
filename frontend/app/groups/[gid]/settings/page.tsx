@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { doc, onSnapshot } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { GroupArchiveDialog } from "@/components/groups/GroupArchiveDialog";
 import { GroupAvatarUpload } from "@/components/groups/GroupAvatarUpload";
 import { GroupSettingsForm } from "@/components/groups/GroupSettingsForm";
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
 import { useGroup } from "@/lib/hooks/useGroup";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 
 type Props = { params: { gid: string } };
 
@@ -19,30 +18,16 @@ export default function GroupSettingsPage({ params }: Props) {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { group, loading: groupLoading } = useGroup(gid);
-  const [isLeader, setIsLeader] = useState(false);
-  const [membershipLoading, setMembershipLoading] = useState(true);
+  const { isLeader, loading: membershipLoading } = useGroupMembership(
+    user?.uid,
+    gid,
+  );
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/sign-in");
     }
   }, [user, authLoading, router]);
-
-  // Check membership role via real-time listener.
-  useEffect(() => {
-    if (!user || !gid) {
-      setMembershipLoading(false);
-      return;
-    }
-    return onSnapshot(
-      doc(firestore, "groups", gid, "members", user.uid),
-      (snap) => {
-        setIsLeader(snap.exists() && snap.data()?.role === "leader");
-        setMembershipLoading(false);
-      },
-      () => setMembershipLoading(false),
-    );
-  }, [user, gid]);
 
   if (authLoading || groupLoading || membershipLoading) {
     return (

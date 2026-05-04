@@ -1,23 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import type { Timestamp } from "firebase/firestore";
 
 import { useAuth } from "@/lib/auth-context";
 import type { Invite } from "@/lib/hooks/useInvites";
 
 type Status = "active" | "expired" | "revoked" | "used_up";
 
+function parseIso(value: string | null): number | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function getStatus(invite: Invite): Status {
   if (invite.revokedAt) return "revoked";
   if (invite.maxUses !== null && invite.useCount >= invite.maxUses) return "used_up";
-  if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) return "expired";
+  const expiresMs = parseIso(invite.expiresAt);
+  if (expiresMs !== null && expiresMs < Date.now()) return "expired";
   return "active";
 }
 
-function formatRelative(ts: Timestamp | null): string {
-  if (!ts) return "—";
-  const diff = Date.now() - ts.toDate().getTime();
+function formatRelative(ts: string | null): string {
+  const ms = parseIso(ts);
+  if (ms === null) return "—";
+  const diff = Date.now() - ms;
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
@@ -28,7 +35,9 @@ function formatRelative(ts: Timestamp | null): string {
 
 function formatExpiry(invite: Invite): string {
   if (!invite.expiresAt) return "Never";
-  const diff = invite.expiresAt.toDate().getTime() - Date.now();
+  const ms = parseIso(invite.expiresAt);
+  if (ms === null) return "—";
+  const diff = ms - Date.now();
   if (diff <= 0) return "—";
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `${minutes}m`;

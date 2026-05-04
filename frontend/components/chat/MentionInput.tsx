@@ -2,7 +2,13 @@
 
 import { type ChangeEvent, type KeyboardEvent, useRef, useState } from "react";
 
-import type { Member } from "@/lib/hooks/useMembers";
+import type { Member as FullMember } from "@/lib/hooks/useMembers";
+
+// Mention rendering only needs `uid` + `displayName`; accept the
+// narrower projection so call-sites can pass partial fixtures (and
+// existing `useMembers()` results — which are a strict superset — fit
+// trivially).
+type Member = Pick<FullMember, "uid" | "displayName">;
 
 type Props = {
   value: string;

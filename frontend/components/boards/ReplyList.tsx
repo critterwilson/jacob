@@ -9,11 +9,9 @@ type Props = {
 function formatTime(reply: BoardReply): string {
   const ts = reply.createdAt;
   if (!ts) return "";
-  try {
-    return ts.toDate().toLocaleString();
-  } catch {
-    return "";
-  }
+  const ms = Date.parse(ts);
+  if (!Number.isFinite(ms)) return "";
+  return new Date(ms).toLocaleString();
 }
 
 export function ReplyList({ replies }: Props) {

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { firestore } from "@/lib/firebase";
-import type { Group } from "@/lib/hooks/useGroups";
+import type { Group } from "@/lib/hooks/useGroup";
 
 const settingsSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Max 100 characters"),

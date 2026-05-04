@@ -3,8 +3,8 @@
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 
 // ── Next.js router ──────────────────────────────────────────────────────────
 vi.mock("next/navigation", () => ({
@@ -60,7 +60,13 @@ vi.mock("@/lib/hooks/useStickers", () => ({
   useStickers: () => ({ stickers: MOCK_STICKERS, loading: false }),
 }));
 
-import { useGroupMessages } from "@/lib/hooks/useGroupMessages";
+// MessageInput consumes useMembers; default to an empty list so the
+// mention machinery doesn't accidentally look up apiGet, whose mock is
+// shared with the message-list tests.
+vi.mock("@/lib/hooks/useMembers", () => ({
+  useMembers: () => ({ members: [], loading: false, refresh: vi.fn() }),
+}));
+
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageItem } from "@/components/chat/MessageItem";
 import { MessageList } from "@/components/chat/MessageList";
@@ -74,7 +80,7 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     authorUid: "alice",
     body: "hello world",
     stickerIds: ["check-in"],
-    createdAt: { toMillis: () => Date.now() } as unknown as Message["createdAt"],
+    createdAt: new Date().toISOString(),
     editedAt: null,
     deletedAt: null,
     parentMessageId: null,
@@ -108,44 +114,10 @@ beforeEach(() => {
   );
 });
 
-// ── useGroupMessages: listener lifecycle ────────────────────────────────────
-
-describe("useGroupMessages", () => {
-  it("subscribes to onSnapshot on mount", () => {
-    renderHook(() => useGroupMessages("g1"));
-    expect(fbFirestore.onSnapshot).toHaveBeenCalledOnce();
-  });
-
-  it("tears down the listener when gid changes (unsubscribe count)", () => {
-    const { rerender } = renderHook(
-      ({ gid }: { gid: string }) => useGroupMessages(gid),
-      { initialProps: { gid: "g1" } },
-    );
-
-    // Changing gid should call the unsubscribe returned by the first onSnapshot
-    rerender({ gid: "g2" });
-
-    expect(mockUnsubscribe).toHaveBeenCalledOnce();
-  });
-
-  it("tears down the listener on unmount", () => {
-    const { unmount } = renderHook(() => useGroupMessages("g1"));
-    unmount();
-    expect(mockUnsubscribe).toHaveBeenCalledOnce();
-  });
-
-  it("starts in loading state", () => {
-    const { result } = renderHook(() => useGroupMessages("g1"));
-    expect(result.current.loading).toBe(true);
-  });
-
-  it("returns empty messages and no loading when gid is undefined", () => {
-    const { result } = renderHook(() => useGroupMessages(undefined));
-    expect(result.current.loading).toBe(false);
-    expect(result.current.messages).toHaveLength(0);
-    expect(result.current.hasMore).toBe(false);
-  });
-});
+// useGroupMessages tests moved to `lib/hooks/__tests__/useGroupMessages.test.ts`
+// to keep them isolated from the MessageInput / MessageList tests below
+// (which use `vi.resetModules()` and would tangle with the polling
+// hook's setInterval lifecycle).
 
 // ── MessageInput ─────────────────────────────────────────────────────────────
 
@@ -228,7 +200,7 @@ describe("MessageItem", () => {
       <MessageItem
         gid="g1"
         message={makeMessage({
-          deletedAt: { toMillis: () => Date.now() } as unknown as Message["deletedAt"],
+          deletedAt: new Date().toISOString(),
         })}
         isLeader={false}
       />,
@@ -249,9 +221,7 @@ describe("MessageItem", () => {
       <MessageItem
         gid="g1"
         message={makeMessage({
-          createdAt: {
-            toMillis: () => Date.now() - 16 * 60 * 1000,
-          } as unknown as Message["createdAt"],
+          createdAt: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
         })}
         isLeader={false}
       />,
@@ -284,7 +254,7 @@ describe("MessageItem", () => {
       <MessageItem
         gid="g1"
         message={makeMessage({
-          editedAt: { toMillis: () => Date.now() } as unknown as Message["editedAt"],
+          editedAt: new Date().toISOString(),
         })}
         isLeader={false}
       />,
