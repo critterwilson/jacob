@@ -79,28 +79,26 @@ vi.mock("@/lib/hooks/useMembers", () => ({
 
 // M3+ hooks call `apiGet`/`apiPost`/`apiPatch`/`apiDelete` from
 // `@/lib/api`. Mocked here so chat tests can assert against them
-// without exercising the real Firebase auth path.
+// without exercising the real Firebase auth path. `vi.hoisted` keeps
+// the mock fns reachable after vi.mock's pre-execution hoisting.
+const { apiPostMock, apiGetMock, apiPatchMock, apiDeleteMock } = vi.hoisted(() => ({
+  apiPostMock: vi.fn(),
+  apiGetMock: vi.fn(),
+  apiPatchMock: vi.fn(),
+  apiDeleteMock: vi.fn(),
+}));
 vi.mock("@/lib/api", () => ({
-  apiGet: vi.fn(),
-  apiPost: vi.fn(),
+  apiGet: apiGetMock,
+  apiPost: apiPostMock,
   apiPut: vi.fn(),
-  apiPatch: vi.fn(),
-  apiDelete: vi.fn(),
+  apiPatch: apiPatchMock,
+  apiDelete: apiDeleteMock,
   ApiError: class ApiError extends Error {
     constructor(public status: number, public code: string, message: string) {
       super(message);
     }
   },
 }));
-
-import {
-  apiPost as apiPostExport,
-  apiPatch as apiPatchExport,
-  apiDelete as apiDeleteExport,
-} from "@/lib/api";
-const apiPostMock = apiPostExport as unknown as ReturnType<typeof vi.fn>;
-const apiPatchMock = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
-const apiDeleteMock = apiDeleteExport as unknown as ReturnType<typeof vi.fn>;
 
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageItem } from "@/components/chat/MessageItem";
@@ -159,7 +157,16 @@ beforeEach(() => {
 describe("MessageInput", () => {
   beforeEach(() => {
     apiPostMock.mockReset();
-    apiPostMock.mockResolvedValue({ id: "new-msg" });
+    // mockImplementation (vs mockResolvedValue) avoids holding a long
+    // reference chain to a single resolved-Promise object across tests
+    // — that pattern reproducibly OOMed the worker when combined with
+    // the rest of this file's queued describes.
+    apiPostMock.mockImplementation(async () => ({ id: "new-msg" }));
+  });
+
+  afterEach(() => {
+    apiPostMock.mockReset();
+    cleanup();
   });
 
   it("shows validation error when body and attachments are both empty", async () => {
@@ -210,7 +217,9 @@ describe("MessageInput", () => {
 
   it("shows error message when apiPost fails", async () => {
     apiPostMock.mockReset();
-    apiPostMock.mockRejectedValueOnce(new Error("network error"));
+    apiPostMock.mockImplementation(async () => {
+      throw new Error("network error");
+    });
 
     render(<MessageInput gid="g1" />);
     await userEvent.type(screen.getByLabelText(/message body/i), "test");
@@ -390,19 +399,8 @@ describe("MessageList — reactions wireup", () => {
 });
 
 // ── T21 — MessageList filters muted + blocked authors ───────────────────────
-//
-// NOTE (M4): these two tests use `vi.resetModules()` + dynamic re-import to
-// swap mute/block hook mocks. After M4 wired components to `@/lib/api`,
-// the resetModules path interacts badly with vitest's worker memory and
-// reliably OOMs the test process when run in this file. Marked `.skip`
-// here as a follow-up — the underlying logic is exercised by the
-// surrounding `useMutes` / `useBlocks` unit tests in
-// `lib/hooks/__tests__/`. The orthogonal mute/block UI behaviour is
-// covered indirectly by `tests/readonly.test.tsx`. Re-enable when the
-// vitest worker memory model improves or when we restructure the file
-// to avoid `vi.resetModules`.
 
-describe.skip("MessageList — mute + block filters", () => {
+describe("MessageList — mute + block filters", () => {
   const defaultProps = {
     gid: "g1",
     messages: [] as Message[],
