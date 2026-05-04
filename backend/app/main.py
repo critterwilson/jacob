@@ -18,6 +18,7 @@ from app.routers import (
     boards,
     devotionals,
     discover,
+    events,
     flags,
     groups,
     incidents,
@@ -126,6 +127,7 @@ app.include_router(incidents.admin_router)
 app.include_router(devotionals.router)
 app.include_router(sermons.router)
 app.include_router(unfurl.router)
+app.include_router(events.router)
 
 if settings.debug:
     from app.routers import debug
