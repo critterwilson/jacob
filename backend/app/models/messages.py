@@ -116,11 +116,22 @@ class EditMessageRequest(BaseModel):
 
 
 class ReactionResponse(BaseModel):
+    """Acknowledgement that a reaction was recorded.
+
+    Does not carry `reactionCounts` — those are updated asynchronously
+    by a Cloud Function trigger, and any pre-trigger snapshot returned
+    here was stale by definition (see PR9 / H7). The next polled
+    `/api/groups/{gid}/messages` response is authoritative; the client
+    optimistically reflects the toggle in the meantime.
+    """
+
     uid: str
     slug: str
     reactedAt: datetime
-    reactionCounts: dict[str, int] = Field(default_factory=dict)
 
 
 class ReactionRemovedResponse(BaseModel):
-    reactionCounts: dict[str, int] = Field(default_factory=dict)
+    """Acknowledgement that a reaction was removed. Same rationale as
+    `ReactionResponse` — no `reactionCounts`."""
+
+    ok: bool = True

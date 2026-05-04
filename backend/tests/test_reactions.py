@@ -118,7 +118,9 @@ def test_react_happy_path() -> None:
     body = res.json()
     assert body["uid"] == "alice"
     assert body["slug"] == "check-in"
-    assert body["reactionCounts"] == {"check-in": 1}
+    # PR9 / H7: reactionCounts dropped from the response (pre-trigger
+    # snapshots were stale). Polled message-list is authoritative.
+    assert "reactionCounts" not in body
 
 
 def test_react_404_sticker_missing() -> None:
@@ -182,8 +184,8 @@ def test_unreact_happy_path() -> None:
         client = TestClient(_app(user))
         res = client.delete("/api/groups/g1/messages/m1/reactions/check-in")
     assert res.status_code == 200
-    body = res.json()
-    assert "reactionCounts" in body
+    # PR9 / H7: response no longer carries reactionCounts. Just an `ok`.
+    assert res.json() == {"ok": True}
 
 
 def test_react_requires_auth() -> None:
