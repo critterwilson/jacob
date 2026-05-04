@@ -60,6 +60,12 @@ SERMON_MUTATION: str = "20/hour"
 # repeat requests so 30/min/IP is comfortable for typical chat use.
 UNFURL_FETCH: str = "30/minute"
 
+# T49 — scheduled events. Leaders create events at low volume; RSVP
+# writes per-user-per-event so the limit is on the spammy direction
+# (someone toggling status repeatedly).
+EVENT_CREATE: str = "30/hour"
+EVENT_RSVP: str = "60/minute"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

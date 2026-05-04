@@ -529,6 +529,44 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T49 default-deny — events + rsvps", () => {
+  it("denies reading groups/{gid}/events/{id}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1", "events", "e1"), {
+        title: "Prayer",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "groups", "g1", "events", "e1")),
+    );
+  });
+
+  it("denies writing groups/{gid}/events/{id}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "events", "e1"), {
+        title: "x",
+      }),
+    );
+  });
+
+  it("denies reading + writing the rsvp subcollection", async () => {
+    await seed(async (db) => {
+      await setDoc(
+        doc(db, "groups", "g1", "events", "e1", "rsvps", "alice"),
+        { status: "going" },
+      );
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "groups", "g1", "events", "e1", "rsvps", "alice")),
+    );
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "events", "e1", "rsvps", "alice"), {
+        status: "going",
+      }),
+    );
+  });
+});
+
 describe("T53 default-deny — unfurl_cache", () => {
   it("denies reading unfurl_cache/{urlHash}", async () => {
     await seed(async (db) => {

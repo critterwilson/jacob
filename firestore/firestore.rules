@@ -83,6 +83,14 @@ service cloud.firestore {
       match /sermons/{sermonId} {
         allow read, write: if false;
       }
+      // T49 — scheduled events + per-user RSVPs.
+      match /events/{eventId} {
+        allow read, write: if false;
+
+        match /rsvps/{uid} {
+          allow read, write: if false;
+        }
+      }
     }
 
     // --- stickers / daily_verse / boards --------------------------------
