@@ -3,6 +3,7 @@ import logging.config
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -57,6 +58,19 @@ settings = get_settings()
 app: FastAPI = FastAPI(title="JACOB API", version="0.1.0")
 
 app.state.limiter = limiter
+# CORS must be the outermost middleware so its response headers reach the
+# browser even when an inner handler raises. Frontend is served from a
+# different host than the API (App Hosting → Cloud Run) so the browser
+# enforces CORS on every /api/* call from the bundle.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-Id"],
+    expose_headers=["ETag", "X-Request-Id"],
+    max_age=600,
+)
 app.add_middleware(StructuredLoggingMiddleware)
 
 # Starlette stubs widen the handler exception type to `Exception`; FastAPI
