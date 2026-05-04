@@ -74,6 +74,8 @@ class VerseCircuitBreaker:
 
 
 _circuit = VerseCircuitBreaker()
+
+
 @lru_cache(maxsize=1)
 def _load_calendar() -> dict[str, object]:
     if _CALENDAR_PATH.exists():

@@ -115,9 +115,7 @@ def _make_db(*, gids: list[str] | None = None) -> MagicMock:
         snap = MagicMock()
         snap.reference.parent.parent.id = gid
         member_cg_snaps.append(snap)
-    db.collection_group.return_value.where.return_value.stream.return_value = iter(
-        member_cg_snaps
-    )
+    db.collection_group.return_value.where.return_value.stream.return_value = iter(member_cg_snaps)
 
     return db
 
