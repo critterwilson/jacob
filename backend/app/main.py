@@ -19,6 +19,7 @@ from app.routers import (
     discover,
     flags,
     groups,
+    incidents,
     invites,
     messages,
     orgs,
@@ -117,6 +118,8 @@ app.include_router(flags.router)
 app.include_router(flags.admin_router)
 app.include_router(orgs.router)
 app.include_router(orgs.public_router)
+app.include_router(incidents.router)
+app.include_router(incidents.admin_router)
 
 if settings.debug:
     from app.routers import debug
