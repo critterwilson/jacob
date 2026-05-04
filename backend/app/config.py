@@ -71,22 +71,35 @@ class Settings(BaseSettings):
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 
-    # CORS — origins allowed to call the API cross-origin. The frontend is
-    # served from Firebase App Hosting (a different host than Cloud Run), so
-    # without an explicit allowlist the browser preflight blocks every
-    # /api/* call from the deployed bundle. Override via env var as a
-    # comma-separated string when adding new environments. Defaults cover
-    # staging, the well-known production app URL, and local dev on the
-    # default Next.js port.
-    cors_allowed_origins: str = (
-        "https://jacob-frontend--jacob-staging-494515.us-central1.hosted.app,"
-        "https://jacob.app,"
-        "http://localhost:3000"
-    )
+    # CORS — origins allowed to call the API cross-origin. Frontend is
+    # served from a different host than Cloud Run, so without an explicit
+    # allowlist the browser preflight blocks every /api/* call.
+    #
+    # The default is empty for any non-development environment: staging
+    # and production MUST set CORS_ALLOWED_ORIGINS as a Cloud Run env var
+    # (see .github/workflows/deploy.yml). Defaulting localhost+staging+prod
+    # everywhere meant a misconfigured prod deploy would silently allow
+    # localhost (a leaked dev tool) and the staging hosted.app URL — both
+    # cross-origin holes the original review flagged as H4.
+    #
+    # Dev still gets the localhost shortcut so `uvicorn` works out of the box.
+    cors_allowed_origins: str = ""
+
+    # Detected environment, used to pick safe defaults. Set by deploy infra
+    # (`ENVIRONMENT=staging` etc); local dev leaves it as "development".
+    environment: str = "development"
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+        if self.cors_allowed_origins:
+            return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+        # No env override — fall back to the dev shortcut only when actually
+        # running locally. Anywhere else (staging, prod) returns [] so a
+        # missing CORS_ALLOWED_ORIGINS is a fail-closed configuration error
+        # rather than an accidental wildcard.
+        if self.environment == "development":
+            return ["http://localhost:3000"]
+        return []
 
 
 @lru_cache

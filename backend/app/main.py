@@ -64,9 +64,25 @@ app.state.limiter = limiter
 # browser even when an inner handler raises. Frontend is served from a
 # different host than the API (App Hosting → Cloud Run) so the browser
 # enforces CORS on every /api/* call from the bundle.
+_cors_origins = settings.cors_origins_list
+# Audit-log the resolved allowlist on every boot so deploys are traceable.
+# An empty list in a non-development env is the explicit fail-closed signal
+# documented in `config.py:cors_allowed_origins` — it means
+# `CORS_ALLOWED_ORIGINS` was not set on the Cloud Run service.
+if not _cors_origins and settings.environment != "development":
+    logger.warning(
+        "cors_allowlist_empty environment=%s — set CORS_ALLOWED_ORIGINS on the service",
+        settings.environment,
+    )
+else:
+    logger.info(
+        "cors_allowlist environment=%s origins=%s",
+        settings.environment,
+        ",".join(_cors_origins) if _cors_origins else "<empty>",
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-Id"],
