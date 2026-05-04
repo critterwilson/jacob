@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGet, apiGetConditional } from "@/lib/api";
 
 const PAGE_SIZE = 50;
 const POLL_INTERVAL_MS = 10_000;
@@ -55,12 +55,19 @@ const createdAtMs = (m: Message): number =>
 /**
  * Group chat messages.
  *
- * As of M3 this hook polls the backend instead of subscribing to a
- * Firestore listener. The realtime semantics will return in M5 (SSE).
- * Until then, messages from another user appear within the
- * `POLL_INTERVAL_MS` window — see migration plan §7.3 for the
- * acceptance criterion. The previous `offline` flag is retained as a
- * constant `false` so callers don't need to change.
+ * Polls the backend in two phases: an initial full first-page fetch and
+ * then `since=<latestCreatedAt>` deltas, with `If-None-Match` short-
+ * circuiting unchanged responses to 304. When `document.hidden` is true
+ * the poll tick is skipped and resumed on `visibilitychange` — open
+ * background tabs no longer burn quota.
+ *
+ * Math: at 1k active users with naive every-tick first-page polls each
+ * tick was ~50 doc reads per user. With `since=` returning ~0 docs in
+ * steady state and 304 short-circuits on top, the read budget for the
+ * chat path drops by an order of magnitude (see review item C3 / M4).
+ *
+ * The `offline` flag is retained as a constant `false` so callers don't
+ * need to change — SSE returns in M5.
  */
 export function useGroupMessages(gid: string | undefined) {
   const [recentMessages, setRecentMessages] = useState<Message[]>([]);
@@ -71,6 +78,10 @@ export function useGroupMessages(gid: string | undefined) {
 
   const olderCursorRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
+  // Latest createdAt seen across all loaded pages — used as `since=` on poll.
+  const latestCreatedAtRef = useRef<string | null>(null);
+  // ETag of the most recent successful poll/fetch — sent back as If-None-Match.
+  const pollEtagRef = useRef<string | null>(null);
 
   const fetchFirstPage = useCallback(
     async (signal: AbortSignal) => {
@@ -85,8 +96,53 @@ export function useGroupMessages(gid: string | undefined) {
       setRecentMessages(oldestFirst);
       olderCursorRef.current = res.nextCursor;
       setHasMore(Boolean(res.nextCursor));
+      // Track the newest createdAt for incremental polls. Server returns
+      // descending, so messages[0] is freshest.
+      const freshest = res.messages[0]?.createdAt ?? null;
+      latestCreatedAtRef.current = freshest;
+      pollEtagRef.current = null; // first page bypasses 304 — content is fresh
     },
     [gid],
+  );
+
+  /** Incremental poll: GET with `since` + `If-None-Match`. Merges by id. */
+  const pollIncremental = useCallback(
+    async (signal: AbortSignal) => {
+      if (!gid) return;
+      const since = latestCreatedAtRef.current;
+      if (!since) {
+        // No anchor yet — fall back to full first-page fetch.
+        await fetchFirstPage(signal);
+        return;
+      }
+      const url = `/api/groups/${gid}/messages?limit=${PAGE_SIZE}&since=${encodeURIComponent(
+        since,
+      )}`;
+      const result = await apiGetConditional<MessagesListResponse>(
+        url,
+        pollEtagRef.current,
+        { signal },
+      );
+      if (signal.aborted) return;
+      pollEtagRef.current = result.etag;
+      if (result.status === 304 || result.data === null) return;
+      const newer = result.data.messages;
+      if (newer.length === 0) return;
+      // Server returned descending; messages[0] is the freshest.
+      const newLatest = newer[0]?.createdAt;
+      if (newLatest) latestCreatedAtRef.current = newLatest;
+      // Merge into recentMessages: dedupe by id, then sort ascending.
+      setRecentMessages((prev) => {
+        const map = new Map<string, Message>();
+        for (const m of prev) map.set(m.id, m);
+        for (const m of newer) map.set(m.id, m);
+        return Array.from(map.values()).sort((a, b) => {
+          const diff = createdAtMs(a) - createdAtMs(b);
+          return diff !== 0 ? diff : a.id.localeCompare(b.id);
+        });
+      });
+    },
+    [gid, fetchFirstPage],
   );
 
   useEffect(() => {
@@ -98,6 +154,8 @@ export function useGroupMessages(gid: string | undefined) {
       return;
     }
     olderCursorRef.current = null;
+    latestCreatedAtRef.current = null;
+    pollEtagRef.current = null;
     setRecentMessages([]);
     setOlderMessages([]);
     setLoading(true);
@@ -118,21 +176,37 @@ export function useGroupMessages(gid: string | undefined) {
       }
     })();
 
-    const interval = setInterval(() => {
+    // visibilitychange-aware poller: skip ticks while the tab is hidden.
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const onTick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void (async () => {
         try {
-          await fetchFirstPage(ctl.signal);
+          await pollIncremental(ctl.signal);
         } catch {
-          /* swallow — next tick will retry */
+          /* swallow — next tick retries */
         }
       })();
-    }, POLL_INTERVAL_MS);
+    };
+    interval = setInterval(onTick, POLL_INTERVAL_MS);
+
+    const onVisibility = () => {
+      if (typeof document === "undefined" || document.hidden) return;
+      // Resumed from background: poll once immediately so the UI catches up.
+      onTick();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
 
     return () => {
       ctl.abort();
-      clearInterval(interval);
+      if (interval !== null) clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
     };
-  }, [gid, fetchFirstPage]);
+  }, [gid, fetchFirstPage, pollIncremental]);
 
   const loadOlder = useCallback(async () => {
     if (

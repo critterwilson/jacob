@@ -213,6 +213,97 @@ export function apiGet<T>(path: string, opts: ApiRequestOpts = {}): Promise<T> {
   return request<T>("GET", path, undefined, opts);
 }
 
+/**
+ * Result of a conditional GET. `status === 304` means the server affirmed
+ * the cached body via `If-None-Match` and `data` is null. Otherwise `status`
+ * is 200 and `data` carries the parsed body. The `etag` (when present) is
+ * the value to send back as `If-None-Match` on the next poll.
+ */
+export type ConditionalGetResult<T> =
+  | { status: 200; data: T; etag: string | null }
+  | { status: 304; data: null; etag: string | null };
+
+/**
+ * GET with `If-None-Match` support. Returns 200+body when content changed
+ * (or no etag was sent), 304+null when the server matched the etag. Used by
+ * the chat-message poll loop to short-circuit unchanged responses.
+ *
+ * Same retry / abort / CORS behaviour as `apiGet`. Auth header attached
+ * automatically.
+ */
+export async function apiGetConditional<T>(
+  path: string,
+  ifNoneMatch: string | null,
+  opts: ApiRequestOpts = {},
+): Promise<ConditionalGetResult<T>> {
+  const url = resolveUrl(path);
+  const maxRetries = opts.retry !== undefined ? opts.retry : 2;
+  let attempt = 0;
+
+  const authH = await authHeader();
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (opts.signal?.aborted) {
+      throw new ApiError(0, "aborted", "Request aborted");
+    }
+    const headers: Record<string, string> = {
+      ...authH,
+      Accept: "application/json",
+    };
+    if (ifNoneMatch) headers["If-None-Match"] = ifNoneMatch;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "GET",
+        headers,
+        signal: opts.signal,
+        credentials: "include",
+      });
+    } catch (e) {
+      if (
+        e instanceof DOMException &&
+        (e.name === "AbortError" || e.name === "TimeoutError")
+      ) {
+        throw new ApiError(0, "aborted", "Request aborted");
+      }
+      if (isLikelyCorsError(e, url)) {
+        throw new ApiError(
+          0,
+          "cors_blocked",
+          `Cross-origin request to ${url} was blocked.`,
+        );
+      }
+      if (attempt < maxRetries) {
+        await delay(200 * 2 ** attempt, opts.signal);
+        attempt++;
+        continue;
+      }
+      throw new ApiError(
+        0,
+        "network_error",
+        e instanceof Error ? e.message : "Network request failed",
+      );
+    }
+
+    const etag = res.headers.get("ETag");
+    if (res.status === 304) {
+      return { status: 304, data: null, etag };
+    }
+    if (res.ok) {
+      const data = (await res.json()) as T;
+      return { status: 200, data, etag };
+    }
+    if (shouldRetry(res.status) && attempt < maxRetries) {
+      await delay(200 * 2 ** attempt, opts.signal);
+      attempt++;
+      continue;
+    }
+    throw await parseError(res);
+  }
+}
+
 export function apiPost<T, B = unknown>(
   path: string,
   body: B,

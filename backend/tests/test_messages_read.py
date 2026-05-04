@@ -304,3 +304,137 @@ def test_list_messages_requires_auth() -> None:
     client = TestClient(_app(user=None))
     res = client.get("/api/groups/g1/messages")
     assert res.status_code == 401
+
+
+# ── PR3: since= + ETag + 304 ────────────────────────────────────────────
+
+
+def test_list_messages_since_filters_by_created_at() -> None:
+    """`since=<iso>` adds where(createdAt >= ts) after the order_by."""
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, group_ref = _member_setup(group_exists=True, member_exists=True)
+    base = datetime(2026, 5, 1, tzinfo=UTC)
+    snaps = [_msg_snap(mid="m2", created_at=base + timedelta(seconds=10))]
+    messages_col = group_ref.collection.return_value
+    # Chain: col.where(parentMessageId).order_by(createdAt).where(createdAt>=).limit().stream()
+    parent_where = messages_col.where.return_value
+    order = parent_where.order_by.return_value
+    since_where = order.where.return_value
+    since_where.limit.return_value.stream.return_value = iter(snaps)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get(
+            "/api/groups/g1/messages",
+            params={"since": base.isoformat()},
+        )
+    assert res.status_code == 200
+    body = res.json()
+    assert [m["id"] for m in body["messages"]] == ["m2"]
+    where_calls = order.where.call_args_list
+    assert any(call.args[0] == "createdAt" and call.args[1] == ">=" for call in where_calls)
+
+
+def test_list_messages_since_invalid_format_400() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, _ = _member_setup(group_exists=True, member_exists=True)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get("/api/groups/g1/messages?since=not-a-date")
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "invalid_since"
+
+
+def test_list_messages_since_and_cursor_mutually_exclusive_400() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, _ = _member_setup(group_exists=True, member_exists=True)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get("/api/groups/g1/messages?since=2026-05-01T00:00:00Z&cursor=abc")
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "invalid_query"
+
+
+def test_list_messages_etag_header_emitted() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, group_ref = _member_setup(group_exists=True, member_exists=True)
+    messages_col = group_ref.collection.return_value
+    chain = messages_col.where.return_value.order_by.return_value
+    chain.limit.return_value.stream.return_value = iter([_msg_snap(mid="m1")])
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get("/api/groups/g1/messages")
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')
+
+
+def test_list_messages_if_none_match_returns_304() -> None:
+    """Two calls with identical content + If-None-Match → 304 + empty body."""
+    user = CurrentUser(uid="alice", email=None, claims={})
+
+    def _fresh_db():
+        db, group_ref = _member_setup(group_exists=True, member_exists=True)
+        messages_col = group_ref.collection.return_value
+        chain = messages_col.where.return_value.order_by.return_value
+        chain.limit.return_value.stream.return_value = iter(
+            [_msg_snap(mid="m1", created_at=datetime(2026, 5, 1, tzinfo=UTC))]
+        )
+        return db
+
+    db1 = _fresh_db()
+    with (
+        patch("app.deps.get_firestore", return_value=db1),
+        patch("app.routers.messages.get_firestore", return_value=db1),
+    ):
+        client = TestClient(_app(user))
+        first = client.get("/api/groups/g1/messages")
+    etag = first.headers["etag"]
+
+    db2 = _fresh_db()
+    with (
+        patch("app.deps.get_firestore", return_value=db2),
+        patch("app.routers.messages.get_firestore", return_value=db2),
+    ):
+        client = TestClient(_app(user))
+        second = client.get("/api/groups/g1/messages", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.content == b""
+    assert second.headers["etag"] == etag
+
+
+def test_list_messages_etag_changes_when_content_changes() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+
+    def _build(mid: str):
+        db, group_ref = _member_setup(group_exists=True, member_exists=True)
+        messages_col = group_ref.collection.return_value
+        chain = messages_col.where.return_value.order_by.return_value
+        chain.limit.return_value.stream.return_value = iter(
+            [_msg_snap(mid=mid, created_at=datetime(2026, 5, 1, tzinfo=UTC))]
+        )
+        return db
+
+    db1 = _build("m1")
+    with (
+        patch("app.deps.get_firestore", return_value=db1),
+        patch("app.routers.messages.get_firestore", return_value=db1),
+    ):
+        first = TestClient(_app(user)).get("/api/groups/g1/messages")
+    db2 = _build("m2")
+    with (
+        patch("app.deps.get_firestore", return_value=db2),
+        patch("app.routers.messages.get_firestore", return_value=db2),
+    ):
+        second = TestClient(_app(user)).get("/api/groups/g1/messages")
+    assert first.headers["etag"] != second.headers["etag"]

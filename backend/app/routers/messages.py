@@ -18,13 +18,15 @@ handlers — see §5.7 of the data-layer migration plan.
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
+from starlette.responses import Response as StarletteResponse
 
 from app.deps import (
     MembershipContext,
@@ -172,16 +174,33 @@ def list_messages(
     response: Response,
     gid: str = Path(..., min_length=1),
     cursor: str | None = Query(default=None),
+    since: str | None = Query(default=None),
     limit: int = Query(default=_PAGE_DEFAULT, ge=1, le=_PAGE_MAX),
     parent_message_id: str | None = Query(default=None, alias="parentMessageId"),
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     ctx: MembershipContext | PublicReadContext = Depends(require_member_or_public_top_level),
-) -> MessagesListResponse:
+) -> Any:
     """Paginated message read.
 
     Without `parentMessageId` returns top-level messages (matches
     `useGroupMessages`). With `parentMessageId` returns thread replies
     in chronological order (matches `useThreadMessages`).
+
+    `since=<iso8601>` returns only messages with `createdAt >= since`,
+    used by the chat poll loop. Mutually exclusive with `cursor`.
+    Comparison is `>=` (not `>`) so callers don't lose ties on the
+    boundary timestamp; the client dedupes by message id when merging.
+
+    The response carries an `ETag`. Callers may pass `If-None-Match`
+    to short-circuit the body when nothing changed (304 + empty).
     """
+    if since is not None and cursor is not None:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_query",
+            message="`since` and `cursor` are mutually exclusive",
+        )
+
     db = get_firestore()
     col = db.collection("groups").document(gid).collection("messages")
     descending = parent_message_id is None
@@ -190,7 +209,19 @@ def list_messages(
         "createdAt", direction=direction
     )
 
-    if cursor:
+    if since is not None:
+        try:
+            since_ts = datetime.fromisoformat(since)
+        except ValueError as exc:
+            raise APIError(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="invalid_since",
+                message="`since` must be ISO 8601",
+            ) from exc
+        if since_ts.tzinfo is None:
+            since_ts = since_ts.replace(tzinfo=UTC)
+        query = query.where("createdAt", ">=", since_ts)
+    elif cursor:
         decoded = _decode_cursor(cursor)
         if decoded is None:
             raise APIError(
@@ -223,7 +254,15 @@ def list_messages(
         if last_ts is not None:
             next_cursor = _encode_cursor(last_ts, snaps[-1].id)
 
-    return MessagesListResponse(messages=out, nextCursor=next_cursor)
+    payload = MessagesListResponse(messages=out, nextCursor=next_cursor)
+    body_bytes = payload.model_dump_json().encode("utf-8")
+    etag = f'W/"{hashlib.md5(body_bytes).hexdigest()}"'
+
+    if if_none_match is not None and if_none_match == etag:
+        return StarletteResponse(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+
+    response.headers["ETag"] = etag
+    return payload
 
 
 # ── single-message read ────────────────────────────────────────────────

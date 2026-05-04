@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGet, apiGetConditional } from "@/lib/api";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
 const PAGE_SIZE = 50;
@@ -17,10 +17,10 @@ const createdAtMs = (m: Message): number =>
   m.createdAt ? Date.parse(m.createdAt) || 0 : 0;
 
 /**
- * Thread replies under a parent message. Mirrors `useGroupMessages` but
- * filtered to `?parentMessageId=...`. Backend returns ascending by
- * createdAt for thread reads (M3); polling cadence matches the parent
- * chat hook.
+ * Thread replies under a parent message. Mirrors `useGroupMessages`:
+ * initial full fetch, then `since=`-incremental polls with
+ * `If-None-Match`, paused while the tab is hidden. Backend returns
+ * ascending by createdAt for thread reads (M3).
  */
 export function useThreadMessages(
   gid: string | undefined,
@@ -33,6 +33,8 @@ export function useThreadMessages(
   const [hasMore, setHasMore] = useState(false);
   const olderCursorRef = useRef<string | null>(null);
   const loadingOlderRef = useRef(false);
+  const latestCreatedAtRef = useRef<string | null>(null);
+  const pollEtagRef = useRef<string | null>(null);
 
   const fetchFirstPage = useCallback(
     async (signal: AbortSignal) => {
@@ -46,8 +48,49 @@ export function useThreadMessages(
       setRecent(res.messages);
       olderCursorRef.current = res.nextCursor;
       setHasMore(Boolean(res.nextCursor));
+      // Latest reply is at the end (ascending order).
+      const last = res.messages[res.messages.length - 1];
+      latestCreatedAtRef.current = last?.createdAt ?? null;
+      pollEtagRef.current = null;
     },
     [gid, parentMessageId],
+  );
+
+  const pollIncremental = useCallback(
+    async (signal: AbortSignal) => {
+      if (!gid || !parentMessageId) return;
+      const since = latestCreatedAtRef.current;
+      if (!since) {
+        await fetchFirstPage(signal);
+        return;
+      }
+      const url =
+        `/api/groups/${gid}/messages?parentMessageId=${encodeURIComponent(parentMessageId)}` +
+        `&limit=${PAGE_SIZE}&since=${encodeURIComponent(since)}`;
+      const result = await apiGetConditional<MessagesListResponse>(
+        url,
+        pollEtagRef.current,
+        { signal },
+      );
+      if (signal.aborted) return;
+      pollEtagRef.current = result.etag;
+      if (result.status === 304 || result.data === null) return;
+      const newer = result.data.messages;
+      if (newer.length === 0) return;
+      // Ascending order — last is freshest.
+      const newLatest = newer[newer.length - 1]?.createdAt;
+      if (newLatest) latestCreatedAtRef.current = newLatest;
+      setRecent((prev) => {
+        const map = new Map<string, Message>();
+        for (const m of prev) map.set(m.id, m);
+        for (const m of newer) map.set(m.id, m);
+        return Array.from(map.values()).sort((a, b) => {
+          const diff = createdAtMs(a) - createdAtMs(b);
+          return diff !== 0 ? diff : a.id.localeCompare(b.id);
+        });
+      });
+    },
+    [gid, parentMessageId, fetchFirstPage],
   );
 
   useEffect(() => {
@@ -59,6 +102,8 @@ export function useThreadMessages(
       return;
     }
     olderCursorRef.current = null;
+    latestCreatedAtRef.current = null;
+    pollEtagRef.current = null;
     setRecent([]);
     setOlder([]);
     setLoading(true);
@@ -78,21 +123,35 @@ export function useThreadMessages(
       }
     })();
 
-    const interval = setInterval(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const onTick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void (async () => {
         try {
-          await fetchFirstPage(ctl.signal);
+          await pollIncremental(ctl.signal);
         } catch {
           /* swallow — next tick retries */
         }
       })();
-    }, POLL_INTERVAL_MS);
+    };
+    interval = setInterval(onTick, POLL_INTERVAL_MS);
+
+    const onVisibility = () => {
+      if (typeof document === "undefined" || document.hidden) return;
+      onTick();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
 
     return () => {
       ctl.abort();
-      clearInterval(interval);
+      if (interval !== null) clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
     };
-  }, [gid, parentMessageId, fetchFirstPage]);
+  }, [gid, parentMessageId, fetchFirstPage, pollIncremental]);
 
   const loadOlder = useCallback(async () => {
     if (
