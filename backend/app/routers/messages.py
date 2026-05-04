@@ -623,9 +623,14 @@ def unreact_to_message(
     gid: str = Path(..., min_length=1),
     mid: str = Path(..., min_length=1),
     slug: str = Path(..., min_length=1, max_length=64),
+    membership: MembershipContext = Depends(require_member),
     user: CurrentUser = Depends(require_not_banned),
 ) -> ReactionRemovedResponse:
-    """Remove a reaction. Banned users may unreact (`firestore.rules:414`)."""
+    """Remove a reaction. Member-only — without `require_member`, non-members
+    of the group could probe for message existence and reaction counts via
+    the response shape. Banned users still get a 403 from `require_not_banned`.
+    """
+    _ = membership  # gid + member role enforced by the dep
     db = get_firestore()
     reaction_user_ref = (
         db.collection("groups")

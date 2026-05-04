@@ -312,7 +312,9 @@ def test_approve_join_request_not_leader_returns_403() -> None:
             headers={"Authorization": "Bearer t"},
         )
     assert res.status_code == 403
-    assert res.json()["error"]["code"] == "forbidden"
+    # PR5: require_leader returns the more specific code; old inline helper
+    # said "forbidden", canonical dep says "not_a_leader".
+    assert res.json()["error"]["code"] == "not_a_leader"
 
 
 # ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────

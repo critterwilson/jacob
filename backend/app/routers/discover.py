@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 
-from app.deps import get_current_user, require_not_banned
+from app.deps import MembershipContext, get_current_user, require_leader, require_not_banned
 from app.errors import APIError
 from app.limits import ADMIN_MUTATION, DISCOVER_LIST, GROUP_JOIN
 from app.middleware.rate_limit import limiter
@@ -34,16 +34,6 @@ router = APIRouter(tags=["discover"])
 def _db() -> Any:
     init_firebase_admin()
     return fb_firestore.client()
-
-
-def _require_leader(db: Any, gid: str, uid: str) -> None:
-    member_snap = db.collection("groups").document(gid).collection("members").document(uid).get()
-    if not member_snap.exists or (member_snap.to_dict() or {}).get("role") != "leader":
-        raise APIError(
-            status_code=status.HTTP_403_FORBIDDEN,
-            code="forbidden",
-            message="Only group leaders may perform this action",
-        )
 
 
 def _ts_to_iso(ts: Any) -> str:
@@ -230,17 +220,10 @@ def list_join_requests(
     response: Response,
     cursor: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
-    user: CurrentUser = Depends(get_current_user),
+    membership: MembershipContext = Depends(require_leader),
 ) -> PendingRequestsResponse:
     db = _db()
-    group_snap = db.collection("groups").document(gid).get()
-    if not group_snap.exists:
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="group_not_found",
-            message="Group not found",
-        )
-    _require_leader(db, gid, user.uid)
+    _ = membership  # gid + leader role already enforced by the dep
 
     query = (
         db.collection("groups")
@@ -289,17 +272,10 @@ def approve_join_request(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> ReviewResponse:
     db = _db()
-    group_snap = db.collection("groups").document(gid).get()
-    if not group_snap.exists:
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="group_not_found",
-            message="Group not found",
-        )
-    _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
 
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(target_uid)
 
@@ -317,7 +293,7 @@ def approve_join_request(
             {
                 "status": "approved",
                 "reviewedAt": gcf.SERVER_TIMESTAMP,
-                "reviewedBy": user.uid,
+                "reviewedBy": actor_uid,
             },
         )
         member_ref = (
@@ -337,12 +313,12 @@ def approve_join_request(
     _txn(db.transaction())
 
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="approve_join_request",
         target_ref=f"groups/{gid}/joinRequests/{target_uid}",
         payload={"targetUid": target_uid},
     )
-    logger.info("approve_join_request leader=%s target=%s gid=%s", user.uid, target_uid, gid)
+    logger.info("approve_join_request leader=%s target=%s gid=%s", actor_uid, target_uid, gid)
     return ReviewResponse(gid=gid, uid=target_uid, status="approved")
 
 
@@ -359,17 +335,10 @@ def reject_join_request(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> ReviewResponse:
     db = _db()
-    group_snap = db.collection("groups").document(gid).get()
-    if not group_snap.exists:
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="group_not_found",
-            message="Group not found",
-        )
-    _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
 
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(target_uid)
 
@@ -383,7 +352,7 @@ def reject_join_request(
             {
                 "status": "rejected",
                 "reviewedAt": gcf.SERVER_TIMESTAMP,
-                "reviewedBy": user.uid,
+                "reviewedBy": actor_uid,
             },
         )
         return True
@@ -395,10 +364,10 @@ def reject_join_request(
             message="Pending join request not found",
         )
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="reject_join_request",
         target_ref=f"groups/{gid}/joinRequests/{target_uid}",
         payload={"targetUid": target_uid},
     )
-    logger.info("reject_join_request leader=%s target=%s gid=%s", user.uid, target_uid, gid)
+    logger.info("reject_join_request leader=%s target=%s gid=%s", actor_uid, target_uid, gid)
     return ReviewResponse(gid=gid, uid=target_uid, status="rejected")

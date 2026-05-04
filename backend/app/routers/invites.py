@@ -9,13 +9,11 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
 from app.config import get_settings
-from app.deps import get_current_user, require_not_banned
+from app.deps import MembershipContext, require_leader
 from app.errors import APIError
 from app.limits import ADMIN_MUTATION, INVITE_CREATE
 from app.middleware.rate_limit import limiter
 from app.models.invite import CreateInviteRequest, InviteListResponse, InviteResponse
-from app.models.user import CurrentUser
-from app.routers.groups import _require_leader
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
 from app.services.invites import _to_datetime, create_invite
@@ -55,11 +53,11 @@ def create_group_invite(
     request: Request,
     response: Response,
     body: CreateInviteRequest,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> InviteResponse:
     """Create a new invite link for a group. Leader-only."""
     db = _db()
-    _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
 
     settings = get_settings()
     app_url = settings.app_url
@@ -67,18 +65,18 @@ def create_group_invite(
     result = create_invite(
         db,
         gid=gid,
-        uid=user.uid,
+        uid=actor_uid,
         expiry=body.expiry,
         max_uses=body.maxUses,
         app_url=app_url,
     )
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="create_invite",
         target_ref=f"groups/{gid}/invites/{result['inviteId']}",
         payload={"expiry": body.expiry, "maxUses": body.maxUses},
     )
-    logger.info("create_invite gid=%s uid=%s invite=%s", gid, user.uid, result["inviteId"])
+    logger.info("create_invite gid=%s uid=%s invite=%s", gid, actor_uid, result["inviteId"])
     return InviteResponse(**result)
 
 
@@ -86,11 +84,11 @@ def create_group_invite(
 def list_group_invites(
     gid: str,
     request: Request,
-    user: CurrentUser = Depends(get_current_user),
+    membership: MembershipContext = Depends(require_leader),
 ) -> InviteListResponse:
     """List all invites for a group. Leader-only."""
     db = _db()
-    _require_leader(db, gid, user.uid)
+    _ = membership  # gid + leader role already enforced by the dep
 
     settings = get_settings()
     app_url = settings.app_url
@@ -113,11 +111,11 @@ def revoke_invite(
     invite_id: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> None:
     """Revoke an invite link. Soft-delete only — row stays for audit trail."""
     db = _db()
-    _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
 
     invite_ref = db.collection("groups").document(gid).collection("invites").document(invite_id)
     snap = invite_ref.get()
@@ -130,13 +128,13 @@ def revoke_invite(
     invite_ref.update(
         {
             "revokedAt": fb_firestore.SERVER_TIMESTAMP,
-            "revokedBy": user.uid,
+            "revokedBy": actor_uid,
         }
     )
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="revoke_invite",
         target_ref=f"groups/{gid}/invites/{invite_id}",
         payload={},
     )
-    logger.info("revoke_invite gid=%s invite=%s uid=%s", gid, invite_id, user.uid)
+    logger.info("revoke_invite gid=%s invite=%s uid=%s", gid, invite_id, actor_uid)

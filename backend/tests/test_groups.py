@@ -265,7 +265,9 @@ def test_archive_group_not_leader_returns_403() -> None:
         res = TestClient(_make_app()).post("/api/groups/gid-001/archive", json={})
 
     assert res.status_code == 403
-    assert res.json()["error"]["code"] == "forbidden"
+    # PR5: require_leader returns the more specific code; old inline helper
+    # said "forbidden", canonical dep says "not_a_leader".
+    assert res.json()["error"]["code"] == "not_a_leader"
 
 
 def test_unarchive_group_happy_path() -> None:
