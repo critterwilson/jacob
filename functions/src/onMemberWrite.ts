@@ -25,6 +25,7 @@
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getDatabase } from "firebase-admin/database";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { eventMarker } from "./services/eventMarkers";
 
@@ -233,5 +234,44 @@ export const onMemberWrite = onDocumentWritten(
       // Do not re-throw: leader-count already succeeded; let the
       // service-layer back-fill on the next attach call repair drift.
     }
+
+    // T48 — mirror membership to RTDB so the presence + typing rules
+    // can authorize per-group writes without a Firestore lookup. The
+    // value is a constant `true`; deletes set null. Idempotent by
+    // construction (same write twice is identical).
+    try {
+      await mirrorRtdbMembership(uid, gid, action);
+    } catch (err) {
+      logger.error("onMemberWrite rtdb-mirror failed", {
+        gid,
+        uid,
+        eventId: event.id,
+        error: (err as Error).message,
+      });
+      // Same posture as the org mirror: don't re-throw. Drift is
+      // self-healing — the next member write replays.
+    }
   },
 );
+
+/**
+ * T48 — mirror Firestore member doc to RTDB
+ * `/memberships/{uid}/{gid}: true` for the presence + typing rules.
+ *
+ * Pure-ish: takes the action and a database accessor so tests can
+ * inject a fake. The trigger calls it with the default getDatabase().
+ */
+export async function mirrorRtdbMembership(
+  uid: string,
+  gid: string,
+  action: OrgMirrorAction,
+  db: ReturnType<typeof getDatabase> = getDatabase(),
+): Promise<void> {
+  if (action === "noop") return;
+  const ref = db.ref(`memberships/${uid}/${gid}`);
+  if (action === "join") {
+    await ref.set(true);
+  } else {
+    await ref.set(null);
+  }
+}

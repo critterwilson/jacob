@@ -93,3 +93,6 @@ class GroupDetail(BaseModel):
     createdAt: datetime | None = None
     inviteCode: str | None = None
     moderationPolicy: str | None = None
+    # T48 — leader-toggleable; absent / null is treated as "on" by the
+    # frontend so existing groups don't need a backfill.
+    presenceEnabled: bool | None = None

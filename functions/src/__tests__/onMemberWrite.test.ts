@@ -8,7 +8,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { leaderDelta, orgMirrorAction } from "../onMemberWrite";
+import {
+  leaderDelta,
+  mirrorRtdbMembership,
+  orgMirrorAction,
+} from "../onMemberWrite";
 
 describe("leaderDelta", () => {
   it("create as leader → +1", () => {
@@ -63,5 +67,44 @@ describe("orgMirrorAction (T54)", () => {
 
   it("phantom write (both missing) → noop", () => {
     expect(orgMirrorAction(false, false)).toBe("noop");
+  });
+});
+
+describe("mirrorRtdbMembership (T48)", () => {
+  function makeFakeDb() {
+    const calls: { path: string; op: "set"; value: unknown }[] = [];
+    return {
+      calls,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db: {
+        ref: (path: string) => ({
+          set: async (value: unknown) => {
+            calls.push({ path, op: "set", value });
+          },
+        }),
+      } as any,
+    };
+  }
+
+  it("noop returns immediately and writes nothing", async () => {
+    const { db, calls } = makeFakeDb();
+    await mirrorRtdbMembership("alice", "g1", "noop", db);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("join writes /memberships/{uid}/{gid}: true", async () => {
+    const { db, calls } = makeFakeDb();
+    await mirrorRtdbMembership("alice", "g1", "join", db);
+    expect(calls).toEqual([
+      { path: "memberships/alice/g1", op: "set", value: true },
+    ]);
+  });
+
+  it("leave writes /memberships/{uid}/{gid}: null (delete)", async () => {
+    const { db, calls } = makeFakeDb();
+    await mirrorRtdbMembership("alice", "g1", "leave", db);
+    expect(calls).toEqual([
+      { path: "memberships/alice/g1", op: "set", value: null },
+    ]);
   });
 });

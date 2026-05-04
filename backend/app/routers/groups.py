@@ -685,6 +685,7 @@ def _group_to_detail(gid: str, data: dict[str, Any], *, include_invite_code: boo
         createdAt=_ts_to_dt(data.get("createdAt")),
         inviteCode=(data.get("inviteCode") if include_invite_code else None),
         moderationPolicy=data.get("moderationPolicy"),
+        presenceEnabled=data.get("presenceEnabled"),
     )
 
 
@@ -919,6 +920,8 @@ def update_group(
         ids = list(supplied["pinnedMessageIds"] or [])
         _validate_pinned_messages_exist(db, gid, ids)
         update["pinnedMessageIds"] = ids
+    if "presenceEnabled" in supplied:
+        update["presenceEnabled"] = bool(supplied["presenceEnabled"])
 
     db.collection("groups").document(gid).update(update)
     write_audit_log(
