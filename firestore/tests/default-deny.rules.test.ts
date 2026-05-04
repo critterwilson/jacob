@@ -529,6 +529,51 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T51 default-deny — devotionals + reading_plans + plan_progress", () => {
+  it("denies reading devotionals/{slug} (read goes through GET /api/devotionals)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "devotionals", "psalm-23"), {
+        title: "x",
+        body: "y",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "devotionals", "psalm-23")));
+  });
+
+  it("denies reading reading_plans/{slug}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "reading_plans", "john"), {
+        title: "John 21",
+        duration: 21,
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "reading_plans", "john")));
+  });
+
+  it("denies reading users/{uid}/plan_progress/{slug}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "plan_progress", "john"), {
+        planSlug: "john",
+        completedDays: [1],
+        streak: 1,
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "users", "alice", "plan_progress", "john")),
+    );
+  });
+
+  it("denies writing users/{uid}/plan_progress/{slug}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "users", "alice", "plan_progress", "john"), {
+        planSlug: "john",
+        completedDays: [1],
+        streak: 1,
+      }),
+    );
+  });
+});
+
 describe("T59 default-deny — active_incidents", () => {
   it("denies reading active_incidents/{id} (read goes through GET /api/incidents)", async () => {
     await seed(async (db) => {

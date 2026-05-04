@@ -1,0 +1,30 @@
+{
+  "slug": "john-21-days",
+  "title": "The Gospel of John in 21 Days",
+  "description": "Read through the Gospel of John in three weeks — roughly one chapter per day. Each day pairs the reading with a single reflection prompt to carry through your day.",
+  "audience": "christian",
+  "duration": 21,
+  "days": [
+    { "dayNumber": 1, "scriptureRef": "John 1:1-18", "prompt": "Where did you sense light today, even in unexpected places?" },
+    { "dayNumber": 2, "scriptureRef": "John 1:19-51", "prompt": "Who in your life is helping you 'come and see'?" },
+    { "dayNumber": 3, "scriptureRef": "John 2", "prompt": "What is Jesus inviting you to bring to him today?" },
+    { "dayNumber": 4, "scriptureRef": "John 3", "prompt": "What does being 'born again' look like in your life right now?" },
+    { "dayNumber": 5, "scriptureRef": "John 4:1-42", "prompt": "Whom do you find yourself avoiding that Jesus might be sending you toward?" },
+    { "dayNumber": 6, "scriptureRef": "John 4:43-5:47", "prompt": "What healing — physical or otherwise — are you longing for?" },
+    { "dayNumber": 7, "scriptureRef": "John 6:1-40", "prompt": "Where are you running on small bread when you've been offered more?" },
+    { "dayNumber": 8, "scriptureRef": "John 6:41-71", "prompt": "What hard teaching of Jesus would you walk away from if you could?" },
+    { "dayNumber": 9, "scriptureRef": "John 7", "prompt": "Where have you confused popular acclaim with God's approval?" },
+    { "dayNumber": 10, "scriptureRef": "John 8:1-30", "prompt": "Who has thrown stones at you that Jesus would have set down?" },
+    { "dayNumber": 11, "scriptureRef": "John 8:31-59", "prompt": "What truth might set you free that you've been avoiding?" },
+    { "dayNumber": 12, "scriptureRef": "John 9", "prompt": "What blind spot are you ready to admit to today?" },
+    { "dayNumber": 13, "scriptureRef": "John 10", "prompt": "Whose voice are you most attuned to right now?" },
+    { "dayNumber": 14, "scriptureRef": "John 11", "prompt": "What 'tomb' in your life has Jesus not yet been invited into?" },
+    { "dayNumber": 15, "scriptureRef": "John 12", "prompt": "What costly act of devotion is being asked of you?" },
+    { "dayNumber": 16, "scriptureRef": "John 13", "prompt": "Whose feet are yours to wash this week?" },
+    { "dayNumber": 17, "scriptureRef": "John 14", "prompt": "What troubled corner of your heart is Jesus speaking peace into?" },
+    { "dayNumber": 18, "scriptureRef": "John 15", "prompt": "Where are you trying to bear fruit while disconnected from the vine?" },
+    { "dayNumber": 19, "scriptureRef": "John 16-17", "prompt": "What grief is Jesus promising to turn into joy?" },
+    { "dayNumber": 20, "scriptureRef": "John 18-19", "prompt": "Where is Jesus inviting you into the cost of love?" },
+    { "dayNumber": 21, "scriptureRef": "John 20-21", "prompt": "What 'do you love me?' question is Jesus asking you, and what is your honest answer?" }
+  ]
+}

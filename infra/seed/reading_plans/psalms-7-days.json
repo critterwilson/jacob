@@ -1,0 +1,16 @@
+{
+  "slug": "psalms-7-days",
+  "title": "Seven Psalms for a Hard Week",
+  "description": "Seven of the most quietly honest psalms in scripture — for any week when you need words you don't have.",
+  "audience": "christian",
+  "duration": 7,
+  "days": [
+    { "dayNumber": 1, "scriptureRef": "Psalm 13", "prompt": "What 'how long, O Lord?' question would you put words to today?" },
+    { "dayNumber": 2, "scriptureRef": "Psalm 22:1-21", "prompt": "Where have you felt forsaken? Speak it as the psalmist does — to God, not about him." },
+    { "dayNumber": 3, "scriptureRef": "Psalm 27", "prompt": "What would 'wait on the Lord' look like in the next 24 hours?" },
+    { "dayNumber": 4, "scriptureRef": "Psalm 42", "prompt": "What thirst do you most need to name today?" },
+    { "dayNumber": 5, "scriptureRef": "Psalm 51", "prompt": "What clean heart are you asking God to create in you?" },
+    { "dayNumber": 6, "scriptureRef": "Psalm 88", "prompt": "Sit with the only psalm that doesn't end in hope. What does it tell you about prayer?" },
+    { "dayNumber": 7, "scriptureRef": "Psalm 121", "prompt": "Where is your help coming from this week?" }
+  ]
+}
