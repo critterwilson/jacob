@@ -1,0 +1,70 @@
+{
+  "app.name": "JACOB",
+  "common.loading": "Loading…",
+  "common.cancel": "Cancel",
+  "common.save": "Save",
+  "common.delete": "Delete",
+  "common.confirm": "Confirm",
+  "common.error.generic": "Something went wrong. Please try again.",
+  "common.error.network": "We couldn't reach the server. Check your connection.",
+  "common.error.unauthorized": "You don't have permission to do that.",
+
+  "nav.home": "Home",
+  "nav.groups": "Groups",
+  "nav.discover": "Discover",
+  "nav.devotionals": "Devotionals",
+  "nav.readingPlans": "Reading plans",
+  "nav.settings": "Settings",
+  "nav.signOut": "Sign out",
+
+  "auth.signIn.title": "Sign in to JACOB",
+  "auth.signIn.email": "Email",
+  "auth.signIn.password": "Password",
+  "auth.signIn.submit": "Sign in",
+  "auth.signIn.google": "Sign in with Google",
+  "auth.signOut.confirm": "Are you sure you want to sign out?",
+
+  "onboarding.title": "Welcome to JACOB",
+  "onboarding.body": "Pick a display name to get started.",
+  "onboarding.displayName": "Display name",
+  "onboarding.submit": "Continue",
+
+  "groups.create.title": "Create a group",
+  "groups.create.name": "Group name",
+  "groups.create.description": "Description",
+  "groups.create.private": "Private (members must be invited)",
+  "groups.create.submit": "Create group",
+  "groups.empty": "You haven't joined any groups yet.",
+
+  "chat.input.placeholder": "Share what's on your mind…",
+  "chat.send": "Send",
+  "chat.empty": "No messages yet. Be the first to say hi.",
+
+  "settings.profile.title": "Profile",
+  "settings.profile.displayName": "Display name",
+  "settings.profile.locale": "Language",
+  "settings.profile.locale.help": "Used for emails and date formatting.",
+
+  "events.title": "Events",
+  "events.empty": "No events scheduled.",
+  "events.rsvp.going": "Going",
+  "events.rsvp.maybe": "Maybe",
+  "events.rsvp.no": "No",
+  "events.checkIn": "I'm here",
+  "events.checkIn.notOpen": "Check-in opens 15 min before the event starts.",
+  "events.addToCalendar": "Add to calendar",
+
+  "devotionals.title": "Devotionals",
+  "devotionals.subtitle": "Short reflections paired with scripture.",
+  "devotionals.empty": "No devotionals published yet. Check back soon.",
+
+  "readingPlans.title": "Reading plans",
+  "readingPlans.subtitle": "Multi-day scripture journeys with a daily reflection.",
+  "readingPlans.streak": "{streak} day streak",
+  "readingPlans.markComplete": "Mark complete",
+  "readingPlans.completed": "Marked complete ✓",
+
+  "incidents.banner.SEV1": "SEV1 — outage",
+  "incidents.banner.SEV2": "SEV2 — degraded",
+  "incidents.banner.SEV3": "SEV3 — info"
+}

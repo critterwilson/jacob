@@ -104,6 +104,7 @@ def _user_doc_to_profile(uid: str, data: dict[str, Any]) -> UserProfile:
         phone=data.get("phone"),
         location=data.get("location"),
         faithBackground=data.get("faithBackground"),
+        locale=data.get("locale"),
     )
 
 
@@ -269,6 +270,8 @@ def update_profile(
         update["photoURL"] = str(url) if url is not None else None
     if "isMinor" in supplied:
         update["isMinor"] = bool(supplied["isMinor"])
+    if "locale" in supplied:
+        update["locale"] = supplied["locale"]
 
     # PR13 / L3: Firebase Auth lets users change their email. The Firestore
     # mirror set at create-time then diverges — leaders see stale emails on

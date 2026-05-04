@@ -1,0 +1,70 @@
+{
+  "app.name": "JACOB",
+  "common.loading": "Cargando…",
+  "common.cancel": "Cancelar",
+  "common.save": "Guardar",
+  "common.delete": "Eliminar",
+  "common.confirm": "Confirmar",
+  "common.error.generic": "Algo salió mal. Inténtalo de nuevo.",
+  "common.error.network": "No pudimos conectar con el servidor. Revisa tu conexión.",
+  "common.error.unauthorized": "No tienes permiso para hacer esto.",
+
+  "nav.home": "Inicio",
+  "nav.groups": "Grupos",
+  "nav.discover": "Descubrir",
+  "nav.devotionals": "Devocionales",
+  "nav.readingPlans": "Planes de lectura",
+  "nav.settings": "Ajustes",
+  "nav.signOut": "Cerrar sesión",
+
+  "auth.signIn.title": "Inicia sesión en JACOB",
+  "auth.signIn.email": "Correo electrónico",
+  "auth.signIn.password": "Contraseña",
+  "auth.signIn.submit": "Iniciar sesión",
+  "auth.signIn.google": "Iniciar sesión con Google",
+  "auth.signOut.confirm": "¿Seguro que quieres cerrar sesión?",
+
+  "onboarding.title": "Bienvenido a JACOB",
+  "onboarding.body": "Elige un nombre para continuar.",
+  "onboarding.displayName": "Nombre",
+  "onboarding.submit": "Continuar",
+
+  "groups.create.title": "Crear un grupo",
+  "groups.create.name": "Nombre del grupo",
+  "groups.create.description": "Descripción",
+  "groups.create.private": "Privado (sólo por invitación)",
+  "groups.create.submit": "Crear grupo",
+  "groups.empty": "Aún no perteneces a ningún grupo.",
+
+  "chat.input.placeholder": "Comparte lo que tienes en mente…",
+  "chat.send": "Enviar",
+  "chat.empty": "Aún no hay mensajes. Sé el primero en saludar.",
+
+  "settings.profile.title": "Perfil",
+  "settings.profile.displayName": "Nombre",
+  "settings.profile.locale": "Idioma",
+  "settings.profile.locale.help": "Usado para correos y formato de fechas.",
+
+  "events.title": "Eventos",
+  "events.empty": "No hay eventos programados.",
+  "events.rsvp.going": "Voy",
+  "events.rsvp.maybe": "Tal vez",
+  "events.rsvp.no": "No",
+  "events.checkIn": "Estoy aquí",
+  "events.checkIn.notOpen": "El registro abre 15 min antes del evento.",
+  "events.addToCalendar": "Agregar al calendario",
+
+  "devotionals.title": "Devocionales",
+  "devotionals.subtitle": "Reflexiones cortas con un pasaje bíblico.",
+  "devotionals.empty": "Aún no hay devocionales publicados. Vuelve pronto.",
+
+  "readingPlans.title": "Planes de lectura",
+  "readingPlans.subtitle": "Recorridos bíblicos de varios días con una reflexión diaria.",
+  "readingPlans.streak": "Racha de {streak} días",
+  "readingPlans.markComplete": "Marcar como completo",
+  "readingPlans.completed": "Marcado como completo ✓",
+
+  "incidents.banner.SEV1": "SEV1 — interrupción",
+  "incidents.banner.SEV2": "SEV2 — degradado",
+  "incidents.banner.SEV3": "SEV3 — informativo"
+}

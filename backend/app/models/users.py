@@ -33,6 +33,10 @@ class UserProfile(BaseModel):
     phone: str | None = None
     location: str | None = None
     faithBackground: str | None = None
+    # T61 — user-facing locale ("en", "es", etc.). Optional; absent
+    # means "fall back to the resolver chain (URL prefix > Accept-
+    # Language > default)". Already consumed by T51 streak math.
+    locale: str | None = None
 
 
 class CreateProfileRequest(BaseModel):
@@ -64,6 +68,10 @@ class UpdateProfileRequest(BaseModel):
     displayName: str | None = Field(default=None, min_length=1, max_length=100)
     photoURL: HttpUrl | None = None
     isMinor: bool | None = None
+    # T61 — locale opt-in. ISO 639-1 (lowercase) optionally suffixed
+    # with a region (e.g. `es`, `en-US`). Validation kept narrow at
+    # the model boundary; the i18n resolver normalises further.
+    locale: str | None = Field(default=None, pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
 
 
 class BootstrapClaims(BaseModel):
