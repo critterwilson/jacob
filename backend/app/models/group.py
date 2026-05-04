@@ -86,3 +86,7 @@ class UpdateGroupRequest(BaseModel):
         max_length=500,
     )
     pinnedMessageIds: list[str] | None = Field(default=None, max_length=5)
+    # T48 — leader-toggleable. Absent / null is treated as the legacy
+    # "presence on" default by the frontend so existing groups keep
+    # working without a backfill.
+    presenceEnabled: bool | None = None

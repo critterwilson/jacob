@@ -1,0 +1,36 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "memberships": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$gid": {
+          ".write": "auth != null && auth.token.admin == true",
+          ".validate": "newData.isBoolean() || newData.val() === null"
+        }
+      }
+    },
+
+    "presence": {
+      "$gid": {
+        ".read": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists()",
+        "$uid": {
+          ".write": "auth != null && auth.uid == $uid && root.child('memberships').child($uid).child($gid).exists()",
+          ".validate": "newData.hasChildren(['lastSeenAt','status']) && newData.child('status').isString() && (newData.child('status').val() == 'online' || newData.child('status').val() == 'offline') && newData.child('lastSeenAt').isNumber()"
+        }
+      }
+    },
+
+    "typing": {
+      "$gid": {
+        ".read": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists()",
+        "$uid": {
+          ".write": "auth != null && auth.uid == $uid && root.child('memberships').child($uid).child($gid).exists()",
+          ".validate": "newData.hasChildren(['startedAt']) && newData.child('startedAt').isNumber()"
+        }
+      }
+    }
+  }
+}
