@@ -97,6 +97,65 @@ def test_create_group_empty_name_returns_422() -> None:
     assert res.status_code == 422
 
 
+def test_create_group_default_audience_is_christian() -> None:
+    """T56 — back-compat: omitting `audience` keeps the Phase 1 default."""
+    mock_db = _make_db()
+    captured: list[object] = []
+
+    def _capture_batch() -> MagicMock:
+        b = MagicMock()
+        b.set.side_effect = lambda _ref, data, **_k: captured.append(data)
+        return b
+
+    mock_db.batch.side_effect = _capture_batch
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.routers.groups._unique_invite_code", return_value="C1"),
+    ):
+        TestClient(_make_app()).post("/api/groups", json={"name": "G"})
+
+    group_doc = next((d for d in captured if isinstance(d, dict) and "name" in d), None)
+    assert group_doc is not None
+    assert group_doc["audience"] == "christian"
+    assert group_doc["stickerSet"] == "christian"
+
+
+def test_create_group_bjj_audience_persists() -> None:
+    """T56 — caller-supplied audience pins both `audience` and `stickerSet`."""
+    mock_db = _make_db()
+    captured: list[object] = []
+
+    def _capture_batch() -> MagicMock:
+        b = MagicMock()
+        b.set.side_effect = lambda _ref, data, **_k: captured.append(data)
+        return b
+
+    mock_db.batch.side_effect = _capture_batch
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.routers.groups._unique_invite_code", return_value="C2"),
+    ):
+        TestClient(_make_app()).post(
+            "/api/groups",
+            json={"name": "Mat Time", "audience": "bjj"},
+        )
+
+    group_doc = next((d for d in captured if isinstance(d, dict) and "name" in d), None)
+    assert group_doc is not None
+    assert group_doc["audience"] == "bjj"
+    assert group_doc["stickerSet"] == "bjj"
+
+
+def test_create_group_invalid_audience_returns_422() -> None:
+    """T56 — only the three known audiences are accepted."""
+    with patch("app.routers.groups._db", return_value=_make_db()):
+        res = TestClient(_make_app()).post(
+            "/api/groups",
+            json={"name": "G", "audience": "yoga"},
+        )
+    assert res.status_code == 422
+
+
 def test_create_group_strips_and_stores_name() -> None:
     mock_db = _make_db()
     captured: list[object] = []

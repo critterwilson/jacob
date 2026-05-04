@@ -9,6 +9,10 @@ class CreateGroupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
     isPrivate: bool = False
+    # T56 — audience pins the sticker set + brand voice. Immutable
+    # after create (changing it would invalidate the group's sticker
+    # history). Defaults to christian for back-compat.
+    audience: Literal["christian", "bjj", "general"] = "christian"
 
 
 class ArchiveGroupRequest(BaseModel):
