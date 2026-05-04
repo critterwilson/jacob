@@ -298,3 +298,53 @@ def test_unarchive_group_too_old_returns_410() -> None:
 
     assert res.status_code == 410
     assert res.json()["error"]["code"] == "archive_too_old"
+
+
+# ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────
+
+
+def test_create_group_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post(
+            "/api/groups", json={"name": "G", "description": "", "isPrivate": False}
+        )
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_join_group_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/join", json={"code": "ABC"})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_rotate_invite_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/invite/rotate")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_archive_group_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/archive", json={"reason": "x"})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_unarchive_group_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/unarchive")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

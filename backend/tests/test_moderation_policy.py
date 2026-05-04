@@ -134,3 +134,12 @@ def test_missing_group_returns_404() -> None:
             json={"policy": "standard"},
         )
     assert r.status_code == 404
+
+
+def test_set_policy_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        r = _client("alice").post("/api/groups/g1/moderation-policy", json={"policy": "standard"})
+    assert r.status_code == 403
+    assert r.json()["error"]["code"] == "banned"

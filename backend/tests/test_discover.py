@@ -313,3 +313,33 @@ def test_approve_join_request_not_leader_returns_403() -> None:
         )
     assert res.status_code == 403
     assert res.json()["error"]["code"] == "forbidden"
+
+
+# ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────
+
+
+def test_create_join_request_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/join-requests", json={"message": ""})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_approve_join_request_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/join-requests/bob/approve")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_reject_join_request_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/groups/g1/join-requests/bob/reject")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

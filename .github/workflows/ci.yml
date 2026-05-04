@@ -55,6 +55,8 @@ jobs:
         working-directory: backend
       - run: mypy app/
         working-directory: backend
+      - run: python scripts/lint_writes_have_not_banned.py
+        working-directory: backend
 
   backend-test:
     name: "Backend — pytest"

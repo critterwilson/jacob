@@ -329,3 +329,26 @@ def test_legacy_inviteCode_field_no_longer_used() -> None:
 
     assert res.status_code == 404
     assert res.json()["error"]["code"] == "invalid_invite"
+
+
+# ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────
+
+
+def test_create_group_invite_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post(
+            "/api/groups/g1/invites", json={"expiry": "7d", "maxUses": None}
+        )
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_revoke_invite_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).delete("/api/groups/g1/invites/inv-1")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

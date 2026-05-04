@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 
-from app.deps import get_current_user
+from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import ADMIN_MUTATION, DISCOVER_LIST, GROUP_JOIN
 from app.middleware.rate_limit import limiter
@@ -140,7 +140,7 @@ def create_join_request(
     request: Request,
     response: Response,
     body: JoinRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> JoinResponse:
     db = _db()
 
@@ -289,7 +289,7 @@ def approve_join_request(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> ReviewResponse:
     db = _db()
     group_snap = db.collection("groups").document(gid).get()
@@ -359,7 +359,7 @@ def reject_join_request(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> ReviewResponse:
     db = _db()
     group_snap = db.collection("groups").document(gid).get()

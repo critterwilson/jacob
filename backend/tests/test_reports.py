@@ -249,6 +249,7 @@ def test_banned_reporter_returns_403() -> None:
         patch("app.routers.reports.init_firebase_admin"),
         patch("app.routers.reports._db", return_value=db),
         patch("app.services.reports._db", return_value=db),
+        patch("app.deps.get_firestore", return_value=db),
     ):
         r = _client().post(
             "/api/reports",
@@ -269,6 +270,7 @@ def test_expired_ban_does_not_block() -> None:
         patch("app.routers.reports.init_firebase_admin"),
         patch("app.routers.reports._db", return_value=db),
         patch("app.services.reports._db", return_value=db),
+        patch("app.deps.get_firestore", return_value=db),
     ):
         r = _client().post(
             "/api/reports",

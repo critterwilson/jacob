@@ -336,3 +336,32 @@ def test_finalize_already_finalized_returns_409() -> None:
         res = TestClient(_make_app()).post("/api/uploads/abc/finalize")
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "upload_already_finalized"
+
+
+# ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────
+
+
+def test_create_photo_upload_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post(
+            "/api/uploads/photos",
+            json={
+                "purpose": "avatar",
+                "filename": "a.jpg",
+                "mimeType": "image/jpeg",
+                "sizeBytes": 1000,
+            },
+        )
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"
+
+
+def test_finalize_upload_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        res = TestClient(_make_app()).post("/api/uploads/abc/finalize")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

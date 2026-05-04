@@ -197,3 +197,20 @@ def test_delete_device_404_when_missing() -> None:
     assert res.status_code == 404
     assert res.json()["error"]["code"] == "device_not_found"
     device_ref.delete.assert_not_called()
+
+
+# ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────
+
+
+def test_register_device_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(user))
+        res = client.post(
+            "/api/users/me/devices",
+            json={"fcmToken": "x" * 60, "platform": "ios"},
+        )
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

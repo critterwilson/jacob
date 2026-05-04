@@ -191,7 +191,7 @@ def create_profile(
     request: Request,
     response: Response,
     body: CreateProfileRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> UserProfile:
     db = get_firestore()
     user_ref = db.collection("users").document(user.uid)
@@ -331,7 +331,7 @@ def register_device(
     request: Request,
     response: Response,
     body: RegisterDeviceRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> DeviceResponse:
     db = get_firestore()
     devices_col = db.collection("users").document(user.uid).collection("devices")
@@ -362,7 +362,7 @@ def register_device(
     return DeviceResponse(deviceId=device_id, registeredAt=now)
 
 
-@router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)  # noqa: not-banned
 def delete_device(
     device_id: str,
     user: CurrentUser = Depends(get_current_user),
@@ -436,7 +436,7 @@ def list_notifications(
     return NotificationsListResponse(items=items, nextCursor=next_cursor)
 
 
-@router.post(
+@router.post(  # noqa: not-banned
     "/notifications/{notification_id}/read",
     response_model=Notification,
 )
@@ -519,7 +519,7 @@ def create_mute(
     return MuteResponse(uid=other_uid, mutedAt=now)
 
 
-@router.delete("/mutes/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/mutes/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)  # noqa: not-banned
 @limiter.limit(USER_MUTES_WRITE)
 def delete_mute(
     request: Request,
@@ -570,7 +570,7 @@ def create_block(
     return BlockResponse(uid=other_uid, blockedAt=now)
 
 
-@router.delete("/blocks/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/blocks/{other_uid}", status_code=status.HTTP_204_NO_CONTENT)  # noqa: not-banned
 @limiter.limit(USER_BLOCKS_WRITE)
 def delete_block(
     request: Request,

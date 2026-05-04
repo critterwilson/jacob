@@ -52,7 +52,7 @@ _web_jinja = Environment(
 )
 
 
-@router.post("/delete", response_model=DeleteAccountResponse)
+@router.post("/delete", response_model=DeleteAccountResponse)  # noqa: not-banned
 def request_delete(
     body: DeleteAccountRequest,
     user: CurrentUser = Depends(get_current_user),
@@ -73,7 +73,7 @@ def request_delete(
     )
 
 
-@router.post("/delete/cancel", response_model=CancelDeleteResponse)
+@router.post("/delete/cancel", response_model=CancelDeleteResponse)  # noqa: not-banned
 def cancel_delete(
     user: CurrentUser = Depends(get_current_user),
 ) -> CancelDeleteResponse:
@@ -135,7 +135,7 @@ def unsubscribe(
 # ── T38 — self-serve data export ─────────────────────────────────────────────
 
 
-@router.post("/export", response_model=ExportJobResponse)
+@router.post("/export", response_model=ExportJobResponse)  # noqa: not-banned
 @limiter.limit(EXPORT_REQUEST)
 def request_export(
     request: Request,

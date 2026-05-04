@@ -455,3 +455,14 @@ def test_update_profile_requires_auth() -> None:
     client = TestClient(_app(authed_user=None))
     res = client.patch("/api/users/me", json={"displayName": "Alice"})
     assert res.status_code == 401
+
+
+def test_create_profile_403_banned() -> None:
+    from tests.conftest import banned_db
+
+    user = CurrentUser(uid="alice", email="a@example.com", claims={})
+    with patch("app.deps.get_firestore", return_value=banned_db()):
+        client = TestClient(_app(authed_user=user, override_not_banned=False))
+        res = client.post("/api/users/me", json={"displayName": "Alice", "isMinor": False})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "banned"

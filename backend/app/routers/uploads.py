@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
 from app.config import get_settings
-from app.deps import get_current_user
+from app.deps import require_not_banned
 from app.errors import APIError
 from app.limits import UPLOAD_INIT
 from app.middleware.rate_limit import limiter
@@ -84,7 +84,7 @@ def create_photo_upload(
     request: Request,
     response: Response,
     body: CreateUploadRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> CreateUploadResponse:
     db = _db()
 
@@ -170,7 +170,7 @@ def create_photo_upload(
 @router.post("/{upload_id}/finalize", response_model=FinalizeUploadResponse)
 def finalize_upload(
     upload_id: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> FinalizeUploadResponse:
     db = _db()
     doc_ref = db.collection("uploads").document(upload_id)
