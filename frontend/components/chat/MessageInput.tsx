@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useMembers } from "@/lib/hooks/useMembers";
 import { extractMentionedUids } from "@/lib/mentions";
@@ -15,7 +15,6 @@ import {
   DEFAULT_STICKER_SLUG,
   StickerPicker,
 } from "@/components/stickers/StickerPicker";
-import { firestore } from "@/lib/firebase";
 
 const MAX_PHOTOS_PER_MESSAGE = 4;
 
@@ -65,23 +64,28 @@ export function MessageInput({ gid, archived = false }: Props) {
     const mentions = extractMentionedUids(trimmedBody, members);
 
     try {
-      await addDoc(collection(firestore, "groups", gid, "messages"), {
-        authorUid: user.uid,
+      await apiPost(`/api/groups/${gid}/messages`, {
         body: trimmedBody,
         stickerIds: finalStickers,
-        createdAt: serverTimestamp(),
-        editedAt: null,
-        deletedAt: null,
-        parentMessageId: null,
-        threadReplyCount: 0,
         mediaRefs,
-        ...(mentions.length > 0 ? { mentions } : {}),
+        parentMessageId: null,
+        mentions,
       });
       reset();
       setStickers([]);
       setMediaRefs([]);
-    } catch {
-      setError("Failed to send message. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "archived") {
+          setError("This group is archived. Messages are disabled.");
+        } else if (err.code === "banned") {
+          setError("Your account is currently restricted from posting.");
+        } else {
+          setError("Failed to send message. Please try again.");
+        }
+      } else {
+        setError("Failed to send message. Please try again.");
+      }
     } finally {
       setSending(false);
     }

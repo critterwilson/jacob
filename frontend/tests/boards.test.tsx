@@ -16,6 +16,18 @@ vi.mock("@/lib/firebase", () => ({
 
 const addDocMock = vi.fn().mockResolvedValue({ id: "p1" });
 
+vi.mock("@/lib/api", () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
+
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn(),
   doc: vi.fn(),
@@ -41,6 +53,9 @@ vi.mock("@/lib/hooks/useStickers", () => ({
   useStickers: () => mockUseStickers(),
   default: () => mockUseStickers(),
 }));
+
+import { apiPost as apiPostExport } from "@/lib/api";
+const apiPostMock = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 
 import { BoardCard } from "@/components/boards/BoardCard";
 import { NewPostForm } from "@/components/boards/NewPostForm";
@@ -69,6 +84,8 @@ beforeEach(() => {
   });
   mockUseStickers.mockReturnValue({ stickers: fakeStickers, loading: false });
   addDocMock.mockClear();
+  apiPostMock.mockReset();
+  apiPostMock.mockResolvedValue({ postId: "p1" });
 });
 
 // ── messageRef helper ──────────────────────────────────────────────────
@@ -116,7 +133,7 @@ describe("BoardCard", () => {
 // ── NewPostForm ────────────────────────────────────────────────────────
 
 describe("NewPostForm", () => {
-  it("posts to firestore with sticker + body", async () => {
+  it("posts to backend with sticker + body", async () => {
     const user = userEvent.setup();
     render(<NewPostForm boardId="b1" />);
 
@@ -125,15 +142,14 @@ describe("NewPostForm", () => {
     await user.type(screen.getByLabelText(/post body/i), "Lord, please heal");
     await user.click(screen.getByRole("button", { name: /^post$/i }));
 
-    await waitFor(() => expect(addDocMock).toHaveBeenCalledTimes(1));
-    const [, payload] = addDocMock.mock.calls[0];
+    await waitFor(() => expect(apiPostMock).toHaveBeenCalledTimes(1));
+    const [path, payload] = apiPostMock.mock.calls[0];
+    expect(path).toBe("/api/boards/b1/posts");
     expect(payload).toMatchObject({
-      authorUid: "alice",
       body: "Lord, please heal",
       stickerIds: ["pray"],
       mediaRefs: [],
-      replyCount: 0,
-      reactionCounts: {},
+      mentions: [],
     });
   });
 
@@ -142,7 +158,7 @@ describe("NewPostForm", () => {
     render(<NewPostForm boardId="b1" />);
     await user.type(screen.getByLabelText(/post body/i), "Hello");
     await user.click(screen.getByRole("button", { name: /^post$/i }));
-    expect(addDocMock).not.toHaveBeenCalled();
+    expect(apiPostMock).not.toHaveBeenCalled();
     expect(await screen.findByText(/pick at least one sticker/i)).toBeInTheDocument();
   });
 

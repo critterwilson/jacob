@@ -80,3 +80,42 @@ class RecentMessage(BaseModel):
 
 class RecentMessagesResponse(BaseModel):
     messages: list[RecentMessage]
+
+
+# ── M4 write request shapes ──────────────────────────────────────────────
+
+
+class CreateMessageRequest(BaseModel):
+    """Body of `POST /api/groups/{gid}/messages`.
+
+    Mirrors `firestore.rules:323-347` — keys allow-list, types, lengths.
+    `extra: forbid` enforces the rules' `keys().hasOnly(...)` predicate.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=4000)
+    stickerIds: list[str] = Field(default_factory=list, max_length=5)
+    mediaRefs: list[str] = Field(default_factory=list, max_length=4)
+    parentMessageId: str | None = None
+    mentions: list[str] = Field(default_factory=list, max_length=10)
+    repostOfThread: str | None = None
+
+
+class EditMessageRequest(BaseModel):
+    """Body of `PATCH /api/groups/{gid}/messages/{mid}`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class ReactionResponse(BaseModel):
+    uid: str
+    slug: str
+    reactedAt: datetime
+    reactionCounts: dict[str, int] = Field(default_factory=dict)
+
+
+class ReactionRemovedResponse(BaseModel):
+    reactionCounts: dict[str, int] = Field(default_factory=dict)

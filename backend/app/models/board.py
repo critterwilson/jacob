@@ -114,3 +114,63 @@ class BoardReply(BaseModel):
 class BoardRepliesResponse(BaseModel):
     replies: list[BoardReply]
     nextCursor: str | None = None
+
+
+# ── M4 write request shapes ──────────────────────────────────────────────
+
+
+class CreateBoardPostRequest(BaseModel):
+    """Body of `POST /api/boards/{bid}/posts`.
+
+    Mirrors `firestore.rules:476-505`. Note: stickerIds is REQUIRED with
+    at least 1 sticker (the rules require it; the create-post UI surfaces
+    a sticker picker so this is a natural constraint).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=4000)
+    stickerIds: list[str] = Field(min_length=1, max_length=5)
+    mediaRefs: list[str] = Field(default_factory=list, max_length=4)
+    mentions: list[str] = Field(default_factory=list, max_length=10)
+
+
+class EditBoardPostRequest(BaseModel):
+    """Body of `PATCH /api/boards/{bid}/posts/{pid}`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class CreateBoardReplyRequest(BaseModel):
+    """Body of `POST /api/boards/{bid}/posts/{pid}/replies`.
+
+    Mirrors `firestore.rules:547-566`. stickerIds is optional for replies.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=4000)
+    stickerIds: list[str] = Field(default_factory=list, max_length=5)
+    mediaRefs: list[str] = Field(default_factory=list, max_length=4)
+    mentions: list[str] = Field(default_factory=list, max_length=10)
+
+
+class EditBoardReplyRequest(BaseModel):
+    """Body of `PATCH /api/boards/{bid}/posts/{pid}/replies/{rid}`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class BoardReactionResponse(BaseModel):
+    uid: str
+    slug: str
+    reactedAt: datetime
+    reactionCounts: dict[str, int] = Field(default_factory=dict)
+
+
+class BoardReactionRemovedResponse(BaseModel):
+    reactionCounts: dict[str, int] = Field(default_factory=dict)

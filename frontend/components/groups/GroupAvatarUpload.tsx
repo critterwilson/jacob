@@ -1,9 +1,8 @@
 "use client";
 
-import { doc, updateDoc } from "firebase/firestore";
 import { useRef, useState } from "react";
 
-import { firestore } from "@/lib/firebase";
+import { apiPatch } from "@/lib/api";
 import { UploadError, useUploadPhoto } from "@/lib/hooks/useUploadPhoto";
 
 type Props = {
@@ -22,7 +21,7 @@ export function GroupAvatarUpload({ gid, currentAvatarUrl }: Props) {
     setPreview(URL.createObjectURL(file));
     try {
       const publicUrl = await upload({ file, purpose: "group_avatar", groupId: gid });
-      await updateDoc(doc(firestore, "groups", gid), { avatarUrl: publicUrl });
+      await apiPatch(`/api/groups/${gid}`, { avatarUrl: publicUrl });
       setPreview(null);
     } catch (err) {
       setPreview(null);

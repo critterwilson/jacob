@@ -26,6 +26,21 @@ vi.mock("firebase/firestore", () => ({
 
 import * as fbFirestore from "firebase/firestore";
 
+vi.mock("@/lib/api", () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
+
+import { apiPatch as apiPatchExport } from "@/lib/api";
+const apiPatchMock = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
+
 const mockUseAuth = vi.fn();
 vi.mock("@/lib/auth-context", () => ({
   useAuth: () => mockUseAuth(),
@@ -119,10 +134,11 @@ describe("MessageInput", () => {
 
 describe("GroupSettingsForm", () => {
   beforeEach(() => {
-    vi.mocked(fbFirestore.updateDoc).mockResolvedValue(undefined);
+    apiPatchMock.mockReset();
+    apiPatchMock.mockResolvedValue({});
   });
 
-  it("calls updateDoc with only allowed fields on submit", async () => {
+  it("calls apiPatch with only allowed fields on submit", async () => {
     const user = userEvent.setup();
     render(<GroupSettingsForm gid="g1" group={fakeGroup} />);
 
@@ -132,13 +148,12 @@ describe("GroupSettingsForm", () => {
 
     await user.click(screen.getByRole("button", { name: /save/i }));
 
-    await waitFor(() => {
-      expect(fbFirestore.updateDoc).toHaveBeenCalled();
-    });
-    const call = vi.mocked(fbFirestore.updateDoc).mock.calls[0];
-    const data = call[1] as unknown as Record<string, unknown>;
-    expect(data).toMatchObject({ name: "Updated Name" });
-    expect(Object.keys(data)).toEqual(
+    await waitFor(() => expect(apiPatchMock).toHaveBeenCalled());
+    const [path, data] = apiPatchMock.mock.calls[0];
+    expect(path).toBe("/api/groups/g1");
+    const body = data as Record<string, unknown>;
+    expect(body).toMatchObject({ name: "Updated Name" });
+    expect(Object.keys(body)).toEqual(
       expect.arrayContaining(["name", "description", "isPrivate"]),
     );
   });

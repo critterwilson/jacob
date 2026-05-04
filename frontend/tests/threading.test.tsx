@@ -32,6 +32,21 @@ vi.mock("firebase/firestore", () => ({
 
 import * as fbFirestore from "firebase/firestore";
 
+vi.mock("@/lib/api", () => ({
+  apiGet: vi.fn(),
+  apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
+
+import { apiPost as apiPostExport } from "@/lib/api";
+const apiPostMock = apiPostExport as unknown as ReturnType<typeof vi.fn>;
+
 vi.mock("@/lib/auth-context", () => ({
   useAuth: () => ({
     user: {
@@ -75,7 +90,7 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
     authorUid: "alice",
     body: "hello world",
     stickerIds: ["check-in"],
-    createdAt: { toMillis: () => Date.now() } as unknown as Message["createdAt"],
+    createdAt: new Date().toISOString(),
     editedAt: null,
     deletedAt: null,
     parentMessageId: null,
@@ -115,6 +130,11 @@ beforeEach(() => {
 // ── ThreadReplyInput ──────────────────────────────────────────────────────────
 
 describe("ThreadReplyInput", () => {
+  beforeEach(() => {
+    apiPostMock.mockReset();
+    apiPostMock.mockResolvedValue({ id: "reply1" });
+  });
+
   it("shows validation error when reply body is empty", async () => {
     render(
       <ThreadReplyInput
@@ -125,14 +145,10 @@ describe("ThreadReplyInput", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /reply/i }));
     expect(await screen.findByText(/cannot be empty/i)).toBeInTheDocument();
-    expect(fbFirestore.addDoc).not.toHaveBeenCalled();
+    expect(apiPostMock).not.toHaveBeenCalled();
   });
 
-  it("calls addDoc once when 'Also post to channel' is unchecked", async () => {
-    vi.mocked(fbFirestore.addDoc).mockResolvedValue(
-      { id: "reply1" } as Awaited<ReturnType<typeof fbFirestore.addDoc>>,
-    );
-
+  it("calls apiPost once when 'Also post to channel' is unchecked", async () => {
     render(
       <ThreadReplyInput
         gid="g1"
@@ -143,17 +159,14 @@ describe("ThreadReplyInput", () => {
     await userEvent.type(screen.getByLabelText(/reply body/i), "Great point!");
     await userEvent.click(screen.getByRole("button", { name: /reply/i }));
 
-    await waitFor(() => expect(fbFirestore.addDoc).toHaveBeenCalledOnce());
-    const [, data] = vi.mocked(fbFirestore.addDoc).mock.calls[0];
+    await waitFor(() => expect(apiPostMock).toHaveBeenCalledOnce());
+    const [path, data] = apiPostMock.mock.calls[0];
+    expect(path).toBe("/api/groups/g1/messages");
     expect((data as Record<string, unknown>).parentMessageId).toBe("m1");
     expect((data as Record<string, unknown>).stickerIds).toEqual(["check-in"]);
   });
 
-  it("calls addDoc twice when 'Also post to channel' is checked", async () => {
-    vi.mocked(fbFirestore.addDoc).mockResolvedValue(
-      { id: "reply1" } as Awaited<ReturnType<typeof fbFirestore.addDoc>>,
-    );
-
+  it("calls apiPost twice when 'Also post to channel' is checked", async () => {
     render(
       <ThreadReplyInput
         gid="g1"
@@ -165,9 +178,9 @@ describe("ThreadReplyInput", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: /also post to channel/i }));
     await userEvent.click(screen.getByRole("button", { name: /reply/i }));
 
-    await waitFor(() => expect(fbFirestore.addDoc).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(apiPostMock).toHaveBeenCalledTimes(2));
 
-    const calls = vi.mocked(fbFirestore.addDoc).mock.calls;
+    const calls = apiPostMock.mock.calls;
     const replyCall = calls[0][1] as Record<string, unknown>;
     const repostCall = calls[1][1] as Record<string, unknown>;
 
@@ -176,8 +189,9 @@ describe("ThreadReplyInput", () => {
     expect(repostCall.repostOfThread).toBe("m1");
   });
 
-  it("shows error when addDoc fails", async () => {
-    vi.mocked(fbFirestore.addDoc).mockRejectedValue(new Error("network error"));
+  it("shows error when apiPost fails", async () => {
+    apiPostMock.mockReset();
+    apiPostMock.mockRejectedValueOnce(new Error("network error"));
 
     render(
       <ThreadReplyInput

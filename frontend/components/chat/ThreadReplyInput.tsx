@@ -4,10 +4,9 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
 
 const schema = z.object({
   body: z
@@ -45,34 +44,35 @@ export function ThreadReplyInput({ gid, parentMessageId, parentStickerIds }: Pro
     setSending(true);
     setError(null);
 
-    const replyData = {
-      authorUid: user.uid,
-      body: values.body.trim(),
-      stickerIds: parentStickerIds,
-      createdAt: serverTimestamp(),
-      editedAt: null,
-      deletedAt: null,
-      parentMessageId,
-      threadReplyCount: 0,
-      mediaRefs: [],
-    };
+    const trimmed = values.body.trim();
 
     try {
-      const messagesRef = collection(firestore, "groups", gid, "messages");
-      await addDoc(messagesRef, replyData);
+      await apiPost(`/api/groups/${gid}/messages`, {
+        body: trimmed,
+        stickerIds: parentStickerIds,
+        mediaRefs: [],
+        parentMessageId,
+        mentions: [],
+      });
 
       if (values.alsoPostToChannel) {
-        await addDoc(messagesRef, {
-          ...replyData,
-          createdAt: serverTimestamp(),
+        await apiPost(`/api/groups/${gid}/messages`, {
+          body: trimmed,
+          stickerIds: parentStickerIds,
+          mediaRefs: [],
           parentMessageId: null,
+          mentions: [],
           repostOfThread: parentMessageId,
         });
       }
 
       reset();
-    } catch {
-      setError("Failed to send reply. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "archived") {
+        setError("This group is archived. Replies are disabled.");
+      } else {
+        setError("Failed to send reply. Please try again.");
+      }
     } finally {
       setSending(false);
     }

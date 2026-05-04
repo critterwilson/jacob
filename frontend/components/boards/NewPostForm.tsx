@@ -1,13 +1,12 @@
 "use client";
 
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { firestore } from "@/lib/firebase";
 import { StickerPicker } from "@/components/stickers/StickerPicker";
 
 // Mirrors backend rule constraint: ≥1 sticker, body 1-4000 chars.
@@ -54,20 +53,25 @@ export function NewPostForm({ boardId, archived = false }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await addDoc(collection(firestore, "boards", boardId, "posts"), {
-        authorUid: user.uid,
+      await apiPost(`/api/boards/${boardId}/posts`, {
         body: values.body.trim(),
         stickerIds: values.stickerIds,
         mediaRefs: [],
-        createdAt: serverTimestamp(),
-        editedAt: null,
-        deletedAt: null,
-        replyCount: 0,
-        reactionCounts: {},
+        mentions: [],
       });
       reset();
-    } catch {
-      setError("Failed to post. Please try again.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "archived") {
+          setError("This board is archived. New posts are disabled.");
+        } else if (err.code === "banned") {
+          setError("Your account is currently restricted from posting.");
+        } else {
+          setError("Failed to post. Please try again.");
+        }
+      } else {
+        setError("Failed to post. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

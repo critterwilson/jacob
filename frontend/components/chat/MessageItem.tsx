@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
+import { ApiError, apiDelete, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PhotoView } from "@/components/chat/PhotoView";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
@@ -14,7 +14,6 @@ import type { Member as FullMember } from "@/lib/hooks/useMembers";
 
 type Member = Pick<FullMember, "uid" | "displayName">;
 import { renderBodyWithMentions } from "@/lib/mentions";
-import { firestore } from "@/lib/firebase";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 import type { PinnedMessage } from "@/lib/hooks/usePinnedMessages";
 
@@ -101,13 +100,18 @@ export function MessageItem({
     setSaving(true);
     setError(null);
     try {
-      await updateDoc(doc(firestore, "groups", gid, "messages", message.id), {
-        body: trimmed,
-        editedAt: serverTimestamp(),
-      });
+      await apiPatch(`/api/groups/${gid}/messages/${message.id}`, { body: trimmed });
       setEditing(false);
-    } catch {
-      setError("Failed to save edit.");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "edit_window_expired") {
+          setError("Edit window expired (15 minutes).");
+        } else {
+          setError("Failed to save edit.");
+        }
+      } else {
+        setError("Failed to save edit.");
+      }
     } finally {
       setSaving(false);
     }
@@ -116,11 +120,13 @@ export function MessageItem({
   const handleDelete = async () => {
     setError(null);
     try {
-      await updateDoc(doc(firestore, "groups", gid, "messages", message.id), {
-        deletedAt: serverTimestamp(),
-      });
-    } catch {
-      setError("Failed to delete message.");
+      await apiDelete(`/api/groups/${gid}/messages/${message.id}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.code !== "aborted") {
+        setError("Failed to delete message.");
+      } else {
+        setError("Failed to delete message.");
+      }
     }
   };
 

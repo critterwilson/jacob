@@ -258,3 +258,32 @@ def require_member_or_public_top_level(
     type to decide whether to filter and which fields to include.
     """
     return require_member_or_public(gid=gid, user=user)
+
+
+# ── M4: write-side guards ────────────────────────────────────────────────
+
+
+def require_member_not_banned(
+    membership: MembershipContext = Depends(require_member),
+    _ban_check: CurrentUser = Depends(require_not_banned),
+) -> MembershipContext:
+    """Compose `require_member` + `require_not_banned`.
+
+    M4 write surfaces compose this dep so the membership read is
+    threaded through and the ban check happens once per request.
+    """
+    return membership
+
+
+def require_not_archived(membership: MembershipContext) -> MembershipContext:
+    """Reject writes against an archived group (firestore.rules:323-347 and
+    related). The `archivedAt` timestamp is read off the already-fetched
+    group doc — no extra round-trip.
+    """
+    if membership.group.get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="archived",
+            message="Group is archived; new writes are disabled",
+        )
+    return membership
