@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request, Response
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user
+from app.deps import require_not_banned
 from app.limits import UNFURL_FETCH
 from app.middleware.rate_limit import limiter
 from app.models.unfurl import UnfurlRequest, UnfurlResponse
@@ -40,7 +40,7 @@ def unfurl_url(
     request: Request,
     response: Response,
     body: UnfurlRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> UnfurlResponse:
     db = _db()
     url = str(body.url)
