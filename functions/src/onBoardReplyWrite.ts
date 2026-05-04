@@ -11,6 +11,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
 
 import { classifyPostChange, type ChangeKind } from "./onBoardPostWrite";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -59,10 +60,7 @@ export const onBoardReplyWrite = onDocumentWritten(
           });
           return;
         }
-        txn.set(eventRef, {
-          processedAt: FieldValue.serverTimestamp(),
-          change,
-        });
+        txn.set(eventRef, eventMarker({ change }));
 
         const delta = change === "create" ? 1 : -1;
         txn.update(postRef, {

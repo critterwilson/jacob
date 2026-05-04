@@ -30,6 +30,7 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
+import { eventMarker } from "./services/eventMarkers";
 
 import {
   TypesenseClient,
@@ -234,7 +235,7 @@ export const onMessageIndex = onDocumentWritten(
     const wasFresh = await db.runTransaction(async (txn) => {
       const snap = await txn.get(eventRef);
       if (snap.exists) return false;
-      txn.set(eventRef, { processedAt: FieldValue.serverTimestamp() });
+      txn.set(eventRef, eventMarker());
       return true;
     });
     if (!wasFresh) {

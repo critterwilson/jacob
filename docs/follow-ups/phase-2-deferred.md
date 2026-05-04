@@ -19,17 +19,17 @@ field, updated security rules, emulator test).
 
 ---
 
-## M16 — `_events` / `_reaction_events` idempotency markers grow unbounded
+## M16 — `_events` / `_reaction_events` idempotency markers grow unbounded — **done**
 
-**Where:** `functions/src/onMessageWrite.ts:106`, `onMemberWrite.ts:77`,
-`onReactionWrite.ts:35`, `onMessageIndex.ts`.
-**Problem:** One permanent Firestore doc per write event under each parent.
-Over a year of activity, every message accumulates a large `_events`
-subcollection.
-**What's needed:** Enable Firestore per-document TTL on `processedAt + 7 days`
-for the `_events` and `_reaction_events` collections. Requires a Firestore TTL
-policy (set via `firebase.json` or `gcloud firestore fields ttls create`) plus
-documentation in `docs/data-model.md`.
+Shipped in `chore: Firestore TTL on idempotency markers (M16)`.
+
+Each marker write now includes `expiresAt = now + 7 days` (helper at
+`functions/src/services/eventMarkers.ts`). TTL is enabled per-collection-group
+on `expiresAt` via `infra/firestore-ttls.sh`, which the user runs once per
+project — see `docs/runbooks/firestore-ttls.md`. Coverage extended to all six
+idempotency-marker collection groups (`_events`, `_reaction_events`,
+`_index_events`, `_post_events`, `_reply_events`, `_member_events`) since they
+share an identical lifecycle.
 
 ---
 
