@@ -483,5 +483,3 @@ def search_groups(
         )
 
     return AdminGroupListResponse(groups=groups)
-
-

@@ -470,9 +470,9 @@ def test_assemble_reaction_scan_returns_all_pages() -> None:
     db.collection_group.side_effect = lambda name: users_cg if name == "users" else MagicMock()
 
     bundle = export.assemble(uid, db=db)
-    assert len(bundle["reactions"]) == _PAGE_SIZE + 1, (
-        f"Expected {_PAGE_SIZE + 1} reactions across two pages, got {len(bundle['reactions'])}"
-    )
+    assert (
+        len(bundle["reactions"]) == _PAGE_SIZE + 1
+    ), f"Expected {_PAGE_SIZE + 1} reactions across two pages, got {len(bundle['reactions'])}"
 
 
 def test_serialize_round_trips_bundle() -> None:
