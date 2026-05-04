@@ -21,8 +21,10 @@ from app.deps import (
     MembershipContext,
     PublicReadContext,
     get_current_user,
+    require_leader,
     require_member,
     require_member_or_public,
+    require_not_banned,
 )
 from app.errors import APIError
 from app.limits import (
@@ -31,6 +33,7 @@ from app.limits import (
     GROUP_JOIN,
     GROUP_MEMBERSHIP_READ,
     GROUP_READ,
+    GROUP_UPDATE,
     INVITE_ROTATE,
     MEMBERS_LIST,
     PINNED_MESSAGES_READ,
@@ -50,6 +53,7 @@ from app.models.group import (
     LeaderActionResponse,
     RotateInviteResponse,
     UnarchiveResponse,
+    UpdateGroupRequest,
 )
 from app.models.members import (
     GroupDetail,
@@ -850,3 +854,89 @@ def get_pinned_messages(
         messages.append(msg)
 
     return PinnedMessagesResponse(messages=messages)
+
+
+# ── M4 writes ────────────────────────────────────────────────────────────
+
+
+_GCS_PUBLIC_PREFIX = "https://storage.googleapis.com/jacob-media-public-"
+
+
+def _validate_pinned_messages_exist(db: Any, gid: str, ids: list[str]) -> None:
+    if not ids:
+        return
+    msg_refs = [
+        db.collection("groups").document(gid).collection("messages").document(mid) for mid in ids
+    ]
+    docs = list(db.get_all(msg_refs))
+    found = {d.id for d in docs if getattr(d, "exists", False)}
+    missing = [mid for mid in ids if mid not in found]
+    if missing:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="pinned_message_missing",
+            message="One or more pinnedMessageIds do not exist in this group",
+            details={"missing": missing},
+        )
+
+
+@router.patch("/{gid}", response_model=GroupDetail)
+@limiter.limit(GROUP_UPDATE)
+def update_group(
+    request: Request,
+    response: Response,
+    body: UpdateGroupRequest,
+    gid: str,
+    membership: MembershipContext = Depends(require_leader),
+    user: CurrentUser = Depends(require_not_banned),
+) -> GroupDetail:
+    """Update a group's metadata. Leader only.
+
+    Mirrors `firestore.rules:217-247`. Refuses to touch `archivedAt` —
+    that lives on `/archive` and `/unarchive`.
+    """
+    supplied = body.model_dump(exclude_unset=True)
+    if not supplied:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="empty_update",
+            message="At least one field must be supplied",
+        )
+
+    db = _db()
+
+    update: dict[str, Any] = {}
+    if "name" in supplied:
+        update["name"] = str(supplied["name"]).strip()
+    if "description" in supplied:
+        desc = supplied["description"]
+        update["description"] = (str(desc).strip()) if desc is not None else None
+    if "isPrivate" in supplied:
+        update["isPrivate"] = bool(supplied["isPrivate"])
+    if "joinMode" in supplied:
+        update["joinMode"] = supplied["joinMode"]
+    if "stickerSet" in supplied:
+        update["stickerSet"] = supplied["stickerSet"]
+    if "avatarUrl" in supplied:
+        avatar = supplied["avatarUrl"]
+        if avatar is not None and not str(avatar).startswith(_GCS_PUBLIC_PREFIX):
+            raise APIError(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code="invalid_avatar_url",
+                message="avatarUrl must point to the public GCS bucket",
+            )
+        update["avatarUrl"] = str(avatar) if avatar is not None else None
+    if "pinnedMessageIds" in supplied:
+        ids = list(supplied["pinnedMessageIds"] or [])
+        _validate_pinned_messages_exist(db, gid, ids)
+        update["pinnedMessageIds"] = ids
+
+    db.collection("groups").document(gid).update(update)
+    write_audit_log(
+        actor_uid=user.uid,
+        action="group.update",
+        target_ref=f"groups/{gid}",
+        payload={"changedKeys": sorted(update.keys())},
+    )
+    fresh = db.collection("groups").document(gid).get()
+    return _group_to_detail(gid, fresh.to_dict() or {}, include_invite_code=True)

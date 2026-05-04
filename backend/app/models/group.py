@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CreateGroupRequest(BaseModel):
@@ -59,3 +61,24 @@ class AnnounceResponse(BaseModel):
     mid: str
     announcedAt: str  # ISO-8601
     notifiedCount: int
+
+
+class UpdateGroupRequest(BaseModel):
+    """`PATCH /api/groups/{gid}` body. Replaces `firestore.rules:217-247`.
+
+    `archivedAt` transitions live on the dedicated `/archive` and
+    `/unarchive` endpoints; this endpoint refuses to touch it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    isPrivate: bool | None = None
+    joinMode: Literal["open", "request", "invite"] | None = None
+    stickerSet: str | None = Field(default=None, min_length=1, max_length=64)
+    avatarUrl: str | None = Field(
+        default=None,
+        max_length=500,
+    )
+    pinnedMessageIds: list[str] | None = Field(default=None, max_length=5)

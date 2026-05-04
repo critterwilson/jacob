@@ -15,15 +15,23 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
+from google.cloud import firestore as gcf
 
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user, require_admin, require_not_banned
 from app.errors import APIError
 from app.limits import (
     BOARD_ADMIN_MUTATION,
+    BOARD_POST_CREATE,
+    BOARD_POST_DELETE,
+    BOARD_POST_EDIT,
     BOARD_POST_READ,
     BOARD_POSTS_LIST,
     BOARD_REPLIES_LIST,
+    BOARD_REPLY_CREATE,
+    BOARD_REPLY_DELETE,
+    BOARD_REPLY_EDIT,
     BOARDS_LIST,
+    REACTION_TOGGLE,
 )
 from app.middleware.rate_limit import limiter
 from app.models.board import (
@@ -32,10 +40,16 @@ from app.models.board import (
     BoardPost,
     BoardPostModeration,
     BoardPostsResponse,
+    BoardReactionRemovedResponse,
+    BoardReactionResponse,
     BoardRepliesResponse,
     BoardReply,
     BoardResponse,
+    CreateBoardPostRequest,
+    CreateBoardReplyRequest,
     CreateBoardRequest,
+    EditBoardPostRequest,
+    EditBoardReplyRequest,
     PinPostRequest,
     PinPostResponse,
 )
@@ -502,3 +516,538 @@ def list_board_replies(
             next_cursor = _encode_cursor(last_ts, snaps[-1].id)
 
     return BoardRepliesResponse(replies=replies, nextCursor=next_cursor)
+
+
+# ── M4 writes ────────────────────────────────────────────────────────────
+
+
+_GCS_PUBLIC_PREFIX = "https://storage.googleapis.com/jacob-media-public-"
+_BOARD_EDIT_WINDOW_SECONDS = 15 * 60
+
+
+def _validate_media_refs(refs: list[str]) -> None:
+    for ref in refs:
+        if not ref.startswith(_GCS_PUBLIC_PREFIX):
+            raise APIError(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code="invalid_media_ref",
+                message="mediaRefs must point to the public GCS bucket",
+                details={"badRef": ref},
+            )
+
+
+def _require_board_not_archived(db: Any, board_id: str) -> dict[str, Any]:
+    snap = db.collection("boards").document(board_id).get()
+    if not getattr(snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="board_not_found",
+            message="Board not found",
+        )
+    data = snap.to_dict() or {}
+    if data.get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="archived",
+            message="Board is archived; new posts are disabled",
+        )
+    return data
+
+
+def _is_admin(user: CurrentUser) -> bool:
+    return user.claims.get("admin") is True
+
+
+@router.post(
+    "/api/boards/{board_id}/posts",
+    response_model=BoardPost,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(BOARD_POST_CREATE)
+def create_board_post(
+    request: Request,
+    response: Response,
+    body: CreateBoardPostRequest,
+    board_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardPost:
+    db = _db()
+    _require_board_not_archived(db, board_id)
+    _validate_media_refs(body.mediaRefs)
+
+    posts_col = db.collection("boards").document(board_id).collection("posts")
+    payload: dict[str, Any] = {
+        "authorUid": user.uid,
+        "body": body.body,
+        "stickerIds": body.stickerIds,
+        "mediaRefs": body.mediaRefs,
+        "createdAt": fb_firestore.SERVER_TIMESTAMP,
+        "editedAt": None,
+        "deletedAt": None,
+        "pinnedAt": None,
+        "pinnedBy": None,
+        "replyCount": 0,
+    }
+    if body.mentions:
+        payload["mentions"] = body.mentions
+
+    new_ref = posts_col.document()
+    new_ref.set(payload)
+    fresh = new_ref.get()
+    return _doc_to_post(fresh.id, fresh.to_dict() or {})
+
+
+@router.patch(
+    "/api/boards/{board_id}/posts/{post_id}",
+    response_model=BoardPost,
+)
+@limiter.limit(BOARD_POST_EDIT)
+def edit_board_post(
+    request: Request,
+    response: Response,
+    body: EditBoardPostRequest,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardPost:
+    """Edit a post body. 15-minute window. Admins can edit beyond the
+    window for moderation; mirrors the rules at firestore.rules:507-522.
+    """
+    db = _db()
+    ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+
+    @gcf.transactional
+    def _txn(txn: Any) -> None:
+        snap = ref.get(transaction=txn)
+        if not getattr(snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="post_not_found",
+                message="Post not found",
+            )
+        data = snap.to_dict() or {}
+        if data.get("deletedAt") is not None:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="deleted",
+                message="Cannot edit a deleted post",
+            )
+        is_author = data.get("authorUid") == user.uid
+        if not is_author and not _is_admin(user):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="not_author",
+                message="Not the author of this post",
+            )
+        if is_author and not _is_admin(user):
+            created = _ts_to_dt(data.get("createdAt"))
+            if created is not None:
+                created_aware = created if created.tzinfo else created.replace(tzinfo=UTC)
+                if (datetime.now(UTC) - created_aware).total_seconds() > _BOARD_EDIT_WINDOW_SECONDS:
+                    raise APIError(
+                        status_code=status.HTTP_409_CONFLICT,
+                        code="edit_window_expired",
+                        message="Edit window has expired (15 minutes)",
+                    )
+        txn.update(ref, {"body": body.body, "editedAt": fb_firestore.SERVER_TIMESTAMP})
+
+    _txn(db.transaction())
+    fresh = ref.get()
+    return _doc_to_post(fresh.id, fresh.to_dict() or {})
+
+
+@router.delete(
+    "/api/boards/{board_id}/posts/{post_id}",
+    response_model=BoardPost,
+)
+@limiter.limit(BOARD_POST_DELETE)
+def delete_board_post(
+    request: Request,
+    response: Response,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardPost:
+    """Soft-delete a post. Author or admin. Idempotent."""
+    db = _db()
+    ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+    deleter_role: str | None = None
+
+    @gcf.transactional
+    def _txn(txn: Any) -> None:
+        nonlocal deleter_role
+        snap = ref.get(transaction=txn)
+        if not getattr(snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="post_not_found",
+                message="Post not found",
+            )
+        data = snap.to_dict() or {}
+        if data.get("deletedAt") is not None:
+            deleter_role = "noop"
+            return
+        is_author = data.get("authorUid") == user.uid
+        if not is_author and not _is_admin(user):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="not_author_or_admin",
+                message="Only the author or an admin can delete this post",
+            )
+        deleter_role = "admin" if _is_admin(user) and not is_author else "author"
+        txn.update(ref, {"deletedAt": fb_firestore.SERVER_TIMESTAMP})
+
+    _txn(db.transaction())
+    if deleter_role and deleter_role != "noop":
+        write_audit_log(
+            actor_uid=user.uid,
+            action="board_post.delete",
+            target_ref=f"boards/{board_id}/posts/{post_id}",
+            payload={"boardId": board_id, "postId": post_id, "deleter_role": deleter_role},
+        )
+    fresh = ref.get()
+    post = _doc_to_post(fresh.id, fresh.to_dict() or {})
+    return post.model_copy(update={"body": ""})
+
+
+# ── post pin / unpin (M4: split from the legacy admin POST /pin endpoint) ──
+
+
+@router.post(
+    "/api/boards/{board_id}/posts/{post_id}/pin",
+    response_model=PinPostResponse,
+)
+@limiter.limit(BOARD_ADMIN_MUTATION)
+def pin_board_post_admin(
+    request: Request,
+    response: Response,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_admin),
+) -> PinPostResponse:
+    """Admin pin endpoint (re-implements PinPost POST without the
+    legacy `pinned` body — the URL alone implies pin/unpin)."""
+    db = _db()
+    post_ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+    snap = post_ref.get()
+    if not getattr(snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="post_not_found",
+            message="Post not found",
+        )
+    if (snap.to_dict() or {}).get("deletedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="post_deleted",
+            message="Cannot pin a deleted post",
+        )
+    post_ref.update({"pinnedAt": fb_firestore.SERVER_TIMESTAMP, "pinnedBy": user.uid})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="board_post.pin",
+        target_ref=f"boards/{board_id}/posts/{post_id}",
+        payload={},
+    )
+    return PinPostResponse(boardId=board_id, postId=post_id, pinnedAt=datetime.now(UTC).isoformat())
+
+
+@router.delete(
+    "/api/boards/{board_id}/posts/{post_id}/pin",
+    response_model=PinPostResponse,
+)
+@limiter.limit(BOARD_ADMIN_MUTATION)
+def unpin_board_post_admin(
+    request: Request,
+    response: Response,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_admin),
+) -> PinPostResponse:
+    db = _db()
+    post_ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+    if not getattr(post_ref.get(), "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="post_not_found",
+            message="Post not found",
+        )
+    post_ref.update({"pinnedAt": None, "pinnedBy": None})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="board_post.unpin",
+        target_ref=f"boards/{board_id}/posts/{post_id}",
+        payload={},
+    )
+    return PinPostResponse(boardId=board_id, postId=post_id, pinnedAt=None)
+
+
+# ── replies ──────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/api/boards/{board_id}/posts/{post_id}/replies",
+    response_model=BoardReply,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(BOARD_REPLY_CREATE)
+def create_board_reply(
+    request: Request,
+    response: Response,
+    body: CreateBoardReplyRequest,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardReply:
+    db = _db()
+    _require_board_not_archived(db, board_id)
+    _validate_media_refs(body.mediaRefs)
+
+    post_ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+    post_snap = post_ref.get()
+    if not getattr(post_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="post_not_found",
+            message="Post not found",
+        )
+    if (post_snap.to_dict() or {}).get("deletedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="post_deleted",
+            message="Cannot reply to a deleted post",
+        )
+
+    replies_col = post_ref.collection("replies")
+    payload: dict[str, Any] = {
+        "authorUid": user.uid,
+        "body": body.body,
+        "stickerIds": body.stickerIds,
+        "mediaRefs": body.mediaRefs,
+        "createdAt": fb_firestore.SERVER_TIMESTAMP,
+        "editedAt": None,
+        "deletedAt": None,
+    }
+    if body.mentions:
+        payload["mentions"] = body.mentions
+
+    new_ref = replies_col.document()
+    new_ref.set(payload)
+    fresh = new_ref.get()
+    return _doc_to_reply(fresh.id, fresh.to_dict() or {})
+
+
+@router.patch(
+    "/api/boards/{board_id}/posts/{post_id}/replies/{reply_id}",
+    response_model=BoardReply,
+)
+@limiter.limit(BOARD_REPLY_EDIT)
+def edit_board_reply(
+    request: Request,
+    response: Response,
+    body: EditBoardReplyRequest,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    reply_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardReply:
+    db = _db()
+    ref = (
+        db.collection("boards")
+        .document(board_id)
+        .collection("posts")
+        .document(post_id)
+        .collection("replies")
+        .document(reply_id)
+    )
+
+    @gcf.transactional
+    def _txn(txn: Any) -> None:
+        snap = ref.get(transaction=txn)
+        if not getattr(snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="reply_not_found",
+                message="Reply not found",
+            )
+        data = snap.to_dict() or {}
+        if data.get("deletedAt") is not None:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="deleted",
+                message="Cannot edit a deleted reply",
+            )
+        is_author = data.get("authorUid") == user.uid
+        if not is_author and not _is_admin(user):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="not_author",
+                message="Not the author of this reply",
+            )
+        if is_author and not _is_admin(user):
+            created = _ts_to_dt(data.get("createdAt"))
+            if created is not None:
+                created_aware = created if created.tzinfo else created.replace(tzinfo=UTC)
+                if (datetime.now(UTC) - created_aware).total_seconds() > _BOARD_EDIT_WINDOW_SECONDS:
+                    raise APIError(
+                        status_code=status.HTTP_409_CONFLICT,
+                        code="edit_window_expired",
+                        message="Edit window has expired (15 minutes)",
+                    )
+        txn.update(ref, {"body": body.body, "editedAt": fb_firestore.SERVER_TIMESTAMP})
+
+    _txn(db.transaction())
+    fresh = ref.get()
+    return _doc_to_reply(fresh.id, fresh.to_dict() or {})
+
+
+@router.delete(
+    "/api/boards/{board_id}/posts/{post_id}/replies/{reply_id}",
+    response_model=BoardReply,
+)
+@limiter.limit(BOARD_REPLY_DELETE)
+def delete_board_reply(
+    request: Request,
+    response: Response,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    reply_id: str = Path(..., min_length=1),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardReply:
+    db = _db()
+    ref = (
+        db.collection("boards")
+        .document(board_id)
+        .collection("posts")
+        .document(post_id)
+        .collection("replies")
+        .document(reply_id)
+    )
+    deleter_role: str | None = None
+
+    @gcf.transactional
+    def _txn(txn: Any) -> None:
+        nonlocal deleter_role
+        snap = ref.get(transaction=txn)
+        if not getattr(snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="reply_not_found",
+                message="Reply not found",
+            )
+        data = snap.to_dict() or {}
+        if data.get("deletedAt") is not None:
+            deleter_role = "noop"
+            return
+        is_author = data.get("authorUid") == user.uid
+        if not is_author and not _is_admin(user):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="not_author_or_admin",
+                message="Only the author or an admin can delete this reply",
+            )
+        deleter_role = "admin" if _is_admin(user) and not is_author else "author"
+        txn.update(ref, {"deletedAt": fb_firestore.SERVER_TIMESTAMP})
+
+    _txn(db.transaction())
+    if deleter_role and deleter_role != "noop":
+        write_audit_log(
+            actor_uid=user.uid,
+            action="board_reply.delete",
+            target_ref=f"boards/{board_id}/posts/{post_id}/replies/{reply_id}",
+            payload={
+                "boardId": board_id,
+                "postId": post_id,
+                "replyId": reply_id,
+                "deleter_role": deleter_role,
+            },
+        )
+    fresh = ref.get()
+    reply = _doc_to_reply(fresh.id, fresh.to_dict() or {})
+    return reply.model_copy(update={"body": ""})
+
+
+# ── board post reactions ─────────────────────────────────────────────────
+
+
+@router.post(
+    "/api/boards/{board_id}/posts/{post_id}/reactions/{slug}",
+    response_model=BoardReactionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(REACTION_TOGGLE)
+def react_to_board_post(
+    request: Request,
+    response: Response,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    slug: str = Path(..., min_length=1, max_length=64),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardReactionResponse:
+    db = _db()
+    _require_board_not_archived(db, board_id)
+    sticker_snap = db.collection("stickers").document(slug).get()
+    if not getattr(sticker_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="sticker_not_found",
+            message="Sticker not found",
+        )
+    post_ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+    post_snap = post_ref.get()
+    if not getattr(post_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="post_not_found",
+            message="Post not found",
+        )
+    if (post_snap.to_dict() or {}).get("deletedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="post_deleted",
+            message="Cannot react to a deleted post",
+        )
+    reaction_user_ref = (
+        post_ref.collection("reactions").document(slug).collection("users").document(user.uid)
+    )
+    now = datetime.now(UTC)
+    reaction_user_ref.set({"reactedAt": fb_firestore.SERVER_TIMESTAMP})
+    fresh = post_ref.get()
+    counts = (fresh.to_dict() or {}).get("reactionCounts") or {}
+    return BoardReactionResponse(
+        uid=user.uid,
+        slug=slug,
+        reactedAt=now,
+        reactionCounts={str(k): int(v) for k, v in counts.items()},
+    )
+
+
+@router.delete(
+    "/api/boards/{board_id}/posts/{post_id}/reactions/{slug}",
+    response_model=BoardReactionRemovedResponse,
+)
+@limiter.limit(REACTION_TOGGLE)
+def unreact_to_board_post(
+    request: Request,
+    response: Response,
+    board_id: str = Path(..., min_length=1),
+    post_id: str = Path(..., min_length=1),
+    slug: str = Path(..., min_length=1, max_length=64),
+    user: CurrentUser = Depends(require_not_banned),
+) -> BoardReactionRemovedResponse:
+    db = _db()
+    reaction_user_ref = (
+        db.collection("boards")
+        .document(board_id)
+        .collection("posts")
+        .document(post_id)
+        .collection("reactions")
+        .document(slug)
+        .collection("users")
+        .document(user.uid)
+    )
+    reaction_user_ref.delete()
+    post_ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
+    fresh = post_ref.get()
+    counts = (fresh.to_dict() or {}).get("reactionCounts") or {}
+    return BoardReactionRemovedResponse(reactionCounts={str(k): int(v) for k, v in counts.items()})

@@ -1,36 +1,60 @@
 """Messages router (M3 reads, M4 writes).
 
-M3 introduces the read endpoints that replace the frontend's direct
-`onSnapshot`/`getDocs` calls on `groups/{gid}/messages`. The realtime
-behaviour is downgraded to 10s polling for M3; M5 reintroduces it via
-SSE. M4 will add the write endpoints (POST/PATCH/DELETE) for messages.
+M3 introduced the read endpoints that replace the frontend's direct
+`onSnapshot`/`getDocs` calls on `groups/{gid}/messages`. M4 adds the
+write endpoints (POST/PATCH/DELETE) and the reaction toggle endpoints.
 
 Read access uses `require_member_or_public_top_level`: members get
 everything (with hidden messages redacted to themselves only); non-
 members of public groups get only top-level non-deleted non-hidden
 messages, matching the rules at `firestore.rules:314-320`.
+
+Write access composes `require_member` + `require_not_banned` +
+`require_not_archived`. The 15-minute edit window and soft-delete
+idempotency are enforced inside Firestore transactions in the write
+handlers — see §5.7 of the data-layer migration plan.
 """
 
 from __future__ import annotations
 
 import base64
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
+from google.cloud import firestore as gcf
 
 from app.deps import (
     MembershipContext,
     PublicReadContext,
     require_member,
     require_member_or_public_top_level,
+    require_not_archived,
+    require_not_banned,
 )
 from app.errors import APIError
-from app.limits import MESSAGE_READ, MESSAGES_LIST
+from app.limits import (
+    MESSAGE_CREATE,
+    MESSAGE_DELETE,
+    MESSAGE_EDIT,
+    MESSAGE_READ,
+    MESSAGES_LIST,
+    REACTION_TOGGLE,
+)
 from app.middleware.rate_limit import limiter
-from app.models.messages import Message, MessagesListResponse, ModerationFields
+from app.models.messages import (
+    CreateMessageRequest,
+    EditMessageRequest,
+    Message,
+    MessagesListResponse,
+    ModerationFields,
+    ReactionRemovedResponse,
+    ReactionResponse,
+)
+from app.models.user import CurrentUser
+from app.services.audit import write_audit_log
 from app.services.firebase import get_firestore
 
 logger = logging.getLogger(__name__)
@@ -231,6 +255,303 @@ def get_message(
             message="Message not found",
         )
     return filtered
+
+
+# ── M4 writes ────────────────────────────────────────────────────────────
+
+
+_EDIT_WINDOW = timedelta(minutes=15)
+_GCS_PUBLIC_PREFIX = "https://storage.googleapis.com/jacob-media-public-"
+
+
+def _validate_media_refs(refs: list[str]) -> None:
+    for ref in refs:
+        if not ref.startswith(_GCS_PUBLIC_PREFIX):
+            raise APIError(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code="invalid_media_ref",
+                message="mediaRefs must point to the public GCS bucket",
+                details={"badRef": ref},
+            )
+
+
+@router.post(
+    "/{gid}/messages",
+    response_model=Message,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(MESSAGE_CREATE)
+def create_message(
+    request: Request,
+    response: Response,
+    body: CreateMessageRequest,
+    gid: str = Path(..., min_length=1),
+    membership: MembershipContext = Depends(require_member),
+    user: CurrentUser = Depends(require_not_banned),
+) -> Message:
+    """Create a top-level message or thread reply.
+
+    Replaces `MessageInput` and `ThreadReplyInput` `addDoc` calls.
+    `archived` returns 409. Parent-exists check inline.
+    """
+    require_not_archived(membership)
+    _validate_media_refs(body.mediaRefs)
+
+    db = get_firestore()
+    messages_col = db.collection("groups").document(gid).collection("messages")
+
+    if body.parentMessageId is not None:
+        parent_snap = messages_col.document(body.parentMessageId).get()
+        if not getattr(parent_snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="parent_not_found",
+                message="Parent message not found",
+            )
+
+    payload: dict[str, Any] = {
+        "authorUid": user.uid,
+        "body": body.body,
+        "stickerIds": body.stickerIds,
+        "mediaRefs": body.mediaRefs,
+        "createdAt": fb_firestore.SERVER_TIMESTAMP,
+        "editedAt": None,
+        "deletedAt": None,
+        "parentMessageId": body.parentMessageId,
+        "threadReplyCount": 0,
+    }
+    if body.mentions:
+        payload["mentions"] = body.mentions
+    if body.repostOfThread is not None:
+        payload["repostOfThread"] = body.repostOfThread
+
+    new_ref = messages_col.document()
+    new_ref.set(payload)
+
+    snap = new_ref.get()
+    return _doc_to_message(snap.id, snap.to_dict() or {})
+
+
+@router.patch(
+    "/{gid}/messages/{mid}",
+    response_model=Message,
+)
+@limiter.limit(MESSAGE_EDIT)
+def edit_message(
+    request: Request,
+    response: Response,
+    body: EditMessageRequest,
+    gid: str = Path(..., min_length=1),
+    mid: str = Path(..., min_length=1),
+    membership: MembershipContext = Depends(require_member),
+    user: CurrentUser = Depends(require_not_banned),
+) -> Message:
+    """Edit a message's body. 15-minute window enforced server-side.
+
+    Returns 403 `not_author`, 409 `edit_window_expired` or `deleted`,
+    404 `message_not_found`.
+    """
+    db = get_firestore()
+    ref = db.collection("groups").document(gid).collection("messages").document(mid)
+
+    @gcf.transactional
+    def _txn(txn: Any) -> dict[str, Any]:
+        snap = ref.get(transaction=txn)
+        if not getattr(snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="message_not_found",
+                message="Message not found",
+            )
+        data = snap.to_dict() or {}
+        if data.get("authorUid") != user.uid:
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="not_author",
+                message="Not the author of this message",
+            )
+        if data.get("deletedAt") is not None:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="deleted",
+                message="Cannot edit a deleted message",
+            )
+        created = _ts_to_dt(data.get("createdAt"))
+        if created is not None and datetime.now(UTC) - created > _EDIT_WINDOW:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="edit_window_expired",
+                message="Edit window has expired (15 minutes)",
+            )
+        txn.update(
+            ref,
+            {"body": body.body, "editedAt": fb_firestore.SERVER_TIMESTAMP},
+        )
+        return data
+
+    _txn(db.transaction())
+    fresh = ref.get()
+    return _doc_to_message(fresh.id, fresh.to_dict() or {})
+
+
+@router.delete(
+    "/{gid}/messages/{mid}",
+    response_model=Message,
+)
+@limiter.limit(MESSAGE_DELETE)
+def delete_message(
+    request: Request,
+    response: Response,
+    gid: str = Path(..., min_length=1),
+    mid: str = Path(..., min_length=1),
+    membership: MembershipContext = Depends(require_member),
+    user: CurrentUser = Depends(require_not_banned),
+) -> Message:
+    """Soft-delete a message. Author or leader. Idempotent — calling
+    delete twice returns 200 with the existing soft-deleted doc.
+    """
+    db = get_firestore()
+    ref = db.collection("groups").document(gid).collection("messages").document(mid)
+
+    deleter_role: str | None = None
+
+    @gcf.transactional
+    def _txn(txn: Any) -> dict[str, Any]:
+        nonlocal deleter_role
+        snap = ref.get(transaction=txn)
+        if not getattr(snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="message_not_found",
+                message="Message not found",
+            )
+        data = snap.to_dict() or {}
+        if data.get("deletedAt") is not None:
+            # Idempotent: return the existing soft-deleted doc.
+            deleter_role = "noop"
+            return data
+        is_author = data.get("authorUid") == user.uid
+        is_leader = membership.role == "leader"
+        if not (is_author or is_leader):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="not_author_or_leader",
+                message="Only the author or a group leader can delete this message",
+            )
+        deleter_role = "leader" if is_leader and not is_author else "author"
+        txn.update(ref, {"deletedAt": fb_firestore.SERVER_TIMESTAMP})
+        return data
+
+    _txn(db.transaction())
+    if deleter_role and deleter_role != "noop":
+        write_audit_log(
+            actor_uid=user.uid,
+            action="message.delete",
+            target_ref=f"groups/{gid}/messages/{mid}",
+            payload={"gid": gid, "mid": mid, "deleter_role": deleter_role},
+        )
+    fresh = ref.get()
+    msg = _doc_to_message(fresh.id, fresh.to_dict() or {})
+    # Body redacted in the response per §4.13.3.
+    return msg.model_copy(update={"body": ""})
+
+
+# ── reactions ────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{gid}/messages/{mid}/reactions/{slug}",
+    response_model=ReactionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(REACTION_TOGGLE)
+def react_to_message(
+    request: Request,
+    response: Response,
+    gid: str = Path(..., min_length=1),
+    mid: str = Path(..., min_length=1),
+    slug: str = Path(..., min_length=1, max_length=64),
+    membership: MembershipContext = Depends(require_member),
+    user: CurrentUser = Depends(require_not_banned),
+) -> ReactionResponse:
+    """Add a reaction to a message. Validates sticker exists, group not
+    archived, message not deleted. Returns the full updated reactionCounts.
+    """
+    require_not_archived(membership)
+    db = get_firestore()
+
+    sticker_snap = db.collection("stickers").document(slug).get()
+    if not getattr(sticker_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="sticker_not_found",
+            message="Sticker not found",
+        )
+
+    msg_ref = db.collection("groups").document(gid).collection("messages").document(mid)
+    msg_snap = msg_ref.get()
+    if not getattr(msg_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="message_not_found",
+            message="Message not found",
+        )
+    if (msg_snap.to_dict() or {}).get("deletedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="message_deleted",
+            message="Cannot react to a deleted message",
+        )
+
+    reaction_user_ref = (
+        msg_ref.collection("reactions").document(slug).collection("users").document(user.uid)
+    )
+    now = datetime.now(UTC)
+    reaction_user_ref.set({"reactedAt": fb_firestore.SERVER_TIMESTAMP})
+
+    # The Cloud Functions trigger updates `reactionCounts` on the parent
+    # message asynchronously. The handler returns the latest value it
+    # can see (post-write); the SSE update from M5 will catch any drift.
+    fresh = msg_ref.get()
+    counts = (fresh.to_dict() or {}).get("reactionCounts") or {}
+    return ReactionResponse(
+        uid=user.uid,
+        slug=slug,
+        reactedAt=now,
+        reactionCounts={str(k): int(v) for k, v in counts.items()},
+    )
+
+
+@router.delete(
+    "/{gid}/messages/{mid}/reactions/{slug}",
+    response_model=ReactionRemovedResponse,
+)
+@limiter.limit(REACTION_TOGGLE)
+def unreact_to_message(
+    request: Request,
+    response: Response,
+    gid: str = Path(..., min_length=1),
+    mid: str = Path(..., min_length=1),
+    slug: str = Path(..., min_length=1, max_length=64),
+    user: CurrentUser = Depends(require_not_banned),
+) -> ReactionRemovedResponse:
+    """Remove a reaction. Banned users may unreact (`firestore.rules:414`)."""
+    db = get_firestore()
+    reaction_user_ref = (
+        db.collection("groups")
+        .document(gid)
+        .collection("messages")
+        .document(mid)
+        .collection("reactions")
+        .document(slug)
+        .collection("users")
+        .document(user.uid)
+    )
+    reaction_user_ref.delete()
+    msg_ref = db.collection("groups").document(gid).collection("messages").document(mid)
+    fresh = msg_ref.get()
+    counts = (fresh.to_dict() or {}).get("reactionCounts") or {}
+    return ReactionRemovedResponse(reactionCounts={str(k): int(v) for k, v in counts.items()})
 
 
 __all__ = ["router"]

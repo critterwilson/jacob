@@ -27,6 +27,7 @@ from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import (
     MY_GROUPS_LIST,
+    NOTIFICATION_READ,
     RECENT_MESSAGES_READ,
     USER_BLOCKS_WRITE,
     USER_BOOTSTRAP,
@@ -433,6 +434,52 @@ def list_notifications(
         next_cursor = _encode_cursor(last.createdAt, last.id)
 
     return NotificationsListResponse(items=items, nextCursor=next_cursor)
+
+
+@router.post(
+    "/notifications/{notification_id}/read",
+    response_model=Notification,
+)
+@limiter.limit(NOTIFICATION_READ)
+def mark_notification_read(
+    request: Request,
+    response: Response,
+    notification_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Notification:
+    """Mark a notification as read.
+
+    Replaces the prior client-side `updateDoc(notification, {readAt})`.
+    Returns the fresh notification doc. Mirrors `firestore.rules:653-660`
+    — the user only writes `readAt`, never any other field.
+    """
+    db = get_firestore()
+    ref = (
+        db.collection("users")
+        .document(user.uid)
+        .collection("notifications")
+        .document(notification_id)
+    )
+    snap = ref.get()
+    if not getattr(snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="notification_not_found",
+            message="Notification not found",
+        )
+    data = snap.to_dict() or {}
+    if data.get("readAt") is None:
+        ref.update({"readAt": fb_firestore.SERVER_TIMESTAMP})
+    fresh = ref.get()
+    fresh_data = fresh.to_dict() or {}
+    created_at = _ts_to_dt(fresh_data.get("createdAt")) or datetime.now(UTC)
+    return Notification(
+        id=fresh.id,
+        kind=str(fresh_data.get("kind") or "unknown"),
+        createdAt=created_at,
+        readAt=_ts_to_dt(fresh_data.get("readAt")),
+        payload=dict(fresh_data.get("payload") or {}),
+    )
 
 
 # ── mutes ────────────────────────────────────────────────────────────────
