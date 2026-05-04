@@ -466,3 +466,69 @@ def test_create_profile_403_banned() -> None:
         res = client.post("/api/users/me", json={"displayName": "Alice", "isMinor": False})
     assert res.status_code == 403
     assert res.json()["error"]["code"] == "banned"
+
+
+def test_update_profile_syncs_changed_email_from_token() -> None:
+    """PR13 / L3: when the Firebase Auth email differs from the doc's
+    `email`, the update mirrors the token value into Firestore."""
+    user_ref = MagicMock()
+    user_ref.get.side_effect = [
+        _user_snap(exists=True, data={"displayName": "Alice", "email": "old@example.com"}),
+        _user_snap(
+            exists=True,
+            data={
+                "displayName": "Alice",
+                "email": "new@example.com",
+                "schemaVersion": 1,
+                "isMinor": False,
+            },
+        ),
+    ]
+    users_col = MagicMock()
+    users_col.document.return_value = user_ref
+    db = MagicMock()
+    db.collection.return_value = users_col
+
+    user = CurrentUser(uid="alice", email="new@example.com", claims={})
+    with (
+        patch("app.routers.users.get_firestore", return_value=db),
+        patch("app.routers.users.write_audit_log"),
+    ):
+        client = TestClient(_app(authed_user=user))
+        res = client.patch("/api/users/me", json={"displayName": "Alice"})
+    assert res.status_code == 200
+    payload = user_ref.update.call_args[0][0]
+    assert payload.get("email") == "new@example.com"
+
+
+def test_update_profile_does_not_write_email_when_unchanged() -> None:
+    """When token email matches the existing doc email, no email field is
+    re-written (cheap optimization, also keeps audit-log payload tidy)."""
+    user_ref = MagicMock()
+    user_ref.get.side_effect = [
+        _user_snap(exists=True, data={"displayName": "Alice", "email": "same@example.com"}),
+        _user_snap(
+            exists=True,
+            data={
+                "displayName": "Alice",
+                "email": "same@example.com",
+                "schemaVersion": 1,
+                "isMinor": False,
+            },
+        ),
+    ]
+    users_col = MagicMock()
+    users_col.document.return_value = user_ref
+    db = MagicMock()
+    db.collection.return_value = users_col
+
+    user = CurrentUser(uid="alice", email="same@example.com", claims={})
+    with (
+        patch("app.routers.users.get_firestore", return_value=db),
+        patch("app.routers.users.write_audit_log"),
+    ):
+        client = TestClient(_app(authed_user=user))
+        res = client.patch("/api/users/me", json={"displayName": "Alice"})
+    assert res.status_code == 200
+    payload = user_ref.update.call_args[0][0]
+    assert "email" not in payload

@@ -156,3 +156,37 @@ def test_my_groups_invalid_archived_value_is_422() -> None:
     client = TestClient(_app(user))
     res = client.get("/api/users/me/groups?archived=bogus")
     assert res.status_code == 422
+
+
+def test_my_groups_logs_warning_for_orphan_memberships(caplog) -> None:
+    """PR13 / L2: when a `members/{uid}` doc references a group that no
+    longer exists (orphan), the handler logs a warning so operators can
+    catch zombie membership rows in Cloud Logging — even though it
+    silently drops the orphan from the response (existing behavior)."""
+    import logging as py_logging
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    joined = datetime(2026, 5, 1, tzinfo=UTC)
+    db = MagicMock()
+    member_snaps = [
+        _member_snap(gid="g-real", uid="alice", role="member", joined_at=joined),
+        _member_snap(gid="g-orphan", uid="alice", role="member", joined_at=joined),
+    ]
+    db.collection_group.return_value.where.return_value.stream.return_value = iter(member_snaps)
+    # Only the real group comes back from get_all — the orphan is missing.
+    db.get_all.return_value = [_group_doc("g-real", name="Real")]
+
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.users.get_firestore", return_value=db),
+        caplog.at_level(py_logging.WARNING, logger="app.routers.users"),
+    ):
+        res = TestClient(_app(user)).get("/api/users/me/groups")
+    assert res.status_code == 200
+    # Response only contains the real group.
+    assert [g["gid"] for g in res.json()["groups"]] == ["g-real"]
+    # Warning was logged with the orphan gid.
+    assert any(
+        "my_groups_orphan_memberships" in rec.message and "g-orphan" in rec.message
+        for rec in caplog.records
+    )
