@@ -204,25 +204,6 @@ def rotate_invite(
 # ── T22: leader hierarchy ────────────────────────────────────────────────────
 
 
-def _require_leader(db: Any, gid: str, uid: str) -> dict[str, Any]:
-    """Return the group doc data; raise 404/403 if missing or not a leader."""
-    group_snap = db.collection("groups").document(gid).get()
-    if not group_snap.exists:
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="group_not_found",
-            message="Group not found",
-        )
-    member_snap = db.collection("groups").document(gid).collection("members").document(uid).get()
-    if not member_snap.exists or (member_snap.to_dict() or {}).get("role") != "leader":
-        raise APIError(
-            status_code=status.HTTP_403_FORBIDDEN,
-            code="forbidden",
-            message="Only group leaders can perform this action",
-        )
-    return group_snap.to_dict() or {}
-
-
 def _members_collection(db: Any, gid: str) -> Any:
     return db.collection("groups").document(gid).collection("members")
 
@@ -237,11 +218,11 @@ def promote_member(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> LeaderActionResponse:
     """Promote a member to leader. Caller must be a leader of this group."""
     db = _db()
-    _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
 
     target_ref = _members_collection(db, gid).document(target_uid)
 
@@ -269,12 +250,12 @@ def promote_member(
             message="Target user is already a leader",
         )
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="promote_member",
         target_ref=f"groups/{gid}/members/{target_uid}",
         payload={"newRole": "leader"},
     )
-    logger.info("promote gid=%s actor=%s target=%s", gid, user.uid, target_uid)
+    logger.info("promote gid=%s actor=%s target=%s", gid, actor_uid, target_uid)
     return LeaderActionResponse(gid=gid, uid=target_uid, role="leader")
 
 
@@ -288,13 +269,14 @@ def demote_member(
     target_uid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> LeaderActionResponse:
     """Demote a leader to member. Founder cannot be demoted; self-demote
     requires more than one leader.
     """
     db = _db()
-    group_data = _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
+    group_data = membership.group
 
     if group_data.get("founderUid") == target_uid:
         raise APIError(
@@ -341,12 +323,12 @@ def demote_member(
             message="Cannot demote the only remaining leader",
         )
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="demote_member",
         target_ref=f"groups/{gid}/members/{target_uid}",
         payload={"newRole": "member"},
     )
-    logger.info("demote gid=%s actor=%s target=%s", gid, user.uid, target_uid)
+    logger.info("demote gid=%s actor=%s target=%s", gid, actor_uid, target_uid)
     return LeaderActionResponse(gid=gid, uid=target_uid, role="member")
 
 
@@ -426,11 +408,12 @@ def archive_group(
     request: Request,
     response: Response,
     body: ArchiveGroupRequest,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> ArchiveResponse:
     """Archive a group. Only the group leader may archive."""
     db = _db()
-    group_data = _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
+    group_data = membership.group
 
     if group_data.get("archivedAt") is not None:
         raise APIError(
@@ -443,18 +426,18 @@ def archive_group(
     group_ref.update(
         {
             "archivedAt": fb_firestore.SERVER_TIMESTAMP,
-            "archivedBy": user.uid,
+            "archivedBy": actor_uid,
             "archiveReason": body.reason,
         }
     )
     archived_at_str = datetime.now(UTC).isoformat()
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="archive_group",
         target_ref=f"groups/{gid}",
         payload={"reason": body.reason},
     )
-    logger.info("archive_group gid=%s uid=%s", gid, user.uid)
+    logger.info("archive_group gid=%s uid=%s", gid, actor_uid)
     return ArchiveResponse(gid=gid, archivedAt=archived_at_str)
 
 
@@ -464,11 +447,12 @@ def unarchive_group(
     gid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> UnarchiveResponse:
     """Unarchive a group. Only possible within 60 days of archival."""
     db = _db()
-    group_data = _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
+    group_data = membership.group
 
     archived_at = group_data.get("archivedAt")
     if archived_at is None:
@@ -504,12 +488,12 @@ def unarchive_group(
         }
     )
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="unarchive_group",
         target_ref=f"groups/{gid}",
         payload={},
     )
-    logger.info("unarchive_group gid=%s uid=%s", gid, user.uid)
+    logger.info("unarchive_group gid=%s uid=%s", gid, actor_uid)
     return UnarchiveResponse(gid=gid)
 
 
@@ -520,11 +504,12 @@ def announce_message(
     mid: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_not_banned),
+    membership: MembershipContext = Depends(require_leader),
 ) -> AnnounceResponse:
     """Pin a message and fan-out an announcement notification to all group members."""
     db = _db()
-    group_data = _require_leader(db, gid, user.uid)
+    actor_uid = membership.uid
+    group_data = membership.group
 
     if group_data.get("archivedAt") is not None:
         raise APIError(
@@ -572,7 +557,7 @@ def announce_message(
             msg_ref,
             {
                 "announcedAt": fb_firestore.SERVER_TIMESTAMP,
-                "announcedBy": user.uid,
+                "announcedBy": actor_uid,
             },
         )
         transaction.update(group_ref, {"pinnedMessageIds": pinned})
@@ -589,18 +574,18 @@ def announce_message(
         kind="announcement",
         group_id=gid,
         message_ref=f"groups/{gid}/messages/{mid}",
-        from_uid=user.uid,
+        from_uid=actor_uid,
         body=body_text,
         skip_blocked_by=True,
     )
 
     write_audit_log(
-        actor_uid=user.uid,
+        actor_uid=actor_uid,
         action="announce_message",
         target_ref=f"groups/{gid}/messages/{mid}",
         payload={"messageRef": f"groups/{gid}/messages/{mid}", "notifiedCount": notified},
     )
-    logger.info("announce_message gid=%s mid=%s uid=%s notified=%d", gid, mid, user.uid, notified)
+    logger.info("announce_message gid=%s mid=%s uid=%s notified=%d", gid, mid, actor_uid, notified)
     return AnnounceResponse(
         gid=gid,
         mid=mid,

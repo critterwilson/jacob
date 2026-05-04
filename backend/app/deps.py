@@ -207,11 +207,14 @@ def require_member(
 
 def require_leader(
     membership: MembershipContext = Depends(require_member),
+    _ban_check: CurrentUser = Depends(require_not_banned),
 ) -> MembershipContext:
     """Require the caller to be a *leader* of `gid`.
 
     Mirrors `firestore.rules:isGroupLeader` (lines 35-38). Reuses the
     membership read from `require_member` to avoid an extra round-trip.
+    Composes `require_not_banned` so callers don't need to add the ban
+    check separately — banned leaders lose their privileges immediately.
     """
     if membership.role != "leader":
         raise APIError(

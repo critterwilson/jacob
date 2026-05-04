@@ -202,3 +202,19 @@ def test_react_403_for_non_member() -> None:
         client = TestClient(_app(user))
         res = client.post("/api/groups/g1/messages/m1/reactions/check-in")
     assert res.status_code == 403
+
+
+def test_unreact_403_for_non_member() -> None:
+    """PR5: non-members get 403 from require_member rather than touching the
+    reactions subcollection. Closes the leak where non-members could probe
+    message existence via the reaction-count response."""
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = _make_db(member=False)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.delete("/api/groups/g1/messages/m1/reactions/check-in")
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "not_a_member"

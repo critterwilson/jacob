@@ -25,7 +25,14 @@ import sys
 from pathlib import Path
 
 WRITE_METHODS = {"post", "patch", "delete", "put"}
-ALLOWED_DEPS = {"require_not_banned", "require_member_not_banned", "require_admin"}
+# These deps either ARE require_not_banned, transitively compose it, or
+# intentionally bypass it (admins). Update if a new composing dep lands.
+ALLOWED_DEPS = {
+    "require_not_banned",
+    "require_member_not_banned",
+    "require_leader",  # composes require_not_banned (deps.py)
+    "require_admin",  # admins bypass ban — intentional
+}
 NOQA_MARKER = "# noqa: not-banned"
 
 
