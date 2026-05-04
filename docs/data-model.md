@@ -31,6 +31,17 @@ boards/{boardId}/posts/{postId}/reactions/{slug}/users/{uid}  # T32
 moderation_queue/{itemId}       # backend only
 bans/{uid}                      # backend only
 audit_log/{eventId}             # backend only
+
+# T54 — multi-tenant org tier
+orgs/{orgId}
+orgs/{orgId}/admins/{uid}
+orgs/{orgId}/members/{uid}      # denormalized via onMemberWrite
+orgs/{orgId}/invites/{inviteId} # schema reserved; UI Phase 3.5
+org_slugs/{slug}                # backend only — slug uniqueness
+org_consent_tokens/{token}      # backend only — attach consent flow
+
+# T58 — feature flags
+feature_flags/{flagKey}         # read via GET /api/flags
 ```
 
 ---
@@ -332,6 +343,134 @@ shared `reactionDelta` / `runReactionTxn` helpers from
 the parent post.
 
 ---
+
+## `orgs/{orgId}` (T54)
+
+A church / ministry / school that owns one or more groups. The
+parent of the group tier; backward-compatible because every
+existing group has `orgId = null` (unaffiliated).
+
+```json
+{
+  "name": "Pilot Church",
+  "slug": "pilot-church",
+  "description": "...",
+  "audience": "christian",
+  "logoUrl": null,
+  "primaryColor": null,
+  "customDomain": null,
+  "customSubdomain": null,
+  "createdBy": "<platform-admin-uid>",
+  "createdAt": "<serverTimestamp>",
+  "schemaVersion": 1,
+  "billing": { "tier": "free", "customerId": null, "status": "active" },
+  "llmModerationPolicy": "off",
+  "threadSummaryEnabled": false,
+  "semanticSearchEnabled": false,
+  "prayerClusteringEnabled": false,
+  "transparencyReportEnabled": false
+}
+```
+
+* `slug` — URL-safe; reserved as the T55 subdomain claim. Stored
+  also as the doc id of `org_slugs/{slug}` for at-most-one
+  uniqueness.
+* `audience` — `christian` / `bjj` / `general`. Immutable once set;
+  changing it would invalidate every group's sticker history.
+* `billing` — placeholder shape so Phase 4 paid tiers don't reshape
+  the doc.
+* AI policy fields (`llmModerationPolicy`, `*Enabled`) — reserved
+  for T43–T47 if those tickets ship; UI not surfaced today.
+
+### `orgs/{orgId}/admins/{uid}`
+
+```json
+{ "addedBy": "<actor-uid>", "addedAt": "<serverTimestamp>" }
+```
+
+* The platform admin creates the first admin at `POST /api/orgs`.
+* Subsequent admins are added by existing admins via
+  `POST /api/orgs/{orgId}/admins`.
+* Last-admin removal is refused (mirrors T22's leader-count rule
+  but enforced at the service layer because the rule engine can't
+  enumerate a subcollection).
+
+### `orgs/{orgId}/members/{uid}` (denormalized, T54)
+
+Maintained by `onMemberWrite` (functions/src/onMemberWrite.ts).
+Mirrors "user is in some group attached to this org." Querying it
+live by collection-group filter would be expensive; the
+denormalization keeps the dashboard cheap.
+
+```json
+{
+  "joinedAt": "<serverTimestamp>",
+  "groupIds": ["g1", "g3"]
+}
+```
+
+* `groupIds` is the set of org-internal groups the user is a member
+  of. The trigger arrayUnions on join, removes on leave, and deletes
+  the doc when `groupIds` becomes empty.
+* `attach_group` / `detach_group` in the service layer also
+  back-fill / clear so attach + detach surfaces are self-repairing
+  if the trigger ever drifts.
+
+### `orgs/{orgId}/invites/{inviteId}` (T54 schema; UI Phase 3.5)
+
+Same shape as `groups/{gid}/invites/{inviteId}` (T25), scoped to
+the org. The endpoint that consumes it is Phase 3.5 work; the
+schema is reserved here so the doc shape stays stable.
+
+## `org_slugs/{slug}` (T54, backend only)
+
+Acts as the slug uniqueness primitive. `{ orgId, createdAt }`. The
+single-doc `create()` semantic on Firestore makes this an
+at-most-one guarantee without needing a transaction.
+
+## `org_consent_tokens/{token}` (T54, backend only)
+
+Issued by `orgs_service.issue_consent_token` when an org admin
+attempts to attach a group whose leader they are not. Sent to each
+group leader by email; the org admin re-issues the attach call with
+the consumed code.
+
+```json
+{
+  "orgId": "o1",
+  "gid": "g1",
+  "issuedTo": "<leader-uid>",
+  "issuedBy": "<org-admin-uid>",
+  "expiresAt": "<+60min>",
+  "consumedAt": null
+}
+```
+
+* TTL: 60 minutes. Single-use. `consume_consent_token` marks
+  `consumedAt` inside the verify transaction.
+
+## `feature_flags/{flagKey}` (T58, backend only)
+
+Self-evaluated server-side; clients call `GET /api/flags` and the
+server returns a `{flagKey: bool}` map for the caller. Documented
+in `docs/runbooks/feature-flags.md`.
+
+```json
+{
+  "enabled": true,
+  "rolloutPercentage": 50,
+  "cohorts": {
+    "uids": ["..."],
+    "orgIds": ["..."],
+    "roles": ["admin"]
+  },
+  "description": "Phase 3 mobile native app",
+  "updatedBy": "<actor-uid>",
+  "updatedAt": "<serverTimestamp>",
+  "fullRolloutAt": null,
+  "schemaVersion": 1
+}
+```
 
 ## Composite indexes
 

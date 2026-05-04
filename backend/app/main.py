@@ -21,6 +21,7 @@ from app.routers import (
     groups,
     invites,
     messages,
+    orgs,
     reports,
     search,
     stickers,
@@ -114,6 +115,7 @@ app.include_router(users.router)
 app.include_router(verse.router)
 app.include_router(flags.router)
 app.include_router(flags.admin_router)
+app.include_router(orgs.router)
 
 if settings.debug:
     from app.routers import debug
