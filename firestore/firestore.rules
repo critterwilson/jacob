@@ -119,6 +119,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- T58 feature flags ----------------------------------------------
+    // Read via `GET /api/flags` (server-evaluated for the caller); mutated
+    // via `/api/admin/flags*` (platform-admin only). Direct client access
+    // is denied per the M6 backend-mediated convention.
+    match /feature_flags/{flagKey} {
+      allow read, write: if false;
+    }
+
     // --- default deny (defense in depth) --------------------------------
     match /{document=**} {
       allow read, write: if false;
