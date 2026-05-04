@@ -22,3 +22,15 @@ BOARD_ADMIN_MUTATION: str = "10/minute"
 # surface so a retry loop can't fan out into many queued jobs.
 EXPORT_REQUEST: str = "1/hour"
 ADMIN_LIST: str = "60/minute"
+
+# M2 — users router. Bootstrap is called on every session start so it
+# needs a generous limit; profile mutation surfaces are deliberately
+# tighter to discourage scripted spam.
+USER_BOOTSTRAP: str = "60/minute"
+USER_PROFILE_CREATE: str = "5/hour"
+USER_PROFILE_UPDATE: str = "30/hour"
+USER_NOTIFICATION_PREFS_WRITE: str = "30/hour"
+USER_DEVICE_REGISTER: str = "20/hour"
+USER_NOTIFICATIONS_LIST: str = "60/minute"
+USER_MUTES_LIST: str = "60/minute"
+USER_BLOCKS_LIST: str = "60/minute"

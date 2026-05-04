@@ -7,12 +7,15 @@ custom-claim check.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
+
 from fastapi import Depends, Header, Request, status
 from firebase_admin import auth as firebase_auth
 
 from app.errors import APIError
 from app.models.user import CurrentUser
-from app.services.firebase import init_firebase_admin
+from app.services.firebase import get_firestore, init_firebase_admin
 
 _BEARER_PREFIX = "Bearer "
 
@@ -71,5 +74,49 @@ def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             code="forbidden",
             message="Admin privileges required",
+        )
+    return user
+
+
+def _ban_expires_at(snap_data: dict[str, Any] | None) -> datetime | None:
+    if not snap_data:
+        return None
+    expires = snap_data.get("expiresAt")
+    if expires is None:
+        return None
+    if isinstance(expires, datetime):
+        return expires if expires.tzinfo else expires.replace(tzinfo=UTC)
+    converter = getattr(expires, "ToDatetime", None)
+    if callable(converter):
+        try:
+            result = converter(tzinfo=UTC)
+        except TypeError:
+            result = converter()
+        if isinstance(result, datetime):
+            return result if result.tzinfo else result.replace(tzinfo=UTC)
+    return None
+
+
+def require_not_banned(
+    user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Refuse the request if the caller has an active ban.
+
+    Mirrors the `notBanned()` predicate at `firestore.rules:26-28`.
+    Active = `bans/{uid}` exists and `expiresAt > now`. M2 introduces
+    this dep for every authenticated *write* surface — see §5.2 of the
+    data-layer migration plan.
+    """
+    db = get_firestore()
+    snap = db.collection("bans").document(user.uid).get()
+    if not getattr(snap, "exists", False):
+        return user
+    expires = _ban_expires_at(snap.to_dict())
+    if expires is not None and expires > datetime.now(UTC):
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="banned",
+            message="Account is banned",
+            details={"expiresAt": expires.isoformat()},
         )
     return user
