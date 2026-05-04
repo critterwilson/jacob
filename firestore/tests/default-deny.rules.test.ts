@@ -546,6 +546,29 @@ describe("T63 default-deny — ncmec_cases", () => {
   });
 });
 
+describe("T65 default-deny — transparency_reports", () => {
+  it("denies reading transparency_reports/{reportId} (read via API)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "transparency_reports", "r1"), {
+        period: "2026-Q1",
+        scope: "platform",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "transparency_reports", "r1")),
+    );
+  });
+
+  it("denies writing transparency_reports/{reportId}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "transparency_reports", "r1"), {
+        period: "2026-Q1",
+        scope: "platform",
+      }),
+    );
+  });
+});
+
 describe("T64 default-deny — appeals", () => {
   it("denies reading appeals/{appealId} (even by appellant)", async () => {
     await seed(async (db) => {

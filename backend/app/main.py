@@ -31,6 +31,7 @@ from app.routers import (
     search,
     sermons,
     stickers,
+    transparency,
     unfurl,
     uploads,
     users,
@@ -136,6 +137,9 @@ app.include_router(watch.router)
 app.include_router(ncmec.router)
 app.include_router(appeals.appellant_router)
 app.include_router(appeals.admin_router)
+app.include_router(transparency.public_router)
+app.include_router(transparency.admin_router)
+app.include_router(transparency.org_router)
 
 if settings.debug:
     from app.routers import debug

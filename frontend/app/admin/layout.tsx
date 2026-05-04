@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/admin/incidents", label: "Incidents" },
   { href: "/admin/ncmec", label: "NCMEC" },
   { href: "/admin/appeals", label: "Appeals" },
+  { href: "/admin/transparency", label: "Transparency" },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
