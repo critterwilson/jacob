@@ -79,6 +79,10 @@ service cloud.firestore {
       match /invites/{inviteId} {
         allow read, write: if false;
       }
+      // T52 — leader-curated sermon archive.
+      match /sermons/{sermonId} {
+        allow read, write: if false;
+      }
     }
 
     // --- stickers / daily_verse / boards --------------------------------

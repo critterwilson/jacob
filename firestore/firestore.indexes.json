@@ -129,6 +129,14 @@
         { "fieldPath": "readAt", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "sermons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deletedAt", "order": "ASCENDING" },
+        { "fieldPath": "sermonDate", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
