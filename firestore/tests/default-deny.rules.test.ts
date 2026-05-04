@@ -529,6 +529,29 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T52 default-deny — sermons", () => {
+  it("denies reading groups/{gid}/sermons/{sermonId}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1", "sermons", "s1"), {
+        title: "Sunday",
+        sourceUrl: "https://example.com/s",
+        sourceType: "other",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "groups", "g1", "sermons", "s1")),
+    );
+  });
+
+  it("denies writing groups/{gid}/sermons/{sermonId}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "sermons", "s1"), {
+        title: "x",
+      }),
+    );
+  });
+});
+
 describe("T51 default-deny — devotionals + reading_plans + plan_progress", () => {
   it("denies reading devotionals/{slug} (read goes through GET /api/devotionals)", async () => {
     await seed(async (db) => {

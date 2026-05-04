@@ -52,6 +52,9 @@ DEVOTIONAL_LIST: str = "60/minute"
 PLAN_PROGRESS_READ: str = "60/minute"
 PLAN_PROGRESS_WRITE: str = "30/hour"
 
+# T52 — sermon archive. Leaders add sermons; volume is low.
+SERMON_MUTATION: str = "20/hour"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

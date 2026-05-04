@@ -26,6 +26,7 @@ from app.routers import (
     orgs,
     reports,
     search,
+    sermons,
     stickers,
     uploads,
     users,
@@ -122,6 +123,7 @@ app.include_router(orgs.public_router)
 app.include_router(incidents.router)
 app.include_router(incidents.admin_router)
 app.include_router(devotionals.router)
+app.include_router(sermons.router)
 
 if settings.debug:
     from app.routers import debug
