@@ -77,9 +77,7 @@ def _doc_to_session(snap: Any) -> WatchSession:
         createdAt=_ts_to_str(data.get("createdAt")),
         endedAt=_ts_to_str(data.get("endedAt")),
         attendees=list(data.get("attendees") or []),
-        durationSec=(
-            int(data["durationSec"]) if data.get("durationSec") is not None else None
-        ),
+        durationSec=(int(data["durationSec"]) if data.get("durationSec") is not None else None),
     )
 
 
