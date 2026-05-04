@@ -529,6 +529,26 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T59 default-deny — active_incidents", () => {
+  it("denies reading active_incidents/{id} (read goes through GET /api/incidents)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "active_incidents", "i1"), {
+        severity: "SEV2",
+        title: "x",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "active_incidents", "i1")));
+  });
+
+  it("denies writing active_incidents/{id}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "active_incidents", "i1"), {
+        severity: "SEV1",
+      }),
+    );
+  });
+});
+
 describe("T55 default-deny — domain_claims", () => {
   it("denies reading domain_claims/{hostname}", async () => {
     await seed(async (db) => {

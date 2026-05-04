@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import { IncidentBanner } from "@/components/IncidentBanner";
 import { SentryInit } from "@/components/SentryInit";
 import { AuthProvider } from "@/lib/auth-context";
 import { WorkspaceOrgProvider, type WorkspaceOrg } from "@/lib/org-context";
@@ -46,7 +47,10 @@ export default function RootLayout({
       <body>
         <SentryInit />
         <AuthProvider>
-          <WorkspaceOrgProvider org={org}>{children}</WorkspaceOrgProvider>
+          <WorkspaceOrgProvider org={org}>
+            <IncidentBanner />
+            {children}
+          </WorkspaceOrgProvider>
         </AuthProvider>
       </body>
     </html>

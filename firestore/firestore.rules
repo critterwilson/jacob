@@ -162,6 +162,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- T59 active incidents -------------------------------------------
+    // Read via `GET /api/incidents` (server filters by displayUntil);
+    // declared / cleared via `/api/admin/incidents*`. M6 backend-mediated.
+    match /active_incidents/{incidentId} {
+      allow read, write: if false;
+    }
+
     // --- default deny (defense in depth) --------------------------------
     match /{document=**} {
       allow read, write: if false;
