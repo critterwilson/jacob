@@ -6,11 +6,13 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiError, apiDelete, apiPost } from "@/lib/api";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
+// Server response for POST /reactions/{slug}. `reactionCounts` was dropped
+// in PR9 / H7 — the pre-trigger snapshot it carried was stale; the next
+// polled message-list response is authoritative.
 type ReactionResponse = {
   uid: string;
   slug: string;
   reactedAt: string;
-  reactionCounts: Record<string, number>;
 };
 
 /**
@@ -94,7 +96,7 @@ export function useReactions(gid: string, messages?: readonly Message[]) {
       optimisticRemoveRef.current.add(key);
       optimisticAddRef.current.delete(key);
       try {
-        await apiDelete<{ reactionCounts: Record<string, number> }>(
+        await apiDelete<{ ok: boolean }>(
           `/api/groups/${gid}/messages/${mid}/reactions/${slug}`,
         );
       } catch (err) {

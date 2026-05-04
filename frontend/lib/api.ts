@@ -13,9 +13,15 @@
 //         generic `network_error` after that bucket misled M1 CORS triage.
 //       - `network_error` — same-origin transport failure (DNS, offline,
 //         server unreachable) or any non-TypeError surface.
-//   * 5xx responses and transient network failures are retried with
-//     exponential backoff (200ms, 400ms) for idempotent verbs (GET).
-//     POST / PATCH / DELETE retries are opt-in via `opts.retry`.
+//   * Retry policy (exponential backoff, 200ms then 400ms):
+//       - Transport failures (fetch threw, not CORS) retry on every
+//         method up to `opts.retry`. Default `opts.retry` is 2 for GET
+//         and 0 for everything else, so non-GET verbs only retry transport
+//         failures when the caller explicitly opts in.
+//       - 5xx + 429 response statuses retry on every method too — but the
+//         non-GET defaults of 0 mean a POST/PATCH/DELETE that gets a 5xx
+//         response surfaces it after the first attempt, since a server-
+//         acknowledged failure could still have committed.
 //   * AbortSignal is honoured: aborts surface as `ApiError(0, "aborted", ...)`.
 
 import { auth } from "@/lib/firebase";

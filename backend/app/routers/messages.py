@@ -599,17 +599,12 @@ def react_to_message(
     now = datetime.now(UTC)
     reaction_user_ref.set({"reactedAt": fb_firestore.SERVER_TIMESTAMP})
 
-    # The Cloud Functions trigger updates `reactionCounts` on the parent
-    # message asynchronously. The handler returns the latest value it
-    # can see (post-write); the SSE update from M5 will catch any drift.
-    fresh = msg_ref.get()
-    counts = (fresh.to_dict() or {}).get("reactionCounts") or {}
-    return ReactionResponse(
-        uid=user.uid,
-        slug=slug,
-        reactedAt=now,
-        reactionCounts={str(k): int(v) for k, v in counts.items()},
-    )
+    # reactionCounts is updated by a Cloud Function trigger; the handler
+    # used to return a pre-trigger snapshot here but that value is stale
+    # by definition. The next polled message-list response is
+    # authoritative — see PR9 / H7. The client tracks `myReactions`
+    # optimistically in the meantime via useReactions.
+    return ReactionResponse(uid=user.uid, slug=slug, reactedAt=now)
 
 
 @router.delete(
@@ -643,10 +638,9 @@ def unreact_to_message(
         .document(user.uid)
     )
     reaction_user_ref.delete()
-    msg_ref = db.collection("groups").document(gid).collection("messages").document(mid)
-    fresh = msg_ref.get()
-    counts = (fresh.to_dict() or {}).get("reactionCounts") or {}
-    return ReactionRemovedResponse(reactionCounts={str(k): int(v) for k, v in counts.items()})
+    # No reactionCounts in the response — see PR9 / H7. The next polled
+    # message-list response is authoritative.
+    return ReactionRemovedResponse()
 
 
 __all__ = ["router"]
