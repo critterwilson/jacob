@@ -260,9 +260,7 @@ def test_get_message_happy_path() -> None:
     members_col.document.return_value.get.return_value = member_snap_local
     msgs_col = MagicMock()
     msgs_col.document.return_value = msg_ref
-    group_ref.collection.side_effect = lambda name: (
-        members_col if name == "members" else msgs_col
-    )
+    group_ref.collection.side_effect = lambda name: (members_col if name == "members" else msgs_col)
     with (
         patch("app.deps.get_firestore", return_value=db),
         patch("app.routers.messages.get_firestore", return_value=db),
@@ -290,9 +288,7 @@ def test_get_message_404_when_missing() -> None:
     missing = MagicMock()
     missing.exists = False
     msgs_col.document.return_value.get.return_value = missing
-    group_ref.collection.side_effect = lambda name: (
-        members_col if name == "members" else msgs_col
-    )
+    group_ref.collection.side_effect = lambda name: (members_col if name == "members" else msgs_col)
     db.collection.return_value.document.return_value = group_ref
     with (
         patch("app.deps.get_firestore", return_value=db),

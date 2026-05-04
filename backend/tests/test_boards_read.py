@@ -64,16 +64,12 @@ def _post_snap(
 def test_list_board_posts_happy_path() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db = MagicMock()
-    posts_col = (
-        db.collection.return_value.document.return_value.collection.return_value
-    )
+    posts_col = db.collection.return_value.document.return_value.collection.return_value
     snaps = [
         _post_snap(pid="p1", body="first"),
         _post_snap(pid="p2", body="second"),
     ]
-    chain = (
-        posts_col.where.return_value.order_by.return_value.order_by.return_value
-    )
+    chain = posts_col.where.return_value.order_by.return_value.order_by.return_value
     chain.limit.return_value.stream.return_value = iter(snaps)
     with patch("app.routers.boards._db", return_value=db):
         client = TestClient(_app(user))
@@ -87,17 +83,13 @@ def test_list_board_posts_happy_path() -> None:
 def test_list_board_posts_filters_hidden_unless_author() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db = MagicMock()
-    posts_col = (
-        db.collection.return_value.document.return_value.collection.return_value
-    )
+    posts_col = db.collection.return_value.document.return_value.collection.return_value
     snaps = [
         _post_snap(pid="p1", body="ok"),
         _post_snap(pid="hidden-other", author="bob", moderation="hidden"),
         _post_snap(pid="hidden-mine", author="alice", moderation="hidden"),
     ]
-    chain = (
-        posts_col.where.return_value.order_by.return_value.order_by.return_value
-    )
+    chain = posts_col.where.return_value.order_by.return_value.order_by.return_value
     chain.limit.return_value.stream.return_value = iter(snaps)
     with patch("app.routers.boards._db", return_value=db):
         client = TestClient(_app(user))
@@ -107,14 +99,19 @@ def test_list_board_posts_filters_hidden_unless_author() -> None:
     assert ids == {"p1", "hidden-mine"}
 
 
+def _post_doc_get_returns(db: MagicMock, snap: MagicMock) -> None:
+    """Wire `db.collection("boards").document(b).collection("posts").document(p).get()` → snap."""
+    boards = db.collection.return_value
+    posts = boards.document.return_value.collection.return_value
+    posts.document.return_value.get.return_value = snap
+
+
 def test_get_board_post_404_when_missing() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db = MagicMock()
     snap = MagicMock()
     snap.exists = False
-    db.collection.return_value.document.return_value.collection.return_value.document.return_value.get.return_value = (
-        snap
-    )
+    _post_doc_get_returns(db, snap)
     with patch("app.routers.boards._db", return_value=db):
         client = TestClient(_app(user))
         res = client.get("/api/boards/b1/posts/nope")
@@ -125,9 +122,7 @@ def test_get_board_post_happy_path() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db = MagicMock()
     snap = _post_snap(pid="p1", body="hi")
-    db.collection.return_value.document.return_value.collection.return_value.document.return_value.get.return_value = (
-        snap
-    )
+    _post_doc_get_returns(db, snap)
     with patch("app.routers.boards._db", return_value=db):
         client = TestClient(_app(user))
         res = client.get("/api/boards/b1/posts/p1")
@@ -139,15 +134,10 @@ def test_list_board_replies_filters_deleted() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db = MagicMock()
     replies_col = MagicMock()
-
-    def _coll_chain(name: str = ""):  # noqa: ARG001
-        return MagicMock(document=MagicMock(return_value=MagicMock(collection=MagicMock(
-            return_value=replies_col
-        ))))
-
-    db.collection.return_value.document.return_value.collection.return_value.document.return_value.collection.return_value = (
-        replies_col
-    )
+    # Wire db.collection("boards").document(b).collection("posts")
+    #     .document(p).collection("replies") → replies_col
+    posts = db.collection.return_value.document.return_value.collection.return_value
+    posts.document.return_value.collection.return_value = replies_col
     snaps = [
         _post_snap(pid="r1", body="r1"),
         _post_snap(pid="r-deleted", deleted=True),

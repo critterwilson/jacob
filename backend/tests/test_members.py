@@ -38,7 +38,7 @@ def _app(user: CurrentUser | None = None) -> FastAPI:
 
 
 def _setup_member_db(*, members: list[tuple[str, str]], profiles: dict[str, dict]):
-    """`members` is a list of (uid, role); `profiles` is {uid: {displayName: ..., photoURL: ...}}."""
+    """Mock harness: `members` = list of (uid, role); `profiles` = {uid: user-doc}."""
     db = MagicMock()
     # group + caller-membership read for require_member
     group_snap = MagicMock()
@@ -103,8 +103,9 @@ def test_list_members_returns_joined_profiles() -> None:
             "bob": {"displayName": "Bob", "photoURL": None},
         },
     )
-    with patch("app.deps.get_firestore", return_value=db), patch(
-        "app.routers.groups.get_firestore", return_value=db
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
     ):
         client = TestClient(_app(user))
         res = client.get("/api/groups/g1/members")
@@ -122,8 +123,9 @@ def test_list_members_uses_uid_when_profile_missing() -> None:
         members=[("ghost", "member")],
         profiles={},  # no profile doc
     )
-    with patch("app.deps.get_firestore", return_value=db), patch(
-        "app.routers.groups.get_firestore", return_value=db
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
     ):
         client = TestClient(_app(user))
         res = client.get("/api/groups/g1/members")
@@ -178,8 +180,9 @@ def test_my_membership_returns_role_for_caller() -> None:
     members_col.document.return_value.get.return_value = caller_member_snap
     group_ref.collection.return_value = members_col
     db.collection.return_value.document.return_value = group_ref
-    with patch("app.deps.get_firestore", return_value=db), patch(
-        "app.routers.groups.get_firestore", return_value=db
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
     ):
         client = TestClient(_app(user))
         res = client.get("/api/groups/g1/me")
@@ -281,8 +284,9 @@ def test_pinned_messages_resolves_ids_to_messages() -> None:
     m2.to_dict.return_value = {"authorUid": "carol", "body": "second"}
     db.get_all.return_value = [m1, m2]
 
-    with patch("app.deps.get_firestore", return_value=db), patch(
-        "app.routers.groups.get_firestore", return_value=db
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
     ):
         client = TestClient(_app(user))
         res = client.get("/api/groups/g1/pinned-messages")
@@ -306,8 +310,9 @@ def test_pinned_messages_returns_empty_when_none_pinned() -> None:
     members_col.document.return_value.get.return_value = caller_member_snap
     group_ref.collection.return_value = members_col
     db.collection.return_value.document.return_value = group_ref
-    with patch("app.deps.get_firestore", return_value=db), patch(
-        "app.routers.groups.get_firestore", return_value=db
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
     ):
         client = TestClient(_app(user))
         res = client.get("/api/groups/g1/pinned-messages")
