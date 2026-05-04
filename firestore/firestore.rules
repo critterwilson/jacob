@@ -91,6 +91,10 @@ service cloud.firestore {
           allow read, write: if false;
         }
       }
+      // T50 — Watch Together session metadata (live state in RTDB).
+      match /watch_sessions/{sessionId} {
+        allow read, write: if false;
+      }
     }
 
     // --- stickers / daily_verse / boards --------------------------------

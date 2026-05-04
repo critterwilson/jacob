@@ -529,6 +529,27 @@ describe("T54 default-deny — orgs + admins + members + invites", () => {
   });
 });
 
+describe("T50 default-deny — watch_sessions", () => {
+  it("denies reading groups/{gid}/watch_sessions/{sid}", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1", "watch_sessions", "s1"), {
+        videoId: "abc12345",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "groups", "g1", "watch_sessions", "s1")),
+    );
+  });
+
+  it("denies writing groups/{gid}/watch_sessions/{sid}", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "watch_sessions", "s1"), {
+        videoId: "x",
+      }),
+    );
+  });
+});
+
 describe("T49 default-deny — events + rsvps", () => {
   it("denies reading groups/{gid}/events/{id}", async () => {
     await seed(async (db) => {

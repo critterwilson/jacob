@@ -33,6 +33,7 @@ from app.routers import (
     uploads,
     users,
     verse,
+    watch,
 )
 from app.services.sentry import init_sentry
 
@@ -128,6 +129,7 @@ app.include_router(devotionals.router)
 app.include_router(sermons.router)
 app.include_router(unfurl.router)
 app.include_router(events.router)
+app.include_router(watch.router)
 
 if settings.debug:
     from app.routers import debug
