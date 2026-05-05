@@ -25,6 +25,18 @@ function initial(name: string): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
+// Avatar src can come from arbitrary places: Firestore profile fields
+// (Firebase Storage HTTPS), local previews (`URL.createObjectURL`,
+// which is `blob:`), or inline data URIs. Anything else — including
+// `javascript:` URIs that could be smuggled in via a profile update —
+// is dropped to the initials fallback. Closes CodeQL js/xss-through-dom.
+const SAFE_PHOTO_SCHEME = /^(?:https?:|blob:|data:image\/)/i;
+
+function safePhotoURL(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return SAFE_PHOTO_SCHEME.test(url) ? url : null;
+}
+
 /**
  * Round avatar. Renders the photo when supplied; otherwise the first
  * letter of the name on an ink-overlay swatch.
@@ -41,6 +53,7 @@ export function Avatar({
   ...rest
 }: AvatarProps) {
   const styles = sizeStyles[size];
+  const safeSrc = safePhotoURL(photoURL);
   return (
     <div
       className={cn(
@@ -50,10 +63,10 @@ export function Avatar({
       )}
       {...rest}
     >
-      {photoURL ? (
+      {safeSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={photoURL}
+          src={safeSrc}
           alt={name}
           className="h-full w-full object-cover"
         />
