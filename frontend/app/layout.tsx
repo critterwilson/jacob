@@ -1,10 +1,26 @@
 import type { Metadata } from "next";
+import { EB_Garamond, Inter } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 import { IncidentBanner } from "@/components/IncidentBanner";
 import { SentryInit } from "@/components/SentryInit";
 import { AuthProvider } from "@/lib/auth-context";
 import { WorkspaceOrgProvider, type WorkspaceOrg } from "@/lib/org-context";
+
+// Variable fonts, latin subset only. Self-hosted by next/font.
+// Combined cold-load impact ~50 KB. Exposed as CSS variables so
+// styles/tokens.css can reference them via --font-display / --font-sans.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const ebGaramond = EB_Garamond({
+  subsets: ["latin"],
+  variable: "--font-eb-garamond",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "JACOB",
@@ -37,9 +53,9 @@ export default function RootLayout({
 }>) {
   const org = hydratedOrg();
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${ebGaramond.variable}`}>
       <head>
-        <meta name="theme-color" content="#1e40af" />
+        <meta name="theme-color" content="#0e1726" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />

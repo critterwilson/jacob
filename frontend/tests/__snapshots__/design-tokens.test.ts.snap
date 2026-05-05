@@ -1,0 +1,153 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`design tokens — resolved Tailwind theme > borderRadius matches the spec (sm 4 / md 6 / lg 10 / xl 16 / 2xl 24) 1`] = `
+{
+  "2xl": "var(--radius-2xl)",
+  "DEFAULT": "var(--radius-md)",
+  "lg": "var(--radius-lg)",
+  "md": "var(--radius-md)",
+  "sm": "var(--radius-sm)",
+  "xl": "var(--radius-xl)",
+}
+`;
+
+exports[`design tokens — resolved Tailwind theme > boxShadow includes raise / pop / glow-gold 1`] = `
+{
+  "glow-gold": "var(--shadow-glow-gold)",
+  "pop": "var(--shadow-pop)",
+  "raise": "var(--shadow-raise)",
+}
+`;
+
+exports[`design tokens — resolved Tailwind theme > colors include the JACOB palette (ink, cream, gold, semantic) 1`] = `
+{
+  "cream": "var(--color-cream)",
+  "cream-dim": "var(--color-cream-dim)",
+  "cream-muted": "var(--color-cream-muted)",
+  "gold": "var(--color-gold)",
+  "gold-deep": "var(--color-gold-deep)",
+  "gold-soft": "var(--color-gold-soft)",
+  "ink": "var(--color-ink)",
+  "ink-overlay": "var(--color-ink-overlay)",
+  "ink-raised": "var(--color-ink-raised)",
+  "lake": "var(--color-lake)",
+  "line": "var(--color-line)",
+  "line-strong": "var(--color-line-strong)",
+  "parchment-amber": "var(--color-parchment-amber)",
+  "sage": "var(--color-sage)",
+  "terracotta": "var(--color-terracotta)",
+}
+`;
+
+exports[`design tokens — resolved Tailwind theme > fontFamily exposes display (serif) and sans tokens 1`] = `
+{
+  "display": [
+    "var(--font-display)",
+  ],
+  "mono": [
+    "ui-monospace",
+    "SFMono-Regular",
+    "Menlo",
+    "Monaco",
+    "Consolas",
+    ""Liberation Mono"",
+    ""Courier New"",
+    "monospace",
+  ],
+  "sans": [
+    "var(--font-sans)",
+  ],
+  "serif": [
+    "ui-serif",
+    "Georgia",
+    "Cambria",
+    ""Times New Roman"",
+    "Times",
+    "serif",
+  ],
+}
+`;
+
+exports[`design tokens — resolved Tailwind theme > fontSize includes the display + body + UI type scale 1`] = `
+{
+  "body": [
+    "1rem",
+    {
+      "fontWeight": "400",
+      "lineHeight": "1.55",
+    },
+  ],
+  "body-lg": [
+    "1.125rem",
+    {
+      "fontWeight": "400",
+      "lineHeight": "1.60",
+    },
+  ],
+  "body-sm": [
+    "0.875rem",
+    {
+      "fontWeight": "400",
+      "lineHeight": "1.50",
+    },
+  ],
+  "caption": [
+    "0.75rem",
+    {
+      "fontWeight": "500",
+      "lineHeight": "1.40",
+    },
+  ],
+  "display-lg": [
+    "2.5rem",
+    {
+      "fontWeight": "600",
+      "lineHeight": "1.10",
+    },
+  ],
+  "display-md": [
+    "2rem",
+    {
+      "fontWeight": "600",
+      "lineHeight": "1.15",
+    },
+  ],
+  "display-sm": [
+    "1.5rem",
+    {
+      "fontWeight": "600",
+      "lineHeight": "1.25",
+    },
+  ],
+  "display-xl": [
+    "3.5rem",
+    {
+      "fontWeight": "600",
+      "lineHeight": "1.05",
+    },
+  ],
+  "eyebrow": [
+    "0.6875rem",
+    {
+      "fontWeight": "600",
+      "letterSpacing": "0.08em",
+      "lineHeight": "1.30",
+    },
+  ],
+  "label": [
+    "0.8125rem",
+    {
+      "fontWeight": "500",
+      "lineHeight": "1.30",
+    },
+  ],
+}
+`;
+
+exports[`design tokens — resolved Tailwind theme > transitionDuration includes fast / base / slow 1`] = `
+{
+  "base": "var(--duration-base)",
+  "fast": "var(--duration-fast)",
+  "slow": "var(--duration-slow)",
+}
+`;
