@@ -5,24 +5,40 @@ import { useState } from "react";
 import { ApiError, apiDelete, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { PhotoView } from "@/components/chat/PhotoView";
-import { StickerBadge } from "@/components/stickers/StickerBadge";
-import { ReportButton } from "@/components/moderation/ReportButton";
 import { ReactionBar } from "@/components/chat/ReactionBar";
 import { ReactionPicker } from "@/components/chat/ReactionPicker";
+import { ReportButton } from "@/components/moderation/ReportButton";
+import { StickerBadge } from "@/components/stickers/StickerBadge";
+import { Avatar, Button, Textarea, cn } from "@/components/ui";
+import { renderBodyWithMentions } from "@/lib/mentions";
 import { useStickers } from "@/lib/hooks/useStickers";
+import type { Message } from "@/lib/hooks/useGroupMessages";
 import type { Member as FullMember } from "@/lib/hooks/useMembers";
 
-type Member = Pick<FullMember, "uid" | "displayName">;
-import { renderBodyWithMentions } from "@/lib/mentions";
-import type { Message } from "@/lib/hooks/useGroupMessages";
-import type { PinnedMessage } from "@/lib/hooks/usePinnedMessages";
+type Member = Pick<FullMember, "uid" | "displayName"> & {
+  photoURL?: string | null;
+};
 
 const FIFTEEN_MIN_MS = 15 * 60 * 1000;
-
 const MEDIA_URL_PREFIX = "https://storage.googleapis.com/jacob-media-public-";
 
 function isSafeMediaUrl(url: string): boolean {
   return url.startsWith(MEDIA_URL_PREFIX);
+}
+
+function resolveAuthor(
+  authorUid: string,
+  members: readonly Member[] | undefined,
+  selfUid?: string,
+): { displayName: string; photoURL?: string | null } {
+  const m = members?.find((x) => x.uid === authorUid);
+  if (authorUid === selfUid) {
+    return { displayName: "You", photoURL: m?.photoURL ?? null };
+  }
+  return {
+    displayName: m?.displayName ?? "Member",
+    photoURL: m?.photoURL ?? null,
+  };
 }
 
 type Props = {
@@ -65,8 +81,12 @@ export function MessageItem({
   const [error, setError] = useState<string | null>(null);
 
   const isAuthor = resolvedUid === message.authorUid;
-  const hasParticipated = message.participants?.includes(resolvedUid ?? "") ?? false;
-  const createdAtMs = message.createdAt ? Date.parse(message.createdAt) || 0 : 0;
+  const author = resolveAuthor(message.authorUid, members, resolvedUid);
+  const hasParticipated =
+    message.participants?.includes(resolvedUid ?? "") ?? false;
+  const createdAtMs = message.createdAt
+    ? Date.parse(message.createdAt) || 0
+    : 0;
   const isDeleted = message.deletedAt != null;
   const canEdit =
     isAuthor && !isDeleted && Date.now() - createdAtMs < FIFTEEN_MIN_MS;
@@ -100,7 +120,9 @@ export function MessageItem({
     setSaving(true);
     setError(null);
     try {
-      await apiPatch(`/api/groups/${gid}/messages/${message.id}`, { body: trimmed });
+      await apiPatch(`/api/groups/${gid}/messages/${message.id}`, {
+        body: trimmed,
+      });
       setEditing(false);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -130,152 +152,179 @@ export function MessageItem({
     }
   };
 
+  const actionChip =
+    "rounded border border-line bg-ink px-2 py-0.5 text-caption text-cream-muted " +
+    "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
+    "focus:outline-none focus-visible:shadow-glow-gold";
+
   return (
     <article
       data-message-id={message.id}
-      className="group relative flex flex-col gap-1 px-4 py-2 hover:bg-gray-50"
+      className="group relative flex gap-3 px-4 py-2 transition-colors duration-fast hover:bg-ink-raised"
     >
-      <div className="flex items-baseline gap-2">
-        <span className="text-sm font-semibold text-gray-900">
-          {isAuthor ? "You" : message.authorUid}
-        </span>
-        <time className="text-xs text-gray-400">{timestamp}</time>
-        {message.editedAt && !isDeleted && (
-          <span className="text-xs text-gray-400">(edited)</span>
-        )}
-      </div>
+      <Avatar
+        name={author.displayName}
+        photoURL={author.photoURL}
+        size="sm"
+        aria-hidden="true"
+        className="mt-1"
+      />
 
-      {isDeleted ? (
-        <p className="text-sm italic text-gray-400">[message removed]</p>
-      ) : shouldHideBody ? (
-        <div className="flex items-center gap-2">
-          <p className="text-sm italic text-amber-700">
-            Hidden pending review
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowHidden(true)}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            Show anyway
-          </button>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-body-sm font-semibold text-cream">
+            {author.displayName}
+          </span>
+          <time className="text-caption text-cream-dim">{timestamp}</time>
+          {message.editedAt && !isDeleted && (
+            <span className="text-caption text-cream-dim">(edited)</span>
+          )}
         </div>
-      ) : editing ? (
-        <div className="flex flex-col gap-2">
-          <textarea
-            aria-label="Edit message"
-            value={editBody}
-            onChange={(e) => setEditBody(e.target.value)}
-            maxLength={4000}
-            rows={2}
-            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <div className="flex gap-2">
+
+        {isDeleted ? (
+          <p className="text-body-sm italic text-cream-dim">[message removed]</p>
+        ) : shouldHideBody ? (
+          <div className="flex items-center gap-2">
+            <p className="text-body-sm italic text-parchment-amber">
+              Hidden pending review
+            </p>
             <button
               type="button"
-              onClick={() => void handleEdit()}
-              disabled={saving}
-              className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+              onClick={() => setShowHidden(true)}
+              className="text-caption text-gold-soft hover:text-gold focus:outline-none focus-visible:shadow-glow-gold rounded-sm"
             >
-              {saving ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false);
-                setEditBody(message.body);
-              }}
-              className="rounded border border-gray-300 px-3 py-1 text-xs"
-            >
-              Cancel
+              Show anyway
             </button>
           </div>
-        </div>
-      ) : (
-        <p className="whitespace-pre-wrap text-sm text-gray-800">
-          {renderBodyWithMentions(
-            message.body,
-            message.mentions ?? [],
-            members ?? [],
-            resolvedUid,
-          ).map((part, i) =>
-            typeof part === "string" ? (
-              part
-            ) : (
-              <span
-                key={i}
-                className={`inline-block rounded px-1 text-xs font-medium ${
-                  part.isSelf
-                    ? "bg-yellow-100 text-yellow-900"
-                    : "bg-purple-100 text-purple-700"
-                }`}
-              >
-                @{part.displayName}
-              </span>
-            ),
-          )}
-        </p>
-      )}
-
-      {messageStickers.length > 0 && !isDeleted && !shouldHideBody && (
-        <div className="flex flex-wrap gap-1">
-          {messageStickers.map((s) => (
-            <StickerBadge key={s.slug} sticker={s} size="sm" />
-          ))}
-        </div>
-      )}
-
-      {!isDeleted && !shouldHideBody && message.mediaRefs.length > 0 && (
-        <ul className="mt-1 flex flex-wrap gap-2" aria-label="Photos">
-          {message.mediaRefs.filter(isSafeMediaUrl).map((url) => (
-            <li key={url}>
-              <PhotoView src={url} alt="" className="max-h-64 w-auto" />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {!isDeleted && !readonly && onToggleReaction && isMyReaction && (
-        <ReactionBar
-          mid={message.id}
-          reactionCounts={message.reactionCounts}
-          isMyReaction={isMyReaction}
-          onToggle={onToggleReaction}
-        />
-      )}
-
-      {!isDeleted && readonly && message.reactionCounts && (
-        <ReactionBar
-          mid={message.id}
-          reactionCounts={message.reactionCounts}
-          isMyReaction={() => false}
-          onToggle={() => undefined}
-        />
-      )}
-
-      {error && (
-        <p role="alert" className="text-xs text-red-600">
-          {error}
-        </p>
-      )}
-
-      {!isDeleted && message.parentMessageId === null && message.threadReplyCount > 0 && (
-        <button
-          type="button"
-          onClick={() => onReply?.(message)}
-          aria-label={`${message.threadReplyCount} ${message.threadReplyCount === 1 ? "reply" : "replies"}, open thread`}
-          className="flex items-center gap-1 self-start text-xs text-blue-600 hover:underline"
-        >
-          {hasParticipated && (
-            <span
-              aria-hidden
-              className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"
+        ) : editing ? (
+          <div className="flex flex-col gap-2">
+            <Textarea
+              label="Edit message"
+              hideLabel
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              maxLength={4000}
+              rows={2}
             />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => void handleEdit()}
+                loading={saving}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setEditing(false);
+                  setEditBody(message.body);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap text-body text-cream">
+            {renderBodyWithMentions(
+              message.body,
+              message.mentions ?? [],
+              members ?? [],
+              resolvedUid,
+            ).map((part, i) =>
+              typeof part === "string" ? (
+                part
+              ) : (
+                <span
+                  key={i}
+                  className={cn(
+                    "inline-block rounded px-1 text-body-sm font-medium",
+                    part.isSelf
+                      ? "bg-gold/20 text-gold-soft"
+                      : "bg-lake/20 text-lake",
+                  )}
+                >
+                  @{part.displayName}
+                </span>
+              ),
+            )}
+          </p>
+        )}
+
+        {messageStickers.length > 0 && !isDeleted && !shouldHideBody && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            {messageStickers.map((s) => (
+              <StickerBadge key={s.slug} sticker={s} size="sm" />
+            ))}
+          </div>
+        )}
+
+        {!isDeleted && !shouldHideBody && message.mediaRefs.length > 0 && (
+          <ul className="mt-1 flex flex-wrap gap-2" aria-label="Photos">
+            {message.mediaRefs.filter(isSafeMediaUrl).map((url) => (
+              <li key={url}>
+                <PhotoView
+                  src={url}
+                  alt=""
+                  className="max-h-64 w-auto rounded-md border border-line"
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {!isDeleted && !readonly && onToggleReaction && isMyReaction && (
+          <ReactionBar
+            mid={message.id}
+            reactionCounts={message.reactionCounts}
+            isMyReaction={isMyReaction}
+            onToggle={onToggleReaction}
+          />
+        )}
+
+        {!isDeleted && readonly && message.reactionCounts && (
+          <ReactionBar
+            mid={message.id}
+            reactionCounts={message.reactionCounts}
+            isMyReaction={() => false}
+            onToggle={() => undefined}
+          />
+        )}
+
+        {error && (
+          <p role="alert" className="text-caption text-terracotta">
+            {error}
+          </p>
+        )}
+
+        {!isDeleted &&
+          message.parentMessageId === null &&
+          message.threadReplyCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onReply?.(message)}
+              aria-label={`${message.threadReplyCount} ${
+                message.threadReplyCount === 1 ? "reply" : "replies"
+              }, open thread`}
+              className="flex items-center gap-1 self-start rounded-sm text-caption text-gold-soft hover:text-gold focus:outline-none focus-visible:shadow-glow-gold"
+            >
+              {hasParticipated && (
+                <span
+                  aria-hidden
+                  className="inline-block h-1.5 w-1.5 rounded-full bg-gold"
+                />
+              )}
+              {message.threadReplyCount}{" "}
+              {message.threadReplyCount === 1 ? "reply" : "replies"}
+            </button>
           )}
-          {message.threadReplyCount}{" "}
-          {message.threadReplyCount === 1 ? "reply" : "replies"}
-        </button>
-      )}
+      </div>
 
       {!isDeleted && !editing && !readonly && (
         <div className="absolute right-4 top-2 hidden gap-1 group-hover:flex">
@@ -283,7 +332,7 @@ export function MessageItem({
             <button
               type="button"
               onClick={() => onReply(message)}
-              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+              className={actionChip}
             >
               Reply
             </button>
@@ -292,7 +341,7 @@ export function MessageItem({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+              className={actionChip}
             >
               Edit
             </button>
@@ -301,7 +350,7 @@ export function MessageItem({
             <button
               type="button"
               onClick={() => void handleDelete()}
-              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+              className={actionChip}
             >
               Delete
             </button>
@@ -310,7 +359,7 @@ export function MessageItem({
             <button
               type="button"
               onClick={() => onTogglePin(message.id)}
-              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+              className={actionChip}
             >
               {pinnedIds.includes(message.id) ? "Unpin" : "Pin"}
             </button>
@@ -319,7 +368,7 @@ export function MessageItem({
             <button
               type="button"
               onClick={() => onAnnounce(message.id)}
-              className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+              className={actionChip}
             >
               Announce
             </button>
@@ -337,7 +386,7 @@ export function MessageItem({
               resourceType="message"
               resourceId={message.id}
               groupId={gid}
-              className="flex items-center rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-400 hover:bg-white hover:text-gray-600"
+              className={cn(actionChip, "flex items-center text-cream-dim")}
             />
           )}
         </div>

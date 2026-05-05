@@ -46,7 +46,11 @@ export function PhotoAttachButton({ gid, onAttach, onError, disabled }: Props) {
         onClick={() => inputRef.current?.click()}
         disabled={disabled || uploading}
         aria-label="Attach photo"
-        className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50"
+        className={
+          "rounded border border-line bg-ink px-3 py-1 text-caption text-cream-muted " +
+          "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
+          "focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
+        }
       >
         {uploading
           ? progress === "finalizing"
@@ -68,7 +72,7 @@ export function PhotoAttachButton({ gid, onAttach, onError, disabled }: Props) {
         }}
       />
       {localError && (
-        <span role="alert" className="text-xs text-red-600">
+        <span role="alert" className="text-caption text-terracotta">
           {localError}
         </span>
       )}

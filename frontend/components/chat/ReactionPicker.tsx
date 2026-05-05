@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { cn } from "@/components/ui";
 import { useStickers } from "@/lib/hooks/useStickers";
 
 type Props = {
@@ -10,7 +12,12 @@ type Props = {
   disabled?: boolean;
 };
 
-export function ReactionPicker({ mid, isMyReaction, onToggle, disabled = false }: Props) {
+export function ReactionPicker({
+  mid,
+  isMyReaction,
+  onToggle,
+  disabled = false,
+}: Props) {
   const { stickers } = useStickers();
   const [open, setOpen] = useState(false);
 
@@ -23,7 +30,11 @@ export function ReactionPicker({ mid, isMyReaction, onToggle, disabled = false }
         aria-label="Add reaction"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="rounded border border-gray-200 px-2 py-0.5 text-xs hover:bg-white"
+        className={
+          "rounded border border-line bg-ink px-2 py-0.5 text-caption text-cream-muted " +
+          "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
+          "focus:outline-none focus-visible:shadow-glow-gold"
+        }
       >
         +
       </button>
@@ -32,7 +43,7 @@ export function ReactionPicker({ mid, isMyReaction, onToggle, disabled = false }
         <div
           role="dialog"
           aria-label="Reaction picker"
-          className="absolute bottom-full left-0 z-10 mb-1 flex flex-wrap gap-1 rounded border border-gray-200 bg-white p-2 shadow-sm"
+          className="absolute bottom-full left-0 z-10 mb-1 flex flex-wrap gap-1 rounded-lg border border-line bg-ink-overlay p-2 shadow-pop"
         >
           {stickers.slice(0, 6).map((s) => {
             const mine = isMyReaction(mid, s.slug);
@@ -46,9 +57,13 @@ export function ReactionPicker({ mid, isMyReaction, onToggle, disabled = false }
                   onToggle(mid, s.slug);
                   setOpen(false);
                 }}
-                className={`rounded px-2 py-1 text-xs transition-colors ${
-                  mine ? "bg-blue-100 font-medium" : "hover:bg-gray-100"
-                }`}
+                className={cn(
+                  "rounded px-2 py-1 text-caption transition-colors duration-fast " +
+                    "focus:outline-none focus-visible:shadow-glow-gold",
+                  mine
+                    ? "bg-gold/15 font-medium"
+                    : "hover:bg-ink",
+                )}
                 style={{ color: s.color }}
               >
                 {s.name}

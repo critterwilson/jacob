@@ -131,7 +131,7 @@ export function MentionInput({
           id="mention-listbox"
           role="listbox"
           aria-label="mention suggestions"
-          className="absolute bottom-full left-0 z-10 mb-1 max-h-40 w-52 overflow-y-auto rounded border border-gray-200 bg-white shadow-md"
+          className="absolute bottom-full left-0 z-10 mb-1 max-h-40 w-52 overflow-y-auto rounded-lg border border-line bg-ink-overlay shadow-pop"
         >
           {filtered.map((member, i) => (
             <li key={member.uid} role="option" aria-selected={i === selectedIdx}>
@@ -141,10 +141,10 @@ export function MentionInput({
                   e.preventDefault(); // prevent textarea blur
                   confirmSelection(member);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-sm ${
+                className={`w-full px-3 py-1.5 text-left text-body-sm transition-colors duration-fast focus:outline-none ${
                   i === selectedIdx
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-50"
+                    ? "bg-ink text-cream"
+                    : "text-cream-muted hover:bg-ink hover:text-cream"
                 }`}
               >
                 {member.displayName}

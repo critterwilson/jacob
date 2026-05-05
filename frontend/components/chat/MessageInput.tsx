@@ -1,20 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { z } from "zod";
 
-import { ApiError, apiPost } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
-import { useMembers } from "@/lib/hooks/useMembers";
-import { extractMentionedUids } from "@/lib/mentions";
 import { MentionInput } from "@/components/chat/MentionInput";
 import { PhotoAttachButton } from "@/components/chat/PhotoAttachButton";
 import {
   DEFAULT_STICKER_SLUG,
   StickerPicker,
 } from "@/components/stickers/StickerPicker";
+import { Button } from "@/components/ui";
+import { ApiError, apiPost } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { useMembers } from "@/lib/hooks/useMembers";
+import { extractMentionedUids } from "@/lib/mentions";
 
 const MAX_PHOTOS_PER_MESSAGE = 4;
 
@@ -96,17 +97,23 @@ export function MessageInput({ gid, archived = false }: Props) {
 
   if (archived) {
     return (
-      <div className="border-t border-gray-200 px-4 py-3 text-center text-sm text-gray-500">
+      <div className="border-t border-line bg-ink px-4 py-3 text-center text-body-sm text-cream-muted">
         This group is archived. New messages are disabled.
       </div>
     );
   }
 
+  const mentionInputClass =
+    "flex-1 resize-none rounded border border-line bg-ink-overlay px-3 py-2 " +
+    "font-sans text-body text-cream placeholder:text-cream-dim " +
+    "transition-colors duration-fast " +
+    "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
+
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
       aria-label="Send a message"
-      className="border-t border-gray-200 px-4 py-3"
+      className="border-t border-line bg-ink px-4 py-3"
     >
       <StickerPicker value={stickers} onChange={setStickers} />
 
@@ -118,13 +125,13 @@ export function MessageInput({ gid, archived = false }: Props) {
               <img
                 src={url}
                 alt="Attached"
-                className="h-16 w-16 rounded object-cover"
+                className="h-16 w-16 rounded-md border border-line object-cover"
               />
               <button
                 type="button"
                 onClick={() => removePhoto(url)}
                 aria-label="Remove attached photo"
-                className="absolute -right-1 -top-1 rounded-full bg-gray-900 px-1.5 text-xs text-white"
+                className="absolute -right-1 -top-1 rounded-full bg-ink-overlay px-1.5 text-caption text-cream-muted hover:text-cream focus:outline-none focus-visible:shadow-glow-gold"
               >
                 ×
               </button>
@@ -147,17 +154,20 @@ export function MessageInput({ gid, archived = false }: Props) {
               placeholder="Say something…"
               rows={2}
               maxLength={4000}
-              className="flex-1 resize-none rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={mentionInputClass}
             />
           )}
         />
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="md"
+          loading={sending}
           disabled={sending}
-          className="self-end rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="self-end"
         >
           {sending ? "Sending…" : "Send"}
-        </button>
+        </Button>
       </div>
 
       <div className="mt-2">
@@ -170,12 +180,12 @@ export function MessageInput({ gid, archived = false }: Props) {
       </div>
 
       {errors.body && (
-        <p role="alert" className="mt-1 text-xs text-red-600">
+        <p role="alert" className="mt-2 text-caption text-terracotta">
           {errors.body.message}
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-1 text-xs text-red-600">
+        <p role="alert" className="mt-2 text-caption text-terracotta">
           {error}
         </p>
       )}

@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import { MessageItem } from "@/components/chat/MessageItem";
+import { Banner } from "@/components/ui";
 import { useBlocks } from "@/lib/hooks/useBlocks";
-import { useMutes } from "@/lib/hooks/useMutes";
 import { useMembers } from "@/lib/hooks/useMembers";
+import { useMutes } from "@/lib/hooks/useMutes";
 import { useReactions } from "@/lib/hooks/useReactions";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
@@ -74,20 +75,21 @@ export function MessageList({
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <span className="text-sm text-gray-500">Loading messages…</span>
+        <span className="text-body-sm text-cream-muted">Loading messages…</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto">
+    <div className="flex flex-1 flex-col overflow-y-auto bg-ink">
       {offline && (
-        <div
+        <Banner
+          tone="warning"
           role="status"
-          className="sticky top-0 z-10 bg-amber-50 px-4 py-2 text-center text-xs text-amber-800 border-b border-amber-200"
+          className="sticky top-0 z-10 rounded-none border-x-0 border-t-0"
         >
           Offline — showing your last loaded messages.
-        </div>
+        </Banner>
       )}
       {hasMore && (
         <div className="flex justify-center py-2">
@@ -95,7 +97,11 @@ export function MessageList({
             type="button"
             onClick={onLoadOlder}
             disabled={loadingOlder}
-            className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+            className={
+              "rounded border border-line bg-ink-raised px-3 py-1 text-caption text-cream-muted " +
+              "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
+              "focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
+            }
           >
             {loadingOlder ? "Loading…" : "Load older messages"}
           </button>
@@ -103,7 +109,7 @@ export function MessageList({
       )}
 
       {visible.length === 0 && (
-        <p className="mt-8 text-center text-sm text-gray-400">
+        <p className="mt-12 text-center text-body-sm text-cream-dim">
           No messages yet. Be the first to say something!
         </p>
       )}
@@ -126,7 +132,7 @@ export function MessageList({
             return (
               <div
                 key={msg.id}
-                className="flex items-center gap-2 px-4 py-2 text-xs italic text-gray-400 hover:bg-gray-50"
+                className="flex items-center gap-2 px-4 py-2 text-caption italic text-cream-dim transition-colors duration-fast hover:bg-ink-raised"
               >
                 <span>Muted user</span>
                 <button
@@ -134,7 +140,7 @@ export function MessageList({
                   onClick={() =>
                     setExpandedMutes((prev) => new Set(prev).add(msg.id))
                   }
-                  className="text-blue-600 hover:underline"
+                  className="rounded-sm text-gold-soft hover:text-gold focus:outline-none focus-visible:shadow-glow-gold"
                 >
                   Show
                 </button>
@@ -154,7 +160,11 @@ export function MessageList({
               members={members}
               archived={archived}
               isMyReaction={readonly ? undefined : isMyReaction}
-              onToggleReaction={readonly ? undefined : (mid, slug) => void toggleReaction(mid, slug)}
+              onToggleReaction={
+                readonly
+                  ? undefined
+                  : (mid, slug) => void toggleReaction(mid, slug)
+              }
               readonly={readonly}
             />
           );

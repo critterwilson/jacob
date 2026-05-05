@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/components/ui";
 import { useStickers } from "@/lib/hooks/useStickers";
 
 type Props = {
@@ -9,7 +10,12 @@ type Props = {
   onToggle: (mid: string, slug: string) => void;
 };
 
-export function ReactionBar({ mid, reactionCounts, isMyReaction, onToggle }: Props) {
+export function ReactionBar({
+  mid,
+  reactionCounts,
+  isMyReaction,
+  onToggle,
+}: Props) {
   const { stickers } = useStickers();
 
   if (!reactionCounts) return null;
@@ -34,11 +40,14 @@ export function ReactionBar({ mid, reactionCounts, isMyReaction, onToggle }: Pro
             onClick={() => onToggle(mid, slug)}
             aria-pressed={mine}
             aria-label={`${sticker?.name ?? slug} ${count}`}
-            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption " +
+                "transition-colors duration-fast " +
+                "focus:outline-none focus-visible:shadow-glow-gold",
               mine
-                ? "border-blue-400 bg-blue-50 font-medium text-blue-700"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
+                ? "border-gold bg-gold/15 font-medium text-gold-soft"
+                : "border-line bg-ink-overlay text-cream-muted hover:bg-ink hover:text-cream",
+            )}
           >
             <span>{sticker?.name ?? slug}</span>
             <span>{count}</span>

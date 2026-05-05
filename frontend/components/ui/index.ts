@@ -6,6 +6,7 @@
  * Import from "@/components/ui" rather than the individual files so
  * we can refactor the internal layout without touching every caller.
  */
+export { Avatar, type AvatarSize } from "./Avatar";
 export { Banner, type BannerTone } from "./Banner";
 export { Button, type ButtonSize, type ButtonVariant } from "./Button";
 export { Card, type CardPadding, type CardSurface } from "./Card";
