@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { Button, Card, Eyebrow, Heading, Link } from "@/components/ui";
 import { usePlanProgress, useReadingPlan } from "@/lib/hooks/useReadingPlans";
 
 export default function ReadingPlanDayPage() {
@@ -20,29 +20,33 @@ export default function ReadingPlanDayPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-ink text-body-sm text-cream-muted">
         Loading…
       </div>
     );
   }
   if (!plan) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
-        <Link href="/reading-plans" className="text-xs text-gray-500">
+      <div className="mx-auto max-w-2xl space-y-3 p-6">
+        <Link href="/reading-plans" variant="muted" className="text-caption">
           ← Reading plans
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Plan not found.</p>
+        <p className="text-body-sm text-cream">Plan not found.</p>
       </div>
     );
   }
   const day = plan.days.find((d) => d.dayNumber === dayNumber);
   if (!day) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
-        <Link href={`/reading-plans/${slug}`} className="text-xs text-gray-500">
+      <div className="mx-auto max-w-2xl space-y-3 p-6">
+        <Link
+          href={`/reading-plans/${slug}`}
+          variant="muted"
+          className="text-caption"
+        >
           ← Plan
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Day not found.</p>
+        <p className="text-body-sm text-cream">Day not found.</p>
       </div>
     );
   }
@@ -61,40 +65,50 @@ export default function ReadingPlanDayPage() {
   };
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <Link href={`/reading-plans/${slug}`} className="text-xs text-gray-500">
+    <main className="mx-auto max-w-2xl space-y-6 p-6">
+      <Link
+        href={`/reading-plans/${slug}`}
+        variant="muted"
+        className="text-caption"
+      >
         ← {plan.title}
       </Link>
-      <header className="mt-3">
-        <p className="text-xs uppercase tracking-wide text-gray-500">
+
+      <header className="space-y-2">
+        <Eyebrow>
           Day {dayNumber} of {plan.duration}
-        </p>
-        <h1 className="text-2xl font-semibold">{day.scriptureRef}</h1>
+        </Eyebrow>
+        <Heading level={1} size="lg">
+          {day.scriptureRef}
+        </Heading>
       </header>
 
-      <section className="mt-6 rounded border border-gray-200 bg-white p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Reflection prompt
-        </p>
-        <p className="mt-2 text-sm text-gray-800">{day.prompt}</p>
-      </section>
+      <Card surface="raised" padding="md" className="space-y-2">
+        <Eyebrow>Reflection prompt</Eyebrow>
+        <p className="text-body-lg leading-relaxed text-cream">{day.prompt}</p>
+      </Card>
 
-      <div className="mt-6 flex items-center justify-between">
-        <button
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button
           type="button"
-          onClick={handleMark}
+          variant={done ? "secondary" : "primary"}
+          size="md"
+          onClick={() => void handleMark()}
+          loading={pending}
           disabled={pending}
-          className={`rounded px-3 py-1 text-sm text-white disabled:opacity-40 ${
-            done ? "bg-green-700" : "bg-blue-600"
-          }`}
         >
-          {pending ? "Saving…" : done ? "Marked complete ✓" : "Mark complete"}
-        </button>
-        <div className="flex gap-2 text-xs">
+          {pending
+            ? "Saving…"
+            : done
+              ? "Marked complete ✓"
+              : "Mark complete"}
+        </Button>
+        <div className="flex gap-2 text-caption">
           {prev && (
             <Link
               href={`/reading-plans/${slug}/day/${prev.dayNumber}`}
-              className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+              variant="muted"
+              className="rounded border border-line px-3 py-1 hover:bg-ink-raised hover:no-underline"
             >
               ← Day {prev.dayNumber}
             </Link>
@@ -102,7 +116,8 @@ export default function ReadingPlanDayPage() {
           {next && (
             <Link
               href={`/reading-plans/${slug}/day/${next.dayNumber}`}
-              className="rounded border border-gray-300 px-2 py-1 hover:bg-gray-50"
+              variant="muted"
+              className="rounded border border-line px-3 py-1 hover:bg-ink-raised hover:no-underline"
             >
               Day {next.dayNumber} →
             </Link>
