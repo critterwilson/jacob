@@ -1,9 +1,4 @@
 import {
-  fetchLatestEmailOrSkip,
-  openMailinatorContext,
-  pickFirebaseActionLink,
-} from "./helpers/mailinator";
-import {
   STRONG_PASSWORD,
   fillSignInForm,
   gotoSignIn,
@@ -13,49 +8,30 @@ import {
   submitSignIn,
   submitSignUp,
 } from "./helpers/auth";
+import { getUserStateByEmail, verifyEmailViaAdmin } from "./helpers/firebaseAdmin";
 import { expect, test } from "./helpers/fixtures";
 
 test.describe("auth", () => {
-  test("fresh signup → verify via mailinator → sign in → sign out → sign back in", async ({
+  test("fresh signup → admin verify link → sign in → sign out → sign back in", async ({
     page,
-    browser,
     freshEmail,
   }) => {
-    test.slow(); // mailinator polling pushes us past the default timeout.
-
-    // 1. Sign up with a brand-new mailinator inbox.
+    // 1. Sign up via the real form so we exercise the same client code path
+    //    a real user takes (CORS preflight, Firebase Auth round-trip, etc.).
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    // Firebase has to round-trip the createUser call before redirect fires.
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
 
-    // 2. Pull the verification link out of the public mailinator inbox in a
-    //    separate browser context so cookies / sessions don't intermix.
-    const { context: mailContext, page: mailPage } =
-      await openMailinatorContext(browser);
-    let verifyLink: string;
-    try {
-      const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
-        subjectIncludes: "verify",
-        timeoutMs: 90_000,
-      });
-      verifyLink = pickFirebaseActionLink(msg, "verifyEmail");
-    } finally {
-      await mailContext.close();
-    }
+    // 2. Generate the same `mode=verifyEmail` link Firebase would have
+    //    emailed and have Playwright navigate it. This still exercises
+    //    Firebase's hosted action handler — we only skip the email
+    //    round-trip (which was unreachable from CI runners on the free
+    //    Mailinator tier).
+    await verifyEmailViaAdmin(page, freshEmail.email);
 
-    // 3. Open the verification link in a fresh page; Firebase shows its own
-    //    "Email verified" interstitial. We don't assert on it (Firebase owns
-    //    the markup) — we assert by signing in afterwards.
-    const verifyPage = await page.context().newPage();
-    await verifyPage.goto(verifyLink, { waitUntil: "domcontentloaded" });
-    // Give Firebase's hosted verification page a moment to call its API.
-    await verifyPage.waitForTimeout(3_000);
-    await verifyPage.close();
-
-    // 4. Sign in with the now-verified account.
+    // 3. Sign in with the now-verified account.
     await gotoSignIn(page);
     await fillSignInForm(page, freshEmail.email, STRONG_PASSWORD);
     await submitSignIn(page);
@@ -64,11 +40,11 @@ test.describe("auth", () => {
     // whether prior runs raced ahead.
     await expect(page).toHaveURL(/\/(onboarding|home|groups)/, { timeout: 20_000 });
 
-    // 5. Sign out.
+    // 4. Sign out.
     await signOut(page);
     await expect(page).toHaveURL(/\/sign-in/);
 
-    // 6. Sign back in to prove the sign-out actually cleared the session
+    // 5. Sign back in to prove the sign-out actually cleared the session
     //    (vs. just routing away from a still-authed page).
     await fillSignInForm(page, freshEmail.email, STRONG_PASSWORD);
     await submitSignIn(page);
@@ -90,11 +66,9 @@ test.describe("auth", () => {
 
   test("unverified account is rejected with verify-email gate", async ({
     page,
-    browser,
     freshEmail,
   }) => {
-    test.slow();
-    // Sign up but DO NOT click the verification link.
+    // Sign up but DO NOT verify the email.
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
@@ -113,18 +87,13 @@ test.describe("auth", () => {
     });
     await expect(page).toHaveURL(/\/sign-in/);
 
-    // Touch the mailinator inbox to confirm the verification email at least
-    // got dispatched (catches a regression where signup silently no-ops).
-    const { context: mailContext, page: mailPage } =
-      await openMailinatorContext(browser);
-    try {
-      const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
-        subjectIncludes: "verify",
-        timeoutMs: 60_000,
-      });
-      expect(msg.links.length).toBeGreaterThan(0);
-    } finally {
-      await mailContext.close();
+    // Confirm via the Admin SDK that signup actually persisted the user
+    // and left them unverified — catches a regression where signup
+    // silently no-ops or auto-verifies.
+    const state = await getUserStateByEmail(freshEmail.email);
+    expect(state.exists).toBe(true);
+    if (state.exists) {
+      expect(state.emailVerified).toBe(false);
     }
   });
 });

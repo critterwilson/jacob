@@ -46,6 +46,7 @@
     "eslint": "^8",
     "eslint-config-next": "^14.2.0",
     "fake-indexeddb": "^6",
+    "firebase-admin": "^12",
     "jsdom": "^25",
     "postcss": "^8",
     "tailwindcss": "^3",
