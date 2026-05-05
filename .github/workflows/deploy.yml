@@ -74,19 +74,32 @@ jobs:
       - name: Push image
         run: docker push "$IMAGE"
 
+      - name: Resolve CORS allowlist
+        id: cors
+        # Staging origins are non-secret (public hosted.app URL + custom
+        # domain + localhost for dev tooling) and are baked in here so the
+        # staging deploy can never silently lose its allowlist again — see
+        # docs/runbooks/backend-deploy.md. Production must come from the
+        # CORS_ALLOWED_ORIGINS GitHub Environment secret; an empty value
+        # makes the backend fail closed (PR #141 / H4).
+        run: |
+          if [[ "${{ needs.setup.outputs.target }}" == "staging" ]]; then
+            echo 'origins=https://jacob-frontend--jacob-staging-494515.us-central1.hosted.app,https://jacob.app,http://localhost:3000' >> "$GITHUB_OUTPUT"
+          else
+            echo 'origins=${{ secrets.CORS_ALLOWED_ORIGINS }}' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to Cloud Run
-        # CORS_ALLOWED_ORIGINS and ENVIRONMENT must be set explicitly per
-        # environment (PR6 / H4) — config.py defaults to empty in non-dev so
-        # a missing var fails closed rather than wildcarding everything.
-        # CORS_ALLOWED_ORIGINS is a GitHub Environment secret; set it to a
-        # comma-separated list of allowed Origins for that environment.
+        # `^@^` switches gcloud's --set-env-vars key delimiter from ',' to
+        # '@' so commas inside the CORS allowlist value are preserved
+        # instead of being parsed as additional env-var keys.
         run: |
           gcloud run deploy jacob-backend \
             --image "us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jacob-images/jacob-backend:${{ github.sha }}" \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "ENVIRONMENT=${{ needs.setup.outputs.target }},CORS_ALLOWED_ORIGINS=${{ secrets.CORS_ALLOWED_ORIGINS }}" \
+            --set-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}"
 
   # ── Functions + Firestore rules: firebase deploy ──────────────────────────
