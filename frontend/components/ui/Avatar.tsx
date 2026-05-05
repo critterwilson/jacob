@@ -25,6 +25,38 @@ function initial(name: string): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
+// Avatar src can come from arbitrary places: Firestore profile fields
+// (Firebase Storage HTTPS), local previews (`URL.createObjectURL`,
+// which is `blob:`), or inline data URIs. We parse with the URL
+// constructor and then allowlist the protocol — anything else
+// (including `javascript:` URIs that could be smuggled in via a
+// profile update) drops to the initials fallback. Closes CodeQL
+// js/xss-through-dom (the constructor + protocol check is the
+// sanitizer pattern CodeQL recognizes as breaking the taint).
+function safePhotoURL(url: string | null | undefined): string | null {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.protocol === "http:" ||
+    parsed.protocol === "https:" ||
+    parsed.protocol === "blob:"
+  ) {
+    return parsed.href;
+  }
+  if (
+    parsed.protocol === "data:" &&
+    parsed.pathname.toLowerCase().startsWith("image/")
+  ) {
+    return parsed.href;
+  }
+  return null;
+}
+
 /**
  * Round avatar. Renders the photo when supplied; otherwise the first
  * letter of the name on an ink-overlay swatch.
@@ -41,6 +73,7 @@ export function Avatar({
   ...rest
 }: AvatarProps) {
   const styles = sizeStyles[size];
+  const safeSrc = safePhotoURL(photoURL);
   return (
     <div
       className={cn(
@@ -50,10 +83,10 @@ export function Avatar({
       )}
       {...rest}
     >
-      {photoURL ? (
+      {safeSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={photoURL}
+          src={safeSrc}
           alt={name}
           className="h-full w-full object-cover"
         />
