@@ -38,6 +38,43 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter jacob-frontend test
 
+  frontend-e2e:
+    name: "Frontend — Playwright E2E"
+    runs-on: ubuntu-latest
+    # Targets the staging Firebase Hosting URL. Runs on every PR (not just
+    # frontend/** changes) because CORS / API regressions land via backend
+    # PRs too — the very class of bug this suite exists to catch. Required
+    # check; failures should not be hidden behind continue-on-error.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: pnpm --filter jacob-frontend exec playwright install --with-deps chromium
+      - name: Run E2E suite against staging
+        env:
+          # Both default to staging in code, but pinned here so a future
+          # secret-rotation doesn't silently flip the target.
+          PLAYWRIGHT_BASE_URL: "https://jacob-frontend--jacob-staging-494515.us-central1.hosted.app"
+          PLAYWRIGHT_API_URL: "https://jacob-backend-7fk543coqq-uc.a.run.app"
+          JACOB_E2E_USER_EMAIL: ${{ secrets.JACOB_E2E_USER_EMAIL }}
+          JACOB_E2E_USER_PASSWORD: ${{ secrets.JACOB_E2E_USER_PASSWORD }}
+        run: pnpm --filter jacob-frontend test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
   backend-lint:
     name: "Backend — ruff, black, mypy"
     runs-on: ubuntu-latest

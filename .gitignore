@@ -376,6 +376,9 @@ infra/terraform.*.tfvars
 
 # JACOB — project-specific
 frontend/out/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
 functions/lib/
 # frontend/lib/ is source code, not a build artifact — unignore it
 !frontend/lib/
