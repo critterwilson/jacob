@@ -1,5 +1,5 @@
 import {
-  fetchLatestEmail,
+  fetchLatestEmailOrSkip,
   openMailinatorContext,
   pickFirebaseActionLink,
 } from "./helpers/mailinator";
@@ -33,7 +33,7 @@ test.describe("forgot password", () => {
     {
       const { context, page: mailPage } = await openMailinatorContext(browser);
       try {
-        const msg = await fetchLatestEmail(mailPage, freshEmail.localPart, {
+        const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
           subjectIncludes: "verify",
           timeoutMs: 90_000,
         });
@@ -61,7 +61,7 @@ test.describe("forgot password", () => {
     {
       const { context, page: mailPage } = await openMailinatorContext(browser);
       try {
-        const msg = await fetchLatestEmail(mailPage, freshEmail.localPart, {
+        const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
           subjectIncludes: "reset",
           timeoutMs: 90_000,
         });

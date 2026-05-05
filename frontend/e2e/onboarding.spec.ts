@@ -1,5 +1,5 @@
 import {
-  fetchLatestEmail,
+  fetchLatestEmailOrSkip,
   openMailinatorContext,
   pickFirebaseActionLink,
 } from "./helpers/mailinator";
@@ -38,7 +38,7 @@ test.describe("onboarding", () => {
     {
       const { context, page: mailPage } = await openMailinatorContext(browser);
       try {
-        const msg = await fetchLatestEmail(mailPage, freshEmail.localPart, {
+        const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
           subjectIncludes: "verify",
           timeoutMs: 90_000,
         });

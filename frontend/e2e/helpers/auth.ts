@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * UI-level auth helpers. They drive the same forms a real user does so the
@@ -102,16 +102,23 @@ export async function signOut(page: Page): Promise<void> {
  *   - registered in the staging Firebase project,
  *   - email-verified,
  *   - onboarded (i.e. has a `users/{uid}` profile doc).
+ *
+ * If the env vars aren't set, we call `test.skip()` rather than throwing
+ * so CI is green-with-skips instead of red. The skipped tests are listed
+ * in the run report; once secrets land, every skip flips to a real run.
  */
 export function sharedAccountCredentials(): { email: string; password: string } {
   const email = process.env.JACOB_E2E_USER_EMAIL;
   const password = process.env.JACOB_E2E_USER_PASSWORD;
   if (!email || !password) {
-    throw new Error(
-      "Missing JACOB_E2E_USER_EMAIL / JACOB_E2E_USER_PASSWORD. The shared " +
-        "verified test account must be configured before running suites that " +
-        "need pre-onboarded auth (home, chat, boards, etc.).",
+    test.skip(
+      true,
+      "Missing JACOB_E2E_USER_EMAIL / JACOB_E2E_USER_PASSWORD — set the " +
+        "shared-account secrets in CI / local env to enable this test.",
     );
+    // Unreachable; test.skip throws internally. Cast to satisfy the
+    // type-checker.
+    return { email: "", password: "" };
   }
   return { email, password };
 }
