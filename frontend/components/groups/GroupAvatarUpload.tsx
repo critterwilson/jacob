@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 
+import { Avatar, Button } from "@/components/ui";
 import { apiPatch } from "@/lib/api";
 import { UploadError, useUploadPhoto } from "@/lib/hooks/useUploadPhoto";
 
@@ -20,7 +21,11 @@ export function GroupAvatarUpload({ gid, currentAvatarUrl }: Props) {
     setError(null);
     setPreview(URL.createObjectURL(file));
     try {
-      const publicUrl = await upload({ file, purpose: "group_avatar", groupId: gid });
+      const publicUrl = await upload({
+        file,
+        purpose: "group_avatar",
+        groupId: gid,
+      });
       await apiPatch(`/api/groups/${gid}`, { avatarUrl: publicUrl });
       setPreview(null);
     } catch (err) {
@@ -39,30 +44,22 @@ export function GroupAvatarUpload({ gid, currentAvatarUrl }: Props) {
     }
   };
 
-  const avatarSrc = preview ?? currentAvatarUrl;
+  const avatarSrc = preview ?? currentAvatarUrl ?? null;
 
   return (
     <div className="flex items-center gap-4">
-      <div className="h-16 w-16 overflow-hidden rounded-full bg-gray-200">
-        {avatarSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarSrc} alt="Group avatar" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl text-gray-400">
-            G
-          </div>
-        )}
-      </div>
+      <Avatar name="Group" photoURL={avatarSrc} size="lg" />
 
-      <div>
-        <button
+      <div className="space-y-1">
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
         >
           {uploading ? "Uploading…" : "Change avatar"}
-        </button>
+        </Button>
         <input
           ref={inputRef}
           type="file"
@@ -75,7 +72,7 @@ export function GroupAvatarUpload({ gid, currentAvatarUrl }: Props) {
           }}
         />
         {error && (
-          <p role="alert" className="mt-1 text-xs text-red-600">
+          <p role="alert" className="text-caption text-terracotta">
             {error}
           </p>
         )}

@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { InviteForm } from "@/components/groups/InviteForm";
 import { InviteList } from "@/components/groups/InviteList";
+import { Heading, Link, Section } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useInvites } from "@/lib/hooks/useInvites";
@@ -30,8 +30,8 @@ export default function GroupInvitesPage({ params }: Props) {
 
   if (authLoading || membershipLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -44,30 +44,37 @@ export default function GroupInvitesPage({ params }: Props) {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Manage invites</h1>
+    <main className="mx-auto max-w-2xl px-4 py-10 space-y-8">
+      <header className="flex items-center justify-between gap-4">
+        <Heading level={1} size="md">
+          Manage invites
+        </Heading>
         <Link
           href={`/groups/${gid}/settings`}
-          className="text-sm text-blue-600 hover:underline"
+          variant="muted"
+          className="text-body-sm"
         >
           ← Back to settings
         </Link>
-      </div>
+      </header>
 
-      <section className="mb-8 rounded border border-gray-200 p-4">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">Create invite</h2>
+      <Section
+        title="Create invite"
+        description="Generate a shareable link with optional expiry and use limits."
+      >
         <InviteForm gid={gid} />
-      </section>
+      </Section>
 
-      <section className="rounded border border-gray-200 p-4">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">Invite history</h2>
+      <Section
+        title="Invite history"
+        description="Active and past invites for this group."
+      >
         {invitesLoading ? (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="text-body-sm text-cream-muted">Loading…</p>
         ) : (
           <InviteList gid={gid} invites={invites} />
         )}
-      </section>
+      </Section>
     </main>
   );
 }

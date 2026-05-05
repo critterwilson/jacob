@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { Banner, Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 
 function apiBase(): string {
@@ -12,6 +14,12 @@ type Props = {
   isArchived: boolean;
   onDone?: () => void;
 };
+
+const reasonTextareaClass =
+  "mt-1 block w-full resize-none rounded border border-line bg-ink-overlay px-3 py-2 " +
+  "font-sans text-body text-cream placeholder:text-cream-dim " +
+  "transition-colors duration-fast " +
+  "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 
 export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
   const { user } = useAuth();
@@ -43,7 +51,9 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
         } | null;
         const code = body?.error?.code;
         if (code === "archive_too_old") {
-          setError("The 60-day unarchive window has expired. Contact an admin to restore.");
+          setError(
+            "The 60-day unarchive window has expired. Contact an admin to restore.",
+          );
         } else {
           setError(body?.error?.message ?? "Something went wrong.");
         }
@@ -61,80 +71,83 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant={isArchived ? "secondary" : "destructive"}
+        size="md"
         onClick={() => setOpen(true)}
-        className={`rounded border px-3 py-1.5 text-sm ${
-          isArchived
-            ? "border-green-300 text-green-700 hover:bg-green-50"
-            : "border-red-300 text-red-700 hover:bg-red-50"
-        }`}
       >
         {isArchived ? "Unarchive group" : "Archive group"}
-      </button>
+      </Button>
 
       {open && (
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="archive-dialog-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
         >
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2 id="archive-dialog-title" className="mb-3 text-lg font-semibold">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-ink-overlay p-6 shadow-pop">
+            <h2
+              id="archive-dialog-title"
+              className="mb-3 font-display text-display-sm text-cream"
+            >
               {isArchived ? "Unarchive group?" : "Archive group?"}
             </h2>
 
             {isArchived ? (
-              <p className="mb-4 text-sm text-gray-600">
-                This will re-enable messaging. Members can post again immediately.
+              <p className="mb-4 text-body-sm text-cream-muted">
+                This will re-enable messaging. Members can post again
+                immediately.
               </p>
             ) : (
               <>
-                <p className="mb-4 text-sm text-gray-600">
-                  Archiving makes the group read-only for everyone. You can unarchive within
-                  60 days. After that, an admin must restore it.
+                <p className="mb-4 text-body-sm text-cream-muted">
+                  Archiving makes the group read-only for everyone. You can
+                  unarchive within 60 days. After that, an admin must restore
+                  it.
                 </p>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-label text-cream">
                   Reason (optional)
                   <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     maxLength={500}
                     rows={2}
-                    className="mt-1 block w-full resize-none rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={reasonTextareaClass}
                   />
                 </label>
               </>
             )}
 
             {error && (
-              <p role="alert" className="mb-3 text-sm text-red-600">
-                {error}
-              </p>
+              <div className="mt-4">
+                <Banner tone="error">{error}</Banner>
+              </div>
             )}
 
-            <div className="flex justify-end gap-3">
-              <button
+            <div className="mt-5 flex justify-end gap-3">
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   setOpen(false);
                   setError(null);
                 }}
-                className="rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant={isArchived ? "primary" : "destructive"}
+                size="md"
                 onClick={() => void handleConfirm()}
+                loading={loading}
                 disabled={loading}
-                className={`rounded px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
-                  isArchived ? "bg-green-600" : "bg-red-600"
-                }`}
               >
                 {loading ? "…" : isArchived ? "Unarchive" : "Archive"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
