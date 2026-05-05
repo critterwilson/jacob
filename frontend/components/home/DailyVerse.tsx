@@ -1,5 +1,6 @@
 "use client";
 
+import { Card, Eyebrow, Scripture, Skeleton } from "@/components/ui";
 import { useDailyVerse } from "@/lib/hooks/useDailyVerse";
 
 export function DailyVerse() {
@@ -7,19 +8,21 @@ export function DailyVerse() {
 
   if (loading) {
     return (
-      <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-4 animate-pulse">
-        <div className="mb-2 h-4 w-1/3 rounded bg-gray-200" />
-        <div className="h-3 w-full rounded bg-gray-200" />
-        <div className="mt-1 h-3 w-4/5 rounded bg-gray-200" />
-      </div>
+      <Card surface="raised" className="space-y-3">
+        <Skeleton className="h-3 w-1/3" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-4/5" />
+      </Card>
     );
   }
 
   if (!verse) {
     return (
-      <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-500 italic">
-        A new verse will appear shortly.
-      </div>
+      <Card surface="raised">
+        <p className="text-body-sm italic text-cream-dim">
+          A new verse will appear shortly.
+        </p>
+      </Card>
     );
   }
 
@@ -27,19 +30,15 @@ export function DailyVerse() {
   const bibleUrl = `https://www.biblegateway.com/passage/?search=${searchRef}&version=${verse.translation}`;
 
   return (
-    <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-4">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-blue-600">
-        Verse of the day
-      </p>
-      <p className="text-sm italic text-gray-800">&ldquo;{verse.text}&rdquo;</p>
-      <a
+    <Card surface="raised" className="space-y-3">
+      <Eyebrow>Verse of the day</Eyebrow>
+      <Scripture
+        reference={verse.reference}
+        translation={verse.translation}
         href={bibleUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-2 inline-block text-xs text-blue-600 hover:underline"
       >
-        {verse.reference} ({verse.translation})
-      </a>
-    </div>
+        {verse.text}
+      </Scripture>
+    </Card>
   );
 }
