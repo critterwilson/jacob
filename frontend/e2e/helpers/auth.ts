@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /**
  * UI-level auth helpers. They drive the same forms a real user does so the
@@ -12,14 +12,35 @@ import { expect, type Page } from "@playwright/test";
 
 export const STRONG_PASSWORD = "JacobE2e!Test#2024";
 
+/**
+ * Next.js App Router renders the form server-side first, then the client
+ * component hydrates. Until hydration completes, the submit button has no
+ * React onClick / form has no onSubmit handler attached, and clicking it
+ * causes the browser's default GET (which leaks the password into the URL —
+ * exactly what we observed in the first run). Waiting on the `load` event +
+ * `networkidle` is the standard Playwright workaround.
+ */
+async function waitForHydration(page: Page, formName: RegExp): Promise<Locator> {
+  await page.waitForLoadState("load");
+  await page.waitForLoadState("networkidle").catch(() => undefined);
+  const form = page.getByRole("form", { name: formName });
+  await expect(form).toBeVisible();
+  return form;
+}
+
 export async function gotoSignIn(page: Page): Promise<void> {
   await page.goto("/sign-in", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("form", { name: /sign in/i })).toBeVisible();
+  await waitForHydration(page, /sign in/i);
 }
 
 export async function gotoSignUp(page: Page): Promise<void> {
   await page.goto("/sign-up", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("form", { name: /create account/i })).toBeVisible();
+  await waitForHydration(page, /create account/i);
+}
+
+export async function gotoForgotPassword(page: Page): Promise<void> {
+  await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
+  await waitForHydration(page, /forgot password/i);
 }
 
 export async function fillSignInForm(

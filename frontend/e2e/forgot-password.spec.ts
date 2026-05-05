@@ -6,6 +6,7 @@ import {
 import {
   STRONG_PASSWORD,
   fillSignInForm,
+  gotoForgotPassword,
   gotoSignIn,
   gotoSignUp,
   submitSignIn,
@@ -47,7 +48,7 @@ test.describe("forgot password", () => {
     }
 
     // Step 1 — request a password reset.
-    await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
+    await gotoForgotPassword(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByRole("button", { name: /send reset link/i }).click();
     await expect(page.getByText(/check your inbox/i)).toBeVisible({

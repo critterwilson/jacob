@@ -53,7 +53,11 @@ test.describe("onboarding", () => {
     }
 
     // Reload onboarding so the auth-context picks up the verified status.
+    // Wait for hydration explicitly — App Router pages render server-side
+    // first and we cannot click Submit before the React handler attaches.
     await page.goto("/onboarding", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await page.waitForLoadState("networkidle").catch(() => undefined);
     await expect(
       page.getByRole("form", { name: /complete your profile/i }),
     ).toBeVisible({ timeout: 15_000 });
