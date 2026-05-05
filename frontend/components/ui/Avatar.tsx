@@ -27,14 +27,34 @@ function initial(name: string): string {
 
 // Avatar src can come from arbitrary places: Firestore profile fields
 // (Firebase Storage HTTPS), local previews (`URL.createObjectURL`,
-// which is `blob:`), or inline data URIs. Anything else — including
-// `javascript:` URIs that could be smuggled in via a profile update —
-// is dropped to the initials fallback. Closes CodeQL js/xss-through-dom.
-const SAFE_PHOTO_SCHEME = /^(?:https?:|blob:|data:image\/)/i;
-
+// which is `blob:`), or inline data URIs. We parse with the URL
+// constructor and then allowlist the protocol — anything else
+// (including `javascript:` URIs that could be smuggled in via a
+// profile update) drops to the initials fallback. Closes CodeQL
+// js/xss-through-dom (the constructor + protocol check is the
+// sanitizer pattern CodeQL recognizes as breaking the taint).
 function safePhotoURL(url: string | null | undefined): string | null {
   if (!url) return null;
-  return SAFE_PHOTO_SCHEME.test(url) ? url : null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.protocol === "http:" ||
+    parsed.protocol === "https:" ||
+    parsed.protocol === "blob:"
+  ) {
+    return parsed.href;
+  }
+  if (
+    parsed.protocol === "data:" &&
+    parsed.pathname.toLowerCase().startsWith("image/")
+  ) {
+    return parsed.href;
+  }
+  return null;
 }
 
 /**
