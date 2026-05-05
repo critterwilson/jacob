@@ -1,12 +1,22 @@
 import { SignUpForm } from "@/components/auth/SignUpForm";
+import { Eyebrow, Heading } from "@/components/ui";
 
 export const metadata = { title: "Create account — JACOB" };
 
 export default function SignUpPage() {
   return (
-    <>
-      <h1 className="mb-6 text-2xl font-semibold">Create your account</h1>
+    <div className="space-y-6">
+      <header className="space-y-2">
+        <Eyebrow>New to JACOB</Eyebrow>
+        <Heading level={2} size="sm">
+          Create your account
+        </Heading>
+        <p className="text-body-sm text-cream-muted">
+          Stay close to your group. Read scripture, talk together, grow in
+          community.
+        </p>
+      </header>
       <SignUpForm />
-    </>
+    </div>
   );
 }

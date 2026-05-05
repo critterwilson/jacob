@@ -14,7 +14,10 @@ type PhotoUploadProps = {
   onUploadError: (msg: string) => void;
 };
 
-export function PhotoUpload({ onUploadComplete, onUploadError }: PhotoUploadProps) {
+export function PhotoUpload({
+  onUploadComplete,
+  onUploadError,
+}: PhotoUploadProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { upload, uploading, progress } = useUploadPhoto();
@@ -26,7 +29,9 @@ export function PhotoUpload({ onUploadComplete, onUploadError }: PhotoUploadProp
       onUploadComplete(publicUrl);
     } catch (err) {
       const message =
-        err instanceof UploadError ? err.message : "Upload failed. Please try again.";
+        err instanceof UploadError
+          ? err.message
+          : "Upload failed. Please try again.";
       onUploadError(message);
     } finally {
       if (inputRef.current) inputRef.current.value = "";
@@ -43,9 +48,15 @@ export function PhotoUpload({ onUploadComplete, onUploadError }: PhotoUploadProp
           : null;
 
   return (
-    <div className="space-y-2">
+    <div className="flex items-center gap-4">
       <div
-        className="flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-gray-300 bg-gray-50"
+        className={
+          "flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden " +
+          "rounded-full border-2 border-dashed border-line bg-ink-overlay " +
+          "text-cream-dim transition-colors duration-fast " +
+          "hover:border-gold-soft hover:text-gold-soft " +
+          "focus:outline-none focus-visible:shadow-glow-gold"
+        }
         onClick={() => inputRef.current?.click()}
         role="button"
         aria-label="Upload profile photo"
@@ -54,10 +65,22 @@ export function PhotoUpload({ onUploadComplete, onUploadError }: PhotoUploadProp
       >
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="Profile preview" className="h-full w-full object-cover" />
+          <img
+            src={previewUrl}
+            alt="Profile preview"
+            className="h-full w-full object-cover"
+          />
         ) : (
-          <span className="text-xs text-gray-400">Add photo</span>
+          <span className="text-caption">Add photo</span>
         )}
+      </div>
+      <div className="space-y-1">
+        {uploading && statusLabel && (
+          <p className="text-body-sm text-cream-muted">{statusLabel}</p>
+        )}
+        <p className="text-caption text-cream-dim">
+          Photos are scanned for safety before they appear.
+        </p>
       </div>
       <input
         ref={inputRef}
@@ -70,12 +93,6 @@ export function PhotoUpload({ onUploadComplete, onUploadError }: PhotoUploadProp
         }}
         data-testid="photo-input"
       />
-      {uploading && statusLabel && (
-        <p className="text-xs text-gray-500">{statusLabel}</p>
-      )}
-      <p className="text-xs text-gray-400">
-        Photos are scanned for safety before they appear.
-      </p>
     </div>
   );
 }

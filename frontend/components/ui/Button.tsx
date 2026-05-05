@@ -74,13 +74,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...rest}
       >
-        {loading ? (
-          <span aria-hidden="true" className="opacity-80">
-            …
-          </span>
-        ) : (
-          children
-        )}
+        {children}
       </button>
     );
   },

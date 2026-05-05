@@ -2,11 +2,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { sendPasswordResetEmail } from "firebase/auth";
-import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { humanizeAuthError } from "@/components/auth/error-messages";
+import { Banner, Button, Input, Link } from "@/components/ui";
 import {
   type ForgotPasswordValues,
   forgotPasswordSchema,
@@ -41,10 +41,12 @@ export function ForgotPasswordForm() {
 
   if (submitted) {
     return (
-      <div className="space-y-2">
-        <p>If that email is registered, a password-reset link is on its way.</p>
-        <Link href="/sign-in" className="text-blue-600 underline">
-          Back to sign in
+      <div className="space-y-4">
+        <Banner tone="success" title="Check your inbox">
+          If that email is registered, a password-reset link is on its way.
+        </Banner>
+        <Link href="/sign-in" variant="muted" className="block">
+          ← Back to sign in
         </Link>
       </div>
     );
@@ -53,44 +55,32 @@ export function ForgotPasswordForm() {
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="space-y-4"
+      className="space-y-5"
       noValidate
       aria-label="Forgot password"
     >
-      <div>
-        <label className="block text-sm font-medium" htmlFor="email">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          {...register("email")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-        />
-        {errors.email && (
-          <p role="alert" className="mt-1 text-sm text-red-600">
-            {errors.email.message}
-          </p>
-        )}
-      </div>
+      <Input
+        label="Email"
+        type="email"
+        autoComplete="email"
+        {...register("email")}
+        error={errors.email?.message}
+      />
 
-      {submitError && (
-        <p role="alert" className="text-sm text-red-600">
-          {submitError}
-        </p>
-      )}
+      {submitError && <Banner tone="error">{submitError}</Banner>}
 
-      <button
+      <Button
         type="submit"
-        disabled={submitting}
-        className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+        variant="primary"
+        size="lg"
+        fullWidth
+        loading={submitting}
       >
         {submitting ? "Sending…" : "Send reset link"}
-      </button>
+      </Button>
 
-      <Link href="/sign-in" className="block text-center text-sm text-blue-600 underline">
-        Back to sign in
+      <Link href="/sign-in" variant="muted" className="block text-center">
+        ← Back to sign in
       </Link>
     </form>
   );
