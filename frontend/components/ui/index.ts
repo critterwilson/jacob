@@ -14,6 +14,7 @@ export { Field } from "./Field";
 export { Heading, type HeadingLevel, type HeadingSize } from "./Heading";
 export { Input } from "./Input";
 export { Link, type LinkVariant } from "./Link";
+export { Scripture } from "./Scripture";
 export { Select } from "./Select";
 export { Skeleton } from "./Skeleton";
 export { Textarea } from "./Textarea";
