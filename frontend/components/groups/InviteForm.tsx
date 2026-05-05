@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { Banner, Button, Select } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 
 const createInviteSchema = z.object({
@@ -77,64 +78,48 @@ export function InviteForm({ gid }: Props) {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-wrap items-end gap-3">
-        <div>
-          <label htmlFor="invite-expiry" className="mb-1 block text-xs font-medium text-gray-700">
-            Expires
-          </label>
-          <select
-            id="invite-expiry"
-            {...register("expiry")}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="never">Never</option>
-            <option value="24h">24 hours</option>
-            <option value="7d">7 days</option>
-            <option value="30d">30 days</option>
-          </select>
-        </div>
-        <div>
-          <label
-            htmlFor="invite-max-uses"
-            className="mb-1 block text-xs font-medium text-gray-700"
-          >
-            Max uses
-          </label>
-          <select
-            id="invite-max-uses"
-            {...register("maxUses")}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="unlimited">Unlimited</option>
-            <option value="1">1 use</option>
-            <option value="10">10 uses</option>
-            <option value="25">25 uses</option>
-          </select>
-        </div>
-        <button
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-wrap items-end gap-3"
+      >
+        <Select label="Expires" {...register("expiry")} className="min-w-[8rem]">
+          <option value="never">Never</option>
+          <option value="24h">24 hours</option>
+          <option value="7d">7 days</option>
+          <option value="30d">30 days</option>
+        </Select>
+        <Select label="Max uses" {...register("maxUses")} className="min-w-[8rem]">
+          <option value="unlimited">Unlimited</option>
+          <option value="1">1 use</option>
+          <option value="10">10 uses</option>
+          <option value="25">25 uses</option>
+        </Select>
+        <Button
           type="submit"
+          variant="primary"
+          size="md"
+          loading={isSubmitting}
           disabled={isSubmitting}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {isSubmitting ? "Generating…" : "Generate invite"}
-        </button>
+        </Button>
       </form>
 
-      {serverError && (
-        <p role="alert" className="text-sm text-red-600">
-          {serverError}
-        </p>
-      )}
+      {serverError && <Banner tone="error">{serverError}</Banner>}
 
       {created && (
-        <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 p-3">
-          <span className="flex-1 truncate font-mono text-sm">{created.url}</span>
-          <button
+        <div className="flex items-center gap-3 rounded-lg border border-line bg-ink-raised p-3">
+          <span className="flex-1 truncate font-mono text-body-sm text-cream">
+            {created.url}
+          </span>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
             onClick={() => void copy()}
-            className="shrink-0 rounded bg-green-600 px-3 py-1 text-xs text-white"
           >
             {copied ? "Copied!" : "Copy"}
-          </button>
+          </Button>
         </div>
       )}
     </div>

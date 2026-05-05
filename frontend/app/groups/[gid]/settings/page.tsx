@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { GroupArchiveDialog } from "@/components/groups/GroupArchiveDialog";
 import { GroupAvatarUpload } from "@/components/groups/GroupAvatarUpload";
 import { GroupSettingsForm } from "@/components/groups/GroupSettingsForm";
+import { Heading, Link, Section } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
@@ -31,8 +31,8 @@ export default function GroupSettingsPage({ params }: Props) {
 
   if (authLoading || groupLoading || membershipLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -41,10 +41,10 @@ export default function GroupSettingsPage({ params }: Props) {
 
   if (!group) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <p className="text-gray-500">Group not found.</p>
-        <Link href="/groups" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
-          Back to groups
+      <main className="mx-auto max-w-2xl px-4 py-10 space-y-4">
+        <p className="text-body-sm text-cream-muted">Group not found.</p>
+        <Link href="/groups" variant="muted" className="text-body-sm">
+          ← Back to groups
         </Link>
       </main>
     );
@@ -56,41 +56,39 @@ export default function GroupSettingsPage({ params }: Props) {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Group settings</h1>
-        <Link href={`/groups/${gid}`} className="text-sm text-blue-600 hover:underline">
+    <main className="mx-auto max-w-2xl px-4 py-10 space-y-8">
+      <header className="flex items-center justify-between gap-4">
+        <Heading level={1} size="md">
+          Group settings
+        </Heading>
+        <Link
+          href={`/groups/${gid}`}
+          variant="muted"
+          className="text-body-sm"
+        >
           ← Back to group
         </Link>
-      </div>
+      </header>
 
-      <section className="mb-8 rounded border border-gray-200 p-4">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">Avatar</h2>
+      <Section title="Avatar" description="The image members see beside the group name.">
         <GroupAvatarUpload gid={gid} currentAvatarUrl={group.avatarUrl} />
-      </section>
+      </Section>
 
-      <section className="mb-8 rounded border border-gray-200 p-4">
-        <h2 className="mb-4 text-sm font-semibold text-gray-700">Metadata</h2>
+      <Section title="Metadata" description="Name, description, and visibility for the group.">
         <GroupSettingsForm gid={gid} group={group} />
-      </section>
+      </Section>
 
-      <section className="rounded border border-red-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-red-700">Danger zone</h2>
-        {group.archivedAt ? (
-          <p className="mb-3 text-sm text-gray-600">
-            This group is archived. You can unarchive it to resume messaging.
-          </p>
-        ) : (
-          <p className="mb-3 text-sm text-gray-600">
-            Archiving makes this group read-only for everyone. Members can still view old
-            messages. You can unarchive within 60 days.
-          </p>
-        )}
-        <GroupArchiveDialog
-          gid={gid}
-          isArchived={Boolean(group.archivedAt)}
-        />
-      </section>
+      <Section
+        tone="danger"
+        title="Danger zone"
+        description={
+          group.archivedAt
+            ? "This group is archived. You can unarchive it to resume messaging."
+            : "Archiving makes this group read-only for everyone. Members can still view old messages. You can unarchive within 60 days."
+        }
+      >
+        <GroupArchiveDialog gid={gid} isArchived={Boolean(group.archivedAt)} />
+      </Section>
     </main>
   );
 }

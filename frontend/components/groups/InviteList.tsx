@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Banner } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import type { Invite } from "@/lib/hooks/useInvites";
 
@@ -15,7 +16,8 @@ function parseIso(value: string | null): number | null {
 
 function getStatus(invite: Invite): Status {
   if (invite.revokedAt) return "revoked";
-  if (invite.maxUses !== null && invite.useCount >= invite.maxUses) return "used_up";
+  if (invite.maxUses !== null && invite.useCount >= invite.maxUses)
+    return "used_up";
   const expiresMs = parseIso(invite.expiresAt);
   if (expiresMs !== null && expiresMs < Date.now()) return "expired";
   return "active";
@@ -59,10 +61,10 @@ const STATUS_LABELS: Record<Status, string> = {
 };
 
 const STATUS_CLASSES: Record<Status, string> = {
-  active: "bg-green-100 text-green-700",
-  expired: "bg-yellow-100 text-yellow-700",
-  revoked: "bg-gray-100 text-gray-500",
-  used_up: "bg-gray-100 text-gray-500",
+  active: "bg-sage/20 text-sage",
+  expired: "bg-parchment-amber/20 text-parchment-amber",
+  revoked: "bg-ink text-cream-dim",
+  used_up: "bg-ink text-cream-dim",
 };
 
 type Props = { gid: string; invites: Invite[] };
@@ -94,25 +96,21 @@ export function InviteList({ gid, invites }: Props) {
   };
 
   if (invites.length === 0) {
-    return <p className="text-sm text-gray-500">No invites yet.</p>;
+    return <p className="text-body-sm text-cream-muted">No invites yet.</p>;
   }
 
   return (
-    <div className="space-y-2">
-      {error && (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      )}
+    <div className="space-y-3">
+      {error && <Banner tone="error">{error}</Banner>}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-body-sm">
           <thead>
-            <tr className="border-b text-left text-xs text-gray-500">
-              <th className="py-2 pr-4">Code</th>
-              <th className="py-2 pr-4">Expires</th>
-              <th className="py-2 pr-4">Uses left</th>
-              <th className="py-2 pr-4">Last used</th>
-              <th className="py-2 pr-4">Status</th>
+            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-dim">
+              <th className="py-2 pr-4 font-normal">Code</th>
+              <th className="py-2 pr-4 font-normal">Expires</th>
+              <th className="py-2 pr-4 font-normal">Uses left</th>
+              <th className="py-2 pr-4 font-normal">Last used</th>
+              <th className="py-2 pr-4 font-normal">Status</th>
               <th className="py-2" />
             </tr>
           </thead>
@@ -120,14 +118,23 @@ export function InviteList({ gid, invites }: Props) {
             {invites.map((inv) => {
               const status = getStatus(inv);
               return (
-                <tr key={inv.inviteId} className="border-b last:border-0">
-                  <td className="py-2 pr-4 font-mono">{inv.code}</td>
-                  <td className="py-2 pr-4 text-gray-600">{formatExpiry(inv)}</td>
-                  <td className="py-2 pr-4">{formatUsesRemaining(inv)}</td>
-                  <td className="py-2 pr-4 text-gray-600">{formatRelative(inv.lastUsedAt)}</td>
+                <tr
+                  key={inv.inviteId}
+                  className="border-b border-line last:border-0"
+                >
+                  <td className="py-2 pr-4 font-mono text-cream">{inv.code}</td>
+                  <td className="py-2 pr-4 text-cream-muted">
+                    {formatExpiry(inv)}
+                  </td>
+                  <td className="py-2 pr-4 text-cream">
+                    {formatUsesRemaining(inv)}
+                  </td>
+                  <td className="py-2 pr-4 text-cream-muted">
+                    {formatRelative(inv.lastUsedAt)}
+                  </td>
                   <td className="py-2 pr-4">
                     <span
-                      className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}
+                      className={`inline-block rounded px-2 py-0.5 text-caption font-medium ${STATUS_CLASSES[status]}`}
                     >
                       {STATUS_LABELS[status]}
                     </span>
@@ -137,7 +144,7 @@ export function InviteList({ gid, invites }: Props) {
                       <button
                         onClick={() => void revoke(inv.inviteId)}
                         disabled={revoking === inv.inviteId}
-                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                        className="rounded-sm text-caption text-terracotta transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
                       >
                         {revoking === inv.inviteId ? "Revoking…" : "Revoke"}
                       </button>
