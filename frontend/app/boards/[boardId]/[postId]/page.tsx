@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { NewReplyForm } from "@/components/boards/NewReplyForm";
 import { PostCard } from "@/components/boards/PostCard";
 import { ReplyList } from "@/components/boards/ReplyList";
+import { Heading, Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBoardPost } from "@/lib/hooks/useBoardPost";
 import { useBoards } from "@/lib/hooks/useBoards";
@@ -27,8 +27,8 @@ export default function BoardPostPage() {
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -37,34 +37,37 @@ export default function BoardPostPage() {
   const board = boards.find((b) => b.boardId === boardId);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main className="mx-auto max-w-2xl px-4 py-10 space-y-6">
       <Link
         href={`/boards/${boardId}`}
-        className="text-xs text-blue-600 hover:underline"
+        variant="muted"
+        className="text-caption"
       >
         ← {board?.name ?? "Board"}
       </Link>
 
-      <div className="mt-4">
+      <div>
         {loading ? (
-          <p className="text-sm text-gray-500">Loading post…</p>
+          <p className="text-body-sm text-cream-muted">Loading post…</p>
         ) : !post ? (
-          <p className="text-sm text-gray-500">Post not found.</p>
+          <p className="text-body-sm text-cream-muted">Post not found.</p>
         ) : (
           <PostCard boardId={boardId} post={post} />
         )}
       </div>
 
-      <h2 className="mt-6 mb-3 text-sm font-semibold text-gray-700">Replies</h2>
-      <ReplyList replies={replies} />
-
-      <div className="mt-6">
-        <NewReplyForm
-          boardId={boardId}
-          postId={postId}
-          archived={board?.archivedAt != null}
-        />
+      <div className="space-y-3">
+        <Heading level={2} size="sm">
+          Replies
+        </Heading>
+        <ReplyList replies={replies} />
       </div>
+
+      <NewReplyForm
+        boardId={boardId}
+        postId={postId}
+        archived={board?.archivedAt != null}
+      />
     </main>
   );
 }

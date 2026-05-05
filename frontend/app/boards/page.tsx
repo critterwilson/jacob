@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { BoardCard } from "@/components/boards/BoardCard";
+import { Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBoards } from "@/lib/hooks/useBoards";
 
@@ -20,8 +21,8 @@ export default function BoardsPage() {
 
   if (authLoading || loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -29,14 +30,19 @@ export default function BoardsPage() {
   if (!user) return null;
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <h1 className="mb-2 text-2xl font-semibold">Boards</h1>
-      <p className="mb-6 text-sm text-gray-500">
-        Cross-group conversations. Anyone signed in can read and post.
-      </p>
+    <main className="mx-auto max-w-2xl px-4 py-10 space-y-6">
+      <header className="space-y-2">
+        <Eyebrow>Cross-group</Eyebrow>
+        <Heading level={1} size="md">
+          Boards
+        </Heading>
+        <p className="text-body-sm text-cream-muted">
+          Cross-group conversations. Anyone signed in can read and post.
+        </p>
+      </header>
 
       {boards.length === 0 ? (
-        <p className="rounded border border-dashed border-gray-300 p-8 text-center text-gray-500">
+        <p className="rounded-lg border border-dashed border-line bg-ink-raised p-8 text-center text-body-sm text-cream-muted">
           No boards yet.
         </p>
       ) : (
