@@ -12,7 +12,9 @@ export default defineConfig({
     // M9 emulator tests live alongside the rest of the test tree but
     // require a running emulator and are run via a separate config
     // (`vitest.integration.config.ts`) inside `firebase emulators:exec`.
-    exclude: ["**/node_modules/**", "**/integration/**"],
+    // Playwright E2E specs in `e2e/` use `@playwright/test`, not vitest —
+    // they must be excluded so vitest doesn't trip on `test.describe`.
+    exclude: ["**/node_modules/**", "**/integration/**", "**/e2e/**"],
   },
   resolve: {
     alias: {
