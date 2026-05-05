@@ -17,7 +17,9 @@ function formatTime(reply: BoardReply): string {
 export function ReplyList({ replies }: Props) {
   if (replies.length === 0) {
     return (
-      <p className="py-4 text-sm text-gray-500">No replies yet. Be the first.</p>
+      <p className="py-4 text-body-sm text-cream-muted">
+        No replies yet. Be the first.
+      </p>
     );
   }
 
@@ -30,15 +32,15 @@ export function ReplyList({ replies }: Props) {
           return (
             <li
               key={reply.replyId}
-              className="rounded border border-gray-200 bg-gray-50 p-3"
+              className="rounded-lg border border-line bg-ink-raised p-3"
             >
-              <p className="text-xs text-gray-500">{formatTime(reply)}</p>
+              <p className="text-caption text-cream-dim">{formatTime(reply)}</p>
               {hidden ? (
-                <p className="mt-1 italic text-gray-500">
+                <p className="mt-1 italic text-body-sm text-cream-dim">
                   This reply was hidden by automated moderation.
                 </p>
               ) : (
-                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">
+                <p className="mt-1 whitespace-pre-wrap text-body text-cream">
                   {reply.body}
                 </p>
               )}

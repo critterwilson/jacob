@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { NewPostForm } from "@/components/boards/NewPostForm";
 import { PostCard } from "@/components/boards/PostCard";
+import { Heading, Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBoardPosts } from "@/lib/hooks/useBoardPosts";
 import { useBoards } from "@/lib/hooks/useBoards";
@@ -26,8 +26,8 @@ export default function BoardPage() {
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -36,26 +36,26 @@ export default function BoardPage() {
   const board = boards.find((b) => b.boardId === boardId);
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link
-        href="/boards"
-        className="text-xs text-blue-600 hover:underline"
-      >
+    <main className="mx-auto max-w-2xl px-4 py-10 space-y-6">
+      <Link href="/boards" variant="muted" className="text-caption">
         ← All boards
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold">{board?.name ?? "Board"}</h1>
-      {board?.description && (
-        <p className="mb-4 text-sm text-gray-500">{board.description}</p>
-      )}
 
-      <div className="mb-6">
-        <NewPostForm boardId={boardId} archived={board?.archivedAt != null} />
-      </div>
+      <header className="space-y-2">
+        <Heading level={1} size="md">
+          {board?.name ?? "Board"}
+        </Heading>
+        {board?.description && (
+          <p className="text-body-sm text-cream-muted">{board.description}</p>
+        )}
+      </header>
+
+      <NewPostForm boardId={boardId} archived={board?.archivedAt != null} />
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading posts…</p>
+        <p className="text-body-sm text-cream-muted">Loading posts…</p>
       ) : posts.length === 0 ? (
-        <p className="rounded border border-dashed border-gray-300 p-8 text-center text-gray-500">
+        <p className="rounded-lg border border-dashed border-line bg-ink-raised p-8 text-center text-body-sm text-cream-muted">
           No posts yet. Start the conversation.
         </p>
       ) : (
