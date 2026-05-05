@@ -8,6 +8,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { PhotoUpload } from "@/components/onboarding/PhotoUpload";
+import {
+  Banner,
+  Button,
+  Input,
+  Link,
+  Textarea,
+} from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { auth } from "@/lib/firebase";
 import { setHasProfileCookie, type UserProfile } from "@/lib/hooks/useUser";
@@ -87,7 +94,9 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         isMinor: values.ageGroup === "13-17",
         ...(values.phone ? { phone: values.phone } : {}),
         ...(values.location ? { location: values.location } : {}),
-        ...(values.faithBackground ? { faithBackground: values.faithBackground } : {}),
+        ...(values.faithBackground
+          ? { faithBackground: values.faithBackground }
+          : {}),
       };
       await apiPost<UserProfile, CreateProfileRequest>("/api/users/me", body);
       // Mirror the cookie on this origin so the Next.js middleware lets the
@@ -121,21 +130,18 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
 
   if (under13Blocked || ageGroup === "under-13") {
     return (
-      <div className="rounded border border-red-200 bg-red-50 p-6 text-center" role="alert">
-        <p className="font-medium text-red-800">
-          JACOB requires you to be at least 13.
-        </p>
-        <p className="mt-2 text-sm text-red-600">
-          Your account has been removed. No data has been saved.
-        </p>
-        <button
-          type="button"
-          onClick={handleUnder13Deletion}
-          className="mt-4 rounded bg-red-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Continue
-        </button>
-      </div>
+      <Banner tone="error" title="JACOB requires you to be at least 13.">
+        <p>Your account has been removed. No data has been saved.</p>
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleUnder13Deletion}
+          >
+            Continue
+          </Button>
+        </div>
+      </Banner>
     );
   }
 
@@ -146,8 +152,8 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       noValidate
       aria-label="Complete your profile"
     >
-      <div>
-        <label className="mb-2 block text-sm font-medium">Profile photo</label>
+      <div className="space-y-2">
+        <span className="font-sans text-label text-cream">Profile photo</span>
         <PhotoUpload
           uid={uid}
           onUploadComplete={(url) => {
@@ -157,126 +163,118 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
           onUploadError={setPhotoError}
         />
         {photoError && (
-          <p role="alert" className="mt-1 text-sm text-red-600">
+          <p role="alert" className="text-body-sm text-terracotta">
             {photoError}
           </p>
         )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium" htmlFor="displayName">
-          Display name <span aria-hidden>*</span>
-        </label>
-        <input
-          id="displayName"
-          type="text"
-          autoComplete="name"
-          {...register("displayName")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-        />
-        {errors.displayName && (
-          <p role="alert" className="mt-1 text-sm text-red-600">
-            {errors.displayName.message}
-          </p>
-        )}
-      </div>
+      <Input
+        label="Display name"
+        type="text"
+        autoComplete="name"
+        required
+        {...register("displayName")}
+        error={errors.displayName?.message}
+      />
 
-      <fieldset>
-        <legend className="text-sm font-medium">
-          Age group <span aria-hidden>*</span>
+      <fieldset className="space-y-2">
+        <legend className="font-sans text-label text-cream">
+          Age group
+          <span aria-hidden="true" className="ml-1 text-terracotta">
+            *
+          </span>
         </legend>
-        <div className="mt-2 space-y-2">
+        <div className="space-y-2">
           {(["18+", "13-17", "under-13"] as const).map((val) => (
-            <label key={val} className="flex items-center gap-2 text-sm">
+            <label
+              key={val}
+              className="flex cursor-pointer items-center gap-2 text-body text-cream"
+            >
               <input
                 type="radio"
                 value={val}
+                className="h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
                 {...register("ageGroup", {
-                  onChange: (e) => handleAgeGroupChange(e.target.value as AgeGroup),
+                  onChange: (e) =>
+                    handleAgeGroupChange(e.target.value as AgeGroup),
                 })}
               />
-              {val === "18+" ? "18 or older" : val === "13-17" ? "13–17" : "Under 13"}
+              {val === "18+"
+                ? "18 or older"
+                : val === "13-17"
+                  ? "13–17"
+                  : "Under 13"}
             </label>
           ))}
         </div>
         {errors.ageGroup && (
-          <p role="alert" className="mt-1 text-sm text-red-600">
+          <p role="alert" className="text-body-sm text-terracotta">
             {errors.ageGroup.message}
           </p>
         )}
       </fieldset>
 
-      <div>
-        <label className="block text-sm font-medium" htmlFor="phone">
-          Phone (optional)
+      <Input
+        label="Phone (optional)"
+        type="tel"
+        autoComplete="tel"
+        {...register("phone")}
+      />
+
+      <Input
+        label="City (optional)"
+        type="text"
+        {...register("location")}
+      />
+
+      <Textarea
+        label="Faith background (optional)"
+        rows={3}
+        {...register("faithBackground")}
+      />
+
+      <div className="space-y-2">
+        <label className="flex cursor-pointer items-start gap-2 text-body-sm text-cream">
+          <input
+            id="communityGuidelines"
+            type="checkbox"
+            className="mt-1 h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
+            {...register("communityGuidelines")}
+          />
+          <span>
+            I agree to the{" "}
+            <Link
+              href="/about"
+              variant="accent"
+              target="_blank"
+              rel="noreferrer"
+            >
+              community guidelines
+            </Link>
+            <span aria-hidden="true" className="ml-1 text-terracotta">
+              *
+            </span>
+          </span>
         </label>
-        <input
-          id="phone"
-          type="tel"
-          autoComplete="tel"
-          {...register("phone")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-        />
+        {errors.communityGuidelines && (
+          <p role="alert" className="text-body-sm text-terracotta">
+            {errors.communityGuidelines.message}
+          </p>
+        )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium" htmlFor="location">
-          City (optional)
-        </label>
-        <input
-          id="location"
-          type="text"
-          {...register("location")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-        />
-      </div>
+      {submitError && <Banner tone="error">{submitError}</Banner>}
 
-      <div>
-        <label className="block text-sm font-medium" htmlFor="faithBackground">
-          Faith background (optional)
-        </label>
-        <textarea
-          id="faithBackground"
-          rows={3}
-          {...register("faithBackground")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
-        />
-      </div>
-
-      <div className="flex items-start gap-2">
-        <input
-          id="communityGuidelines"
-          type="checkbox"
-          {...register("communityGuidelines")}
-          className="mt-0.5"
-        />
-        <label htmlFor="communityGuidelines" className="text-sm">
-          I agree to the{" "}
-          <a href="/about" className="text-blue-600 underline" target="_blank" rel="noreferrer">
-            community guidelines
-          </a>{" "}
-          <span aria-hidden>*</span>
-        </label>
-      </div>
-      {errors.communityGuidelines && (
-        <p role="alert" className="mt-1 text-sm text-red-600">
-          {errors.communityGuidelines.message}
-        </p>
-      )}
-
-      {submitError && (
-        <p role="alert" className="text-sm text-red-600">
-          {submitError}
-        </p>
-      )}
-
-      <button
+      <Button
         type="submit"
-        disabled={submitting}
-        className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+        variant="primary"
+        size="lg"
+        fullWidth
+        loading={submitting}
       >
         {submitting ? "Saving…" : "Complete profile"}
-      </button>
+      </Button>
     </form>
   );
 }
