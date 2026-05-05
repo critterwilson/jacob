@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 
+import { Banner, Button, Card, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { useExportStatus, type ExportStatus } from "@/lib/hooks/useExportStatus";
+import {
+  type ExportStatus,
+  useExportStatus,
+} from "@/lib/hooks/useExportStatus";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -88,8 +92,6 @@ export default function ExportPage() {
 
   const onDownload = async () => {
     if (!user || !job.jobId || job.status !== "ready") return;
-    // Use the redirect endpoint so the bearer token never appears in
-    // the URL bar; the backend re-checks ownership and the URL freshness.
     const token = await user.getIdToken();
     const res = await fetch(
       `${API}/api/account/export/${encodeURIComponent(job.jobId)}/download`,
@@ -111,25 +113,27 @@ export default function ExportPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
-      <h1 className="mb-2 text-2xl font-semibold">Export your data</h1>
-      <p className="mb-4 text-sm text-gray-700">
+    <div className="mx-auto max-w-xl space-y-5 px-4 py-10">
+      <Heading level={1} size="md">
+        Export your data
+      </Heading>
+      <p className="text-body-sm text-cream-muted">
         Request a copy of the data we hold about you. The bundle is a single
         gzipped JSON file with your profile, messages, mentions, reactions,
-        memberships, mute and block lists, and audit history. Photos are linked
-        rather than embedded.
+        memberships, mute and block lists, and audit history. Photos are
+        linked rather than embedded.
       </p>
-      <p className="mb-6 text-sm text-gray-600">
+      <p className="text-body-sm text-cream-muted">
         Exports usually finish within a few minutes. We&apos;ll email you when
         it&apos;s ready, and the download link expires after 7 days. After
         that, request a new export.
       </p>
 
-      <div className="mb-6 rounded border border-gray-200 p-4 text-sm">
-        <h2 className="mb-2 font-semibold">Current status</h2>
-        <p className="mb-2 text-gray-700">{statusLabel(job.status)}</p>
+      <Card surface="raised" padding="md" className="space-y-3">
+        <h2 className="text-body font-semibold text-cream">Current status</h2>
+        <p className="text-body-sm text-cream">{statusLabel(job.status)}</p>
         {job.status !== "none" && (
-          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs text-gray-600">
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-caption text-cream-muted">
             <dt>Requested</dt>
             <dd>{formatDateTime(job.requestedAt)}</dd>
             {job.completedAt && (
@@ -158,55 +162,58 @@ export default function ExportPage() {
             )}
           </dl>
         )}
-      </div>
+      </Card>
 
       {error && (
-        <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <Banner tone="error">
           {error === "export_in_flight"
             ? "An export is already in progress for this account."
             : error === "export_disabled"
               ? "Data export is temporarily unavailable. Please try again later."
               : error}
-        </p>
+        </Banner>
       )}
 
       <div className="flex flex-wrap gap-3">
         {job.status === "ready" && job.downloadUrl && (
-          <button
+          <Button
             type="button"
-            onClick={onDownload}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            variant="primary"
+            size="md"
+            onClick={() => void onDownload()}
           >
             Download my data
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="md"
+          loading={submitting}
           disabled={!canRequest || submitting}
-          onClick={onRequest}
-          className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          onClick={() => void onRequest()}
         >
           {submitting
             ? "Requesting…"
             : job.status === "ready" || job.status === "expired"
               ? "Request a new export"
               : "Request export"}
-        </button>
+        </Button>
       </div>
 
       {job.status === "ready" && job.downloadUrl && (
-        <div className="mt-6 rounded border border-gray-200 p-3 text-xs">
-          <p className="mb-1 font-semibold text-gray-700">
+        <Card surface="raised" padding="sm" className="space-y-2">
+          <p className="text-caption font-semibold text-cream">
             Backup link (in case you lose this page or the email):
           </p>
-          <code className="block break-all rounded bg-gray-100 p-2 font-mono text-gray-700">
+          <code className="block break-all rounded bg-ink-overlay p-2 font-mono text-caption text-cream">
             {job.downloadUrl}
           </code>
-          <p className="mt-2 text-gray-600">
+          <p className="text-caption text-cream-muted">
             Treat this link as a credential — anyone who has it can download
             your bundle.
           </p>
-        </div>
+        </Card>
       )}
     </div>
   );

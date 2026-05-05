@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Heading, Link } from "@/components/ui";
 
 const faqs = [
   {
@@ -21,25 +21,27 @@ const faqs = [
 
 export default function FaqPage() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <nav className="mb-6">
-        <Link href="/" className="text-sm text-blue-600 hover:underline">
-          ← Back
-        </Link>
-      </nav>
+    <main className="mx-auto max-w-2xl space-y-6 px-4 py-10">
+      <Link href="/" variant="muted" className="text-caption">
+        ← Back
+      </Link>
 
-      <h1 className="mb-6 text-2xl font-semibold">Frequently Asked Questions</h1>
+      <Heading level={1} size="lg">
+        Frequently Asked Questions
+      </Heading>
 
       <dl className="space-y-6">
         {faqs.map(({ q, a }) => (
-          <div key={q}>
-            <dt className="font-medium text-gray-900">{q}</dt>
-            <dd className="mt-1 text-sm text-gray-600">{a}</dd>
+          <div key={q} className="space-y-1">
+            <dt className="font-display text-display-sm text-cream">{q}</dt>
+            <dd className="text-body-lg leading-relaxed text-cream-muted">
+              {a}
+            </dd>
           </div>
         ))}
       </dl>
 
-      <p className="mt-8 text-xs text-gray-400">
+      <p className="text-caption text-cream-dim">
         Additional content will be added by Christopher before launch.
       </p>
     </main>

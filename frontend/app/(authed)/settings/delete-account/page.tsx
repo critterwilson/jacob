@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { Banner, Button, Heading, Input } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useDeletionStatus } from "@/lib/hooks/useDeletionStatus";
 
@@ -29,9 +30,8 @@ function formatDate(d: Date): string {
 export default function DeleteAccountPage() {
   const { user, signOut } = useAuth();
   const router = useRouter();
-  const { pending, finalizeAt, keepBody: pendingKeepBody } = useDeletionStatus(
-    user?.uid,
-  );
+  const { pending, finalizeAt, keepBody: pendingKeepBody } =
+    useDeletionStatus(user?.uid);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -42,26 +42,30 @@ export default function DeleteAccountPage() {
 
   if (pending && finalizeAt) {
     return (
-      <div className="mx-auto max-w-xl px-4 py-8">
-        <h1 className="mb-4 text-2xl font-semibold">Account deletion pending</h1>
-        <p className="mb-2 text-sm text-gray-700">
+      <div className="mx-auto max-w-xl space-y-4 px-4 py-10">
+        <Heading level={1} size="md">
+          Account deletion pending
+        </Heading>
+        <p className="text-body text-cream">
           Your account is scheduled for deletion on{" "}
-          <strong>{formatDate(finalizeAt)}</strong>.
+          <strong className="font-medium text-cream">
+            {formatDate(finalizeAt)}
+          </strong>
+          .
         </p>
-        <p className="mb-6 text-sm text-gray-600">
+        <p className="text-body-sm text-cream-muted">
           {pendingKeepBody
             ? "Your messages will remain readable to other members but show as “[deleted user]”."
             : "Your messages will show as “[deleted user]” and the message text will be cleared."}
         </p>
 
-        {submitError && (
-          <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">
-            {submitError}
-          </p>
-        )}
+        {submitError && <Banner tone="error">{submitError}</Banner>}
 
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="md"
+          loading={submitting}
           disabled={submitting}
           onClick={async () => {
             if (!user) return;
@@ -83,10 +87,9 @@ export default function DeleteAccountPage() {
               setSubmitting(false);
             }
           }}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {submitting ? "Cancelling…" : "Cancel deletion"}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -116,89 +119,83 @@ export default function DeleteAccountPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
-      <h1 className="mb-2 text-2xl font-semibold">Delete your account</h1>
-      <p className="mb-6 text-sm text-gray-700">
+    <div className="mx-auto max-w-xl space-y-5 px-4 py-10">
+      <Heading level={1} size="md">
+        Delete your account
+      </Heading>
+      <p className="text-body-sm text-cream-muted">
         After you confirm, your account will be scheduled for deletion in{" "}
-        <strong>14 days</strong>. You can sign back in during that window to
-        cancel. After 14 days your profile and personal data are permanently
-        removed.
+        <strong className="font-medium text-cream">14 days</strong>. You can
+        sign back in during that window to cancel. After 14 days your profile
+        and personal data are permanently removed.
       </p>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <fieldset className="space-y-2 rounded border border-gray-200 p-3 text-sm">
-          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        <fieldset className="space-y-3 rounded-lg border border-line bg-ink-raised p-4">
+          <legend className="px-1 text-eyebrow uppercase tracking-wider text-cream-dim">
             What about your messages?
           </legend>
-          <label className="flex items-start gap-2">
+          <label className="flex cursor-pointer items-start gap-2 text-body-sm">
             <input
               type="radio"
               value="keep"
               checked={form.watch("keepBody") === true}
               onChange={() => form.setValue("keepBody", true)}
-              className="mt-1"
+              className="mt-1 h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
             />
             <span>
-              <span className="block font-medium">Keep my messages</span>
-              <span className="block text-xs text-gray-500">
+              <span className="block font-medium text-cream">
+                Keep my messages
+              </span>
+              <span className="block text-caption text-cream-muted">
                 Author will show as “[deleted user]” but the message text stays
                 visible to other members. Recommended — keeps group history
                 intact.
               </span>
             </span>
           </label>
-          <label className="flex items-start gap-2">
+          <label className="flex cursor-pointer items-start gap-2 text-body-sm">
             <input
               type="radio"
               value="erase"
               checked={form.watch("keepBody") === false}
               onChange={() => form.setValue("keepBody", false)}
-              className="mt-1"
+              className="mt-1 h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
             />
             <span>
-              <span className="block font-medium">Also erase the message text</span>
-              <span className="block text-xs text-gray-500">
+              <span className="block font-medium text-cream">
+                Also erase the message text
+              </span>
+              <span className="block text-caption text-cream-muted">
                 Message text is cleared on every message you authored.
               </span>
             </span>
           </label>
         </fieldset>
 
-        <div>
-          <label
-            htmlFor="confirmation"
-            className="mb-1 block text-sm font-medium text-gray-700"
-          >
-            Type <code className="rounded bg-gray-100 px-1">DELETE</code> to
-            confirm
-          </label>
-          <input
-            id="confirmation"
-            type="text"
-            autoComplete="off"
-            {...form.register("confirmation")}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          {form.formState.errors.confirmation && (
-            <p className="mt-1 text-xs text-red-600">
-              You must type DELETE exactly to confirm.
-            </p>
-          )}
-        </div>
+        <Input
+          label="Type DELETE to confirm"
+          type="text"
+          autoComplete="off"
+          {...form.register("confirmation")}
+          error={
+            form.formState.errors.confirmation
+              ? "You must type DELETE exactly to confirm."
+              : undefined
+          }
+        />
 
-        {submitError && (
-          <p className="rounded bg-red-50 p-3 text-sm text-red-700">
-            {submitError}
-          </p>
-        )}
+        {submitError && <Banner tone="error">{submitError}</Banner>}
 
-        <button
+        <Button
           type="submit"
+          variant="destructive"
+          size="md"
+          loading={submitting}
           disabled={submitting}
-          className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
         >
           {submitting ? "Submitting…" : "Schedule account deletion"}
-        </button>
+        </Button>
       </form>
     </div>
   );
