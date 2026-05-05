@@ -1,0 +1,75 @@
+/*
+ * JACOB design tokens
+ *
+ * Source of truth: docs/design-system.md
+ * Mirrored into Tailwind theme via frontend/tailwind.config.ts so that
+ * `bg-ink`, `text-cream`, `font-display`, `text-display-md`, `rounded-xl`
+ * all resolve to the same values exposed here as CSS custom properties.
+ *
+ * Use the CSS custom properties when authoring outside Tailwind utilities
+ * (e.g. inline styles, third-party widgets, prose plugin overrides).
+ */
+
+:root {
+  /* Surfaces — dark-first ground */
+  --color-ink: #0e1726;
+  --color-ink-raised: #15233a;
+  --color-ink-overlay: #1c2d49;
+
+  /* Lines and borders */
+  --color-line: #243149;
+  --color-line-strong: #3a4d6e;
+
+  /* Text — cream on ink */
+  --color-cream: #f5efe0;
+  --color-cream-muted: #c9c2b3;
+  --color-cream-dim: #8e8878;
+
+  /* Accent — the gold bookmark */
+  --color-gold: #c9a95c;
+  --color-gold-soft: #d9be7c;
+  --color-gold-deep: #a8893e;
+
+  /* Semantic — warm, never vivid */
+  --color-terracotta: #c16b5c;
+  --color-sage: #7e9b7c;
+  --color-parchment-amber: #d9b068;
+  --color-lake: #6e8aa9;
+
+  /* Type families. Set by next/font in app/layout.tsx. */
+  --font-display: var(--font-eb-garamond, "EB Garamond"), "Iowan Old Style",
+    "Apple Garamond", "Baskerville", "Times New Roman", serif;
+  --font-sans: var(--font-inter, "Inter"), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  /* Shadows. Drop shadows + inner highlight so cards lift off ink cleanly. */
+  --shadow-raise:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --shadow-pop:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 24px 60px -20px rgba(0, 0, 0, 0.8);
+  --shadow-glow-gold:
+    0 0 0 1px rgba(201, 169, 92, 0.3),
+    0 0 0 4px rgba(201, 169, 92, 0.12);
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 280ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

@@ -1,3 +1,41 @@
+@import "../styles/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Global defaults
+ *
+ * Sets the new ink ground and cream type as the default for any surface
+ * that has not yet been migrated. Existing surfaces with explicit
+ * background classes (bg-white, bg-blue-50, etc.) still render their
+ * own colors; this only catches the page background and the body type
+ * defaults.
+ *
+ * Source of truth: docs/design-system.md
+ */
+@layer base {
+  html {
+    background-color: var(--color-ink);
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-cream);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /*
+   * Tabular figures inside time / data cells. Keeps timestamps and
+   * counters from jittering as digits change width.
+   */
+  time,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+  }
+}
