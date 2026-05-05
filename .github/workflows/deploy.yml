@@ -18,6 +18,8 @@ jobs:
   setup:
     name: "Determine target"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       target: ${{ steps.set.outputs.target }}
       firebase-alias: ${{ steps.set.outputs.firebase-alias }}
@@ -109,6 +111,8 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.target }}
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 

@@ -10,6 +10,8 @@ jobs:
   frontend-lint:
     name: "Frontend — lint & type-check"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -26,6 +28,8 @@ jobs:
   frontend-test:
     name: "Frontend — vitest"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -41,6 +45,8 @@ jobs:
   backend-lint:
     name: "Backend — ruff, black, mypy"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,6 +67,8 @@ jobs:
   backend-test:
     name: "Backend — pytest"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,6 +83,8 @@ jobs:
   functions-build:
     name: "Functions — tsc & eslint"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -92,6 +102,8 @@ jobs:
   rules-test:
     name: "Firestore rules — vitest + emulator"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
