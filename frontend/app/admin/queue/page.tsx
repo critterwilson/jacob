@@ -254,7 +254,7 @@ export default function ModerationQueuePage() {
   };
 
   if (loading && items.length === 0) {
-    return <p className="text-sm text-gray-500">Loading moderation queue…</p>;
+    return <p className="text-sm text-cream-muted">Loading moderation queue…</p>;
   }
 
   return (
@@ -280,13 +280,13 @@ export default function ModerationQueuePage() {
       />
 
       {error && (
-        <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700" role="alert">
+        <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta" role="alert">
           {error}
         </p>
       )}
 
       {items.length === 0 && !loading && (
-        <p className="text-sm text-gray-500">No items match the current filters.</p>
+        <p className="text-sm text-cream-muted">No items match the current filters.</p>
       )}
 
       <ul className="space-y-4">
@@ -309,7 +309,7 @@ export default function ModerationQueuePage() {
           type="button"
           onClick={() => void loadItems(nextCursor)}
           disabled={loading}
-          className="mt-6 rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+          className="mt-6 rounded border border-line px-4 py-2 text-sm hover:bg-ink-overlay disabled:opacity-50"
         >
           {loading ? "Loading…" : "Load more"}
         </button>

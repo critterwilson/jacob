@@ -25,12 +25,12 @@ function CountTable({ title, data }: { title: string; data?: Record<string, numb
   const entries = Object.entries(data ?? {});
   if (entries.length === 0) return null;
   return (
-    <section className="rounded border border-gray-200 bg-white p-4">
-      <h2 className="mb-2 text-sm font-semibold text-gray-700">{title}</h2>
+    <section className="rounded border border-line bg-ink-raised p-4">
+      <h2 className="mb-2 text-sm font-semibold text-cream">{title}</h2>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         {entries.map(([k, v]) => (
-          <div key={k} className="flex justify-between border-b border-gray-100 py-1">
-            <dt className="text-gray-700">{k}</dt>
+          <div key={k} className="flex justify-between border-b border-line py-1">
+            <dt className="text-cream">{k}</dt>
             <dd className="font-mono">{v}</dd>
           </div>
         ))}
@@ -59,20 +59,20 @@ export default function TransparencyPage() {
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <header>
         <h1 className="text-3xl font-semibold">Transparency report</h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-cream-muted">
           Aggregated counts of moderation actions, reports received, appeals,
           and NCMEC submissions. No identifying details. Published quarterly.
         </p>
       </header>
 
-      {loading && <p className="text-sm text-gray-500">Loading…</p>}
+      {loading && <p className="text-sm text-cream-muted">Loading…</p>}
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
           {error}
         </div>
       )}
       {!loading && !error && !report && (
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-cream-muted">
           No reports have been published yet. Check back after the next
           quarter ends.
         </p>
@@ -80,7 +80,7 @@ export default function TransparencyPage() {
 
       {report && (
         <div className="space-y-4">
-          <div className="rounded bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          <div className="rounded bg-ink-raised px-4 py-3 text-sm text-cream">
             <p>
               <strong>Period:</strong> {report.period}
             </p>

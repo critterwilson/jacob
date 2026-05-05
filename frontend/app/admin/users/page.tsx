@@ -108,50 +108,50 @@ export default function AdminUsersPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void searchUsers()}
           placeholder="Search by display name…"
-          className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 rounded border border-line bg-ink-raised px-3 py-2 text-sm focus:outline-none focus-visible:shadow-glow-gold"
         />
         <button
           type="button"
           onClick={() => void searchUsers()}
           disabled={loading}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
         >
           {loading ? "Searching…" : "Search"}
         </button>
       </div>
       {error && (
-        <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>
+        <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta">{error}</p>
       )}
       {users.length === 0 && !loading && (
-        <p className="text-sm text-gray-500">No users found. Run a search to load users.</p>
+        <p className="text-sm text-cream-muted">No users found. Run a search to load users.</p>
       )}
       <ul className="space-y-3">
         {users.map((u) => (
           <li
             key={u.uid}
-            className="flex items-center justify-between gap-4 rounded border border-gray-200 bg-white p-4 shadow-sm"
+            className="flex items-center justify-between gap-4 rounded border border-line bg-ink-raised p-4 shadow-sm"
           >
             <div className="min-w-0">
-              <p className="truncate font-medium text-gray-800">
+              <p className="truncate font-medium text-cream">
                 {u.displayName ?? "(no name)"}
               </p>
-              <p className="truncate text-xs text-gray-500">{u.email ?? u.uid}</p>
+              <p className="truncate text-xs text-cream-muted">{u.email ?? u.uid}</p>
               {u.isBanned && (
-                <span className="mt-1 inline-block rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                <span className="mt-1 inline-block rounded bg-ink-overlay px-2 py-0.5 text-xs font-medium text-terracotta">
                   Banned
                 </span>
               )}
             </div>
             <div className="shrink-0">
               {actionState[u.uid] === "loading" ? (
-                <span className="text-xs text-gray-500">Processing…</span>
+                <span className="text-xs text-cream-muted">Processing…</span>
               ) : actionState[u.uid] && actionState[u.uid] !== "done" ? (
-                <span className="text-xs text-red-600">{actionState[u.uid]}</span>
+                <span className="text-xs text-terracotta">{actionState[u.uid]}</span>
               ) : u.isBanned ? (
                 <button
                   type="button"
                   onClick={() => void unbanUser(u.uid)}
-                  className="rounded bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200"
+                  className="rounded bg-ink-overlay px-3 py-1.5 text-xs font-medium text-cream hover:bg-ink-overlay/80"
                 >
                   Unban
                 </button>
@@ -160,21 +160,21 @@ export default function AdminUsersPage() {
                   <button
                     type="button"
                     onClick={() => void banUser(u.uid, "24h")}
-                    className="rounded border border-red-300 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                    className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                   >
                     Ban 24h
                   </button>
                   <button
                     type="button"
                     onClick={() => void banUser(u.uid, "7d")}
-                    className="rounded border border-red-300 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                    className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                   >
                     Ban 7d
                   </button>
                   <button
                     type="button"
                     onClick={() => void banUser(u.uid, "permanent")}
-                    className="rounded border border-red-500 bg-red-50 px-2 py-1.5 text-xs font-medium text-red-800 hover:bg-red-100"
+                    className="rounded border border-terracotta/60 bg-ink-raised px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                   >
                     Ban ∞
                   </button>

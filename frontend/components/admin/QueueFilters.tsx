@@ -47,7 +47,7 @@ export function QueueFilters({
       aria-label="Moderation queue filters"
       className="mb-4 flex flex-wrap items-center gap-2"
     >
-      <span className="text-xs font-medium text-gray-600">Status:</span>
+      <span className="text-xs font-medium text-cream-muted">Status:</span>
       <div className="flex gap-1" role="group" aria-label="Status filter">
         {STATUSES.map((s) => (
           <button
@@ -57,8 +57,8 @@ export function QueueFilters({
             onClick={() => onStatusChange(s)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${
               status === s
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                ? "bg-gold text-ink hover:bg-gold-soft"
+                : "bg-ink-overlay text-cream hover:bg-ink-overlay/80"
             }`}
           >
             {s}
@@ -66,14 +66,14 @@ export function QueueFilters({
         ))}
       </div>
 
-      <span className="ml-2 text-xs font-medium text-gray-600">Reason:</span>
+      <span className="ml-2 text-xs font-medium text-cream-muted">Reason:</span>
       <select
         aria-label="Reason filter"
         value={reason}
         onChange={(e: ChangeEvent<HTMLSelectElement>) =>
           onReasonChange(e.target.value as QueueReason)
         }
-        className="rounded border border-gray-300 px-2 py-1 text-xs"
+        className="rounded border border-line bg-ink-raised px-2 py-1 text-xs focus:outline-none focus-visible:shadow-glow-gold"
       >
         {REASONS.map((r) => (
           <option key={r} value={r}>
@@ -82,14 +82,14 @@ export function QueueFilters({
         ))}
       </select>
 
-      <span className="ml-2 text-xs font-medium text-gray-600">Sort:</span>
+      <span className="ml-2 text-xs font-medium text-cream-muted">Sort:</span>
       <select
         aria-label="Sort by"
         value={sortBy}
         onChange={(e: ChangeEvent<HTMLSelectElement>) =>
           onSortChange(e.target.value as QueueSort)
         }
-        className="rounded border border-gray-300 px-2 py-1 text-xs"
+        className="rounded border border-line bg-ink-raised px-2 py-1 text-xs focus:outline-none focus-visible:shadow-glow-gold"
       >
         <option value="createdAt">Oldest first</option>
         <option value="severity">Severity</option>

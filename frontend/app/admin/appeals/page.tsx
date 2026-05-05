@@ -56,10 +56,10 @@ export default function AdminAppealsPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Appeals queue</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-cream-muted">
           Decisions must come from a different admin than the original actor — if
           you took the original action, escalate to another admin per{" "}
-          <code className="rounded bg-gray-100 px-1 text-xs">
+          <code className="rounded bg-ink-overlay px-1 text-xs">
             docs/community-guidelines.md
           </code>
           .
@@ -74,8 +74,8 @@ export default function AdminAppealsPage() {
             onClick={() => setFilter(f)}
             className={`rounded px-3 py-1 ${
               filter === f
-                ? "bg-blue-100 font-medium text-blue-700"
-                : "border border-gray-300 hover:bg-gray-50"
+                ? "bg-ink-overlay font-medium text-gold-soft"
+                : "border border-line hover:bg-ink-overlay"
             }`}
           >
             {f}
@@ -84,37 +84,37 @@ export default function AdminAppealsPage() {
       </div>
 
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
           {error}
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       ) : appeals.length === 0 ? (
-        <p className="text-sm text-gray-500">No appeals.</p>
+        <p className="text-sm text-cream-muted">No appeals.</p>
       ) : (
         <ul className="space-y-2">
           {appeals.map((a) => (
             <li
               key={a.appealId}
-              className="rounded border border-gray-200 bg-white p-4 text-sm"
+              className="rounded border border-line bg-ink-raised p-4 text-sm"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <Link
                     href={`/admin/appeals/${a.appealId}`}
-                    className="font-mono text-xs text-blue-600 hover:underline"
+                    className="font-mono text-xs text-gold-soft hover:text-gold hover:underline"
                   >
                     {a.appealId}
                   </Link>
                   <p className="mt-1">
                     <strong>{a.subject.type}</strong> →{" "}
-                    <code className="rounded bg-gray-100 px-1 text-xs">
+                    <code className="rounded bg-ink-overlay px-1 text-xs">
                       {a.subject.ref}
                     </code>
                   </p>
-                  <p className="mt-1 text-xs text-gray-600">
+                  <p className="mt-1 text-xs text-cream-muted">
                     By <span className="font-mono">{a.appellantUid}</span> ·
                     submitted{" "}
                     {a.submittedAt
@@ -126,16 +126,16 @@ export default function AdminAppealsPage() {
                   <span
                     className={`rounded px-2 py-0.5 text-xs ${
                       a.decision === "pending"
-                        ? "bg-amber-100 text-amber-800"
+                        ? "bg-ink-overlay text-parchment-amber"
                         : a.decision === "reversed"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-ink-overlay text-sage"
+                          : "bg-ink-overlay text-cream"
                     }`}
                   >
                     {a.decision}
                   </span>
                   {a.overdue && (
-                    <span className="rounded bg-red-100 px-2 py-0.5 text-xs text-red-800">
+                    <span className="rounded bg-ink-overlay px-2 py-0.5 text-xs text-terracotta">
                       overdue
                     </span>
                   )}

@@ -107,9 +107,9 @@ export default function AdminTransparencyPage() {
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Transparency reports</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-cream-muted">
             Review the bucketed counts before publishing. See{" "}
-            <code className="rounded bg-gray-100 px-1 text-xs">
+            <code className="rounded bg-ink-overlay px-1 text-xs">
               docs/runbooks/transparency-report.md
             </code>
             .
@@ -118,35 +118,35 @@ export default function AdminTransparencyPage() {
         <button
           type="button"
           onClick={generate}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
+          className="rounded bg-gold px-3 py-1.5 text-sm text-ink hover:bg-gold-soft"
         >
           Generate draft
         </button>
       </header>
 
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
           {error}
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       ) : reports.length === 0 ? (
-        <p className="text-sm text-gray-500">No reports yet.</p>
+        <p className="text-sm text-cream-muted">No reports yet.</p>
       ) : (
         <ul className="space-y-3">
           {reports.map((r) => (
             <li
               key={r.reportId}
-              className="rounded border border-gray-200 bg-white p-4 text-sm"
+              className="rounded border border-line bg-ink-raised p-4 text-sm"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p>
                     <strong>{r.period}</strong> · scope {r.scope}
                   </p>
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-cream-muted">
                     Generated{" "}
                     {r.generatedAt
                       ? new Date(r.generatedAt).toLocaleString()
@@ -159,22 +159,22 @@ export default function AdminTransparencyPage() {
                   <button
                     type="button"
                     onClick={() => publish(r.reportId)}
-                    className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+                    className="rounded bg-sage px-3 py-1 text-sm text-ink hover:bg-sage/90"
                   >
                     Publish
                   </button>
                 )}
                 {actionState[r.reportId] && (
-                  <span className="self-center text-xs text-gray-500">
+                  <span className="self-center text-xs text-cream-muted">
                     {actionState[r.reportId]}
                   </span>
                 )}
               </div>
               <details className="mt-3">
-                <summary className="cursor-pointer text-xs text-blue-600 hover:underline">
+                <summary className="cursor-pointer text-xs text-gold-soft hover:text-gold hover:underline">
                   View payload
                 </summary>
-                <pre className="mt-2 overflow-x-auto rounded bg-gray-50 p-2 text-xs">
+                <pre className="mt-2 overflow-x-auto rounded bg-ink p-2 text-xs">
                   {JSON.stringify(r.payload, null, 2)}
                 </pre>
               </details>

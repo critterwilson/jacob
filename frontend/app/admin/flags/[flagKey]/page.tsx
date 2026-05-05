@@ -160,13 +160,13 @@ export default function AdminFlagDetailPage() {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-500">Loading…</p>;
+  if (loading) return <p className="text-sm text-cream-muted">Loading…</p>;
 
   if (error && !flag) {
     return (
       <div>
-        <p className="text-sm text-red-600">{error}</p>
-        <Link href="/admin/flags" className="text-sm text-blue-700 underline">
+        <p className="text-sm text-terracotta">{error}</p>
+        <Link href="/admin/flags" className="text-sm text-gold-soft hover:text-gold underline">
           ← Back to flags
         </Link>
       </div>
@@ -180,12 +180,12 @@ export default function AdminFlagDetailPage() {
       <header>
         <Link
           href="/admin/flags"
-          className="text-xs text-gray-500 hover:text-gray-700"
+          className="text-xs text-cream-muted hover:text-cream"
         >
           ← All flags
         </Link>
         <h1 className="mt-2 font-mono text-2xl">{flag.flagKey}</h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-cream-muted">
           last updated{" "}
           {flag.updatedAt
             ? new Date(flag.updatedAt).toLocaleString()
@@ -194,8 +194,8 @@ export default function AdminFlagDetailPage() {
         </p>
       </header>
 
-      <section className="space-y-3 rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="space-y-3 rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-eyebrow uppercase tracking-wider text-cream-dim">
           Configuration
         </h2>
 
@@ -210,56 +210,56 @@ export default function AdminFlagDetailPage() {
         </label>
 
         <label className="block text-sm">
-          <span className="text-xs text-gray-500">rolloutPercentage</span>
+          <span className="text-xs text-cream-muted">rolloutPercentage</span>
           <input
             type="number"
             min={0}
             max={100}
             value={pct}
             onChange={(e) => setPct(Number(e.target.value))}
-            className="ml-2 w-20 rounded border border-gray-300 px-2 py-1"
+            className="ml-2 w-20 rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
           />
         </label>
 
         <label className="block text-sm">
-          <span className="text-xs text-gray-500">description</span>
+          <span className="text-xs text-cream-muted">description</span>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+            className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
           />
         </label>
 
         <fieldset className="space-y-2">
-          <legend className="text-xs uppercase tracking-wide text-gray-500">
+          <legend className="text-eyebrow uppercase tracking-wider text-cream-dim">
             Cohort overrides (comma- or whitespace-separated)
           </legend>
           <label className="block text-sm">
-            <span className="text-xs text-gray-500">uids</span>
+            <span className="text-xs text-cream-muted">uids</span>
             <textarea
               value={uids}
               onChange={(e) => setUids(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 font-mono text-xs focus:outline-none focus-visible:shadow-glow-gold"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-xs text-gray-500">orgIds</span>
+            <span className="text-xs text-cream-muted">orgIds</span>
             <textarea
               value={orgIds}
               onChange={(e) => setOrgIds(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 font-mono text-xs focus:outline-none focus-visible:shadow-glow-gold"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-cream-muted">
               roles (admin / leader / member)
             </span>
             <input
               value={roles}
               onChange={(e) => setRoles(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 font-mono text-xs focus:outline-none focus-visible:shadow-glow-gold"
             />
           </label>
         </fieldset>
@@ -269,7 +269,7 @@ export default function AdminFlagDetailPage() {
             type="button"
             onClick={save}
             disabled={saving}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+            className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -277,25 +277,25 @@ export default function AdminFlagDetailPage() {
             type="button"
             onClick={remove}
             disabled={saving}
-            className="rounded border border-red-300 bg-white px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+            className="rounded border border-terracotta/40 bg-ink-raised px-3 py-1 text-sm text-terracotta hover:bg-ink-overlay"
           >
             Delete
           </button>
         </div>
 
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-terracotta">{error}</p>}
       </section>
 
-      <section className="space-y-2 rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="space-y-2 rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-eyebrow uppercase tracking-wider text-cream-dim">
           Audit history
         </h2>
         {audit.length === 0 ? (
-          <p className="text-xs text-gray-500">No audit rows.</p>
+          <p className="text-xs text-cream-muted">No audit rows.</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-cream-muted">
                 <th className="py-1">When</th>
                 <th>Actor</th>
                 <th>Action</th>
@@ -304,7 +304,7 @@ export default function AdminFlagDetailPage() {
             </thead>
             <tbody>
               {audit.map((entry) => (
-                <tr key={entry.eventId} className="border-b border-gray-100">
+                <tr key={entry.eventId} className="border-b border-line">
                   <td className="py-1">
                     {entry.createdAt
                       ? new Date(entry.createdAt).toLocaleString()
@@ -313,7 +313,7 @@ export default function AdminFlagDetailPage() {
                   <td className="font-mono">{entry.actorUid}</td>
                   <td>{entry.action}</td>
                   <td>
-                    <pre className="whitespace-pre-wrap text-[10px] text-gray-700">
+                    <pre className="whitespace-pre-wrap text-[10px] text-cream">
                       {JSON.stringify(entry.payload, null, 0)}
                     </pre>
                   </td>

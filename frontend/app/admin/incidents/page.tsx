@@ -117,28 +117,28 @@ export default function AdminIncidentsPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Incidents</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-cream-muted">
           Declare a SEV1/2 banner. The playbook lives at{" "}
-          <code className="rounded bg-gray-100 px-1 text-xs">
+          <code className="rounded bg-ink-overlay px-1 text-xs">
             docs/runbooks/incident.md
           </code>
           .
         </p>
       </header>
 
-      <section className="space-y-3 rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="space-y-3 rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-eyebrow uppercase tracking-wider text-cream-dim">
           Declare incident
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <label className="block text-sm">
-            <span className="text-xs text-gray-500">Severity</span>
+            <span className="text-xs text-cream-muted">Severity</span>
             <select
               value={severity}
               onChange={(e) =>
                 setSeverity(e.target.value as "SEV1" | "SEV2" | "SEV3")
               }
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             >
               <option value="SEV1">SEV1 — outage</option>
               <option value="SEV2">SEV2 — degraded</option>
@@ -146,33 +146,33 @@ export default function AdminIncidentsPage() {
             </select>
           </label>
           <label className="col-span-3 block text-sm">
-            <span className="text-xs text-gray-500">Title</span>
+            <span className="text-xs text-cream-muted">Title</span>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Search returning empty results"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             />
           </label>
           <label className="col-span-4 block text-sm">
-            <span className="text-xs text-gray-500">Body</span>
+            <span className="text-xs text-cream-muted">Body</span>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={3}
               placeholder="One-line description users see, plus expected resolution window"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-xs text-gray-500">Display minutes</span>
+            <span className="text-xs text-cream-muted">Display minutes</span>
             <input
               type="number"
               min={15}
               max={1440}
               value={displayMinutes}
               onChange={(e) => setDisplayMinutes(Number(e.target.value))}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             />
           </label>
           <div className="col-span-3 flex items-end">
@@ -180,23 +180,23 @@ export default function AdminIncidentsPage() {
               type="button"
               onClick={declare}
               disabled={!title || !body || pending}
-              className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+              className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
             >
               {pending ? "Declaring…" : "Declare"}
             </button>
           </div>
         </div>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-terracotta">{error}</p>}
       </section>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       ) : incidents.length === 0 ? (
-        <p className="text-sm text-gray-500">No incidents (active or recent).</p>
+        <p className="text-sm text-cream-muted">No incidents (active or recent).</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-dim">
               <th className="py-2">Severity</th>
               <th>Title</th>
               <th>Until</th>
@@ -208,15 +208,15 @@ export default function AdminIncidentsPage() {
             {incidents.map((i) => {
               const expired = new Date(i.displayUntil) < new Date();
               return (
-                <tr key={i.incidentId} className="border-b border-gray-100">
+                <tr key={i.incidentId} className="border-b border-line">
                   <td className="py-2">
                     <span
-                      className={`rounded px-2 py-0.5 text-xs text-white ${
+                      className={`rounded px-2 py-0.5 text-xs ${
                         i.severity === "SEV1"
-                          ? "bg-red-600"
+                          ? "bg-terracotta text-cream"
                           : i.severity === "SEV2"
-                            ? "bg-amber-500"
-                            : "bg-blue-600"
+                            ? "bg-parchment-amber text-ink"
+                            : "bg-gold text-ink"
                       }`}
                     >
                       {i.severity}
@@ -224,15 +224,15 @@ export default function AdminIncidentsPage() {
                   </td>
                   <td>
                     <p className="font-medium">{i.title}</p>
-                    <p className="text-xs text-gray-500">{i.body}</p>
+                    <p className="text-xs text-cream-muted">{i.body}</p>
                   </td>
                   <td className="text-xs">
                     {new Date(i.displayUntil).toLocaleString()}
                     {expired && (
-                      <span className="ml-1 text-gray-400">(expired)</span>
+                      <span className="ml-1 text-cream-dim">(expired)</span>
                     )}
                   </td>
-                  <td className="text-xs text-gray-500">
+                  <td className="text-xs text-cream-muted">
                     {i.createdAt
                       ? new Date(i.createdAt).toLocaleString()
                       : "—"}
@@ -242,7 +242,7 @@ export default function AdminIncidentsPage() {
                       <button
                         type="button"
                         onClick={() => clearIncident(i.incidentId)}
-                        className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                        className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-ink-overlay"
                       >
                         Clear
                       </button>
