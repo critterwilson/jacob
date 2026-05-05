@@ -2,10 +2,11 @@
 
 import { useEffect, useRef } from "react";
 
-import { useThreadMessages } from "@/lib/hooks/useThreadMessages";
-import { ThreadReplyInput } from "@/components/chat/ThreadReplyInput";
 import { MessageItem } from "@/components/chat/MessageItem";
+import { ThreadReplyInput } from "@/components/chat/ThreadReplyInput";
+import { Eyebrow } from "@/components/ui";
 import { useReactions } from "@/lib/hooks/useReactions";
+import { useThreadMessages } from "@/lib/hooks/useThreadMessages";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 
 type Props = {
@@ -17,14 +18,25 @@ type Props = {
   onClose: () => void;
 };
 
-export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, archived = false, onClose }: Props) {
+export function ThreadPanel({
+  gid,
+  parentMessage,
+  isLeader,
+  currentUserUid,
+  archived = false,
+  onClose,
+}: Props) {
   const { messages, loading, loadingOlder, hasMore, loadOlder } =
     useThreadMessages(gid, parentMessage.id);
   // Include the parent message in hydration so reactions on the parent are
   // also recovered after a refresh (the parent isn't in `messages`).
   const allForReactions: Message[] = [parentMessage, ...messages];
-  const { isMyReaction, toggle: toggleReaction } = useReactions(gid, allForReactions);
-  const onToggleReaction = (mid: string, slug: string) => void toggleReaction(mid, slug);
+  const { isMyReaction, toggle: toggleReaction } = useReactions(
+    gid,
+    allForReactions,
+  );
+  const onToggleReaction = (mid: string, slug: string) =>
+    void toggleReaction(mid, slug);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -39,17 +51,18 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, arch
     prevCountRef.current = messages.length;
   }, [messages.length]);
 
-  const hasParticipated = parentMessage.participants?.includes(currentUserUid) ?? false;
+  const hasParticipated =
+    parentMessage.participants?.includes(currentUserUid) ?? false;
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
-      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-gray-900">
+    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-ink-raised">
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
+        <h2 className="flex items-center gap-2 text-body-sm font-semibold text-cream">
           Thread
           {hasParticipated && (
             <span
               aria-label="You have participated in this thread"
-              className="ml-2 inline-block h-2 w-2 rounded-full bg-blue-500"
+              className="inline-block h-2 w-2 rounded-full bg-gold"
             />
           )}
         </h2>
@@ -57,16 +70,18 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, arch
           type="button"
           onClick={onClose}
           aria-label="Close thread"
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className={
+            "rounded p-1 text-cream-muted transition-colors duration-fast " +
+            "hover:bg-ink hover:text-cream " +
+            "focus:outline-none focus-visible:shadow-glow-gold"
+          }
         >
           ✕
         </button>
       </div>
 
-      <div className="shrink-0 border-b border-gray-100 bg-gray-50 px-4 py-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-          Original message
-        </p>
+      <div className="shrink-0 border-b border-line bg-ink px-4 py-2">
+        <Eyebrow className="block">Original message</Eyebrow>
         <MessageItem
           gid={gid}
           message={parentMessage}
@@ -77,10 +92,12 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, arch
         />
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className="flex flex-1 flex-col overflow-y-auto bg-ink-raised">
         {loading ? (
           <div className="flex flex-1 items-center justify-center">
-            <span className="text-sm text-gray-500">Loading replies…</span>
+            <span className="text-body-sm text-cream-muted">
+              Loading replies…
+            </span>
           </div>
         ) : (
           <>
@@ -90,7 +107,11 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, arch
                   type="button"
                   onClick={() => void loadOlder()}
                   disabled={loadingOlder}
-                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  className={
+                    "rounded border border-line bg-ink px-3 py-1 text-caption text-cream-muted " +
+                    "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
+                    "focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
+                  }
                 >
                   {loadingOlder ? "Loading…" : "Load earlier replies"}
                 </button>
@@ -98,7 +119,7 @@ export function ThreadPanel({ gid, parentMessage, isLeader, currentUserUid, arch
             )}
 
             {messages.length === 0 && (
-              <p className="mt-8 text-center text-sm text-gray-400">
+              <p className="mt-8 text-center text-body-sm text-cream-dim">
                 No replies yet. Start the thread!
               </p>
             )}

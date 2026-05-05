@@ -1,21 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { MessageInput } from "@/components/chat/MessageInput";
+import { MessageList } from "@/components/chat/MessageList";
+import { PinnedBar } from "@/components/chat/PinnedBar";
+import { ThreadPanel } from "@/components/chat/ThreadPanel";
+import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
+import { Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useAnnounce } from "@/lib/hooks/useAnnounce";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useGroupMessages } from "@/lib/hooks/useGroupMessages";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 import { usePinnedMessages } from "@/lib/hooks/usePinnedMessages";
-import { useAnnounce } from "@/lib/hooks/useAnnounce";
-import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
-import { PinnedBar } from "@/components/chat/PinnedBar";
-import { MessageInput } from "@/components/chat/MessageInput";
-import { MessageList } from "@/components/chat/MessageList";
-import { ThreadPanel } from "@/components/chat/ThreadPanel";
 
 type Props = { params: { gid: string } };
 
@@ -53,8 +53,8 @@ export default function ChatPage({ params }: Props) {
 
   if (authLoading || membershipLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -65,15 +65,12 @@ export default function ChatPage({ params }: Props) {
   const archivedAt = group?.archivedAt ?? null;
 
   return (
-    <main className="flex h-screen flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 px-4 py-3">
-        <Link
-          href={`/groups/${gid}`}
-          className="text-sm text-blue-600 hover:underline"
-        >
+    <main className="flex h-screen flex-col bg-ink text-cream">
+      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-ink px-4 py-3">
+        <Link href={`/groups/${gid}`} variant="muted" className="text-body-sm">
           ← {groupName ?? "Group"}
         </Link>
-        <h1 className="text-sm font-semibold text-gray-900">Chat</h1>
+        <h1 className="text-body-sm font-semibold text-cream">Chat</h1>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
