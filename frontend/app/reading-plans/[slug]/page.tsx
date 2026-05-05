@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import NextLink from "next/link";
 import { useParams } from "next/navigation";
 
+import { Eyebrow, Heading, Link, cn } from "@/components/ui";
 import { usePlanProgress, useReadingPlan } from "@/lib/hooks/useReadingPlans";
 
 export default function ReadingPlanDetailPage() {
@@ -15,62 +16,75 @@ export default function ReadingPlanDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-ink text-body-sm text-cream-muted">
         Loading…
       </div>
     );
   }
   if (!plan) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
-        <Link href="/reading-plans" className="text-xs text-gray-500">
+      <div className="mx-auto max-w-2xl space-y-3 p-6">
+        <Link href="/reading-plans" variant="muted" className="text-caption">
           ← Reading plans
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Plan not found.</p>
+        <p className="text-body-sm text-cream">Plan not found.</p>
       </div>
     );
   }
 
   const completed = new Set<number>(progress?.completedDays ?? []);
+  const streak = progress?.streak ?? 0;
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <Link href="/reading-plans" className="text-xs text-gray-500">
+    <main className="mx-auto max-w-3xl space-y-6 p-6">
+      <Link href="/reading-plans" variant="muted" className="text-caption">
         ← Reading plans
       </Link>
-      <header className="mt-3">
-        <h1 className="text-3xl font-semibold">{plan.title}</h1>
-        <p className="mt-1 text-sm text-gray-500">{plan.duration} days</p>
-        <p className="mt-3 text-sm text-gray-700">{plan.description}</p>
-        {progress && (progress.streak ?? 0) > 0 && (
-          <p className="mt-3 text-sm text-amber-700">
-            🔥 Current streak: {progress.streak} days
+
+      <header className="space-y-2">
+        <Eyebrow>Reading plan</Eyebrow>
+        <Heading level={1} size="lg">
+          {plan.title}
+        </Heading>
+        <p className="text-caption text-cream-dim">{plan.duration} days</p>
+        <p className="text-body text-cream-muted">{plan.description}</p>
+        {streak > 0 && (
+          <p className="inline-flex items-center gap-2 rounded-full border border-parchment-amber/40 bg-parchment-amber/10 px-3 py-1 text-caption font-medium text-parchment-amber">
+            Current streak · {streak} {streak === 1 ? "day" : "days"}
           </p>
         )}
       </header>
 
-      <ol className="mt-6 space-y-2">
+      <ol className="space-y-2">
         {plan.days.map((d) => {
           const done = completed.has(d.dayNumber);
           return (
-            <li
-              key={d.dayNumber}
-              className={`flex items-center justify-between rounded border px-4 py-3 ${
-                done ? "border-green-200 bg-green-50" : "border-gray-200 bg-white"
-              }`}
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  Day {d.dayNumber} — {d.scriptureRef}
-                </p>
-                <p className="text-xs text-gray-500">{d.prompt}</p>
-              </div>
-              <Link
+            <li key={d.dayNumber}>
+              <NextLink
                 href={`/reading-plans/${plan.slug}/day/${d.dayNumber}`}
-                className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50"
+                className={cn(
+                  "flex items-center justify-between rounded-lg border px-4 py-3 transition-colors duration-fast " +
+                    "focus:outline-none focus-visible:shadow-glow-gold",
+                  done
+                    ? "border-sage/40 bg-sage/10 hover:bg-sage/15"
+                    : "border-line bg-ink-raised hover:bg-ink-overlay",
+                )}
               >
-                {done ? "Review" : "Open"}
-              </Link>
+                <div className="space-y-0.5">
+                  <p className="text-body text-cream">
+                    Day {d.dayNumber} — {d.scriptureRef}
+                  </p>
+                  <p className="text-caption text-cream-muted">{d.prompt}</p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 text-caption",
+                    done ? "text-sage" : "text-gold-soft",
+                  )}
+                >
+                  {done ? "Review" : "Open →"}
+                </span>
+              </NextLink>
             </li>
           );
         })}

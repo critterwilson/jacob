@@ -1,20 +1,38 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
+import NextLink from "next/link";
 import { useMemo, useState } from "react";
 
+import { OpenBook } from "@/components/motifs/OpenBook";
+import {
+  Banner,
+  Button,
+  Card,
+  Eyebrow,
+  Heading,
+  Link,
+  Section,
+  Select,
+} from "@/components/ui";
 import {
   type Sermon,
   useGroupSermons,
 } from "@/lib/hooks/useGroupSermons";
+
+const inputClass =
+  "w-full rounded border border-line bg-ink-overlay px-3 py-2 " +
+  "font-sans text-body-sm text-cream placeholder:text-cream-dim " +
+  "transition-colors duration-fast " +
+  "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 
 export default function SermonsListPage() {
   const params = useParams();
   const gid = String(
     Array.isArray(params?.gid) ? params.gid[0] : (params?.gid ?? ""),
   );
-  const { sermons, preachers, loading, error, addSermon } = useGroupSermons(gid);
+  const { sermons, preachers, loading, error, addSermon } =
+    useGroupSermons(gid);
 
   const [preacherFilter, setPreacherFilter] = useState<string>("");
   const [showAdd, setShowAdd] = useState(false);
@@ -57,98 +75,112 @@ export default function SermonsListPage() {
   };
 
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <Link
-            href={`/groups/${gid}/chat`}
-            className="text-xs text-gray-500 hover:text-gray-700"
-          >
-            ← Back to group
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold">Sermon archive</h1>
+    <main className="mx-auto max-w-4xl space-y-6 p-6">
+      <Link
+        href={`/groups/${gid}/chat`}
+        variant="muted"
+        className="text-caption"
+      >
+        ← Back to group
+      </Link>
+
+      <header className="flex items-end justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <OpenBook className="h-14 w-auto shrink-0 text-gold-soft opacity-90" />
+          <div className="space-y-1">
+            <Eyebrow>Group library</Eyebrow>
+            <Heading level={1} size="md">
+              Sermon archive
+            </Heading>
+          </div>
         </div>
-        <button
+        <Button
           type="button"
+          variant={showAdd ? "secondary" : "primary"}
+          size="md"
           onClick={() => setShowAdd((s) => !s)}
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
         >
           {showAdd ? "Cancel" : "Add sermon"}
-        </button>
+        </Button>
       </header>
 
       {showAdd && (
-        <section className="space-y-2 rounded border border-gray-200 bg-white p-4">
-          <input
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            placeholder="YouTube URL or podcast link"
-            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-          />
-          <input
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Title (auto-filled for YouTube)"
-            className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-          />
-          <div className="grid grid-cols-3 gap-2">
+        <Section title="Add a sermon" description="Paste a YouTube URL or podcast link. Title is auto-filled when possible.">
+          <div className="space-y-2">
             <input
-              value={newPreacher}
-              onChange={(e) => setNewPreacher(e.target.value)}
-              placeholder="Preacher"
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              placeholder="YouTube URL or podcast link"
+              className={inputClass}
             />
             <input
-              value={newScripture}
-              onChange={(e) => setNewScripture(e.target.value)}
-              placeholder="Scripture (e.g. John 3:16)"
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Title (auto-filled for YouTube)"
+              className={inputClass}
             />
-            <input
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
-              placeholder="YYYY-MM-DD"
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
-            />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <input
+                value={newPreacher}
+                onChange={(e) => setNewPreacher(e.target.value)}
+                placeholder="Preacher"
+                className={inputClass}
+              />
+              <input
+                value={newScripture}
+                onChange={(e) => setNewScripture(e.target.value)}
+                placeholder="Scripture (e.g. John 3:16)"
+                className={inputClass}
+              />
+              <input
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
+                className={inputClass}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2 pt-1">
-            <button
+
+          {addError && <Banner tone="error">{addError}</Banner>}
+
+          <div className="flex justify-end">
+            <Button
               type="button"
+              variant="primary"
+              size="md"
               onClick={submit}
+              loading={pending}
               disabled={!newUrl || pending}
-              className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
             >
               {pending ? "Adding…" : "Add"}
-            </button>
-            {addError && (
-              <span className="text-xs text-red-600">{addError}</span>
-            )}
+            </Button>
           </div>
-        </section>
+        </Section>
       )}
 
-      <div className="flex items-center gap-2 text-sm">
-        <label className="text-xs text-gray-500">Preacher:</label>
-        <select
+      <div className="flex items-center gap-3">
+        <Select
+          label="Preacher"
+          hideLabel
           value={preacherFilter}
           onChange={(e) => setPreacherFilter(e.target.value)}
-          className="rounded border border-gray-300 px-2 py-1 text-sm"
+          className="w-48"
         >
-          <option value="">All</option>
+          <option value="">All preachers</option>
           {preachers.map((p) => (
             <option key={p} value={p}>
               {p}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-body-sm text-cream-muted">Loading…</p>
       ) : error ? (
-        <p className="text-sm text-red-600">{error.message}</p>
+        <Banner tone="error">{error.message}</Banner>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-500">No sermons yet.</p>
+        <p className="text-body-sm text-cream-muted">No sermons yet.</p>
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {filtered.map((sermon) => (
@@ -162,26 +194,30 @@ export default function SermonsListPage() {
 
 function SermonRow({ gid, sermon }: { gid: string; sermon: Sermon }) {
   return (
-    <li className="rounded border border-gray-200 bg-white p-3">
-      {sermon.thumbnail && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={sermon.thumbnail}
-          alt=""
-          className="mb-2 aspect-video w-full rounded object-cover"
-        />
-      )}
-      <Link
+    <li>
+      <NextLink
         href={`/groups/${gid}/sermons/${sermon.sermonId}`}
-        className="text-sm font-medium text-blue-700 hover:underline"
+        className="block rounded-lg focus:outline-none focus-visible:shadow-glow-gold"
       >
-        {sermon.title}
-      </Link>
-      <p className="text-xs text-gray-500">
-        {[sermon.preacher, sermon.scripture, sermon.sermonDate]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
+        <Card surface="raised" interactive padding="sm" className="space-y-2">
+          {sermon.thumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={sermon.thumbnail}
+              alt=""
+              className="aspect-video w-full rounded-md border border-line object-cover"
+            />
+          )}
+          <h3 className="font-display text-display-sm text-cream">
+            {sermon.title}
+          </h3>
+          <p className="text-caption text-cream-muted">
+            {[sermon.preacher, sermon.scripture, sermon.sermonDate]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </Card>
+      </NextLink>
     </li>
   );
 }

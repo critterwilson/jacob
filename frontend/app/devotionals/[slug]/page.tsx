@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 
+import { Eyebrow, Heading, Link } from "@/components/ui";
 import { useDevotional } from "@/lib/hooks/useDevotionals";
 
 // Minimal markdown rendering: bold (**), italic (*), inline code (`),
@@ -16,14 +16,14 @@ function renderMarkdown(body: string): JSX.Element[] {
       return (
         <blockquote
           key={i}
-          className="my-3 border-l-4 border-blue-300 bg-blue-50 px-3 py-2 italic text-gray-700"
+          className="my-4 border-l-2 border-gold-soft bg-ink-raised px-4 py-3 font-display text-body-lg italic text-cream"
         >
           {renderInline(block.slice(2))}
         </blockquote>
       );
     }
     return (
-      <p key={i} className="my-3 leading-relaxed">
+      <p key={i} className="my-4 text-body-lg leading-relaxed text-cream">
         {renderInline(block)}
       </p>
     );
@@ -31,7 +31,6 @@ function renderMarkdown(body: string): JSX.Element[] {
 }
 
 function renderInline(text: string): JSX.Element[] {
-  // Pass: ** → bold, * → italic, ` → mono. Keep it cheap; T53 is real.
   const parts: JSX.Element[] = [];
   let cursor = 0;
   let key = 0;
@@ -46,7 +45,10 @@ function renderInline(text: string): JSX.Element[] {
       parts.push(<strong key={key++}>{tok.slice(2, -2)}</strong>);
     } else if (tok.startsWith("`")) {
       parts.push(
-        <code key={key++} className="rounded bg-gray-100 px-1 text-xs">
+        <code
+          key={key++}
+          className="rounded bg-ink-overlay px-1 font-mono text-body-sm text-cream"
+        >
           {tok.slice(1, -1)}
         </code>,
       );
@@ -70,45 +72,56 @@ export default function DevotionalPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-ink text-body-sm text-cream-muted">
         Loading…
       </div>
     );
   }
   if (!devotional) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
-        <Link href="/devotionals" className="text-xs text-gray-500">
+      <div className="mx-auto max-w-2xl p-6 space-y-3">
+        <Link href="/devotionals" variant="muted" className="text-caption">
           ← Devotionals
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Devotional not found.</p>
+        <p className="text-body-sm text-cream">Devotional not found.</p>
       </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <Link href="/devotionals" className="text-xs text-gray-500">
+    <main className="mx-auto max-w-2xl p-6 space-y-4">
+      <Link href="/devotionals" variant="muted" className="text-caption">
         ← Devotionals
       </Link>
-      <h1 className="mt-3 text-3xl font-semibold">{devotional.title}</h1>
-      <p className="mt-1 text-sm text-blue-700">{devotional.scriptureRef}</p>
-      <article className="prose prose-sm mt-6 max-w-none text-gray-800">
+
+      <header className="space-y-2">
+        <Eyebrow>Devotional</Eyebrow>
+        <Heading level={1} size="lg">
+          {devotional.title}
+        </Heading>
+        <p className="text-body-sm text-gold-soft">
+          {devotional.scriptureRef}
+        </p>
+      </header>
+
+      <article className="max-w-none">
         {renderMarkdown(devotional.body)}
       </article>
+
       {devotional.audioUrl && (
-        <p className="mt-6 text-sm">
-          <a
+        <p className="text-body-sm">
+          <Link
             href={devotional.audioUrl}
+            variant="accent"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-700 underline"
           >
             Listen (opens in a new tab)
-          </a>
+          </Link>
         </p>
       )}
-      <footer className="mt-8 text-xs text-gray-500">
+
+      <footer className="border-t border-line pt-4 text-caption text-cream-dim">
         {devotional.sourceAttribution}
       </footer>
     </main>

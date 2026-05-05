@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo } from "react";
 
+import { Button, Eyebrow, Heading, Link } from "@/components/ui";
 import { useGroupSermons } from "@/lib/hooks/useGroupSermons";
 
 export default function SermonDetailPage() {
@@ -24,21 +24,22 @@ export default function SermonDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-ink text-body-sm text-cream-muted">
         Loading…
       </div>
     );
   }
   if (!sermon) {
     return (
-      <div className="mx-auto max-w-3xl p-6">
+      <div className="mx-auto max-w-3xl p-6 space-y-3">
         <Link
           href={`/groups/${gid}/sermons`}
-          className="text-xs text-gray-500"
+          variant="muted"
+          className="text-caption"
         >
           ← Sermon archive
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Sermon not found.</p>
+        <p className="text-body-sm text-cream">Sermon not found.</p>
       </div>
     );
   }
@@ -52,69 +53,88 @@ export default function SermonDetailPage() {
   };
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
+    <main className="mx-auto max-w-3xl space-y-5 p-6">
       <Link
         href={`/groups/${gid}/sermons`}
-        className="text-xs text-gray-500"
+        variant="muted"
+        className="text-caption"
       >
         ← Sermon archive
       </Link>
+
       {sermon.thumbnail && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={sermon.thumbnail}
           alt=""
-          className="mt-4 w-full rounded object-cover"
+          className="w-full rounded-lg border border-line object-cover"
         />
       )}
-      <h1 className="mt-4 text-2xl font-semibold">{sermon.title}</h1>
-      <dl className="mt-2 grid grid-cols-2 gap-y-1 text-sm">
+
+      <header className="space-y-2">
+        <Eyebrow>Sermon</Eyebrow>
+        <Heading level={1} size="lg">
+          {sermon.title}
+        </Heading>
+      </header>
+
+      <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-body-sm">
         {sermon.preacher && (
           <>
-            <dt className="text-gray-500">Preacher</dt>
-            <dd>{sermon.preacher}</dd>
+            <dt className="text-eyebrow uppercase tracking-wider text-cream-dim">
+              Preacher
+            </dt>
+            <dd className="text-cream">{sermon.preacher}</dd>
           </>
         )}
         {sermon.scripture && (
           <>
-            <dt className="text-gray-500">Scripture</dt>
-            <dd>{sermon.scripture}</dd>
+            <dt className="text-eyebrow uppercase tracking-wider text-cream-dim">
+              Scripture
+            </dt>
+            <dd className="text-gold-soft">{sermon.scripture}</dd>
           </>
         )}
         {sermon.sermonDate && (
           <>
-            <dt className="text-gray-500">Date</dt>
-            <dd>{new Date(sermon.sermonDate).toLocaleDateString()}</dd>
+            <dt className="text-eyebrow uppercase tracking-wider text-cream-dim">
+              Date
+            </dt>
+            <dd className="text-cream">
+              {new Date(sermon.sermonDate).toLocaleDateString()}
+            </dd>
           </>
         )}
       </dl>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-3">
         <a
           href={sermon.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
+          className="inline-flex h-10 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
         >
           Open source ↗
         </a>
         {/* T50 will replace this with an inline Watch Together flow.
             Until then, the link above is the path. */}
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="md"
           disabled
           title="Watch Together — coming with T50"
-          className="cursor-not-allowed rounded border border-gray-300 px-3 py-1 text-sm text-gray-500"
         >
           Watch with the group (coming soon)
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          onClick={handleDelete}
-          className="rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+          variant="destructive"
+          size="md"
+          onClick={() => void handleDelete()}
         >
           Delete
-        </button>
+        </Button>
       </div>
     </main>
   );

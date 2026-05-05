@@ -1,48 +1,56 @@
 "use client";
 
-import Link from "next/link";
-
+import { OpenBook } from "@/components/motifs/OpenBook";
+import { Card, Eyebrow, Heading, Link } from "@/components/ui";
 import { useDevotionals } from "@/lib/hooks/useDevotionals";
 
 export default function DevotionalsIndexPage() {
   const { devotionals, loading } = useDevotionals();
 
   return (
-    <main className="mx-auto max-w-3xl space-y-4 p-6">
-      <header>
-        <h1 className="text-3xl font-semibold">Devotionals</h1>
-        <p className="text-sm text-gray-500">
-          Short reflections paired with scripture. Refreshed regularly.
-        </p>
+    <main className="mx-auto max-w-3xl space-y-8 p-6">
+      <header className="flex items-center gap-6">
+        <OpenBook className="h-16 w-auto shrink-0 text-gold-soft opacity-90" />
+        <div className="space-y-2">
+          <Eyebrow>Daily reading</Eyebrow>
+          <Heading level={1} size="md">
+            Devotionals
+          </Heading>
+          <p className="text-body-sm text-cream-muted">
+            Short reflections paired with scripture. Refreshed regularly.
+          </p>
+        </div>
       </header>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-body-sm text-cream-muted">Loading…</p>
       ) : devotionals.length === 0 ? (
-        <p className="text-sm text-gray-500">
+        <p className="text-body-sm text-cream-muted">
           No devotionals published yet. Check back soon.
         </p>
       ) : (
         <ul className="space-y-3">
           {devotionals.map((d) => (
-            <li
-              key={d.slug}
-              className="rounded border border-gray-200 bg-white p-4"
-            >
+            <li key={d.slug}>
               <Link
                 href={`/devotionals/${d.slug}`}
-                className="text-lg font-medium text-blue-700 hover:underline"
+                variant="muted"
+                className="block rounded-lg no-underline hover:no-underline focus:outline-none focus-visible:shadow-glow-gold"
               >
-                {d.title}
+                <Card surface="raised" interactive padding="md" className="space-y-2">
+                  <h2 className="font-display text-display-sm text-cream">
+                    {d.title}
+                  </h2>
+                  <p className="text-caption text-gold-soft">{d.scriptureRef}</p>
+                  <p className="text-body text-cream-muted">
+                    {d.body
+                      .replace(/[*_#`]/g, "")
+                      .split("\n")[0]
+                      .slice(0, 160)}
+                    …
+                  </p>
+                </Card>
               </Link>
-              <p className="mt-1 text-xs text-gray-500">{d.scriptureRef}</p>
-              <p className="mt-2 text-sm text-gray-700">
-                {d.body
-                  .replace(/[*_#`]/g, "")
-                  .split("\n")[0]
-                  .slice(0, 160)}
-                …
-              </p>
             </li>
           ))}
         </ul>
