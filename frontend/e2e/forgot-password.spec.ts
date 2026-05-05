@@ -1,9 +1,4 @@
 import {
-  fetchLatestEmailOrSkip,
-  openMailinatorContext,
-  pickFirebaseActionLink,
-} from "./helpers/mailinator";
-import {
   STRONG_PASSWORD,
   fillSignInForm,
   gotoForgotPassword,
@@ -12,16 +7,17 @@ import {
   submitSignIn,
   submitSignUp,
 } from "./helpers/auth";
+import {
+  generateResetLink,
+  verifyEmailViaAdmin,
+} from "./helpers/firebaseAdmin";
 import { expect, test } from "./helpers/fixtures";
 
 test.describe("forgot password", () => {
-  test("request reset → mailinator → set new password → sign in", async ({
+  test("request reset → admin link → set new password → sign in", async ({
     page,
-    browser,
     freshEmail,
   }) => {
-    test.slow();
-
     // Step 0 — create + verify an account. We can't use the shared account
     // here because the test mutates the password.
     await gotoSignUp(page);
@@ -29,25 +25,10 @@ test.describe("forgot password", () => {
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
+    await verifyEmailViaAdmin(page, freshEmail.email);
 
-    {
-      const { context, page: mailPage } = await openMailinatorContext(browser);
-      try {
-        const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
-          subjectIncludes: "verify",
-          timeoutMs: 90_000,
-        });
-        const verifyLink = pickFirebaseActionLink(msg, "verifyEmail");
-        const verifyPage = await page.context().newPage();
-        await verifyPage.goto(verifyLink, { waitUntil: "domcontentloaded" });
-        await verifyPage.waitForTimeout(3_000);
-        await verifyPage.close();
-      } finally {
-        await context.close();
-      }
-    }
-
-    // Step 1 — request a password reset.
+    // Step 1 — request a password reset through the real form so the
+    // forgot-password endpoint + Firebase round-trip get exercised.
     await gotoForgotPassword(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByRole("button", { name: /send reset link/i }).click();
@@ -55,21 +36,11 @@ test.describe("forgot password", () => {
       timeout: 10_000,
     });
 
-    // Step 2 — pick the reset link out of mailinator. The same inbox already
-    // received a verification email, so we filter on subject.
-    let resetLink: string;
-    {
-      const { context, page: mailPage } = await openMailinatorContext(browser);
-      try {
-        const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
-          subjectIncludes: "reset",
-          timeoutMs: 90_000,
-        });
-        resetLink = pickFirebaseActionLink(msg, "resetPassword");
-      } finally {
-        await context.close();
-      }
-    }
+    // Step 2 — generate the same reset link Firebase would have emailed
+    //  via the Admin SDK. The link points at Firebase's hosted reset page
+    //  (`<project>.firebaseapp.com/__/auth/action?mode=resetPassword&...`),
+    //  same form as the link we used to scrape from Mailinator.
+    const resetLink = await generateResetLink(freshEmail.email);
 
     // Step 3 — open the reset link, set a new password.
     const newPassword = STRONG_PASSWORD + "!new";

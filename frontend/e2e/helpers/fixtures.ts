@@ -1,15 +1,19 @@
 import { test as base, expect, type Page } from "@playwright/test";
 
 import { sharedAccountCredentials, signIn } from "./auth";
+import { cleanupTestUser, ensureAdminOrSkip } from "./firebaseAdmin";
 import { uniqueEmail } from "./unique";
 
 /**
  * Two flavours of fixture:
  *
- *   - `freshEmail` / `freshAccount` — generates a brand-new mailinator inbox
- *     per test. The corresponding Firebase Auth user only exists if the test
+ *   - `freshEmail` / `freshAccount` — generates a brand-new test email per
+ *     test. The corresponding Firebase Auth user only exists if the test
  *     itself completes signup. Use these for tests that exercise signup,
- *     verification, password-reset, or onboarding flows.
+ *     verification, password-reset, or onboarding flows. Requires Firebase
+ *     Admin SDK credentials so we can (a) flip emailVerified without
+ *     scraping a public inbox and (b) delete the user afterwards. If
+ *     credentials are missing the fixture skips the test.
  *
  *   - `sharedAccountPage` — yields a Page already signed in as the
  *     pre-onboarded shared test account. Use this for read-mostly tests
@@ -24,7 +28,13 @@ type Fixtures = {
 
 export const test = base.extend<Fixtures>({
   freshEmail: async ({}, use) => {
-    await use(uniqueEmail());
+    ensureAdminOrSkip();
+    const value = uniqueEmail();
+    try {
+      await use(value);
+    } finally {
+      await cleanupTestUser(value.email);
+    }
   },
 
   sharedAccountPage: async ({ page }, use) => {

@@ -70,6 +70,12 @@ jobs:
           PLAYWRIGHT_API_URL: "https://jacob-backend-7fk543coqq-uc.a.run.app"
           JACOB_E2E_USER_EMAIL: ${{ secrets.JACOB_E2E_USER_EMAIL }}
           JACOB_E2E_USER_PASSWORD: ${{ secrets.JACOB_E2E_USER_PASSWORD }}
+          # Firebase Admin SDK service-account key (base64'd JSON) for the
+          # staging project. Unlocks the auth / forgot-password / onboarding
+          # tests that previously scraped Mailinator. Tests skip cleanly
+          # when this is unset, so the suite stays green-with-skips while
+          # the secret is being provisioned. See frontend/e2e/README.md.
+          JACOB_E2E_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.JACOB_E2E_FIREBASE_SERVICE_ACCOUNT }}
         run: pnpm --filter jacob-frontend test:e2e
       - name: Upload Playwright report
         if: always()

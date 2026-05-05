@@ -120,6 +120,9 @@ importers:
       fake-indexeddb:
         specifier: ^6
         version: 6.2.5
+      firebase-admin:
+        specifier: ^12
+        version: 12.7.0
       jsdom:
         specifier: ^25
         version: 25.0.1

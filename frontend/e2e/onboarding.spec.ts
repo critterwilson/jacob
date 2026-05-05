@@ -1,13 +1,9 @@
 import {
-  fetchLatestEmailOrSkip,
-  openMailinatorContext,
-  pickFirebaseActionLink,
-} from "./helpers/mailinator";
-import {
   STRONG_PASSWORD,
   gotoSignUp,
   submitSignUp,
 } from "./helpers/auth";
+import { verifyEmailViaAdmin } from "./helpers/firebaseAdmin";
 import { expect, test } from "./helpers/fixtures";
 
 /**
@@ -21,13 +17,10 @@ import { expect, test } from "./helpers/fixtures";
  * follow-up navigation through. That's the integration test we needed.
  */
 test.describe("onboarding", () => {
-  test("fresh signup → verify → onboarding → /groups", async ({
+  test("fresh signup → admin verify → onboarding → /groups", async ({
     page,
-    browser,
     freshEmail,
   }) => {
-    test.slow();
-
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
@@ -35,22 +28,7 @@ test.describe("onboarding", () => {
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
 
     // Verify the email so the onboarding endpoint accepts the request.
-    {
-      const { context, page: mailPage } = await openMailinatorContext(browser);
-      try {
-        const msg = await fetchLatestEmailOrSkip(mailPage, freshEmail.localPart, {
-          subjectIncludes: "verify",
-          timeoutMs: 90_000,
-        });
-        const verifyLink = pickFirebaseActionLink(msg, "verifyEmail");
-        const verifyPage = await page.context().newPage();
-        await verifyPage.goto(verifyLink, { waitUntil: "domcontentloaded" });
-        await verifyPage.waitForTimeout(3_000);
-        await verifyPage.close();
-      } finally {
-        await context.close();
-      }
-    }
+    await verifyEmailViaAdmin(page, freshEmail.email);
 
     // Reload onboarding so the auth-context picks up the verified status.
     // Wait for hydration explicitly — App Router pages render server-side
