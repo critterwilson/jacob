@@ -41,15 +41,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   if (loading || isAdmin === null) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen">
-      <nav className="w-48 shrink-0 border-r border-gray-200 bg-gray-50 p-4">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
+      <nav className="w-48 shrink-0 border-r border-line bg-ink-raised p-4">
+        <p className="mb-4 text-eyebrow uppercase tracking-wider text-cream-dim">
           Admin
         </p>
         <ul className="space-y-1">
@@ -59,8 +59,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 href={href}
                 className={`block rounded px-3 py-2 text-sm ${
                   pathname.startsWith(href)
-                    ? "bg-blue-100 font-medium text-blue-700"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-ink-overlay font-medium text-gold-soft"
+                    : "text-cream hover:bg-ink-overlay"
                 }`}
               >
                 {label}
@@ -68,8 +68,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
-        <div className="mt-6 border-t border-gray-200 pt-4">
-          <Link href="/home" className="text-xs text-gray-500 hover:text-gray-700">
+        <div className="mt-6 border-t border-line pt-4">
+          <Link href="/home" className="text-xs text-cream-muted hover:text-cream">
             ← Back to app
           </Link>
         </div>

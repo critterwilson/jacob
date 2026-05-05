@@ -94,14 +94,14 @@ export default function AdminAppealDetailPage() {
     }
   };
 
-  if (loading) return <p className="text-sm text-gray-500">Loading…</p>;
+  if (loading) return <p className="text-sm text-cream-muted">Loading…</p>;
   if (error)
     return (
-      <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+      <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
         {error}
       </div>
     );
-  if (!appeal) return <p className="text-sm text-gray-500">Not found.</p>;
+  if (!appeal) return <p className="text-sm text-cream-muted">Not found.</p>;
 
   const isPending = appeal.decision === "pending";
 
@@ -109,7 +109,7 @@ export default function AdminAppealDetailPage() {
     <div className="max-w-3xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Appeal {appeal.appealId}</h1>
-        <p className="mt-1 text-xs text-gray-500">
+        <p className="mt-1 text-xs text-cream-muted">
           Submitted{" "}
           {appeal.submittedAt
             ? new Date(appeal.submittedAt).toLocaleString()
@@ -117,14 +117,14 @@ export default function AdminAppealDetailPage() {
         </p>
       </header>
 
-      <section className="rounded border border-gray-200 bg-white p-4 text-sm">
+      <section className="rounded border border-line bg-ink-raised p-4 text-sm">
         <h2 className="mb-2 font-medium">Subject</h2>
         <p>
           <strong>Type:</strong> {appeal.subject.type}
         </p>
         <p>
           <strong>Ref:</strong>{" "}
-          <code className="rounded bg-gray-100 px-1 text-xs">
+          <code className="rounded bg-ink-overlay px-1 text-xs">
             {appeal.subject.ref}
           </code>
         </p>
@@ -140,13 +140,13 @@ export default function AdminAppealDetailPage() {
         )}
       </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4 text-sm">
+      <section className="rounded border border-line bg-ink-raised p-4 text-sm">
         <h2 className="mb-2 font-medium">Appellant statement</h2>
-        <p className="whitespace-pre-wrap text-gray-800">{appeal.body}</p>
+        <p className="whitespace-pre-wrap text-cream">{appeal.body}</p>
       </section>
 
       {!isPending && (
-        <section className="rounded border border-gray-200 bg-gray-50 p-4 text-sm">
+        <section className="rounded border border-line bg-ink p-4 text-sm">
           <h2 className="mb-2 font-medium">Decision</h2>
           <p>
             <strong>{appeal.decision}</strong> by{" "}
@@ -162,21 +162,21 @@ export default function AdminAppealDetailPage() {
       )}
 
       {isPending && (
-        <section className="rounded border border-gray-200 bg-white p-4 text-sm">
+        <section className="rounded border border-line bg-ink-raised p-4 text-sm">
           <h2 className="mb-3 font-medium">Decide</h2>
-          <p className="mb-3 text-xs text-amber-700">
+          <p className="mb-3 text-xs text-parchment-amber">
             ⚠️ If you took the original moderation action, the API will reject
             this with <code>self_review_required</code>. Escalate to another
             admin.
           </p>
           <label className="block">
-            <span className="text-xs font-medium text-gray-700">Outcome</span>
+            <span className="text-xs font-medium text-cream">Outcome</span>
             <select
               value={decision}
               onChange={(e) =>
                 setDecision(e.target.value as "upheld" | "reversed")
               }
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             >
               <option value="upheld">
                 upheld — original action stands
@@ -187,17 +187,17 @@ export default function AdminAppealDetailPage() {
             </select>
           </label>
           <label className="mt-3 block">
-            <span className="text-xs font-medium text-gray-700">
+            <span className="text-xs font-medium text-cream">
               Reasoning (≥ 50 chars; recorded in audit log)
             </span>
             <textarea
               value={reasoning}
               onChange={(e) => setReasoning(e.target.value)}
               rows={5}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+              className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 font-mono text-xs focus:outline-none focus-visible:shadow-glow-gold"
               placeholder="Explain the rationale — what evidence you reviewed, why this outcome."
             />
-            <span className="mt-1 block text-xs text-gray-500">
+            <span className="mt-1 block text-xs text-cream-muted">
               {reasoning.length} / 50 chars minimum
             </span>
           </label>
@@ -205,7 +205,7 @@ export default function AdminAppealDetailPage() {
             type="button"
             onClick={decide}
             disabled={submitting || reasoning.trim().length < 50}
-            className="mt-4 rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+            className="mt-4 rounded bg-gold px-4 py-2 text-sm text-ink hover:bg-gold-soft disabled:opacity-50"
           >
             {submitting ? "Submitting…" : "Submit decision"}
           </button>

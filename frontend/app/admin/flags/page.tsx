@@ -157,7 +157,7 @@ export default function AdminFlagsPage() {
       <header className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Feature flags</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-cream-muted">
             Read{" "}
             <Link
               href="/admin/flags-runbook"
@@ -175,8 +175,8 @@ export default function AdminFlagsPage() {
             onClick={() => setFilter("all")}
             className={`rounded border px-3 py-1 ${
               filter === "all"
-                ? "border-blue-500 bg-blue-50 text-blue-700"
-                : "border-gray-300 text-gray-700"
+                ? "border-gold-soft/60 bg-ink-raised text-gold-soft"
+                : "border-line text-cream"
             }`}
           >
             All ({flags.length})
@@ -186,8 +186,8 @@ export default function AdminFlagsPage() {
             onClick={() => setFilter("candidate-cleanup")}
             className={`rounded border px-3 py-1 ${
               filter === "candidate-cleanup"
-                ? "border-amber-500 bg-amber-50 text-amber-700"
-                : "border-gray-300 text-gray-700"
+                ? "border-parchment-amber/60 bg-ink-raised text-parchment-amber"
+                : "border-line text-cream"
             }`}
           >
             Candidate for cleanup ({cleanupCount})
@@ -196,63 +196,63 @@ export default function AdminFlagsPage() {
       </header>
 
       {cleanupCount > 0 && filter === "all" && (
-        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+        <div className="rounded border border-parchment-amber/40 bg-ink-raised px-4 py-2 text-sm text-parchment-amber">
           {cleanupCount} flag{cleanupCount === 1 ? " is" : "s are"} at 100% for
           30+ days. Remove the call sites and delete the flag.
         </div>
       )}
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="rounded border border-line bg-ink-raised p-4">
+        <h2 className="mb-2 text-eyebrow uppercase tracking-wider text-cream-dim">
           Create flag
         </h2>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <label className="block text-xs text-gray-500">flagKey</label>
+            <label className="block text-xs text-cream-muted">flagKey</label>
             <input
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
               placeholder="my_feature_enabled"
-              className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+              className="w-full rounded border border-line bg-ink-raised px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
             />
           </div>
           <div className="flex-[2]">
-            <label className="block text-xs text-gray-500">description</label>
+            <label className="block text-xs text-cream-muted">description</label>
             <input
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
               placeholder="What this flag gates"
-              className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+              className="w-full rounded border border-line bg-ink-raised px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
             />
           </div>
           <button
             type="button"
             onClick={createFlag}
             disabled={!newKey || createPending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+            className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
           >
             {createPending ? "Creating…" : "Create at 0%"}
           </button>
         </div>
         {createError && (
-          <p className="mt-2 text-xs text-red-600">{createError}</p>
+          <p className="mt-2 text-xs text-terracotta">{createError}</p>
         )}
       </section>
 
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
           {error}
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       ) : visible.length === 0 ? (
-        <p className="text-sm text-gray-500">No flags.</p>
+        <p className="text-sm text-cream-muted">No flags.</p>
       ) : (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-dim">
               <th className="py-2">Key</th>
               <th>Enabled</th>
               <th>%</th>
@@ -271,31 +271,31 @@ export default function AdminFlagsPage() {
               return (
                 <tr
                   key={flag.flagKey}
-                  className="border-b border-gray-100"
+                  className="border-b border-line"
                   data-cleanup-candidate={isCandidateForCleanup(flag)}
                 >
                   <td className="py-2 font-mono text-xs">
                     <Link
                       href={`/admin/flags/${flag.flagKey}`}
-                      className="text-blue-700 hover:underline"
+                      className="text-gold-soft hover:text-gold hover:underline"
                     >
                       {flag.flagKey}
                     </Link>
                     {isCandidateForCleanup(flag) && (
-                      <span className="ml-2 rounded bg-amber-100 px-1 py-0.5 text-[10px] uppercase text-amber-700">
+                      <span className="ml-2 rounded bg-ink-overlay px-1 py-0.5 text-[10px] uppercase text-parchment-amber">
                         cleanup
                       </span>
                     )}
                     {flag.description && (
-                      <p className="text-xs text-gray-500">{flag.description}</p>
+                      <p className="text-xs text-cream-muted">{flag.description}</p>
                     )}
                   </td>
                   <td>
                     <span
                       className={`inline-flex rounded px-2 py-0.5 text-xs ${
                         flag.enabled
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-500"
+                          ? "bg-ink-overlay text-sage"
+                          : "bg-ink-overlay text-cream-muted"
                       }`}
                     >
                       {flag.enabled ? "on" : "off"}
@@ -307,7 +307,7 @@ export default function AdminFlagsPage() {
                       onChange={(e) =>
                         setPercentage(flag.flagKey, Number(e.target.value))
                       }
-                      className="rounded border border-gray-300 px-1 py-0.5 text-xs"
+                      className="rounded border border-line bg-ink-raised px-1 py-0.5 text-xs focus:outline-none focus-visible:shadow-glow-gold"
                     >
                       {[0, 5, 10, 25, 50, 75, 90, 100].map((pct) => (
                         <option key={pct} value={pct}>
@@ -316,17 +316,17 @@ export default function AdminFlagsPage() {
                       ))}
                     </select>
                   </td>
-                  <td className="text-xs text-gray-500">
+                  <td className="text-xs text-cream-muted">
                     {cohortBadge > 0 ? `${cohortBadge} entries` : "—"}
                   </td>
-                  <td className="text-xs text-gray-500">
+                  <td className="text-xs text-cream-muted">
                     {flag.updatedAt
                       ? new Date(flag.updatedAt).toLocaleString()
                       : "—"}
                   </td>
                   <td className="text-right">
                     {flagState && flagState !== "done" && (
-                      <span className="text-xs text-gray-500">{flagState}</span>
+                      <span className="text-xs text-cream-muted">{flagState}</span>
                     )}
                   </td>
                 </tr>

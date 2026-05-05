@@ -62,42 +62,42 @@ export default function AdminGroupsPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void searchGroups()}
           placeholder="Search by group name…"
-          className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 rounded border border-line bg-ink-raised px-3 py-2 text-sm focus:outline-none focus-visible:shadow-glow-gold"
         />
         <button
           type="button"
           onClick={() => void searchGroups()}
           disabled={loading}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
         >
           {loading ? "Searching…" : "Search"}
         </button>
       </div>
       {error && (
-        <p className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>
+        <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta">{error}</p>
       )}
       {groups.length === 0 && !loading && (
-        <p className="text-sm text-gray-500">No groups found. Run a search to load groups.</p>
+        <p className="text-sm text-cream-muted">No groups found. Run a search to load groups.</p>
       )}
       <ul className="space-y-3">
         {groups.map((g) => (
           <li
             key={g.gid}
-            className="flex items-center justify-between gap-4 rounded border border-gray-200 bg-white p-4 shadow-sm"
+            className="flex items-center justify-between gap-4 rounded border border-line bg-ink-raised p-4 shadow-sm"
           >
             <div className="min-w-0">
-              <p className="truncate font-medium text-gray-800">{g.name}</p>
-              <p className="text-xs text-gray-500">
+              <p className="truncate font-medium text-cream">{g.name}</p>
+              <p className="text-xs text-cream-muted">
                 {g.memberCount} member{g.memberCount !== 1 ? "s" : ""}
                 {g.createdAt && (
                   <> · Created {new Date(g.createdAt).toLocaleDateString()}</>
                 )}
               </p>
-              <p className="truncate text-xs text-gray-400">{g.gid}</p>
+              <p className="truncate text-xs text-cream-dim">{g.gid}</p>
             </div>
             <Link
               href={`/groups/${g.gid}`}
-              className="shrink-0 rounded border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50"
+              className="shrink-0 rounded border border-line px-3 py-1.5 text-xs hover:bg-ink-overlay"
             >
               View
             </Link>

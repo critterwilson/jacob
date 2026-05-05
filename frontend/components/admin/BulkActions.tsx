@@ -23,16 +23,16 @@ export function BulkActions({
     <div
       role="region"
       aria-label="Bulk actions"
-      className="sticky top-0 z-10 mb-4 flex items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 shadow-sm"
+      className="sticky top-0 z-10 mb-4 flex items-center gap-2 rounded border border-line bg-ink-raised px-3 py-2 shadow-sm"
     >
-      <span className="text-sm font-medium text-gray-700">
+      <span className="text-sm font-medium text-cream">
         {selectedCount} selected
       </span>
       <button
         type="button"
         onClick={onBulkApprove}
         disabled={disabled}
-        className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        className="rounded bg-sage px-3 py-1 text-xs font-medium text-ink hover:bg-sage/90 disabled:opacity-50"
       >
         Approve all
       </button>
@@ -40,7 +40,7 @@ export function BulkActions({
         type="button"
         onClick={onBulkReject}
         disabled={disabled}
-        className="rounded bg-red-100 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
+        className="rounded bg-ink-overlay px-3 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay/80 disabled:opacity-50"
       >
         Reject all
       </button>
@@ -48,14 +48,14 @@ export function BulkActions({
         type="button"
         onClick={onBulkRejectAndBan}
         disabled={disabled}
-        className="rounded border border-red-500 bg-red-50 px-3 py-1 text-xs font-medium text-red-800 hover:bg-red-100 disabled:opacity-50"
+        className="rounded border border-terracotta/60 bg-ink-raised px-3 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay disabled:opacity-50"
       >
         Reject + Ban reporter(s)
       </button>
       <button
         type="button"
         onClick={onClear}
-        className="ml-auto text-xs text-gray-500 hover:text-gray-700"
+        className="ml-auto text-xs text-cream-muted hover:text-cream"
       >
         Clear
       </button>

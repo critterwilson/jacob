@@ -130,9 +130,9 @@ export default function AdminNcmecPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">NCMEC reporting queue</h1>
-        <p className="mt-1 text-sm text-amber-700">
+        <p className="mt-1 text-sm text-parchment-amber">
           ⚠️ Submitting a case files an external legal report. Read{" "}
-          <code className="rounded bg-gray-100 px-1 text-xs">
+          <code className="rounded bg-ink-overlay px-1 text-xs">
             docs/runbooks/csam-incident.md
           </code>{" "}
           before clicking Submit.
@@ -140,39 +140,39 @@ export default function AdminNcmecPage() {
       </header>
 
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
           {error}
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       ) : cases.length === 0 ? (
-        <p className="text-sm text-gray-500">No pending cases.</p>
+        <p className="text-sm text-cream-muted">No pending cases.</p>
       ) : (
         <ul className="space-y-3">
           {cases.map((c) => (
             <li
               key={c.caseId}
-              className="rounded border border-gray-200 bg-white p-4 text-sm"
+              className="rounded border border-line bg-ink-raised p-4 text-sm"
             >
-              <p className="font-mono text-xs text-gray-500">{c.caseId}</p>
+              <p className="font-mono text-xs text-cream-muted">{c.caseId}</p>
               <p>
                 <strong>Hash source:</strong> {c.hashSource}
               </p>
               <p>
                 <strong>Hash:</strong>{" "}
-                <code className="rounded bg-gray-100 px-1 text-xs">
+                <code className="rounded bg-ink-overlay px-1 text-xs">
                   {c.hashValue.slice(0, 16)}…
                 </code>
               </p>
               <p>
                 <strong>Evidence path:</strong>{" "}
-                <code className="rounded bg-gray-100 px-1 text-xs">
+                <code className="rounded bg-ink-overlay px-1 text-xs">
                   {c.evidence.gcsPath}
                 </code>{" "}
                 · sha256{" "}
-                <code className="rounded bg-gray-100 px-1 text-[10px]">
+                <code className="rounded bg-ink-overlay px-1 text-[10px]">
                   {c.evidence.sha256.slice(0, 16)}…
                 </code>{" "}
                 · {c.evidence.sizeBytes} bytes
@@ -193,19 +193,19 @@ export default function AdminNcmecPage() {
                 <button
                   type="button"
                   onClick={() => submit(c.caseId)}
-                  className="rounded bg-red-700 px-3 py-1 text-sm text-white hover:bg-red-800"
+                  className="rounded bg-terracotta px-3 py-1 text-sm text-cream hover:bg-terracotta/90"
                 >
                   Submit (legal action)
                 </button>
                 <button
                   type="button"
                   onClick={() => withdraw(c.caseId)}
-                  className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+                  className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-overlay"
                 >
                   Withdraw (false positive)
                 </button>
                 {actionState[c.caseId] && (
-                  <span className="self-center text-xs text-gray-500">
+                  <span className="self-center text-xs text-cream-muted">
                     {actionState[c.caseId]}
                   </span>
                 )}
