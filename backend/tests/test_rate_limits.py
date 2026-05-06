@@ -285,6 +285,41 @@ def test_key_func_falls_back_to_ip_when_no_uid() -> None:
     assert result != "user-abc"
 
 
+def test_key_func_uses_x_forwarded_for_when_no_uid() -> None:
+    """H-BACK-3: behind Cloud Run's LB, request.client.host is the LB's IP.
+
+    Without consulting X-Forwarded-For, every unauthenticated request
+    shares one rate-limit bucket. The keyfunc must walk XFF and pick the
+    leftmost public address.
+    """
+    mock_request = MagicMock(spec=Request)
+    del mock_request.state.uid
+    mock_request.headers = {"x-forwarded-for": "8.8.8.8, 10.0.0.1, 169.254.0.1"}
+    mock_request.client = MagicMock()
+    mock_request.client.host = "10.0.0.1"  # the LB
+    assert _key_by_uid_or_ip(mock_request) == "8.8.8.8"
+
+
+def test_key_func_skips_private_xff_hops() -> None:
+    """Skip private/internal hops in XFF and find the originating client."""
+    mock_request = MagicMock(spec=Request)
+    del mock_request.state.uid
+    mock_request.headers = {"x-forwarded-for": "10.0.0.1, 192.168.1.5, 1.1.1.1"}
+    mock_request.client = MagicMock()
+    mock_request.client.host = "10.0.0.1"
+    assert _key_by_uid_or_ip(mock_request) == "1.1.1.1"
+
+
+def test_key_func_falls_back_to_remote_when_no_xff() -> None:
+    """Without an X-Forwarded-For header, fall back to the direct peer."""
+    mock_request = MagicMock(spec=Request)
+    del mock_request.state.uid
+    mock_request.headers = {}
+    mock_request.client = MagicMock()
+    mock_request.client.host = "9.9.9.9"
+    assert _key_by_uid_or_ip(mock_request) == "9.9.9.9"
+
+
 def test_two_uids_are_independent_buckets() -> None:
     """Two authenticated users with different UIDs each get their own counter."""
     test_limiter = Limiter(key_func=_key_by_uid_or_ip, headers_enabled=True)
