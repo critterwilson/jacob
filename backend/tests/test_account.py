@@ -360,6 +360,75 @@ def test_finalize_idempotent_when_user_already_gone() -> None:
     db._user_ref.delete.assert_not_called()
 
 
+def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """C1: confirm finalize_account routes through every new cleanup helper.
+
+    Patches each helper to a sentinel return value; asserts each was
+    invoked once and the resulting audit-log payload + return dict carry
+    the expected fanout counters. Doesn't exercise Firestore semantics
+    end-to-end (that's the emulator job).
+    """
+    db = _make_finalize_db(messages=[("g1", "m1", "hi")])
+    calls: dict[str, int] = {}
+
+    def _wrap(name: str, ret):  # type: ignore[no-untyped-def]
+        def fn(*args, **kwargs):  # type: ignore[no-untyped-def]
+            calls[name] = calls.get(name, 0) + 1
+            return ret
+
+        return fn
+
+    with (
+        patch("app.services.deletion._db", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+        patch("app.services.deletion.firebase_auth.update_user"),
+        patch(
+            "app.services.deletion._tombstone_board_content",
+            _wrap("boards", {"posts": 2, "replies": 5}),
+        ),
+        patch("app.services.deletion._delete_reactions_by_user", _wrap("reactions", 0)),
+        patch("app.services.deletion._delete_event_rsvps", _wrap("rsvps", 3)),
+        patch("app.services.deletion._delete_reports_by_user", _wrap("reports", 1)),
+        patch(
+            "app.services.deletion._delete_group_memberships",
+            _wrap("group_members", 4),
+        ),
+        patch(
+            "app.services.deletion._delete_org_memberships",
+            _wrap("org_members", 1),
+        ),
+        patch(
+            "app.services.deletion._delete_user_subcollections",
+            _wrap("subcollections", {"notifications": 7, "devices": 2, "mutes": 0}),
+        ),
+        patch("app.services.deletion._delete_typesense_messages", _wrap("typesense", 0)),
+    ):
+        result = deletion.finalize_account("alice")
+
+    # Every new cleanup helper was invoked exactly once.
+    assert calls == {
+        "boards": 1,
+        "reactions": 1,
+        "rsvps": 1,
+        "reports": 1,
+        "group_members": 1,
+        "org_members": 1,
+        "subcollections": 1,
+        "typesense": 1,
+    }
+    # Return shape carries the new counters.
+    assert result["boardPostsTombstoned"] == 2
+    assert result["boardRepliesTombstoned"] == 5
+    assert result["rsvpsDeleted"] == 3
+    assert result["reportsDeleted"] == 1
+    assert result["groupMemberships"] == 4
+    assert result["orgMemberships"] == 1
+    # Audit payload mirrors the result fanout.
+    audit_set = db._audit_col.document().set.call_args[0][0]
+    assert audit_set["payload"]["boardPostsTombstoned"] == 2
+    assert audit_set["payload"]["userSubcollections"]["notifications"] == 7
+
+
 def test_find_users_due_uses_cutoff() -> None:
     db = MagicMock()
     where_mock = MagicMock()

@@ -72,3 +72,30 @@ at age 365 days; no Delete rule.
 document the retention policy in `docs/runbooks/media-moderation.md`.
 Requires legal/counsel sign-off per existing comment; file a ticket before
 implementing.
+
+---
+
+## C1 — Reaction subcollection cleanup on account deletion
+
+**Where:** `backend/app/services/deletion.py:_delete_reactions_by_user` is
+currently a no-op that returns 0.
+
+**Why deferred:** the reaction docs live at
+`groups/{gid}/messages/{mid}/reactions/{slug}/users/{uid}`. The leaf
+subcollection name `users` collides with the top-level `users` collection
+at the collection-group level, and the Python Admin SDK doesn't expose a
+clean by-document-id filter for collection-group queries. Two viable fixes:
+
+1. Denormalise a `userUid` field on the reaction doc and CG-query by
+   that. Requires updating the reaction toggle endpoint
+   (`POST /api/groups/{gid}/messages/{mid}/reactions/{slug}` in
+   `backend/app/routers/messages.py`) to write the field; backfill via
+   a one-shot script.
+2. Maintain a `users/{uid}/reactions/{gid}_{mid}_{slug}` index doc on
+   every reaction write. One extra Firestore write per reaction; cheap
+   delete on account finalize.
+
+**Impact today:** stale reaction docs contain only `reactedAt` (no PII
+beyond a timestamp). The `reactionCounts` map on the parent message
+stays slightly inflated for any message the deleted user reacted to
+until a re-index. No GDPR violation; cosmetic UI inconsistency only.

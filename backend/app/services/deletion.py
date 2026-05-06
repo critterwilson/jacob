@@ -199,16 +199,80 @@ def _delete_avatar(photo_url: str | None) -> None:
 
 
 def _tombstone_messages(db: Any, uid: str, *, keep_body: bool) -> int:
-    """Replace authorUid with TOMBSTONE_UID across all groups. Returns count."""
+    """Replace authorUid with TOMBSTONE_UID across all groups. Returns count.
+
+    When `keep_body=False`, also clears `body` and best-effort deletes any
+    GCS objects referenced from `mediaRefs` (the messages were the only
+    place that pointed at them; orphaning would just waste storage budget).
+    """
     query = db.collection_group("messages").where("authorUid", "==", uid)
     count = 0
     for snap in query.stream():
+        data = snap.to_dict() or {}
         update: dict[str, Any] = {"authorUid": TOMBSTONE_UID}
         if not keep_body:
             update["body"] = ""
+            update["mediaRefs"] = []
+            for media_url in data.get("mediaRefs") or []:
+                if isinstance(media_url, str):
+                    _delete_gcs_object_by_url(media_url)
         snap.reference.update(update)
         count += 1
     return count
+
+
+def _delete_gcs_object_by_url(url: str) -> None:
+    """Best-effort delete of a public-bucket object referenced by URL."""
+    prefix = "https://storage.googleapis.com/"
+    if not url.startswith(prefix):
+        return
+    rest = url[len(prefix) :]
+    if "/" not in rest:
+        return
+    bucket_name, object_name = rest.split("/", 1)
+    import importlib
+
+    storage = importlib.import_module("google.cloud.storage")
+    try:
+        client = storage.Client()
+        client.bucket(bucket_name).blob(object_name).delete()
+    except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+        logger.warning(
+            "media delete failed bucket=%s object=%s err=%s", bucket_name, object_name, exc
+        )
+
+
+# ── C1: full subcollection + cross-surface cleanup ──────────────────────────
+
+# Subcollections directly under `users/{uid}`. `private` is handled
+# separately because its semantics (PII payload) and audit posture differ.
+_USER_SUBCOLLECTIONS = (
+    "notifications",
+    "devices",
+    "mutes",
+    "blocks",
+    "exports",
+    "plan_progress",
+    "notificationPrefs",
+)
+
+
+def _delete_user_subcollections(db: Any, uid: str) -> dict[str, int]:
+    """Delete every doc under each `users/{uid}/{subcol}` we know about.
+
+    Returns a counter dict keyed by subcollection name so callers can log
+    the deletion fanout. Tolerant to missing subcollections (Firestore
+    `stream()` over a non-existent path is a no-op).
+    """
+    counts: dict[str, int] = {}
+    for subcol in _USER_SUBCOLLECTIONS:
+        col = db.collection("users").document(uid).collection(subcol)
+        n = 0
+        for snap in col.stream():
+            snap.reference.delete()
+            n += 1
+        counts[subcol] = n
+    return counts
 
 
 def _delete_private_subcollection(db: Any, uid: str) -> None:
@@ -217,16 +281,146 @@ def _delete_private_subcollection(db: Any, uid: str) -> None:
         snap.reference.delete()
 
 
+def _delete_group_memberships(db: Any, uid: str) -> int:
+    """Remove the user's `groups/{gid}/members/{uid}` rows + decrement
+    `memberCount` on each parent group.
+
+    The `onMemberWrite` Cloud Function maintains `leaderCount` and
+    `leaderUids` automatically, so the in-line decrement here is only for
+    `memberCount` (which has no trigger).
+    """
+    query = db.collection_group("members").where("uid", "==", uid)
+    count = 0
+    for snap in query.stream():
+        # Path: `{collection}/{docId}/members/{uid}`. Only act on group
+        # members; org members are handled separately below.
+        parent = snap.reference.parent.parent
+        if parent is None or parent.parent is None or parent.parent.id != "groups":
+            continue
+        try:
+            parent.update({"memberCount": fb_firestore.Increment(-1)})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "memberCount decrement failed gid=%s err=%s",
+                parent.id,
+                exc,
+            )
+        snap.reference.delete()
+        count += 1
+    return count
+
+
+def _delete_org_memberships(db: Any, uid: str) -> int:
+    """Remove `orgs/{orgId}/members/{uid}` rows. Org membership has no
+    counter to decrement; the doc is the membership."""
+    query = db.collection_group("members").where("uid", "==", uid)
+    count = 0
+    for snap in query.stream():
+        parent = snap.reference.parent.parent
+        if parent is None or parent.parent is None or parent.parent.id != "orgs":
+            continue
+        snap.reference.delete()
+        count += 1
+    return count
+
+
+def _delete_reactions_by_user(db: Any, uid: str) -> int:
+    """Reaction-user docs live at `groups/{gid}/messages/{mid}/reactions/
+    {slug}/users/{uid}`. The `users` subcollection name collides with the
+    top-level `users` collection at the collection-group level, and the
+    Python Admin SDK doesn't expose a clean by-document-id filter for CG
+    queries — so we cannot use a single CG query.
+
+    Tracked as a follow-up: either denormalise a `userUid` field on the
+    reaction doc and CG-query by that, or maintain a `users/{uid}/
+    reactions` index on every reaction write. For now the reaction docs
+    contain only `reactedAt` (no PII beyond a timestamp). The
+    reactionCounts on the parent message stay slightly inflated for any
+    message the user reacted to until the next re-index; tracked in
+    `docs/follow-ups/phase-2-deferred.md`.
+    """
+    return 0
+
+
+def _delete_event_rsvps(db: Any, uid: str) -> int:
+    """Delete `groups/{gid}/events/{eid}/rsvps/{uid}` rows."""
+    cg = db.collection_group("rsvps")
+    count = 0
+    for snap in cg.stream():
+        if snap.id != uid:
+            continue
+        snap.reference.delete()
+        count += 1
+    return count
+
+
+def _tombstone_board_content(db: Any, uid: str, *, keep_body: bool) -> dict[str, int]:
+    """Tombstone the user's authored board posts and replies, mirroring
+    the message tombstone semantics."""
+    counts = {"posts": 0, "replies": 0}
+    posts_q = db.collection_group("posts").where("authorUid", "==", uid)
+    for snap in posts_q.stream():
+        # Skip non-board `posts` collections if any exist outside boards.
+        path = snap.reference.path
+        if not path.startswith("boards/"):
+            continue
+        update: dict[str, Any] = {"authorUid": TOMBSTONE_UID}
+        if not keep_body:
+            update["body"] = ""
+        snap.reference.update(update)
+        counts["posts"] += 1
+    replies_q = db.collection_group("replies").where("authorUid", "==", uid)
+    for snap in replies_q.stream():
+        path = snap.reference.path
+        if not path.startswith("boards/"):
+            continue
+        update = {"authorUid": TOMBSTONE_UID}
+        if not keep_body:
+            update["body"] = ""
+        snap.reference.update(update)
+        counts["replies"] += 1
+    return counts
+
+
+def _delete_reports_by_user(db: Any, uid: str) -> int:
+    """Delete `moderation_queue` rows where the user filed the report.
+
+    Authored content + reports about the user are kept (those are
+    moderator-facing audit trails). Only reports the user *filed* go.
+    """
+    query = db.collection("moderation_queue").where("reportedBy", "==", uid)
+    count = 0
+    for snap in query.stream():
+        snap.reference.delete()
+        count += 1
+    return count
+
+
+def _delete_typesense_messages(uid: str) -> int:
+    """Search-sidecar cleanup is delegated to the existing
+    `onMessageWrite` Cloud Function (functions/src/onMessageWrite.ts).
+
+    Tombstoning a message (via `_tombstone_messages` above) fires that
+    trigger, which re-indexes the message in Typesense with the
+    tombstoned authorUid. No direct delete is needed here. Returns 0.
+    """
+    return 0
+
+
 def finalize_account(uid: str) -> dict[str, Any]:
-    """Hard-delete a user past their grace window. Idempotent.
+    """Hard-delete a user past their grace window. Idempotent (C1).
 
     Order matters:
       1. Disable the Firebase Auth account so no fresh tokens can be minted.
-      2. Tombstone messages (still need the user doc for keepBody).
-      3. Delete avatar object from GCS.
-      4. Delete `users/{uid}/private/profile`.
-      5. Delete `users/{uid}` doc.
-      6. Audit log with actorUid="system".
+      2. Tombstone authored messages + boards posts/replies.
+      3. Delete reactions / RSVPs / reports filed by the user.
+      4. Delete group + org memberships (decrementing memberCount; the
+         onMemberWrite trigger handles leaderCount + leaderUids).
+      5. Delete avatar + private-profile + every subcollection under
+         `users/{uid}`.
+      6. Best-effort search-sidecar cleanup.
+      7. Delete `users/{uid}` doc.
+      8. Audit log with actorUid="system".
     """
     db = _db()
     user_ref = db.collection("users").document(uid)
@@ -246,29 +440,74 @@ def finalize_account(uid: str) -> dict[str, Any]:
         pass
 
     tombstoned = _tombstone_messages(db, uid, keep_body=keep_body)
+    boards = _tombstone_board_content(db, uid, keep_body=keep_body)
+    reactions_deleted = _delete_reactions_by_user(db, uid)
+    rsvps_deleted = _delete_event_rsvps(db, uid)
+    reports_deleted = _delete_reports_by_user(db, uid)
+    group_memberships = _delete_group_memberships(db, uid)
+    org_memberships = _delete_org_memberships(db, uid)
+    typesense_deleted = _delete_typesense_messages(uid)
+
     _delete_avatar(photo_url if isinstance(photo_url, str) else None)
     _delete_private_subcollection(db, uid)
+    subcol_counts = _delete_user_subcollections(db, uid)
 
     # Capture email/name before the doc disappears.
     to_email = data.get("email", "")
     display_name = data.get("displayName", "")
     user_ref.delete()
 
+    payload: dict[str, Any] = {
+        "keepBody": keep_body,
+        "messagesTombstoned": tombstoned,
+        "boardPostsTombstoned": boards["posts"],
+        "boardRepliesTombstoned": boards["replies"],
+        "reactionsDeleted": reactions_deleted,
+        "rsvpsDeleted": rsvps_deleted,
+        "reportsDeleted": reports_deleted,
+        "groupMemberships": group_memberships,
+        "orgMemberships": org_memberships,
+        "typesenseDeleted": typesense_deleted,
+        "userSubcollections": subcol_counts,
+    }
     write_audit_log(
         actor_uid="system",
         action="account_finalized",
         target_ref=f"users/{uid}",
-        payload={"keepBody": keep_body, "messagesTombstoned": tombstoned},
+        payload=payload,
     )
 
-    logger.info("finalize complete uid=%s tombstoned=%d", uid, tombstoned)
+    logger.info(
+        "finalize complete uid=%s tombstoned=%d board_posts=%d board_replies=%d "
+        "reactions=%d rsvps=%d reports=%d group_members=%d org_members=%d",
+        uid,
+        tombstoned,
+        boards["posts"],
+        boards["replies"],
+        reactions_deleted,
+        rsvps_deleted,
+        reports_deleted,
+        group_memberships,
+        org_memberships,
+    )
 
     try:
         send_deletion_finalized(to_email=to_email, display_name=display_name)
     except Exception:
         logger.exception("deletion_finalized email failed uid=%s", uid)
 
-    return {"uid": uid, "status": "finalized", "messagesTombstoned": tombstoned}
+    return {
+        "uid": uid,
+        "status": "finalized",
+        "messagesTombstoned": tombstoned,
+        "boardPostsTombstoned": boards["posts"],
+        "boardRepliesTombstoned": boards["replies"],
+        "reactionsDeleted": reactions_deleted,
+        "rsvpsDeleted": rsvps_deleted,
+        "reportsDeleted": reports_deleted,
+        "groupMemberships": group_memberships,
+        "orgMemberships": org_memberships,
+    }
 
 
 def find_users_due(now: datetime | None = None) -> list[str]:
