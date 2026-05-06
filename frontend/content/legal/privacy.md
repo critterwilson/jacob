@@ -107,9 +107,11 @@ transferred to and processed in the United States.
 We keep your data while your account is active. When you delete your
 account:
 
-- Your profile, messages, posts, photos, reactions, and group memberships
-  are removed in a cascading deletion (this is the *right to be forgotten*
-  / Article 17 of the GDPR).
+- Your profile, messages, posts, photos, and group memberships are removed
+  in a cascading deletion (this is the *right to be forgotten* / Article 17
+  of the GDPR). Reactions you've made on other people's content persist
+  as anonymous timestamps after deletion — the underlying reaction
+  document holds only a `reactedAt` field and no other personal data.
 - The deletion is performed within 30 days of your request. Some references
   to your prior content (for example, in another member's quoted reply)
   are replaced with a generic "deleted user" placeholder rather than your
