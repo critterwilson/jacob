@@ -166,6 +166,17 @@ export const onNotificationCreate = onDocumentCreated(
 
     const payload = buildPayload(notif, uid);
 
+    // Initialise the counters BEFORE enqueuing so a worker that lands
+    // between `enqueue()` and the trigger's post-loop write can't be
+    // clobbered by a hard `delivered: 0` / `failed: 0` reset. Workers
+    // race each other safely because `FieldValue.increment` is
+    // commutative; the post-loop write only updates `enqueued` totals.
+    await notifRef.update({
+      enqueuedAt: FieldValue.serverTimestamp(),
+      delivered: 0,
+      failed: 0,
+    });
+
     // H2: enqueue one Cloud Task per device. The `sendFcmTask` worker
     // (in sendFcmTask.ts) handles the FCM send and incrementally
     // updates `delivered`/`failed` counters on this notif doc. The
@@ -187,15 +198,7 @@ export const onNotificationCreate = onDocumentCreated(
       enqueued += 1;
     }
 
-    // Initialise the counters so the worker's `FieldValue.increment`
-    // calls land on a known shape. Workers race each other safely
-    // because increment is commutative.
-    await notifRef.update({
-      enqueued,
-      enqueuedAt: FieldValue.serverTimestamp(),
-      delivered: 0,
-      failed: 0,
-    });
+    await notifRef.update({ enqueued });
 
     logger.info("notification_dispatched", {
       uid,
