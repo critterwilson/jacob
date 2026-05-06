@@ -103,6 +103,7 @@ export const onBoardPostCreate = onDocumentCreated(
             const snap = await db.collection("users").doc(uid).get();
             return snap.exists;
           },
+          eventId: event.id,
         });
         logger.info("board_mention_fanout_done", {
           boardId,
