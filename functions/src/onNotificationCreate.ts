@@ -6,8 +6,11 @@
  * and device list, sends FCM to each registered device, then stamps the
  * notification doc with `deliveredAt` or `failedAt`.
  *
- * Idempotency: the trigger fires once per create. Retried delivery
- * re-sends, but FCM deduplicates within 4 h via `collapse_key`.
+ * Idempotency: Cloud Functions delivery is at-least-once. We dedupe on
+ * `event.id` via a marker doc at
+ * `users/{uid}/notifications/{nid}/_events/{eventId}`, written inside a
+ * transaction before any task is enqueued. Same pattern as
+ * `onMessageWrite.ts` and `onReactionWrite.ts`.
  *
  * P3 options: region us-central1, maxInstances 10, retry false.
  */
@@ -20,6 +23,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 
 import { tryReserveFcmQuota, type FcmPayload } from "./services/fcm";
 import type { SendFcmTaskPayload } from "./sendFcmTask";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -107,6 +111,21 @@ export const onNotificationCreate = onDocumentCreated(
 
     const db = getFirestore();
     const notifRef = db.collection("users").doc(uid).collection("notifications").doc(nid);
+
+    // Idempotency guard: bail if we have already processed this event id.
+    // Cloud Functions delivery is at-least-once; without this every redelivery
+    // would re-enqueue the per-device FCM tasks and produce duplicate pushes.
+    const eventRef = notifRef.collection("_events").doc(event.id);
+    const reserved = await db.runTransaction(async (txn) => {
+      const eventSnap = await txn.get(eventRef);
+      if (eventSnap.exists) return false;
+      txn.set(eventRef, eventMarker());
+      return true;
+    });
+    if (!reserved) {
+      logger.info("notification_event_already_processed", { uid, nid, eventId: event.id });
+      return;
+    }
 
     const prefKey = KIND_TO_PREF[notif.kind] ?? null;
     if (prefKey !== null) {
