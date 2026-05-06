@@ -265,8 +265,13 @@ class FakeTransaction:
     def __init__(self, fs: FakeFirestore) -> None:
         self._fs = fs
 
-    def get(self, ref: FakeDocRef) -> FakeSnapshot:
-        return ref.get()
+    def get(self, ref_or_query: Any) -> Any:
+        # Real Firestore transactions accept either a DocumentReference
+        # (returns a snapshot) or a Query/CollectionReference (returns an
+        # iterator of snapshots). FakeQuery has `stream`; FakeDocRef does not.
+        if hasattr(ref_or_query, "stream"):
+            return ref_or_query.stream()
+        return ref_or_query.get()
 
     def set(self, ref: FakeDocRef, data: dict[str, Any]) -> None:
         ref.set(data)
@@ -692,10 +697,65 @@ def test_admin_remove_refuses_last_admin() -> None:
     _seed_org(fs, org_id="o1", admins=["admin-1"])
     user = _user("admin-1")
 
-    with patch("app.routers.orgs._db", return_value=fs):
+    with (
+        patch("app.routers.orgs._db", return_value=fs),
+        patch("google.cloud.firestore.transactional", _patch_transactional()),
+    ):
         res = TestClient(_app(user=user)).delete("/api/orgs/o1/admins/admin-1")
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "last_admin"
+
+
+def test_remove_admin_re_reads_admins_through_transaction() -> None:
+    """H-BACK-1: the admin-count check must run inside the txn.
+
+    Simulate a concurrent race by feeding the txn-scoped query a stale
+    view that has dropped to one admin, even though the bare collection
+    still returns two. If `remove_admin` reads through the transaction
+    (the correctness invariant), it sees count=1 and refuses; if it
+    reads outside, it sees count=2 and brick-deletes the last admin.
+    """
+    fs = FakeFirestore()
+    _seed_org(fs, org_id="o1", admins=["admin-1", "admin-2"])
+
+    txn_get_args: list[Any] = []
+
+    class RacingTxn:
+        def get(self, ref_or_query: Any) -> Any:
+            txn_get_args.append(ref_or_query)
+            if hasattr(ref_or_query, "stream"):
+                # One admin only — as if a concurrent remove had
+                # already committed during this transaction's window.
+                return iter([FakeSnapshot("admin-2", {"addedBy": "x"})])
+            return ref_or_query.get()
+
+        def delete(self, ref: Any) -> None:
+            ref.delete()
+
+    racing_txn = RacingTxn()
+
+    class RacingDB:
+        def __init__(self, inner: FakeFirestore) -> None:
+            self._inner = inner
+
+        def collection(self, name: str) -> Any:
+            return self._inner.collection(name)
+
+        def transaction(self) -> Any:
+            return racing_txn
+
+    with patch("google.cloud.firestore.transactional", _patch_transactional()):
+        ok, reason = orgs_service.remove_admin(
+            RacingDB(fs),
+            org_id="o1",
+            uid="admin-1",
+        )
+
+    assert (ok, reason) == (False, "last_admin")
+    # The admin-count query was issued through the txn (a query has .stream).
+    assert any(hasattr(arg, "stream") for arg in txn_get_args)
+    # And the doc was *not* deleted — the txn refused.
+    assert fs._doc_get("orgs/o1/admins/admin-1") is not None
 
 
 def test_admin_remove_404_for_non_admin_target() -> None:
@@ -706,6 +766,7 @@ def test_admin_remove_404_for_non_admin_target() -> None:
     with (
         patch("app.routers.orgs._db", return_value=fs),
         patch("app.services.audit._db", return_value=fs),
+        patch("google.cloud.firestore.transactional", _patch_transactional()),
     ):
         res = TestClient(_app(user=user)).delete("/api/orgs/o1/admins/stranger")
     assert res.status_code == 404
