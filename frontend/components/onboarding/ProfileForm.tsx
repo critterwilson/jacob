@@ -245,7 +245,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
           <span>
             I agree to the{" "}
             <Link
-              href="/about"
+              href="/guidelines"
               variant="accent"
               target="_blank"
               rel="noreferrer"

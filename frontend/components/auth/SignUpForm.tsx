@@ -24,8 +24,11 @@ export function SignUpForm() {
   const {
     register,
     handleSubmit,
+    setError,
+    watch,
     formState: { errors },
   } = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema) });
+  const acceptTerms = watch("acceptTerms");
 
   const onSubmit = async (values: SignUpValues) => {
     setSubmitError(null);
@@ -47,6 +50,16 @@ export function SignUpForm() {
 
   const onGoogle = async () => {
     setSubmitError(null);
+    if (!acceptTerms) {
+      // The Google flow bypasses the form's submit handler, so the
+      // zod gate doesn't fire. Surface the same error inline so a
+      // user can't sidestep the ToS check by clicking Google.
+      setError("acceptTerms", {
+        type: "manual",
+        message: "You must agree to the Terms of Service and Privacy Policy",
+      });
+      return;
+    }
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
       router.push("/onboarding");
@@ -78,6 +91,45 @@ export function SignUpForm() {
         helperText="At least 10 characters, one number, one symbol."
         error={errors.password?.message}
       />
+
+      <div className="space-y-2">
+        <label className="flex cursor-pointer items-start gap-2 text-body-sm text-cream">
+          <input
+            id="acceptTerms"
+            type="checkbox"
+            className="mt-1 h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
+            {...register("acceptTerms")}
+          />
+          <span>
+            I agree to the{" "}
+            <Link
+              href="/terms"
+              variant="accent"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link
+              href="/privacy"
+              variant="accent"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Privacy Policy
+            </Link>
+            <span aria-hidden="true" className="ml-1 text-terracotta">
+              *
+            </span>
+          </span>
+        </label>
+        {errors.acceptTerms && (
+          <p role="alert" className="text-body-sm text-terracotta">
+            {errors.acceptTerms.message}
+          </p>
+        )}
+      </div>
 
       {submitError && <Banner tone="error">{submitError}</Banner>}
 

@@ -57,6 +57,13 @@ export async function submitSignIn(page: Page): Promise<void> {
 }
 
 export async function submitSignUp(page: Page): Promise<void> {
+  // The form gates submission on the Terms of Service checkbox; tick
+  // it here so each test that goes through the helper doesn't have to
+  // know about the gate.
+  const accept = page.locator("#acceptTerms");
+  if (await accept.isVisible()) {
+    await accept.check();
+  }
   await page.getByRole("button", { name: /^create account$/i }).click();
 }
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { LegalFooter } from "@/components/legal/LegalFooter";
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { Card, Heading } from "@/components/ui";
 
@@ -18,6 +19,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <Card surface="raised" padding="lg" className="w-full">
           {children}
         </Card>
+
+        <LegalFooter />
       </div>
     </main>
   );
