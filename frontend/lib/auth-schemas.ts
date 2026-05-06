@@ -18,6 +18,9 @@ export type SignInValues = z.infer<typeof signInSchema>;
 export const signUpSchema = z.object({
   email,
   password,
+  acceptTerms: z.literal(true, {
+    error: "You must agree to the Terms of Service and Privacy Policy",
+  }),
 });
 export type SignUpValues = z.infer<typeof signUpSchema>;
 
