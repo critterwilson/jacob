@@ -2,9 +2,8 @@
 
 import { useCallback, useState } from "react";
 
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type AdminUser = {
   uid: string;
@@ -15,17 +14,6 @@ type AdminUser = {
 };
 
 type BanDuration = "24h" | "7d" | "permanent";
-
-async function authFetch(token: string, path: string, init?: RequestInit) {
-  return fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
-}
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -40,16 +28,19 @@ export default function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const url = query
+      const path = query
         ? `/api/admin/users?q=${encodeURIComponent(query)}`
         : "/api/admin/users";
-      const res = await authFetch(token, url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ users: AdminUser[] }>(path);
       setUsers(data.users);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load users");
+      setError(
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : e instanceof Error
+            ? e.message
+            : "Failed to load users",
+      );
     } finally {
       setLoading(false);
     }
@@ -59,12 +50,10 @@ export default function AdminUsersPage() {
     if (!user) return;
     setActionState((s) => ({ ...s, [uid]: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/users/${uid}/ban`, {
-        method: "POST",
-        body: JSON.stringify({ reason: "Admin ban", duration }),
+      await apiPost(`/api/admin/users/${uid}/ban`, {
+        reason: "Admin ban",
+        duration,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setUsers((prev) =>
         prev.map((u) => (u.uid === uid ? { ...u, isBanned: true } : u)),
       );
@@ -72,7 +61,12 @@ export default function AdminUsersPage() {
     } catch (e) {
       setActionState((s) => ({
         ...s,
-        [uid]: e instanceof Error ? e.message : "error",
+        [uid]:
+          e instanceof ApiError
+            ? e.message || `HTTP ${e.status}`
+            : e instanceof Error
+              ? e.message
+              : "error",
       }));
     }
   };
@@ -81,11 +75,7 @@ export default function AdminUsersPage() {
     if (!user) return;
     setActionState((s) => ({ ...s, [uid]: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/users/${uid}/unban`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiPost(`/api/admin/users/${uid}/unban`, undefined);
       setUsers((prev) =>
         prev.map((u) => (u.uid === uid ? { ...u, isBanned: false } : u)),
       );
@@ -93,7 +83,12 @@ export default function AdminUsersPage() {
     } catch (e) {
       setActionState((s) => ({
         ...s,
-        [uid]: e instanceof Error ? e.message : "error",
+        [uid]:
+          e instanceof ApiError
+            ? e.message || `HTTP ${e.status}`
+            : e instanceof Error
+              ? e.message
+              : "error",
       }));
     }
   };

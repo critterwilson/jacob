@@ -17,6 +17,21 @@
           }
         ]
       }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.name='fetch']",
+        "message": "Use the typed apiGet/apiPost/apiPatch/apiDelete from @/lib/api instead of raw fetch(). The wrapper attaches the Firebase ID token, normalises errors as ApiError, and handles retries / CORS / aborts uniformly. Legitimate exceptions (direct cross-origin uploads to signed URLs, etc.) need an inline `// eslint-disable-next-line no-restricted-syntax` with a short why."
+      }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["lib/api.ts", "app/sw.ts"],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
 }

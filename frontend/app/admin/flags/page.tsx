@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Cohorts = {
   orgIds: string[];
@@ -28,23 +27,18 @@ type FilterMode = "all" | "candidate-cleanup";
 
 const CLEANUP_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
-async function authFetch(token: string, path: string, init?: RequestInit) {
-  return fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
-}
-
 function isCandidateForCleanup(flag: FeatureFlag): boolean {
   if (flag.rolloutPercentage < 100) return false;
   if (!flag.fullRolloutAt) return false;
   const at = Date.parse(flag.fullRolloutAt);
   if (Number.isNaN(at)) return false;
   return Date.now() - at >= CLEANUP_THRESHOLD_MS;
+}
+
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return fallback;
 }
 
 export default function AdminFlagsPage() {
@@ -65,13 +59,10 @@ export default function AdminFlagsPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, "/api/admin/flags");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setFlags(data.flags as FeatureFlag[]);
+      const data = await apiGet<{ flags: FeatureFlag[] }>("/api/admin/flags");
+      setFlags(data.flags);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load flags");
+      setError(errorMessage(e, "Failed to load flags"));
     } finally {
       setLoading(false);
     }
@@ -97,22 +88,16 @@ export default function AdminFlagsPage() {
     if (!user) return;
     setActionState((s) => ({ ...s, [flagKey]: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/flags/${flagKey}/percentage`, {
-        method: "POST",
-        body: JSON.stringify({ rolloutPercentage: pct }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const updated: FeatureFlag = await res.json();
+      const updated = await apiPost<FeatureFlag>(
+        `/api/admin/flags/${flagKey}/percentage`,
+        { rolloutPercentage: pct },
+      );
       setFlags((prev) =>
         prev.map((f) => (f.flagKey === flagKey ? updated : f)),
       );
       setActionState((s) => ({ ...s, [flagKey]: "done" }));
     } catch (e) {
-      setActionState((s) => ({
-        ...s,
-        [flagKey]: e instanceof Error ? e.message : "error",
-      }));
+      setActionState((s) => ({ ...s, [flagKey]: errorMessage(e, "error") }));
     }
   };
 
@@ -121,32 +106,18 @@ export default function AdminFlagsPage() {
     setCreatePending(true);
     setCreateError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, "/api/admin/flags", {
-        method: "POST",
-        body: JSON.stringify({
-          flagKey: newKey,
-          enabled: true,
-          rolloutPercentage: 0,
-          cohorts: { orgIds: [], roles: [], uids: [] },
-          description: newDescription,
-        }),
+      await apiPost("/api/admin/flags", {
+        flagKey: newKey,
+        enabled: true,
+        rolloutPercentage: 0,
+        cohorts: { orgIds: [], roles: [], uids: [] },
+        description: newDescription,
       });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error?.message) msg = body.error.message;
-        } catch {
-          // fall through with HTTP-status fallback
-        }
-        throw new Error(msg);
-      }
       setNewKey("");
       setNewDescription("");
       await loadFlags();
     } catch (e) {
-      setCreateError(e instanceof Error ? e.message : "Failed to create flag");
+      setCreateError(errorMessage(e, "Failed to create flag"));
     } finally {
       setCreatePending(false);
     }

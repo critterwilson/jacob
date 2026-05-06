@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
+import { ApiError, apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type AdminGroup = {
   gid: string;
@@ -13,17 +12,6 @@ type AdminGroup = {
   memberCount: number;
   createdAt: string | null;
 };
-
-async function authFetch(token: string, path: string, init?: RequestInit) {
-  return fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
-}
 
 export default function AdminGroupsPage() {
   const { user } = useAuth();
@@ -37,16 +25,19 @@ export default function AdminGroupsPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const url = query
+      const path = query
         ? `/api/admin/groups?q=${encodeURIComponent(query)}`
         : "/api/admin/groups";
-      const res = await authFetch(token, url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ groups: AdminGroup[] }>(path);
       setGroups(data.groups);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load groups");
+      setError(
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : e instanceof Error
+            ? e.message
+            : "Failed to load groups",
+      );
     } finally {
       setLoading(false);
     }

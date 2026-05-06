@@ -88,6 +88,40 @@ describe("apiPost / apiGet — transport error disambiguation", () => {
   });
 });
 
+describe("apiPost — FormData body", () => {
+  it("passes the FormData straight through and does NOT set Content-Type", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    global.fetch = fetchMock;
+
+    const fd = new FormData();
+    fd.append("file", new Blob(["hello"], { type: "text/plain" }), "hi.txt");
+    fd.append("purpose", "avatar");
+
+    await apiPost<{ ok: boolean }>("/api/things", fd);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    // The browser sets multipart Content-Type+boundary automatically; we
+    // must not pre-set it or the boundary is missing and the server rejects.
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBeUndefined();
+    // Same FormData reference (not stringified).
+    expect(init.body).toBe(fd);
+  });
+
+  it("still sets Content-Type: application/json for plain object bodies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    global.fetch = fetchMock;
+
+    await apiPost("/api/things", { hello: "world" });
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
+      "application/json",
+    );
+    expect(init.body).toBe(JSON.stringify({ hello: "world" }));
+  });
+});
+
 describe("ApiError shape", () => {
   it("carries status, code, message, and details", () => {
     const e = new ApiError(503, "stickers_unavailable", "down", { foo: 1 });

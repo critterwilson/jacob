@@ -3,9 +3,8 @@
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError, apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Appeal = {
   appealId: string;
@@ -32,14 +31,16 @@ export default function AppealDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}/api/appeals/${appealId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setAppeal(await res.json());
+      const data = await apiGet<Appeal>(`/api/appeals/${appealId}`);
+      setAppeal(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : e instanceof Error
+            ? e.message
+            : "Failed to load",
+      );
     } finally {
       setLoading(false);
     }

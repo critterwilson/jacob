@@ -3,11 +3,8 @@
 import { useState } from "react";
 
 import { Banner, Button } from "@/components/ui";
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-}
 
 type Props = {
   gid: string;
@@ -33,37 +30,26 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const endpoint = isArchived
-        ? `${apiBase()}/api/groups/${gid}/unarchive`
-        : `${apiBase()}/api/groups/${gid}/archive`;
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: isArchived ? undefined : JSON.stringify({ reason }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as {
-          error?: { message?: string; code?: string };
-        } | null;
-        const code = body?.error?.code;
-        if (code === "archive_too_old") {
-          setError(
-            "The 60-day unarchive window has expired. Contact an admin to restore.",
-          );
-        } else {
-          setError(body?.error?.message ?? "Something went wrong.");
-        }
-        return;
+      if (isArchived) {
+        await apiPost(`/api/groups/${gid}/unarchive`, undefined);
+      } else {
+        await apiPost(`/api/groups/${gid}/archive`, { reason });
       }
       setOpen(false);
       setReason("");
       onDone?.();
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.code === "archive_too_old") {
+          setError(
+            "The 60-day unarchive window has expired. Contact an admin to restore.",
+          );
+        } else {
+          setError(e.message || "Something went wrong.");
+        }
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

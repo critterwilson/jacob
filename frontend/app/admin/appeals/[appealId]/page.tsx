@@ -3,9 +3,8 @@
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Appeal = {
   appealId: string;
@@ -21,6 +20,12 @@ type Appeal = {
   reasoning: string | null;
   overdue: boolean;
 };
+
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return fallback;
+}
 
 export default function AdminAppealDetailPage() {
   const { user } = useAuth();
@@ -39,14 +44,10 @@ export default function AdminAppealDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}/api/appeals/${appealId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setAppeal(await res.json());
+      const data = await apiGet<Appeal>(`/api/appeals/${appealId}`);
+      setAppeal(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(errorMessage(e, "Failed to load"));
     } finally {
       setLoading(false);
     }
@@ -64,31 +65,13 @@ export default function AdminAppealDetailPage() {
     }
     setSubmitting(true);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${API}/api/admin/appeals/${appealId}/decide`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ decision, reasoning }),
-        },
-      );
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error?.message) msg = body.error.message;
-        } catch {
-          /* fall through */
-        }
-        throw new Error(msg);
-      }
+      await apiPost(`/api/admin/appeals/${appealId}/decide`, {
+        decision,
+        reasoning,
+      });
       router.replace("/admin/appeals");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Decide failed");
+      setError(errorMessage(e, "Decide failed"));
     } finally {
       setSubmitting(false);
     }
