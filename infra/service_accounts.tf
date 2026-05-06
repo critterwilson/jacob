@@ -73,6 +73,23 @@ resource "google_service_account" "jacob_scheduler_deletions" {
   description  = "OIDC identity used by Cloud Scheduler to invoke the finalize_deletions Cloud Run job."
 }
 
+# ── Typesense sidecar runtime SA ──────────────────────────────────────────────
+#
+# Without an explicit SA, the Cloud Run service falls back to the default
+# Compute Engine SA (PROJECT_NUMBER-compute@developer.gserviceaccount.com),
+# which carries roles/editor by default. Typesense is internet-facing
+# open-source software — a compromise of the container would inherit
+# project-wide editor on that SA.
+#
+# Scope is intentionally minimal: only secretAccessor on the Typesense
+# admin-key secret (bound at the secret resource in typesense.tf).
+resource "google_service_account" "jacob_typesense" {
+  project      = var.project_id
+  account_id   = "jacob-typesense"
+  display_name = "JACOB Typesense (search sidecar)"
+  description  = "Runtime SA for the Typesense Cloud Run service. Only reads the typesense-admin-key secret."
+}
+
 # ── project-level role bindings (non-bucket): jacob-api ──────────────────────
 #
 # Bucket bindings live in buckets.tf — see comment above.

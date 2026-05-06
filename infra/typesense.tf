@@ -69,6 +69,16 @@ resource "google_secret_manager_secret" "typesense_search_key" {
 #   echo -n "$ADMIN_KEY"  | gcloud secrets versions add typesense-admin-key-${ENV}  --data-file=-
 #   echo -n "$SEARCH_KEY" | gcloud secrets versions add typesense-search-key-${ENV} --data-file=-
 
+# Resource-scoped (not project-level) secretAccessor binding so the
+# Typesense runtime SA can only read this single secret, not every
+# secret in the project.
+resource "google_secret_manager_secret_iam_member" "typesense_admin_key_accessor" {
+  project   = google_secret_manager_secret.typesense_admin_key.project
+  secret_id = google_secret_manager_secret.typesense_admin_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.jacob_typesense.email}"
+}
+
 # ── Cloud Run service (single instance) ──────────────────────────────────────
 
 resource "google_cloud_run_v2_service" "typesense" {
@@ -81,6 +91,12 @@ resource "google_cloud_run_v2_service" "typesense" {
   ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"
 
   template {
+    # Run as the dedicated jacob-typesense SA defined in service_accounts.tf.
+    # Without this, Cloud Run falls back to the default Compute SA which
+    # carries roles/editor — an unacceptable blast radius for an
+    # internet-exposed open-source container.
+    service_account = google_service_account.jacob_typesense.email
+
     scaling {
       min_instance_count = 1
       max_instance_count = 1
