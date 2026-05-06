@@ -1,0 +1,47 @@
+# Code ownership for JACOB.
+#
+# GitHub uses this file to auto-request reviews when PRs touch matching paths.
+# Branch protection ("require review from code owners") still has to be enabled
+# separately on the main branch — see PR description for the gh api call that
+# requires the Administration: Read and write PAT scope.
+#
+# Format: <path glob> <owner>...
+# More-specific later rules win over earlier ones.
+
+# Default: every file is owned by @critterwilson unless overridden below.
+*                                   @critterwilson
+
+# Top-level governance / strategy
+/CLAUDE.md                          @critterwilson
+/DEV_PLAN.md                        @critterwilson
+/README.md                          @critterwilson
+
+# CI/CD and repo automation
+/.github/                           @critterwilson
+/.github/workflows/                 @critterwilson
+/.github/CODEOWNERS                 @critterwilson
+
+# Backend (FastAPI)
+/backend/                           @critterwilson
+/backend/app/services/moderation.py @critterwilson
+/backend/app/services/deletion.py   @critterwilson
+/backend/scripts/                   @critterwilson
+
+# Frontend (Next.js)
+/frontend/                          @critterwilson
+
+# Cloud Functions for Firebase
+/functions/                         @critterwilson
+
+# Firestore — security rules and indexes are the access-control boundary.
+/firestore/                         @critterwilson
+/firestore/firestore.rules          @critterwilson
+
+# Infrastructure as code
+/infra/                             @critterwilson
+/infra/firebase-rtdb-rules.json     @critterwilson
+
+# Docs (runbooks, ADRs, reviews, legal)
+/docs/                              @critterwilson
+/docs/legal/                        @critterwilson
+/docs/runbooks/                     @critterwilson
