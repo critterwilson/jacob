@@ -413,6 +413,71 @@ def test_list_messages_if_none_match_returns_304() -> None:
     assert second.headers["etag"] == etag
 
 
+def _wire_reactions_batch(
+    db: MagicMock,
+    *,
+    matches: dict[str, list[str]],
+) -> list[list[object]]:
+    """Wire `db.get_all` so refs ending in `/reactions/{slug}/users/{uid}`
+    are reported as existing iff `slug in matches[mid]`.
+
+    Returns `get_all_calls`, a list of (the refs argument) per call. Tests
+    assert constant-in-N: `len(get_all_calls) == 1` regardless of message
+    count.
+    """
+    get_all_calls: list[list[object]] = []
+
+    def _get_all(refs):  # type: ignore[no-untyped-def]
+        ref_list = list(refs)
+        get_all_calls.append(ref_list)
+        snaps = []
+        for ref in ref_list:
+            path: str = ref.path
+            # path is `groups/{gid}/messages/{mid}/reactions/{slug}/users/{uid}`
+            parts = path.split("/")
+            mid = parts[3]
+            slug = parts[5]
+            uid = parts[7]
+            snap = MagicMock()
+            snap.reference = ref
+            snap.exists = uid == "alice" and slug in matches.get(mid, [])
+            snaps.append(snap)
+        return snaps
+
+    db.get_all.side_effect = _get_all
+    return get_all_calls
+
+
+def _wire_reaction_refs(group_ref: MagicMock, mids: list[str]) -> None:
+    """Wire `messages_col.document(mid).collection("reactions").document(
+    slug).collection("users").document(uid)` so each .path is the canonical
+    Firestore path the batch helper reads back."""
+    messages_col = group_ref.collection.return_value
+
+    def _msg_doc(mid: str) -> MagicMock:
+        msg = MagicMock()
+        reactions = MagicMock()
+
+        def _slug_doc(slug: str) -> MagicMock:
+            slug_doc = MagicMock()
+            users = MagicMock()
+
+            def _user_doc(uid: str) -> MagicMock:
+                user_doc = MagicMock()
+                user_doc.path = f"groups/g1/messages/{mid}/reactions/{slug}/users/{uid}"
+                return user_doc
+
+            users.document.side_effect = _user_doc
+            slug_doc.collection.return_value = users
+            return slug_doc
+
+        reactions.document.side_effect = _slug_doc
+        msg.collection.return_value = reactions
+        return msg
+
+    messages_col.document.side_effect = _msg_doc
+
+
 def test_list_messages_includes_my_reactions_for_member() -> None:
     """Member sees `myReactions` populated for slugs they reacted with."""
     user = CurrentUser(uid="alice", email=None, claims={})
@@ -426,29 +491,8 @@ def test_list_messages_includes_my_reactions_for_member() -> None:
     chain = messages_col.where.return_value.order_by.return_value
     chain.limit.return_value.stream.return_value = iter([snap])
 
-    # Reactions chain: messages_col.document(mid).collection("reactions")
-    # .document(slug).collection("users").document(uid).get().exists
-    msg_doc = MagicMock()
-    reactions_col = MagicMock()
-
-    def _reactions_doc(slug: str) -> MagicMock:
-        slug_doc = MagicMock()
-        users_col = MagicMock()
-
-        def _users_doc(uid: str) -> MagicMock:
-            user_doc = MagicMock()
-            user_snap = MagicMock()
-            user_snap.exists = slug == "pray" and uid == "alice"
-            user_doc.get.return_value = user_snap
-            return user_doc
-
-        users_col.document.side_effect = _users_doc
-        slug_doc.collection.return_value = users_col
-        return slug_doc
-
-    reactions_col.document.side_effect = _reactions_doc
-    msg_doc.collection.return_value = reactions_col
-    messages_col.document.return_value = msg_doc
+    _wire_reaction_refs(group_ref, mids=["m1"])
+    _wire_reactions_batch(db, matches={"m1": ["pray"]})
 
     with (
         patch("app.deps.get_firestore", return_value=db),
@@ -459,6 +503,52 @@ def test_list_messages_includes_my_reactions_for_member() -> None:
     assert res.status_code == 200
     body = res.json()
     assert body["messages"][0]["myReactions"] == ["pray"]
+
+
+def test_list_messages_my_reactions_uses_constant_round_trips(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """M10: db.get_all should be called exactly once regardless of N messages."""
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, group_ref = _member_setup(group_exists=True, member_exists=True)
+    snaps = []
+    matches: dict[str, list[str]] = {}
+    for i in range(20):
+        s = _msg_snap(mid=f"m{i}", body=f"msg-{i}")
+        s.to_dict.return_value = {
+            **s.to_dict.return_value,
+            "reactionCounts": {"pray": 1, "amen": 1},
+        }
+        snaps.append(s)
+        matches[f"m{i}"] = ["pray"] if i % 2 == 0 else []
+
+    messages_col = group_ref.collection.return_value
+    chain = messages_col.where.return_value.order_by.return_value
+    chain.limit.return_value.stream.return_value = iter(snaps)
+
+    _wire_reaction_refs(group_ref, mids=[f"m{i}" for i in range(20)])
+    get_all_calls = _wire_reactions_batch(db, matches=matches)
+
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get("/api/groups/g1/messages?limit=20")
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["messages"]) == 20
+
+    # The whole point of M10: one batched get_all, regardless of N.
+    assert len(get_all_calls) == 1, (
+        f"Expected exactly 1 db.get_all call for N=20 messages with reactions, "
+        f"got {len(get_all_calls)} (the per-message N+1 loop has regressed)."
+    )
+
+    # Spot-check the wiring landed: even-indexed messages got 'pray'.
+    for i, msg in enumerate(body["messages"]):
+        if i % 2 == 0:
+            assert msg["myReactions"] == ["pray"], msg
+        else:
+            assert msg.get("myReactions") in (None, []), msg
 
 
 def test_list_messages_etag_changes_when_content_changes() -> None:

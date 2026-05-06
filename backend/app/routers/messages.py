@@ -164,6 +164,55 @@ def _my_reactions(
     return out
 
 
+def _my_reactions_batch(
+    db: Any,
+    *,
+    gid: str,
+    caller_uid: str,
+    messages: list[tuple[str, dict[str, int]]],
+) -> dict[str, list[str]]:
+    """Batch the per-message my-reactions lookup into a single round-trip (M10).
+
+    Builds the full set of `users/{caller_uid}` refs across every (message,
+    slug) pair where count > 0, fans them out via `db.get_all()`, then
+    rebuilds the {mid: [slug, ...]} map. Total Firestore round-trips is one
+    regardless of message count — replacing the previous N+1 walk that did
+    one .get() per slug per message in the chat poll.
+    """
+    if not messages:
+        return {}
+    msgs_col = db.collection("groups").document(gid).collection("messages")
+    refs: list[Any] = []
+    keys: list[tuple[str, str]] = []  # parallel to refs: (mid, slug)
+    for mid, counts in messages:
+        if not counts:
+            continue
+        reactions_col = msgs_col.document(mid).collection("reactions")
+        for slug, count in counts.items():
+            if count <= 0:
+                continue
+            refs.append(reactions_col.document(slug).collection("users").document(caller_uid))
+            keys.append((mid, str(slug)))
+    if not refs:
+        return {}
+    out: dict[str, list[str]] = {}
+    # `db.get_all` returns DocumentSnapshots in an unspecified order; pair
+    # them back to keys via `snap.reference.path`. Build a lookup map first.
+    ref_path_to_key = {ref.path: key for ref, key in zip(refs, keys, strict=True)}
+    for snap in db.get_all(refs):
+        if not getattr(snap, "exists", False):
+            continue
+        path = getattr(snap.reference, "path", None)
+        if path is None:
+            continue
+        key = ref_path_to_key.get(path)
+        if key is None:
+            continue
+        mid, slug = key
+        out.setdefault(mid, []).append(slug)
+    return out
+
+
 def _filter_for_visibility(
     msg: Message,
     *,
@@ -276,24 +325,35 @@ def list_messages(
 
     caller_uid = ctx.uid
     is_member = isinstance(ctx, MembershipContext)
-    out: list[Message] = []
+    visible: list[Message] = []
     for snap in snaps:
         data = snap.to_dict() or {}
         msg = _doc_to_message(snap.id, data)
         filtered = _filter_for_visibility(msg, ctx=ctx, caller_uid=caller_uid)
         if filtered is None:
             continue
-        if is_member and filtered.reactionCounts:
-            mine = _my_reactions(
-                db,
-                gid=gid,
-                mid=filtered.id,
-                caller_uid=caller_uid,
-                reaction_counts=filtered.reactionCounts,
-            )
-            if mine:
-                filtered = filtered.model_copy(update={"myReactions": mine})
-        out.append(filtered)
+        visible.append(filtered)
+
+    out: list[Message] = visible
+    if is_member:
+        # M10: batch every per-message reaction lookup into one round-trip
+        # instead of one Firestore .get() per (message, slug). Page-of-50
+        # polls used to fan out into ~150 Firestore round-trips; now it's 1.
+        my_reactions_by_mid = _my_reactions_batch(
+            db,
+            gid=gid,
+            caller_uid=caller_uid,
+            messages=[(m.id, m.reactionCounts) for m in visible if m.reactionCounts],
+        )
+        if my_reactions_by_mid:
+            out = [
+                (
+                    m.model_copy(update={"myReactions": my_reactions_by_mid[m.id]})
+                    if m.id in my_reactions_by_mid
+                    else m
+                )
+                for m in visible
+            ]
 
     next_cursor: str | None = None
     if has_more and snaps:
