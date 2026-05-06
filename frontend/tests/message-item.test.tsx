@@ -34,11 +34,20 @@ vi.mock("@/lib/hooks/useStickers", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  apiGet: vi.fn(),
-  apiPost: vi.fn(),
-  apiPut: vi.fn(),
-  apiPatch: vi.fn(),
-  apiDelete: vi.fn(),
+  apiGet: vi.fn().mockResolvedValue({}),
+  // MessageBody internally calls useUnfurl which hits POST /api/unfurl.
+  // Default to a benign resolved value so render-only tests don't
+  // explode when the body contains a URL.
+  apiPost: vi.fn().mockResolvedValue({
+    url: "",
+    title: null,
+    description: null,
+    imageUrl: null,
+    siteName: null,
+  }),
+  apiPut: vi.fn().mockResolvedValue({}),
+  apiPatch: vi.fn().mockResolvedValue({}),
+  apiDelete: vi.fn().mockResolvedValue({}),
   ApiError: class ApiError extends Error {
     constructor(public status: number, public code: string, message: string) {
       super(message);
@@ -129,5 +138,57 @@ describe("MessageItem", () => {
       />,
     );
     expect(screen.getByText(/\(edited\)/i)).toBeInTheDocument();
+  });
+
+  it("renders markdown bold from the message body (C-FRONT-2)", () => {
+    // Pre-fix, MessageItem rendered the body as plain text with a
+    // `whitespace-pre-wrap` paragraph — `**bold**` shipped to users as
+    // literal asterisks. MessageBody is now wired in so markdown
+    // tokens become real HTML.
+    const { container } = render(
+      <MessageItem
+        gid="g1"
+        message={makeMessage({ body: "this is **bold** text" })}
+        isLeader={false}
+      />,
+    );
+    const strong = container.querySelector("strong");
+    expect(strong?.textContent).toBe("bold");
+    // Author should NOT see literal asterisks anywhere in the rendered
+    // body.
+    expect(container.textContent).not.toMatch(/\*\*bold\*\*/);
+  });
+
+  it("autolinks URLs in the body (C-FRONT-2)", () => {
+    const { container } = render(
+      <MessageItem
+        gid="g1"
+        message={makeMessage({ body: "see https://example.com" })}
+        isLeader={false}
+      />,
+    );
+    const link = container.querySelector('a[href="https://example.com"]');
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute("rel")).toContain("noopener");
+    expect(link?.getAttribute("target")).toBe("_blank");
+  });
+
+  it("renders mention badges and preserves markdown around them (C-FRONT-2)", () => {
+    const { container } = render(
+      <MessageItem
+        gid="g1"
+        message={makeMessage({
+          body: "**hello** @Bob Smith and friends",
+          mentions: ["bob"],
+        })}
+        members={[{ uid: "bob", displayName: "Bob Smith", photoURL: null }]}
+        isLeader={false}
+      />,
+    );
+    // Markdown still applied around the mention.
+    expect(container.querySelector("strong")?.textContent).toBe("hello");
+    // Mention rendered as a badge with @-prefix.
+    expect(container.textContent).toContain("@Bob Smith");
+    expect(container.textContent).toContain("and friends");
   });
 });

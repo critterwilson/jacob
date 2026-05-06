@@ -2,7 +2,21 @@
  * @vitest-environment jsdom
  */
 import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// MessageBody now wires `useUnfurl` internally so production renders
+// link previews without each MessageItem having to thread the hook.
+// Stub the firebase + api surface so the test boots without env vars
+// and so unfurl fetches don't try to hit a server.
+vi.mock("@/lib/firebase", () => ({ auth: {}, storage: {}, rtdb: {} }));
+vi.mock("@/lib/api", () => ({
+  apiPost: vi.fn().mockResolvedValue({}),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) {
+      super(message);
+    }
+  },
+}));
 
 import { MessageBody } from "@/components/chat/MessageBody";
 import { renderMarkdownToHtml } from "@/lib/markdown";

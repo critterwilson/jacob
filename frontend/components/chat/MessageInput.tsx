@@ -28,9 +28,16 @@ type FormValues = z.infer<typeof schema>;
 type Props = {
   gid: string;
   archived?: boolean;
+  /**
+   * T48 — fired on every input change with `true`, on submit/blur
+   * with `false`. The chat page wires this to `useTyping().setTyping`
+   * so other members see "Alice is typing…". The hook is internally
+   * debounced — it's safe to call this on every keystroke.
+   */
+  onTyping?: (active: boolean) => void;
 };
 
-export function MessageInput({ gid, archived = false }: Props) {
+export function MessageInput({ gid, archived = false, onTyping }: Props) {
   const { user } = useAuth();
   const { members } = useMembers(gid);
   const [stickers, setStickers] = useState<string[]>([]);
@@ -75,6 +82,7 @@ export function MessageInput({ gid, archived = false }: Props) {
       reset();
       setStickers([]);
       setMediaRefs([]);
+      onTyping?.(false);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === "archived") {
@@ -147,8 +155,14 @@ export function MessageInput({ gid, archived = false }: Props) {
           render={({ field }) => (
             <MentionInput
               value={field.value}
-              onChange={field.onChange}
-              onBlur={field.onBlur}
+              onChange={(v) => {
+                field.onChange(v);
+                if (onTyping) onTyping(v.trim().length > 0);
+              }}
+              onBlur={() => {
+                field.onBlur();
+                onTyping?.(false);
+              }}
               members={members}
               aria-label="Message body"
               placeholder="Say something…"

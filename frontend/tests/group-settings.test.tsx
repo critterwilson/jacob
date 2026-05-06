@@ -77,6 +77,7 @@ const fakeGroup: Group = {
   createdAt: null,
   inviteCode: "TESTCODE",
   moderationPolicy: null,
+  presenceEnabled: null,
 };
 
 // ── ArchivedBanner ─────────────────────────────────────────────────────────────
