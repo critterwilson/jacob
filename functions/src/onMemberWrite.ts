@@ -54,6 +54,28 @@ export function leaderDelta(
 }
 
 /**
+ * H5 — keep a denormalised `groups/{gid}.leaderUids` array in sync so the
+ * discover endpoint can render leader badges without a per-group
+ * subcollection query.
+ *
+ * Returned together with the count delta so the trigger can apply both
+ * inside the same idempotent transaction. Pure helper for unit tests.
+ */
+export type LeaderUidsAction = "noop" | "add" | "remove";
+
+export function leaderUidsAction(
+  beforeExists: boolean,
+  afterExists: boolean,
+  beforeRole: string | undefined,
+  afterRole: string | undefined,
+): LeaderUidsAction {
+  const wasLeader = beforeExists && beforeRole === "leader";
+  const isLeader = afterExists && afterRole === "leader";
+  if (wasLeader === isLeader) return "noop";
+  return isLeader ? "add" : "remove";
+}
+
+/**
  * T54 — mirror member presence onto `orgs/{orgId}/members/{uid}` when
  * the parent group has `orgId != null`. Pure helper extracted for unit
  * tests; the trigger calls it inside a separate transaction so a
@@ -157,8 +179,14 @@ export const onMemberWrite = onDocumentWritten(
     const db = getFirestore();
     const groupRef = db.collection("groups").doc(gid);
 
-    // ── leader count ──
+    // ── leader count + leaderUids array ──
     const delta = leaderDelta(beforeExists, afterExists, beforeRole, afterRole);
+    const uidsAction = leaderUidsAction(
+      beforeExists,
+      afterExists,
+      beforeRole,
+      afterRole,
+    );
     if (delta !== 0) {
       try {
         await db.runTransaction(async (txn) => {
@@ -174,11 +202,19 @@ export const onMemberWrite = onDocumentWritten(
             return;
           }
           txn.set(eventRef, eventMarker({ delta }));
-          txn.set(
-            groupRef,
-            { leaderCount: FieldValue.increment(delta) },
-            { merge: true },
-          );
+          // H5: leaderUids is the denormalised list discover.py reads.
+          // arrayUnion / arrayRemove are commutative so concurrent
+          // promotions/demotions across the same trigger event id
+          // converge to the right set.
+          const update: Record<string, unknown> = {
+            leaderCount: FieldValue.increment(delta),
+          };
+          if (uidsAction === "add") {
+            update.leaderUids = FieldValue.arrayUnion(uid);
+          } else if (uidsAction === "remove") {
+            update.leaderUids = FieldValue.arrayRemove(uid);
+          }
+          txn.set(groupRef, update, { merge: true });
         });
         logger.info("leader count adjusted", {
           gid,

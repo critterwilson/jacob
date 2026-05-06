@@ -136,6 +136,74 @@ def test_discover_lists_only_public() -> None:
     assert "groups" in data
 
 
+def _wire_discover_query(col: MagicMock, snap: MagicMock) -> None:
+    """The discover query is `col.where(isPrivate).where(archivedAt).
+    order_by(memberCount).order_by(createdAt).limit(N).stream()`. Configure
+    that exact chain so .stream() yields the snap."""
+    chain = (
+        col.where.return_value.where.return_value.order_by.return_value.order_by.return_value.limit.return_value
+    )
+    chain.stream.return_value = iter([snap])
+
+
+def test_discover_uses_denormalised_leader_uids_when_present() -> None:
+    """H5: when `leaderUids` is on the group doc, no per-group subcollection scan."""
+    db = MagicMock()
+    col = MagicMock()
+    db.collection.return_value = col
+
+    snap = _mock_group_snap("g1", is_private=False)
+    snap.to_dict.return_value = {
+        **snap.to_dict.return_value,
+        "leaderUids": ["alice", "bob", "carol"],
+    }
+    _wire_discover_query(col, snap)
+
+    # If the code falls back to the subcollection scan, this MagicMock will
+    # record `.collection("members")` calls on the group ref. We assert
+    # that DOES NOT happen on the denormalised path.
+    group_ref = MagicMock()
+    group_ref.get.return_value = snap
+    col.document.return_value = group_ref
+
+    with patch("app.routers.discover._db", return_value=db):
+        client = TestClient(_make_app())
+        res = client.get("/api/discover/groups", headers={"Authorization": "Bearer t"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["groups"][0]["leaderUids"] == ["alice", "bob", "carol"]
+    # The denormalised path must not touch the members subcollection.
+    group_ref.collection.assert_not_called()
+
+
+def test_discover_falls_back_to_subcollection_when_leader_uids_missing() -> None:
+    """Backward-compat: groups not yet backfilled keep working."""
+    db = MagicMock()
+    col = MagicMock()
+    db.collection.return_value = col
+
+    snap = _mock_group_snap("g1", is_private=False)
+    # Note: no leaderUids field at all (mimics un-backfilled doc).
+    _wire_discover_query(col, snap)
+
+    leader_snap = MagicMock()
+    leader_snap.id = "alice"
+    members_col = MagicMock()
+    members_col.where.return_value.limit.return_value.stream.return_value = iter([leader_snap])
+
+    group_ref = MagicMock()
+    group_ref.get.return_value = snap
+    group_ref.collection.return_value = members_col
+    col.document.return_value = group_ref
+
+    with patch("app.routers.discover._db", return_value=db):
+        client = TestClient(_make_app())
+        res = client.get("/api/discover/groups", headers={"Authorization": "Bearer t"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["groups"][0]["leaderUids"] == ["alice"]
+
+
 def test_discover_audience_filter() -> None:
     db = MagicMock()
     col = MagicMock()

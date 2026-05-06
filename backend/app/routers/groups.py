@@ -134,6 +134,12 @@ def create_group(
             "audience": body.audience,
             "stickerSet": body.audience,
             "orgId": None,
+            # H5 — denormalised leader list read by discover.py. The
+            # onMemberWrite trigger keeps it in sync after this point;
+            # initialising here means the brand-new group renders with
+            # the right leader badge before the trigger fires.
+            "leaderUids": [user.uid],
+            "leaderCount": 1,
             "schemaVersion": 1,
         },
     )
