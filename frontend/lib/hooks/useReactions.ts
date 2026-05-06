@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, apiDelete, apiPost } from "@/lib/api";
@@ -15,71 +15,150 @@ type ReactionResponse = {
   reactedAt: string;
 };
 
+const key = (mid: string, slug: string): string => `${mid}:${slug}`;
+const splitKey = (k: string): [string, string] => {
+  const i = k.indexOf(":");
+  return [k.slice(0, i), k.slice(i + 1)];
+};
+
 /**
  * Group-message reactions.
  *
  * Toggle calls `POST/DELETE /api/groups/{gid}/messages/{mid}/reactions/{slug}`.
- * Optimistic local state lives in `myReactionsRef`. The ref is hydrated
- * from each message's server-supplied `myReactions` whenever `messages`
- * changes — that's the bit fixing the bug where, after a refresh, the
- * "I reacted" state was lost and the toggle treated the user's existing
- * reaction as a new one (see PR4 / C4).
+ * The hook tracks two state slices:
+ *   - `optimisticAdd` / `optimisticRemove`: client-side deltas issued by
+ *     the current user that haven't yet been observed in the server
+ *     response. Both flip in `react()` / `unreact()` to make the UI
+ *     update SYNCHRONOUSLY (the previous ref-based version updated a
+ *     mutable Set, which never triggered a re-render — the chip didn't
+ *     toggle visually until the next 10s poll).
+ *   - The `messages` prop is treated as the server-of-record; on every
+ *     update we drop optimistic entries that the server has now confirmed
+ *     (added entries that now appear in `myReactions`; removed entries
+ *     that no longer appear).
  *
- * Optimistic adds set during a toggle are preserved across re-hydrations
- * via the `optimisticDeltaRef` overlay until the next server response
- * lands them — the server is then authoritative.
+ * `mergeReactionCounts(mid, base)` returns the chip counts to render —
+ * `base` plus the optimistic delta, plus any slug the user has just
+ * reacted with for the first time on this message (so a brand-new
+ * sticker shows up immediately instead of after the next 10s poll).
  */
 export function useReactions(gid: string, messages?: readonly Message[]) {
   const { user } = useAuth();
-  const myReactionsRef = useRef<Set<string>>(new Set());
-  // Tracks slugs added/removed locally that haven't been observed in the
-  // server response yet, so a post-toggle hydrate doesn't snap them away
-  // before the next poll merges the change in.
-  const optimisticAddRef = useRef<Set<string>>(new Set());
-  const optimisticRemoveRef = useRef<Set<string>>(new Set());
+  // The setters always create a new Set, so the value is treated as
+  // immutable in practice — the type is plain `Set` because TS narrows
+  // for-of over ReadonlySet awkwardly with the project's tsconfig target.
+  const [optimisticAdd, setOptimisticAdd] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [optimisticRemove, setOptimisticRemove] = useState<Set<string>>(
+    () => new Set(),
+  );
 
-  // Re-seed from the message stream whenever it changes. Server is
-  // authoritative; local optimistic deltas overlay on top.
+  // Keep the latest `messages` reference around for `react`/`unreact`
+  // closures so we don't have to rebuild them on every render.
+  const messagesRef = useRef<readonly Message[] | undefined>(messages);
+  messagesRef.current = messages;
+
+  // On every messages update, drop optimistic entries the server now
+  // confirms — adds that now appear in myReactions, removes that no
+  // longer appear.
   useEffect(() => {
     if (!messages) return;
-    const next = new Set<string>();
+    const serverHas = new Set<string>();
     for (const m of messages) {
       if (!m.myReactions) continue;
-      for (const slug of m.myReactions) next.add(`${m.id}:${slug}`);
+      m.myReactions.forEach((slug) => serverHas.add(key(m.id, slug)));
     }
-    // Apply optimistic overlay; clear entries the server now confirms.
-    optimisticAddRef.current.forEach((key) => {
-      if (next.has(key)) optimisticAddRef.current.delete(key);
-      else next.add(key);
+    setOptimisticAdd((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      prev.forEach((k) => {
+        if (serverHas.has(k)) {
+          next.delete(k);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
-    optimisticRemoveRef.current.forEach((key) => {
-      if (!next.has(key)) optimisticRemoveRef.current.delete(key);
-      else next.delete(key);
+    setOptimisticRemove((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      prev.forEach((k) => {
+        const [mid] = splitKey(k);
+        // Only drop the pending remove once the server-of-record for that
+        // message has come back without the slug. If the message hasn't
+        // been re-fetched yet, hold the optimistic state.
+        const messageStillPresent = messages.some((m) => m.id === mid);
+        if (messageStillPresent && !serverHas.has(k)) {
+          next.delete(k);
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
     });
-    myReactionsRef.current = next;
   }, [messages]);
 
   const isMyReaction = useCallback(
-    (mid: string, slug: string): boolean =>
-      myReactionsRef.current.has(`${mid}:${slug}`),
-    [],
+    (mid: string, slug: string): boolean => {
+      const k = key(mid, slug);
+      if (optimisticRemove.has(k)) return false;
+      if (optimisticAdd.has(k)) return true;
+      const m = messagesRef.current?.find((x) => x.id === mid);
+      return Boolean(m?.myReactions?.includes(slug));
+    },
+    [optimisticAdd, optimisticRemove],
+  );
+
+  const mergeReactionCounts = useCallback(
+    (
+      mid: string,
+      base: Record<string, number> | undefined,
+    ): Record<string, number> => {
+      const out: Record<string, number> = { ...(base ?? {}) };
+      optimisticAdd.forEach((k) => {
+        const [m, slug] = splitKey(k);
+        if (m !== mid) return;
+        out[slug] = (out[slug] ?? 0) + 1;
+      });
+      optimisticRemove.forEach((k) => {
+        const [m, slug] = splitKey(k);
+        if (m !== mid) return;
+        out[slug] = Math.max(0, (out[slug] ?? 0) - 1);
+      });
+      return out;
+    },
+    [optimisticAdd, optimisticRemove],
   );
 
   const react = useCallback(
     async (mid: string, slug: string) => {
       if (!user) return;
-      const key = `${mid}:${slug}`;
-      myReactionsRef.current.add(key);
-      optimisticAddRef.current.add(key);
-      optimisticRemoveRef.current.delete(key);
+      const k = key(mid, slug);
+      setOptimisticAdd((prev) => {
+        if (prev.has(k)) return prev;
+        const next = new Set(prev);
+        next.add(k);
+        return next;
+      });
+      setOptimisticRemove((prev) => {
+        if (!prev.has(k)) return prev;
+        const next = new Set(prev);
+        next.delete(k);
+        return next;
+      });
       try {
         await apiPost<ReactionResponse, undefined>(
           `/api/groups/${gid}/messages/${mid}/reactions/${slug}`,
           undefined,
         );
       } catch (err) {
-        myReactionsRef.current.delete(key);
-        optimisticAddRef.current.delete(key);
+        // Roll back the optimistic add — leave server state untouched.
+        setOptimisticAdd((prev) => {
+          if (!prev.has(k)) return prev;
+          const next = new Set(prev);
+          next.delete(k);
+          return next;
+        });
         if (err instanceof ApiError && err.code !== "aborted") {
           console.warn("reaction_failed", err.code, err.status);
         }
@@ -91,17 +170,31 @@ export function useReactions(gid: string, messages?: readonly Message[]) {
   const unreact = useCallback(
     async (mid: string, slug: string) => {
       if (!user) return;
-      const key = `${mid}:${slug}`;
-      myReactionsRef.current.delete(key);
-      optimisticRemoveRef.current.add(key);
-      optimisticAddRef.current.delete(key);
+      const k = key(mid, slug);
+      setOptimisticRemove((prev) => {
+        if (prev.has(k)) return prev;
+        const next = new Set(prev);
+        next.add(k);
+        return next;
+      });
+      setOptimisticAdd((prev) => {
+        if (!prev.has(k)) return prev;
+        const next = new Set(prev);
+        next.delete(k);
+        return next;
+      });
       try {
         await apiDelete<{ ok: boolean }>(
           `/api/groups/${gid}/messages/${mid}/reactions/${slug}`,
         );
       } catch (err) {
-        myReactionsRef.current.add(key);
-        optimisticRemoveRef.current.delete(key);
+        // Roll back the optimistic remove.
+        setOptimisticRemove((prev) => {
+          if (!prev.has(k)) return prev;
+          const next = new Set(prev);
+          next.delete(k);
+          return next;
+        });
         if (err instanceof ApiError && err.code !== "aborted") {
           console.warn("unreaction_failed", err.code, err.status);
         }
@@ -118,5 +211,5 @@ export function useReactions(gid: string, messages?: readonly Message[]) {
     [isMyReaction, react, unreact],
   );
 
-  return { react, unreact, toggle, isMyReaction };
+  return { react, unreact, toggle, isMyReaction, mergeReactionCounts };
 }

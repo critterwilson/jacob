@@ -31,10 +31,11 @@ export function ThreadPanel({
   // Include the parent message in hydration so reactions on the parent are
   // also recovered after a refresh (the parent isn't in `messages`).
   const allForReactions: Message[] = [parentMessage, ...messages];
-  const { isMyReaction, toggle: toggleReaction } = useReactions(
-    gid,
-    allForReactions,
-  );
+  const {
+    isMyReaction,
+    toggle: toggleReaction,
+    mergeReactionCounts,
+  } = useReactions(gid, allForReactions);
   const onToggleReaction = (mid: string, slug: string) =>
     void toggleReaction(mid, slug);
 
@@ -89,6 +90,7 @@ export function ThreadPanel({
           archived={archived}
           isMyReaction={isMyReaction}
           onToggleReaction={onToggleReaction}
+          mergeReactionCounts={mergeReactionCounts}
         />
       </div>
 
@@ -134,6 +136,7 @@ export function ThreadPanel({
                   archived={archived}
                   isMyReaction={isMyReaction}
                   onToggleReaction={onToggleReaction}
+                  mergeReactionCounts={mergeReactionCounts}
                 />
               ))}
             </div>
