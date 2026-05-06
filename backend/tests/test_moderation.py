@@ -151,15 +151,64 @@ def test_hash_provider_legacy_url_env_still_works(monkeypatch) -> None:  # type:
     assert result.matched is False
 
 
-def test_report_to_ncmec_logs_stub(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
+def test_report_to_ncmec_logs_critical_when_called(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.delenv(moderation.NCMEC_ENDPOINT_ENV, raising=False)
-    with caplog.at_level("ERROR"):
-        moderation.report_to_ncmec(
+    monkeypatch.delenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, raising=False)
+    with caplog.at_level("CRITICAL"):
+        case_id = moderation.report_to_ncmec(
             image_hash="deadbeef",
             uploader_uid="alice",
             object_name="uploads/alice/abc.jpg",
         )
-    assert any("ncmec_report_stub" in r.message for r in caplog.records)
+    assert case_id is None  # no db passed, no case row created
+    assert any(
+        "MANUAL_ACTION_REQUIRED" in r.message and "ncmec_report" in r.message
+        for r in caplog.records
+    )
+
+
+def test_report_to_ncmec_creates_case_when_db_supplied(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """When the upload pipeline calls with a db client, a case lands in the
+    operator queue (`ncmec_cases`) so the manual-handoff is visible at /admin/ncmec."""
+    monkeypatch.delenv(moderation.NCMEC_ENDPOINT_ENV, raising=False)
+
+    captured: dict[str, object] = {}
+
+    def _fake_create_case(db, **kwargs):  # type: ignore[no-untyped-def]
+        captured["db"] = db
+        captured["kwargs"] = kwargs
+        return "case-id-123"
+
+    with patch("app.services.ncmec.create_case", _fake_create_case):
+        case_id = moderation.report_to_ncmec(
+            image_hash="deadbeef",
+            uploader_uid="alice",
+            object_name="uploads/alice/abc.jpg",
+            db="<sentinel-db>",
+            hash_source="PhotoDNA",
+        )
+
+    assert case_id == "case-id-123"
+    assert captured["db"] == "<sentinel-db>"
+    assert captured["kwargs"]["hash_source"] == "PhotoDNA"
+    assert captured["kwargs"]["hash_value"] == "deadbeef"
+    assert captured["kwargs"]["evidence"]["gcsPath"] == "uploads/alice/abc.jpg"
+    assert captured["kwargs"]["suspect_uid"] == "alice"
+
+
+def test_ncmec_autosubmit_disabled_default_true(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, raising=False)
+    assert moderation.ncmec_autosubmit_disabled() is True
+
+
+def test_ncmec_autosubmit_disabled_explicit_false(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, "false")
+    assert moderation.ncmec_autosubmit_disabled() is False
+
+
+def test_ncmec_autosubmit_disabled_explicit_true(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, "true")
+    assert moderation.ncmec_autosubmit_disabled() is True
 
 
 def test_safesearch_calls_vision_when_enabled(monkeypatch) -> None:  # type: ignore[no-untyped-def]
