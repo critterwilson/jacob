@@ -6,6 +6,25 @@ external API calls (SafeSearch returns "pass", hash service returns
 review checklist in `docs/moderation-pipeline.md` covers the launch
 gates that depend on these calls being live.
 
+CSAM hash provider selection (C2):
+
+* `JACOB_HASH_PROVIDER` is the new explicit knob. Values:
+
+    - `disabled` — no-op, all uploads allowed. Default in `development`.
+    - `noop`     — same behaviour, but each call logs a WARNING so the
+                   bypass is loud (use this in staging while a hash
+                   service is being commissioned).
+    - any URL    — POST `{"hash": "<sha256>"}` to that endpoint.
+
+* `JACOB_HASH_SERVICE_URL` is the legacy URL-only var. Still honoured
+  when `JACOB_HASH_PROVIDER` is unset, so existing deploys keep working.
+
+* In production (`environment != "development"`), the provider MUST be
+  explicitly configured. An unset / blank provider raises and rejects
+  the upload. This is the legal-exposure gate the review (C2) called
+  for: bypassing CSAM scanning has to be a deliberate choice, never a
+  default.
+
 `google.cloud.vision` is imported lazily so the module loads in
 environments where the SDK isn't installed (tests).
 """
@@ -25,11 +44,18 @@ try:
 except ImportError:  # pragma: no cover
     _sentry_sdk = None  # type: ignore[assignment]
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 
 DISABLE_MODERATION_ENV = "JACOB_DISABLE_MODERATION"
+HASH_PROVIDER_ENV = "JACOB_HASH_PROVIDER"
 HASH_SERVICE_URL_ENV = "JACOB_HASH_SERVICE_URL"
 NCMEC_ENDPOINT_ENV = "JACOB_NCMEC_ENDPOINT"
+
+# Recognised non-URL provider sentinels.
+_PROVIDER_DISABLED = "disabled"
+_PROVIDER_NOOP = "noop"
 
 SafeSearchVerdict = Literal["pass", "fail"]
 
@@ -71,6 +97,23 @@ def check_safesearch(image_bytes: bytes) -> SafeSearchResult:
     return SafeSearchResult(verdict="pass")
 
 
+def _resolve_hash_provider() -> str:
+    """Resolve the active CSAM hash provider.
+
+    Returns one of: ``""`` (unset → caller fails closed in production,
+    silently disabled in dev), ``"disabled"``, ``"noop"``, or a URL.
+    """
+    explicit = os.environ.get(HASH_PROVIDER_ENV, "").strip()
+    if explicit:
+        return explicit
+    legacy_url = os.environ.get(HASH_SERVICE_URL_ENV, "").strip()
+    if legacy_url:
+        return legacy_url
+    if get_settings().environment == "development":
+        return _PROVIDER_DISABLED
+    return ""
+
+
 def check_hash_service(image_hash: str) -> HashCheckResult:
     """CSAM hash lookup. Stub HTTP shape — vendor TBD before launch.
 
@@ -82,16 +125,41 @@ def check_hash_service(image_hash: str) -> HashCheckResult:
     if moderation_disabled():
         return HashCheckResult(matched=False)
 
-    endpoint = os.environ.get(HASH_SERVICE_URL_ENV)
-    if not endpoint:
-        msg = "CSAM hash service URL unset (JACOB_HASH_SERVICE_URL); rejecting upload"
+    provider = _resolve_hash_provider()
+    if not provider:
+        msg = (
+            "CSAM hash provider unset (JACOB_HASH_PROVIDER); rejecting upload. "
+            "In production, set JACOB_HASH_PROVIDER to a URL or to "
+            "'disabled'/'noop' to deliberately bypass scanning — "
+            "see docs/runbooks/csam-incident.md."
+        )
+        logger.error(msg)
+        if _sentry_sdk is not None:
+            _sentry_sdk.capture_message(msg, level="error")
+        raise RuntimeError(msg)
+
+    if provider == _PROVIDER_DISABLED:
+        return HashCheckResult(matched=False)
+
+    if provider == _PROVIDER_NOOP:
+        logger.warning(
+            "csam_hash_check_noop hash=%s — JACOB_HASH_PROVIDER=noop, scan bypassed",
+            image_hash,
+        )
+        return HashCheckResult(matched=False)
+
+    if not (provider.startswith("http://") or provider.startswith("https://")):
+        msg = (
+            f"JACOB_HASH_PROVIDER='{provider}' is not a recognised sentinel "
+            "('disabled', 'noop') and not an http(s) URL; rejecting upload"
+        )
         logger.error(msg)
         if _sentry_sdk is not None:
             _sentry_sdk.capture_message(msg, level="error")
         raise RuntimeError(msg)
 
     req = urllib.request.Request(
-        endpoint,
+        provider,
         data=json.dumps({"hash": image_hash}).encode(),
         headers={"Content-Type": "application/json"},
     )
