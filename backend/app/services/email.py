@@ -48,6 +48,23 @@ _MAX_ATTEMPTS = 3
 _BACKOFF_BASE = 1.0  # seconds; doubles each retry
 
 
+def _redact_email(addr: str) -> str:
+    """Return a partially-redacted form of *addr* safe to write to logs.
+
+    `alice@example.com` -> `a***@example.com`
+    `a@example.com`     -> `*@example.com`
+    Anything that doesn't look like an email is returned as `<redacted>`.
+    """
+    if not addr or "@" not in addr:
+        return "<redacted>"
+    local, _, domain = addr.partition("@")
+    if not local or not domain:
+        return "<redacted>"
+    if len(local) <= 1:
+        return f"*@{domain}"
+    return f"{local[0]}***@{domain}"
+
+
 def _render(template_name: str, context: dict[str, Any]) -> tuple[str, str]:
     """Return (html_body, text_body) for *template_name*."""
     html = _jinja_env.get_template(f"{template_name}.html.j2").render(**context)
@@ -65,7 +82,10 @@ def _send_message(message: Mail, *, label: str, to_email: str) -> None:
             response = sg.send(message)
             if response.status_code < 300:
                 logger.info(
-                    "email_sent label=%s to=%s status=%s", label, to_email, response.status_code
+                    "email_sent label=%s to=%s status=%s",
+                    label,
+                    _redact_email(to_email),
+                    response.status_code,
                 )
                 return
             raise RuntimeError(f"SendGrid returned status {response.status_code}")
@@ -86,7 +106,7 @@ def _send_message(message: Mail, *, label: str, to_email: str) -> None:
     logger.error(
         "email_failed label=%s to=%s after %d attempts: %s",
         label,
-        to_email,
+        _redact_email(to_email),
         _MAX_ATTEMPTS,
         last_exc,
     )
@@ -112,7 +132,7 @@ def send_email(
         logger.warning(
             "email_skipped: SENDGRID_API_KEY not set — would have sent '%s' to %s",
             subject,
-            to_email,
+            _redact_email(to_email),
         )
         return
 
@@ -228,7 +248,7 @@ def send_weekly_digest(
     if not settings.sendgrid_api_key:
         logger.warning(
             "email_skipped: SENDGRID_API_KEY not set — would have sent digest to %s",
-            to_email,
+            _redact_email(to_email),
         )
         return
 

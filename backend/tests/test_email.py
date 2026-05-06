@@ -242,3 +242,73 @@ def test_send_deletion_finalized_calls_send_email() -> None:
     mock_send.assert_called_once()
     _, kwargs = mock_send.call_args
     assert kwargs["template_name"] == "deletion_finalized"
+
+
+# ── log redaction (H6) ────────────────────────────────────────────────────────
+
+
+def test_redact_email_typical() -> None:
+    assert email_svc._redact_email("alice@example.com") == "a***@example.com"
+
+
+def test_redact_email_single_char_local() -> None:
+    assert email_svc._redact_email("a@example.com") == "*@example.com"
+
+
+def test_redact_email_invalid_returns_redacted() -> None:
+    assert email_svc._redact_email("") == "<redacted>"
+    assert email_svc._redact_email("not-an-email") == "<redacted>"
+    assert email_svc._redact_email("@example.com") == "<redacted>"
+    assert email_svc._redact_email("alice@") == "<redacted>"
+
+
+def test_send_email_skipped_log_does_not_leak_address(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = MagicMock()
+    settings.sendgrid_api_key = ""
+
+    with (
+        patch("app.services.email.get_settings", return_value=settings),
+        patch("app.services.email.SendGridAPIClient"),
+        caplog.at_level("WARNING"),
+    ):
+        email_svc.send_email(
+            to_email="alice@example.com",
+            display_name="Alice",
+            subject="Test",
+            template_name="deletion_finalized",
+        )
+
+    full_log = "\n".join(r.getMessage() for r in caplog.records)
+    assert "alice@example.com" not in full_log
+    assert "a***@example.com" in full_log
+
+
+def test_send_email_success_log_does_not_leak_address(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = MagicMock()
+    settings.sendgrid_api_key = "SG.test"
+    settings.email_sender = "JACOB <noreply@example.com>"
+    settings.email_reply_to = None
+
+    sg_client = MagicMock()
+    sg_client.send.return_value = _mock_response(202)
+
+    with (
+        patch("app.services.email.get_settings", return_value=settings),
+        patch("app.services.email.SendGridAPIClient", return_value=sg_client),
+        patch("app.services.email.time.sleep"),
+        caplog.at_level("INFO"),
+    ):
+        email_svc.send_email(
+            to_email="alice@example.com",
+            display_name="Alice",
+            subject="Test",
+            template_name="deletion_finalized",
+        )
+
+    full_log = "\n".join(r.getMessage() for r in caplog.records)
+    assert "alice@example.com" not in full_log
+    assert "a***@example.com" in full_log
