@@ -162,10 +162,10 @@ jobs:
           java-version: "21"
       - run: pnpm install --frozen-lockfile
       - run: npm install -g firebase-tools
-      - name: Run rules tests against Firestore emulator
+      - name: Run rules tests against Firestore + Database emulators
         run: >
           firebase emulators:exec
-          --only firestore
+          --only firestore,database
           --project demo-jacob
           "pnpm --filter jacob-firestore test"
       - name: Run frontend integration tests against the emulator (M9)
