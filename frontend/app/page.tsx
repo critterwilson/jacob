@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { LegalFooter } from "@/components/legal/LegalFooter";
 import { Dove } from "@/components/motifs/Dove";
 import { Button, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -57,6 +58,8 @@ export default function LandingPage() {
           Create an account
         </Button>
       </div>
+
+      <LegalFooter />
     </main>
   );
 }
