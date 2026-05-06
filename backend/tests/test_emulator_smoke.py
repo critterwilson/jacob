@@ -41,15 +41,22 @@ def _ensure_emulator_env() -> None:
 
 @pytest.fixture(scope="module")
 def db():  # type: ignore[no-untyped-def]
-    """Boot a real Firebase Admin SDK pointed at the emulator."""
+    """Connect to the Firestore emulator via the lower-level
+    `google.cloud.firestore.Client`. The Admin SDK
+    (`firebase_admin.firestore`) tries to load Application Default
+    Credentials even when targeting the emulator; the lower-level
+    client respects `FIRESTORE_EMULATOR_HOST` and accepts anonymous
+    auth in that mode.
+    """
     _ensure_emulator_env()
     os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "demo-jacob")
-    import firebase_admin
-    from firebase_admin import firestore as fb_firestore
+    from google.auth.credentials import AnonymousCredentials
+    from google.cloud import firestore as gcf_module
 
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(options={"projectId": "demo-jacob"})
-    return fb_firestore.client()
+    return gcf_module.Client(
+        project="demo-jacob",
+        credentials=AnonymousCredentials(),
+    )
 
 
 @pytest.fixture(autouse=True)
