@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   leaderDelta,
+  leaderUidsAction,
   mirrorRtdbMembership,
   orgMirrorAction,
 } from "../onMemberWrite";
@@ -49,6 +50,36 @@ describe("leaderDelta", () => {
 
   it("write with both sides missing → 0", () => {
     expect(leaderDelta(false, false, undefined, undefined)).toBe(0);
+  });
+});
+
+describe("leaderUidsAction (H5)", () => {
+  it("create as leader → add", () => {
+    expect(leaderUidsAction(false, true, undefined, "leader")).toBe("add");
+  });
+
+  it("create as member → noop", () => {
+    expect(leaderUidsAction(false, true, undefined, "member")).toBe("noop");
+  });
+
+  it("delete a leader → remove", () => {
+    expect(leaderUidsAction(true, false, "leader", undefined)).toBe("remove");
+  });
+
+  it("delete a member → noop", () => {
+    expect(leaderUidsAction(true, false, "member", undefined)).toBe("noop");
+  });
+
+  it("promote member → leader → add", () => {
+    expect(leaderUidsAction(true, true, "member", "leader")).toBe("add");
+  });
+
+  it("demote leader → member → remove", () => {
+    expect(leaderUidsAction(true, true, "leader", "member")).toBe("remove");
+  });
+
+  it("no role change (leader → leader) → noop", () => {
+    expect(leaderUidsAction(true, true, "leader", "leader")).toBe("noop");
   });
 });
 

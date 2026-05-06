@@ -398,20 +398,33 @@ def dashboard_for(db: Any, org_id: str) -> dict[str, Any]:
         member_count += 1
         del snap
 
+    # H5: walk the org's groups once, gather counts and the gid set in
+    # the same pass. The previous code streamed `groups.where(orgId)`
+    # twice (once for counts, once for the gid set).
+    org_gids: set[str] = set()
     for snap in db.collection("groups").where("orgId", "==", org_id).stream():
         group_count += 1
+        org_gids.add(snap.id)
         if (snap.to_dict() or {}).get("archivedAt"):
             archived_count += 1
 
     pending_mod = 0
-    # Best-effort: counts pending moderation_queue rows that name a group
-    # in this org. The collection is admin-SDK-only; we tolerate the cost
-    # because dashboards are leader/admin-rate.
-    org_gids = {snap.id for snap in db.collection("groups").where("orgId", "==", org_id).stream()}
+    # H5: replace the previous full-scan-and-filter
+    # (`stream() ... data["groupId"] in org_gids`) with chunked Firestore
+    # `in` queries against (status, groupId). Cost is now O(orgs.groups)
+    # instead of O(all-pending-moderation-rows) — the latter scaled with
+    # platform load, not org size, which is the wrong sensitivity.
     if org_gids:
-        for snap in db.collection("moderation_queue").where("status", "==", "pending").stream():
-            data = snap.to_dict() or {}
-            if data.get("groupId") in org_gids:
+        gids = list(org_gids)
+        # Firestore `in` operator caps at 30 values per query.
+        for i in range(0, len(gids), 30):
+            chunk = gids[i : i + 30]
+            chunk_query = (
+                db.collection("moderation_queue")
+                .where("status", "==", "pending")
+                .where("groupId", "in", chunk)
+            )
+            for _snap in chunk_query.stream():
                 pending_mod += 1
 
     return {

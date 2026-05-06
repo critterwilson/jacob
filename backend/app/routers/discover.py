@@ -92,16 +92,23 @@ def list_discover_groups(
             if q.lower() not in name and q.lower() not in desc:
                 continue
 
-        # Gather leader UIDs from members subcollection.
-        member_snaps = (
-            db.collection("groups")
-            .document(snap.id)
-            .collection("members")
-            .where("role", "==", "leader")
-            .limit(3)
-            .stream()
-        )
-        leader_uids = [m.id for m in member_snaps]
+        # H5: read denormalised `leaderUids` off the group doc itself
+        # (maintained by `functions/src/onMemberWrite.ts`). Fall back to
+        # the per-group subcollection scan only for groups that haven't
+        # been backfilled yet — see `infra/scripts/backfill_group_leaders.py`.
+        leader_uids = list(d.get("leaderUids") or [])
+        if not leader_uids and "leaderUids" not in d:
+            member_snaps = (
+                db.collection("groups")
+                .document(snap.id)
+                .collection("members")
+                .where("role", "==", "leader")
+                .limit(3)
+                .stream()
+            )
+            leader_uids = [m.id for m in member_snaps]
+        else:
+            leader_uids = leader_uids[:3]
 
         groups.append(
             DiscoverGroup(
