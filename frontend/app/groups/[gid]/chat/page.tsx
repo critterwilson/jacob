@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageList } from "@/components/chat/MessageList";
 import { PinnedBar } from "@/components/chat/PinnedBar";
+import { PresenceBar } from "@/components/chat/PresenceBar";
 import { ThreadPanel } from "@/components/chat/ThreadPanel";
+import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { ArchivedBanner } from "@/components/groups/ArchivedBanner";
 import { Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -15,7 +17,9 @@ import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useGroupMessages } from "@/lib/hooks/useGroupMessages";
 import type { Message } from "@/lib/hooks/useGroupMessages";
+import { useMembers } from "@/lib/hooks/useMembers";
 import { usePinnedMessages } from "@/lib/hooks/usePinnedMessages";
+import { useTyping } from "@/lib/hooks/useTyping";
 
 type Props = { params: { gid: string } };
 
@@ -34,6 +38,22 @@ export default function ChatPage({ params }: Props) {
   );
   const { pinnedIds, togglePin } = usePinnedMessages(gid);
   const { announce } = useAnnounce(gid);
+  const { members } = useMembers(gid);
+
+  // T48 — presence + typing run only when the leader hasn't disabled
+  // social signals on the group. `null` (legacy default) is treated as
+  // enabled so groups created before the toggle existed still get the
+  // bar.
+  const presenceEnabled = group?.presenceEnabled !== false;
+  const { setTyping } = useTyping(user ? gid : undefined, presenceEnabled);
+
+  const resolveName = useCallback(
+    (uid: string) => {
+      const m = members.find((mem) => mem.uid === uid);
+      return m?.displayName ?? "Someone";
+    },
+    [members],
+  );
 
   const [activeThread, setActiveThread] = useState<Message | null>(null);
 
@@ -71,6 +91,9 @@ export default function ChatPage({ params }: Props) {
           ← {groupName ?? "Group"}
         </Link>
         <h1 className="text-body-sm font-semibold text-cream">Chat</h1>
+        <div className="ml-auto">
+          <PresenceBar gid={gid} presenceEnabled={presenceEnabled} />
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -92,7 +115,16 @@ export default function ChatPage({ params }: Props) {
             onTogglePin={(mid) => void togglePin(mid)}
             onAnnounce={(mid) => void announce(mid)}
           />
-          <MessageInput gid={gid} archived={Boolean(archivedAt)} />
+          <TypingIndicator
+            gid={gid}
+            presenceEnabled={presenceEnabled}
+            resolveName={resolveName}
+          />
+          <MessageInput
+            gid={gid}
+            archived={Boolean(archivedAt)}
+            onTyping={setTyping}
+          />
         </div>
 
         {activeThread && (

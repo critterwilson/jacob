@@ -15,7 +15,11 @@ export function UnfurlCard({ unfurl }: { unfurl: Unfurl }) {
       href={unfurl.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex gap-3 rounded border border-gray-200 bg-gray-50 p-2 hover:bg-gray-100"
+      className={
+        "flex gap-3 rounded border border-line bg-ink-overlay p-2 " +
+        "transition-colors duration-fast hover:bg-ink-raised " +
+        "focus:outline-none focus-visible:shadow-glow-gold"
+      }
     >
       {unfurl.imageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
@@ -29,20 +33,20 @@ export function UnfurlCard({ unfurl }: { unfurl: Unfurl }) {
       )}
       <div className="min-w-0 flex-1">
         {unfurl.siteName && (
-          <p className="truncate text-xs uppercase tracking-wide text-gray-500">
+          <p className="truncate text-caption uppercase tracking-wide text-cream-dim">
             {unfurl.siteName}
           </p>
         )}
-        <p className="truncate text-sm font-medium text-gray-800">
+        <p className="truncate text-body-sm font-medium text-cream">
           {unfurl.title ?? unfurl.url}
         </p>
         {unfurl.description && (
-          <p className="line-clamp-2 text-xs text-gray-600">
+          <p className="line-clamp-2 text-caption text-cream-muted">
             {unfurl.description}
           </p>
         )}
         {!hasMetadata && (
-          <p className="text-xs text-gray-500">{unfurl.url}</p>
+          <p className="text-caption text-cream-dim">{unfurl.url}</p>
         )}
       </div>
     </a>

@@ -4,13 +4,13 @@ import { useState } from "react";
 
 import { ApiError, apiDelete, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { MessageBody } from "@/components/chat/MessageBody";
 import { PhotoView } from "@/components/chat/PhotoView";
 import { ReactionBar } from "@/components/chat/ReactionBar";
 import { ReactionPicker } from "@/components/chat/ReactionPicker";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
 import { Avatar, Button, Textarea, cn } from "@/components/ui";
-import { renderBodyWithMentions } from "@/lib/mentions";
 import { useStickers } from "@/lib/hooks/useStickers";
 import type { Message } from "@/lib/hooks/useGroupMessages";
 import type { Member as FullMember } from "@/lib/hooks/useMembers";
@@ -243,30 +243,12 @@ export function MessageItem({
             </div>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap text-body text-cream">
-            {renderBodyWithMentions(
-              message.body,
-              message.mentions ?? [],
-              members ?? [],
-              resolvedUid,
-            ).map((part, i) =>
-              typeof part === "string" ? (
-                part
-              ) : (
-                <span
-                  key={i}
-                  className={cn(
-                    "inline-block rounded px-1 text-body-sm font-medium",
-                    part.isSelf
-                      ? "bg-gold/20 text-gold-soft"
-                      : "bg-lake/20 text-lake",
-                  )}
-                >
-                  @{part.displayName}
-                </span>
-              ),
-            )}
-          </p>
+          <MessageBody
+            body={message.body}
+            mentions={message.mentions ?? []}
+            members={members ?? []}
+            currentUserUid={resolvedUid}
+          />
         )}
 
         {messageStickers.length > 0 && !isDeleted && !shouldHideBody && (

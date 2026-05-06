@@ -46,7 +46,7 @@ vi.mock("@/lib/hooks/useMembers", () => ({
 }));
 
 import { useState } from "react";
-import { extractMentionedUids, renderBodyWithMentions } from "@/lib/mentions";
+import { extractMentionedUids } from "@/lib/mentions";
 import { MentionInput } from "@/components/chat/MentionInput";
 
 // MentionInput accepts a narrower projection (just `uid`+`displayName`).
@@ -110,46 +110,10 @@ describe("extractMentionedUids", () => {
   });
 });
 
-// ── renderBodyWithMentions (pure) ─────────────────────────────────────────────
-
-describe("renderBodyWithMentions", () => {
-  it("returns plain string when no mentions", () => {
-    const parts = renderBodyWithMentions("hello world", [], fakeMembers);
-    expect(parts).toEqual(["hello world"]);
-  });
-
-  it("returns chip tokens for mentioned uids", () => {
-    const parts = renderBodyWithMentions(
-      "Hey @Bob Smith!",
-      ["bob"],
-      fakeMembers,
-      "alice",
-    );
-    expect(parts.some((p) => typeof p === "object" && p.displayName === "Bob Smith")).toBe(true);
-  });
-
-  it("marks isSelf when current user is mentioned", () => {
-    const parts = renderBodyWithMentions(
-      "@Bob Smith check this",
-      ["bob"],
-      fakeMembers,
-      "bob",
-    );
-    const chip = parts.find((p) => typeof p === "object") as { isSelf: boolean } | undefined;
-    expect(chip?.isSelf).toBe(true);
-  });
-
-  it("marks isSelf=false for another user's mention", () => {
-    const parts = renderBodyWithMentions(
-      "@Bob Smith check this",
-      ["bob"],
-      fakeMembers,
-      "alice",
-    );
-    const chip = parts.find((p) => typeof p === "object") as { isSelf: boolean } | undefined;
-    expect(chip?.isSelf).toBe(false);
-  });
-});
+// renderBodyWithMentions was retired when MessageBody folded markdown +
+// mentions into a single renderer (T53 follow-up). The mention badge
+// behavior is now exercised by tests/message-item.test.tsx and
+// tests/markdown.test.tsx.
 
 // ── MentionInput component ────────────────────────────────────────────────────
 

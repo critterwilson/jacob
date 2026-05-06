@@ -30,6 +30,12 @@ export type GroupDetail = {
   createdAt: string | null;
   inviteCode: string | null;
   moderationPolicy: string | null;
+  /**
+   * T48 — leader-toggleable. `null` (legacy default) is treated as
+   * "presence on" by the chat page so existing groups keep working
+   * without a backfill.
+   */
+  presenceEnabled: boolean | null;
 };
 
 /**
