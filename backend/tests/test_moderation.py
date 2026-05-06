@@ -30,20 +30,48 @@ def test_disable_flag_short_circuits_hash_check(monkeypatch) -> None:  # type: i
     assert result.matched is False
 
 
-def test_hash_check_without_endpoint_raises(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Unset JACOB_HASH_SERVICE_URL must fail closed, not pass the image."""
+def _force_production_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Force `Settings.environment` to a non-development value so the
+    hash-provider resolver does not pick the dev "disabled" default."""
+    from app.config import Settings, get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    # Sanity-check the override took.
+    assert Settings().environment == "production"
+
+
+def test_hash_check_without_provider_raises_in_production(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Unset JACOB_HASH_PROVIDER in production must fail closed."""
     monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.delenv(moderation.HASH_PROVIDER_ENV, raising=False)
     monkeypatch.delenv(moderation.HASH_SERVICE_URL_ENV, raising=False)
+    _force_production_env(monkeypatch)
     import pytest
 
-    with pytest.raises(RuntimeError, match="CSAM hash service URL unset"):
+    with pytest.raises(RuntimeError, match="CSAM hash provider unset"):
         moderation.check_hash_service("deadbeef")
 
 
-def test_hash_check_without_endpoint_captures_sentry(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Unset URL is surfaced via Sentry so it's visible in the dashboard."""
+def test_hash_check_without_provider_passes_in_development(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """In development the resolver defaults to 'disabled' so uploads work."""
     monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.delenv(moderation.HASH_PROVIDER_ENV, raising=False)
     monkeypatch.delenv(moderation.HASH_SERVICE_URL_ENV, raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    result = moderation.check_hash_service("deadbeef")
+    assert result.matched is False
+
+
+def test_hash_check_without_provider_captures_sentry(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """In production the unset case is surfaced via Sentry."""
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.delenv(moderation.HASH_PROVIDER_ENV, raising=False)
+    monkeypatch.delenv(moderation.HASH_SERVICE_URL_ENV, raising=False)
+    _force_production_env(monkeypatch)
 
     captured: list[tuple[str, str]] = []
 
@@ -58,6 +86,69 @@ def test_hash_check_without_endpoint_captures_sentry(monkeypatch) -> None:  # ty
     with pytest.raises(RuntimeError):
         moderation.check_hash_service("deadbeef")
     assert captured and captured[0][1] == "error"
+
+
+def test_hash_provider_disabled_short_circuits(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`JACOB_HASH_PROVIDER=disabled` is the explicit no-op, valid in any env."""
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, "disabled")
+    _force_production_env(monkeypatch)
+    result = moderation.check_hash_service("deadbeef")
+    assert result.matched is False
+
+
+def test_hash_provider_noop_logs_warning(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]
+    """`noop` returns no-match and emits a WARNING per call."""
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, "noop")
+    _force_production_env(monkeypatch)
+    with caplog.at_level("WARNING"):
+        result = moderation.check_hash_service("deadbeef")
+    assert result.matched is False
+    assert any("csam_hash_check_noop" in r.message for r in caplog.records)
+
+
+def test_hash_provider_invalid_value_raises(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Random strings (non-URL, non-sentinel) fail closed."""
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, "totally-not-a-url")
+    _force_production_env(monkeypatch)
+    import pytest
+
+    with pytest.raises(RuntimeError, match="not a recognised sentinel"):
+        moderation.check_hash_service("deadbeef")
+
+
+def test_hash_provider_legacy_url_env_still_works(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Old `JACOB_HASH_SERVICE_URL` env var continues to drive the URL provider."""
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    monkeypatch.delenv(moderation.HASH_PROVIDER_ENV, raising=False)
+    monkeypatch.setenv(moderation.HASH_SERVICE_URL_ENV, "https://hash.example.com/check")
+    _force_production_env(monkeypatch)
+
+    class _FakeResp:
+        def __init__(self, body: bytes) -> None:
+            self._body = body
+
+        def __enter__(self):  # type: ignore[no-untyped-def]
+            return self
+
+        def __exit__(self, *exc):  # type: ignore[no-untyped-def]
+            return False
+
+        def read(self) -> bytes:
+            return self._body
+
+    captured: dict[str, object] = {}
+
+    def _fake_urlopen(req, timeout):  # type: ignore[no-untyped-def]
+        captured["url"] = req.full_url
+        return _FakeResp(b'{"matched": false}')
+
+    monkeypatch.setattr(moderation.urllib.request, "urlopen", _fake_urlopen)
+    result = moderation.check_hash_service("deadbeef")
+    assert captured["url"] == "https://hash.example.com/check"
+    assert result.matched is False
 
 
 def test_report_to_ncmec_logs_stub(monkeypatch, caplog) -> None:  # type: ignore[no-untyped-def]

@@ -1,5 +1,33 @@
 # CSAM incident runbook (T63)
 
+## Hash-provider configuration (C2)
+
+`backend/app/services/moderation.py:check_hash_service` reads a single
+env knob, `JACOB_HASH_PROVIDER`. Recognised values:
+
+| Value      | Behaviour                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| `disabled` | No-op. Returns "no match" silently. **Default in `development`.**                                                |
+| `noop`     | No-op + `WARNING` log per call ("csam_hash_check_noop"). Use in staging while commissioning a real hash service. |
+| URL        | POSTs `{"hash":"<sha256>"}` to the endpoint and parses `{matched, source}` from the JSON response.               |
+
+`JACOB_HASH_SERVICE_URL` (the legacy URL-only var) is still honoured
+when `JACOB_HASH_PROVIDER` is unset, so deploys that already configured
+it keep working.
+
+In any environment other than `development`, an unset / blank
+`JACOB_HASH_PROVIDER` (and unset `JACOB_HASH_SERVICE_URL`) **fails
+closed**: every upload raises and is rejected. This is intentional —
+the gate is loud so a bad config is caught at the next upload attempt
+rather than discovered later from a NCMEC inquiry.
+
+> **Legal exposure.** `disabled` and `noop` mean uploads bypass CSAM
+> scanning entirely. That has to be a deliberate choice tied to a
+> business reason ("we don't accept image uploads in this env" /
+> "we're between vendors and have an alternative human-review
+> process"), not the silent default. The dev-only default is permitted
+> because dev environments don't accept real user content.
+
 ## Severity
 
 A confirmed CSAM hash match is **always** SEV1 even if no user is
