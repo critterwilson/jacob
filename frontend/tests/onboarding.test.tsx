@@ -239,6 +239,12 @@ describe("ProfileForm validation", () => {
     });
   });
 
+  it("links the community-guidelines label to /guidelines", () => {
+    renderForm();
+    const link = screen.getByRole("link", { name: /community guidelines/i });
+    expect(link).toHaveAttribute("href", "/guidelines");
+  });
+
   it("shows error when community guidelines not agreed on submit", async () => {
     const user = userEvent.setup();
     renderForm();

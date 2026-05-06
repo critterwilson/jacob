@@ -284,6 +284,7 @@ describe("SignUpForm", () => {
     render(<SignUpForm />);
     await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
     await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.click(screen.getByLabelText(/i agree/i));
     await userEvent.click(
       screen.getByRole("button", { name: /create account/i }),
     );
@@ -302,6 +303,7 @@ describe("SignUpForm", () => {
     render(<SignUpForm />);
     await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
     await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.click(screen.getByLabelText(/i agree/i));
     await userEvent.click(
       screen.getByRole("button", { name: /create account/i }),
     );
@@ -317,11 +319,48 @@ describe("SignUpForm", () => {
     } as unknown as fbAuth.UserCredential);
 
     render(<SignUpForm />);
+    await userEvent.click(screen.getByLabelText(/i agree/i));
     await userEvent.click(
       screen.getByRole("button", { name: /continue with google/i }),
     );
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/onboarding"));
+  });
+
+  it("blocks the email/password submit when the ToS checkbox is unchecked", async () => {
+    render(<SignUpForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.click(
+      screen.getByRole("button", { name: /create account/i }),
+    );
+
+    expect(
+      await screen.findByText(/must agree to the terms of service/i),
+    ).toBeInTheDocument();
+    expect(fbAuth.createUserWithEmailAndPassword).not.toHaveBeenCalled();
+  });
+
+  it("blocks the Google sign-up button when the ToS checkbox is unchecked", async () => {
+    render(<SignUpForm />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue with google/i }),
+    );
+
+    expect(
+      await screen.findByText(/must agree to the terms of service/i),
+    ).toBeInTheDocument();
+    expect(fbAuth.signInWithPopup).not.toHaveBeenCalled();
+  });
+
+  it("the ToS label links to /terms and /privacy", () => {
+    render(<SignUpForm />);
+    expect(
+      screen.getByRole("link", { name: /terms of service/i }),
+    ).toHaveAttribute("href", "/terms");
+    expect(
+      screen.getByRole("link", { name: /privacy policy/i }),
+    ).toHaveAttribute("href", "/privacy");
   });
 });
 

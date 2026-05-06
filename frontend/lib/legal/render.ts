@@ -14,9 +14,9 @@
 // renderer. Adding DOMPurify would require an isomorphic shim
 // (jsdom on the server) for no security gain.
 
-import { marked } from "marked";
+import { Marked, Renderer } from "marked";
 
-const _renderer = new marked.Renderer();
+const _renderer = new Renderer();
 
 // Lock down link rendering: only http(s) + mailto. Anything else
 // (javascript:, data:, etc.) renders as plain text.
@@ -44,7 +44,7 @@ _renderer.link = ({ href, text }) => {
 _renderer.html = () => "";
 _renderer.image = () => "";
 
-const _instance = new marked.Marked({
+const _instance = new Marked({
   renderer: _renderer,
   gfm: true,
   breaks: false, // long-form prose: paragraph breaks come from blank lines
