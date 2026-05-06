@@ -15,9 +15,11 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getFunctions } from "firebase-admin/functions";
 import { getApps, initializeApp } from "firebase-admin/app";
 
-import { sendFcm, StaleTokenError, tryReserveFcmQuota, type FcmPayload } from "./services/fcm";
+import { tryReserveFcmQuota, type FcmPayload } from "./services/fcm";
+import type { SendFcmTaskPayload } from "./sendFcmTask";
 
 if (!getApps().length) {
   initializeApp();
@@ -144,44 +146,44 @@ export const onNotificationCreate = onDocumentCreated(
     }
 
     const payload = buildPayload(notif, uid);
-    let successCount = 0;
-    let lastFailureReason = "";
-    const sends = devicesSnap.docs.map(async (deviceSnap) => {
+
+    // H2: enqueue one Cloud Task per device. The `sendFcmTask` worker
+    // (in sendFcmTask.ts) handles the FCM send and incrementally
+    // updates `delivered`/`failed` counters on this notif doc. The
+    // per-task retry budget is independent of this trigger's lifetime,
+    // so a slow FCM call no longer holds the trigger open.
+    const queue = getFunctions().taskQueue<SendFcmTaskPayload>("sendFcmTask");
+    let enqueued = 0;
+    for (const deviceSnap of devicesSnap.docs) {
       const device = deviceSnap.data() as DeviceDoc;
       const token = device.fcmToken;
-      if (!token) return;
+      if (!token) continue;
+      await queue.enqueue({
+        uid,
+        deviceId: deviceSnap.id,
+        fcmToken: token,
+        notifPath: notifRef.path,
+        fcmPayload: payload,
+      });
+      enqueued += 1;
+    }
 
-      try {
-        await sendFcm(token, payload);
-        successCount++;
-        logger.info("fcm_sent", { uid, nid, deviceId: deviceSnap.id });
-      } catch (err) {
-        if (err instanceof StaleTokenError) {
-          logger.info("stale_token_deleted", { uid, deviceId: deviceSnap.id });
-          await deviceSnap.ref.delete();
-          return;
-        }
-        lastFailureReason = (err as Error).message;
-        logger.error("fcm_send_error", { uid, nid, deviceId: deviceSnap.id, error: lastFailureReason });
-      }
+    // Initialise the counters so the worker's `FieldValue.increment`
+    // calls land on a known shape. Workers race each other safely
+    // because increment is commutative.
+    await notifRef.update({
+      enqueued,
+      enqueuedAt: FieldValue.serverTimestamp(),
+      delivered: 0,
+      failed: 0,
     });
 
-    await Promise.allSettled(sends);
-
-    if (successCount > 0) {
-      await notifRef.update({
-        deliveredAt: FieldValue.serverTimestamp(),
-        delivered: successCount,
-        failed: deviceCount - successCount,
-      });
-    } else {
-      await notifRef.update({
-        failedAt: FieldValue.serverTimestamp(),
-        failureReason: lastFailureReason || "all_devices_failed",
-        delivered: 0,
-        failed: deviceCount,
-      });
-    }
-    logger.info("notification_dispatched", { uid, nid, kind: notif.kind, successCount, deviceCount });
+    logger.info("notification_dispatched", {
+      uid,
+      nid,
+      kind: notif.kind,
+      enqueued,
+      deviceCount,
+    });
   },
 );
