@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export const createGroupSchema = z.object({
@@ -40,34 +41,18 @@ export function CreateGroupForm() {
     setSubmitting(true);
 
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/groups`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            name: values.name,
-            description: values.description ?? "",
-            isPrivate: values.isPrivate,
-          }),
-        },
-      );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        const msg = err?.error?.message ?? "Failed to create group. Please try again.";
-        setSubmitError(msg);
-        return;
-      }
-
-      const { groupId } = (await res.json()) as { groupId: string };
+      const { groupId } = await apiPost<{ groupId: string }>("/api/groups", {
+        name: values.name,
+        description: values.description ?? "",
+        isPrivate: values.isPrivate,
+      });
       router.push(`/groups/${groupId}`);
-    } catch {
-      setSubmitError("Something went wrong. Please try again.");
+    } catch (e) {
+      setSubmitError(
+        e instanceof ApiError
+          ? e.message || "Failed to create group. Please try again."
+          : "Something went wrong. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }

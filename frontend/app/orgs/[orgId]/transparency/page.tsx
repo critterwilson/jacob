@@ -3,9 +3,8 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ApiError, apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Report = {
   reportId: string;
@@ -31,20 +30,19 @@ export default function OrgTransparencyPage() {
 
   useEffect(() => {
     if (authLoading || !user) return;
-    user
-      .getIdToken()
-      .then((token) =>
-        fetch(`${API}/api/orgs/${orgId}/transparency/latest`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      )
-      .then(async (res) => {
-        if (res.status === 403) throw new Error("Org-admin access required.");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    apiGet<Report>(`/api/orgs/${orgId}/transparency/latest`)
       .then(setReport)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e: unknown) => {
+        if (e instanceof ApiError) {
+          if (e.status === 403) {
+            setError("Org-admin access required.");
+          } else {
+            setError(e.message || `HTTP ${e.status}`);
+          }
+          return;
+        }
+        setError(e instanceof Error ? e.message : "Failed to load");
+      })
       .finally(() => setLoading(false));
   }, [user, authLoading, orgId]);
 

@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Payload = Record<string, unknown>;
 
@@ -16,6 +15,12 @@ type Report = {
   generatedAt: string | null;
   publishedAt: string | null;
 };
+
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return fallback;
+}
 
 export default function AdminTransparencyPage() {
   const { user } = useAuth();
@@ -29,15 +34,12 @@ export default function AdminTransparencyPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}/api/admin/transparency/drafts`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ reports: Report[] }>(
+        "/api/admin/transparency/drafts",
+      );
       setReports(data.reports);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(errorMessage(e, "Failed to load"));
     } finally {
       setLoading(false);
     }
@@ -53,29 +55,14 @@ export default function AdminTransparencyPage() {
       window.prompt("Period to generate (YYYY-Qn). Leave blank for previous quarter.") ?? "";
     setActionState((s) => ({ ...s, generate: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const qs = period ? `?period=${encodeURIComponent(period)}` : "";
-      const res = await fetch(
-        `${API}/api/admin/transparency/generate${qs}`,
-        { method: "POST", headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error?.message) msg = body.error.message;
-        } catch {
-          /* fall through */
-        }
-        throw new Error(msg);
-      }
+      const path = period
+        ? `/api/admin/transparency/generate?period=${encodeURIComponent(period)}`
+        : "/api/admin/transparency/generate";
+      await apiPost(path, undefined);
       await load();
       setActionState((s) => ({ ...s, generate: "done" }));
     } catch (e) {
-      setActionState((s) => ({
-        ...s,
-        generate: e instanceof Error ? e.message : "error",
-      }));
+      setActionState((s) => ({ ...s, generate: errorMessage(e, "error") }));
     }
   };
 
@@ -87,18 +74,10 @@ export default function AdminTransparencyPage() {
     if (!ok) return;
     setActionState((s) => ({ ...s, [reportId]: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${API}/api/admin/transparency/${reportId}/publish`,
-        { method: "POST", headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiPost(`/api/admin/transparency/${reportId}/publish`, undefined);
       await load();
     } catch (e) {
-      setActionState((s) => ({
-        ...s,
-        [reportId]: e instanceof Error ? e.message : "error",
-      }));
+      setActionState((s) => ({ ...s, [reportId]: errorMessage(e, "error") }));
     }
   };
 

@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useMembers } from "@/lib/hooks/useMembers";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Props = { params: { gid: string } };
 
@@ -36,25 +35,17 @@ export default function MembersPage({ params }: Props) {
     setPending(path);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      if (!res.ok) {
-        const err = (await res.json().catch(() => null)) as
-          | { error?: { message?: string } }
-          | null;
-        setError(err?.error?.message ?? `HTTP ${res.status}`);
-        return false;
-      }
+      await apiPost(path, body);
       // Refresh the member list so the role badge reflects the change.
       await refresh();
       return true;
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : "Network error",
+      );
+      return false;
     } finally {
       setPending(null);
     }

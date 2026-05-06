@@ -23,6 +23,14 @@ vi.mock("@/lib/auth-context", () => ({
   useAuth: () => ({ user: mockUser, loading: false, signOut: vi.fn() }),
 }));
 
+// lib/api reads Firebase auth state via @/lib/firebase. Tests don't run with
+// real Firebase env, so stub the module before any page (which transitively
+// imports @/lib/api) is loaded.
+vi.mock("@/lib/firebase", () => ({
+  auth: { currentUser: null },
+  firestore: {},
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => "/admin/queue",

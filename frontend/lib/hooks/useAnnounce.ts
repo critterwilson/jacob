@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 type AnnounceResult = {
@@ -20,25 +22,22 @@ export function useAnnounce(gid: string) {
     setIsPending(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/groups/${gid}/messages/${mid}/announce`,
-        { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+      return await apiPost<AnnounceResult>(
+        `/api/groups/${gid}/messages/${mid}/announce`,
+        undefined,
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        const msg =
-          err?.error?.code === "already_announced"
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setError(
+          e.code === "already_announced"
             ? "Message already announced."
-            : err?.error?.code === "archived"
+            : e.code === "archived"
               ? "Cannot announce in an archived group."
-              : "Failed to announce.";
-        setError(msg);
-        return null;
+              : "Failed to announce.",
+        );
+      } else {
+        setError("Something went wrong.");
       }
-      return (await res.json()) as AnnounceResult;
-    } catch {
-      setError("Something went wrong.");
       return null;
     } finally {
       setIsPending(false);

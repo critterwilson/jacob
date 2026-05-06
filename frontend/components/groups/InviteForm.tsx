@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Banner, Button, Select } from "@/components/ui";
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 const createInviteSchema = z.object({
@@ -46,26 +47,17 @@ export function InviteForm({ gid }: Props) {
     setServerError(null);
     setCreated(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/groups/${gid}/invites`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(values),
-        },
+      const result = await apiPost<InviteResult>(
+        `/api/groups/${gid}/invites`,
+        values,
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        setServerError(err?.error?.message ?? "Failed to create invite.");
-        return;
-      }
-      setCreated((await res.json()) as InviteResult);
-    } catch {
-      setServerError("Something went wrong.");
+      setCreated(result);
+    } catch (e) {
+      setServerError(
+        e instanceof ApiError
+          ? e.message || "Failed to create invite."
+          : "Something went wrong.",
+      );
     }
   };
 

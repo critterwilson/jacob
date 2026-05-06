@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+
+import { apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export type DiscoverGroup = {
@@ -25,8 +27,6 @@ type State =
   | { status: "ok"; groups: DiscoverGroup[]; nextCursor: string | null }
   | { status: "error"; message: string };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 export function useDiscoverGroups(params: {
   audience?: string;
   q?: string;
@@ -44,21 +44,15 @@ export function useDiscoverGroups(params: {
           : { status: "loading" },
       );
 
-      const url = new URL(`${API_URL}/api/discover/groups`);
-      if (params.audience) url.searchParams.set("audience", params.audience);
-      if (params.q) url.searchParams.set("q", params.q);
-      if (append && cursorRef.current) url.searchParams.set("cursor", cursorRef.current);
+      const search = new URLSearchParams();
+      if (params.audience) search.set("audience", params.audience);
+      if (params.q) search.set("q", params.q);
+      if (append && cursorRef.current) search.set("cursor", cursorRef.current);
+      const qs = search.toString();
+      const path = qs ? `/api/discover/groups?${qs}` : "/api/discover/groups";
 
       try {
-        const token = await user.getIdToken();
-        const res = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          setState({ status: "error", message: "Failed to load groups" });
-          return;
-        }
-        const page = (await res.json()) as Page;
+        const page = await apiGet<Page>(path);
         cursorRef.current = page.nextCursor ?? null;
         setState((s) => ({
           status: "ok",
@@ -66,7 +60,7 @@ export function useDiscoverGroups(params: {
           nextCursor: page.nextCursor ?? null,
         }));
       } catch {
-        setState({ status: "error", message: "Network error" });
+        setState({ status: "error", message: "Failed to load groups" });
       }
     },
     [user, params.audience, params.q],

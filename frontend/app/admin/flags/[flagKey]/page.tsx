@@ -4,9 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Cohorts = {
   orgIds: string[];
@@ -33,22 +32,17 @@ type AuditEntry = {
   payload: Record<string, unknown>;
 };
 
-async function authFetch(token: string, path: string, init?: RequestInit) {
-  return fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
-}
-
 function csv(input: string): string[] {
   return input
     .split(/[\s,]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return fallback;
 }
 
 export default function AdminFlagDetailPage() {
@@ -75,26 +69,22 @@ export default function AdminFlagDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const [flagRes, auditRes] = await Promise.all([
-        authFetch(token, `/api/admin/flags/${flagKey}`),
-        authFetch(token, `/api/admin/flags/${flagKey}/audit`),
+      const [flagData, auditData] = await Promise.all([
+        apiGet<FeatureFlag>(`/api/admin/flags/${flagKey}`),
+        apiGet<{ entries: AuditEntry[] }>(
+          `/api/admin/flags/${flagKey}/audit`,
+        ).catch(() => ({ entries: [] as AuditEntry[] })),
       ]);
-      if (!flagRes.ok) throw new Error(`HTTP ${flagRes.status}`);
-      const data: FeatureFlag = await flagRes.json();
-      setFlag(data);
-      setEnabled(data.enabled);
-      setPct(data.rolloutPercentage);
-      setDescription(data.description);
-      setUids(data.cohorts.uids.join(", "));
-      setOrgIds(data.cohorts.orgIds.join(", "));
-      setRoles(data.cohorts.roles.join(", "));
-      if (auditRes.ok) {
-        const auditData = await auditRes.json();
-        setAudit(auditData.entries as AuditEntry[]);
-      }
+      setFlag(flagData);
+      setEnabled(flagData.enabled);
+      setPct(flagData.rolloutPercentage);
+      setDescription(flagData.description);
+      setUids(flagData.cohorts.uids.join(", "));
+      setOrgIds(flagData.cohorts.orgIds.join(", "));
+      setRoles(flagData.cohorts.roles.join(", "));
+      setAudit(auditData.entries);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load flag");
+      setError(errorMessage(e, "Failed to load flag"));
     } finally {
       setLoading(false);
     }
@@ -109,34 +99,20 @@ export default function AdminFlagDetailPage() {
     setSaving(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/flags`, {
-        method: "POST",
-        body: JSON.stringify({
-          flagKey,
-          enabled,
-          rolloutPercentage: pct,
-          description,
-          cohorts: {
-            uids: csv(uids),
-            orgIds: csv(orgIds),
-            roles: csv(roles),
-          },
-        }),
+      await apiPost("/api/admin/flags", {
+        flagKey,
+        enabled,
+        rolloutPercentage: pct,
+        description,
+        cohorts: {
+          uids: csv(uids),
+          orgIds: csv(orgIds),
+          roles: csv(roles),
+        },
       });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error?.message) msg = body.error.message;
-        } catch {
-          // fall through
-        }
-        throw new Error(msg);
-      }
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save flag");
+      setError(errorMessage(e, "Failed to save flag"));
     } finally {
       setSaving(false);
     }
@@ -148,14 +124,10 @@ export default function AdminFlagDetailPage() {
       return;
     setSaving(true);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/flags/${flagKey}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiDelete(`/api/admin/flags/${flagKey}`);
       window.location.assign("/admin/flags");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete flag");
+      setError(errorMessage(e, "Failed to delete flag"));
       setSaving(false);
     }
   };

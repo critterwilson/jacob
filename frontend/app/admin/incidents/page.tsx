@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Incident = {
   incidentId: string;
@@ -17,15 +16,10 @@ type Incident = {
   acknowledged: boolean;
 };
 
-async function authFetch(token: string, path: string, init?: RequestInit) {
-  return fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return fallback;
 }
 
 export default function AdminIncidentsPage() {
@@ -45,13 +39,10 @@ export default function AdminIncidentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, "/api/admin/incidents");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ incidents: Incident[] }>("/api/admin/incidents");
       setIncidents(data.incidents);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(errorMessage(e, "Failed to load"));
     } finally {
       setLoading(false);
     }
@@ -66,31 +57,17 @@ export default function AdminIncidentsPage() {
     setPending(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, "/api/admin/incidents", {
-        method: "POST",
-        body: JSON.stringify({
-          severity,
-          title,
-          body,
-          displayMinutes,
-        }),
+      await apiPost("/api/admin/incidents", {
+        severity,
+        title,
+        body,
+        displayMinutes,
       });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const err = await res.json();
-          if (err?.error?.message) msg = err.error.message;
-        } catch {
-          // fall through
-        }
-        throw new Error(msg);
-      }
       setTitle("");
       setBody("");
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to declare");
+      setError(errorMessage(e, "Failed to declare"));
     } finally {
       setPending(false);
     }
@@ -100,16 +77,10 @@ export default function AdminIncidentsPage() {
     if (!user) return;
     if (!confirm(`Clear incident ${incidentId}?`)) return;
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(
-        token,
-        `/api/admin/incidents/${incidentId}/clear`,
-        { method: "POST" },
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiPost(`/api/admin/incidents/${incidentId}/clear`, undefined);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to clear");
+      setError(errorMessage(e, "Failed to clear"));
     }
   };
 

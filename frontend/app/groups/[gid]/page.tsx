@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { ReportButton } from "@/components/moderation/ReportButton";
@@ -39,23 +40,17 @@ export default function GroupPage({ params }: Props) {
     setRotateError(null);
     setRotating(true);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/groups/${gid}/invite/rotate`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        },
+      const { inviteCode } = await apiPost<{ inviteCode: string }>(
+        `/api/groups/${gid}/invite/rotate`,
+        undefined,
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        setRotateError(err?.error?.message ?? "Failed to rotate code.");
-        return;
-      }
-      const { inviteCode } = (await res.json()) as { inviteCode: string };
       setCurrentCode(inviteCode);
-    } catch {
-      setRotateError("Something went wrong.");
+    } catch (e) {
+      setRotateError(
+        e instanceof ApiError
+          ? e.message || "Failed to rotate code."
+          : "Something went wrong.",
+      );
     } finally {
       setRotating(false);
     }

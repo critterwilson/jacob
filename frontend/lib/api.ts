@@ -134,6 +134,14 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+// FormData bodies are passed straight to fetch — the browser sets the
+// Content-Type (with the multipart boundary) automatically. We must NOT
+// set Content-Type ourselves; doing so omits the boundary and the server
+// rejects the body. JSON bodies still get the explicit Content-Type.
+function isFormData(value: unknown): value is FormData {
+  return typeof FormData !== "undefined" && value instanceof FormData;
+}
+
 async function request<T>(
   method: Method,
   path: string,
@@ -149,6 +157,8 @@ async function request<T>(
   // tokens and refreshes them itself, so re-fetching on retry is wasteful.
   const authH = await authHeader();
 
+  const formDataBody = isFormData(body);
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
     if (opts.signal?.aborted) {
@@ -159,14 +169,21 @@ async function request<T>(
       ...authH,
       Accept: "application/json",
     };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (body !== undefined && !formDataBody) {
+      headers["Content-Type"] = "application/json";
+    }
 
     let res: Response;
     try {
       res = await fetch(url, {
         method,
         headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        body:
+          body === undefined
+            ? undefined
+            : formDataBody
+              ? (body as FormData)
+              : JSON.stringify(body),
         signal: opts.signal,
         credentials: "include",
       });

@@ -9,6 +9,8 @@
 // surface the right message (oversize, mime, rejected by safety, etc.).
 
 import { useCallback, useState } from "react";
+
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export const ALLOWED_PHOTO_MIME_TYPES = [
@@ -59,28 +61,8 @@ type FinalizeResponse = {
   publicUrl: string;
 };
 
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-}
-
 function isAllowedMime(value: string): value is AllowedPhotoMimeType {
   return (ALLOWED_PHOTO_MIME_TYPES as readonly string[]).includes(value);
-}
-
-function errorCodeFromBody(body: unknown): UploadErrorCode | null {
-  if (
-    typeof body === "object" &&
-    body !== null &&
-    "error" in body &&
-    typeof (body as { error?: unknown }).error === "object" &&
-    (body as { error?: { code?: unknown } }).error?.code !== undefined
-  ) {
-    const code = String(
-      (body as { error: { code: unknown } }).error.code,
-    ) as UploadErrorCode;
-    return code;
-  }
-  return null;
 }
 
 export function useUploadPhoto() {
@@ -114,39 +96,38 @@ export function useUploadPhoto() {
       setUploading(true);
       setProgress("signing");
       try {
-        const token = await user.getIdToken();
-
         // Step 1: ask the backend for a signed PUT URL
-        const initRes = await fetch(`${apiBase()}/api/uploads/photos`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+        let signed: CreateResponse;
+        try {
+          signed = await apiPost<CreateResponse>("/api/uploads/photos", {
             purpose,
             mimeType: file.type,
             byteCount: file.size,
             ...(groupId ? { groupId } : {}),
-          }),
-        });
-
-        if (!initRes.ok) {
-          const body = (await initRes.json().catch(() => null)) as unknown;
-          const code = errorCodeFromBody(body);
-          if (initRes.status === 403) {
-            throw new UploadError("forbidden", "You can't upload to this group.");
+          });
+        } catch (e) {
+          if (e instanceof ApiError) {
+            if (e.status === 403) {
+              throw new UploadError(
+                "forbidden",
+                "You can't upload to this group.",
+              );
+            }
+            throw new UploadError(
+              (e.code as UploadErrorCode) || "server_error",
+              "Could not start upload.",
+            );
           }
-          throw new UploadError(
-            (code as UploadErrorCode) ?? "server_error",
-            "Could not start upload.",
-          );
+          throw e;
         }
-        const { uploadId, uploadUrl } = (await initRes.json()) as CreateResponse;
 
-        // Step 2: PUT bytes directly to GCS via the signed URL
+        // Step 2: PUT bytes directly to GCS via the signed URL. This is a
+        // cross-origin request to a Google-issued URL with no Authorization
+        // header (the signature is the auth) and no JSON body — it
+        // intentionally does NOT go through lib/api.ts.
         setProgress("uploading");
-        const putRes = await fetch(uploadUrl, {
+        // eslint-disable-next-line no-restricted-syntax
+        const putRes = await fetch(signed.uploadUrl, {
           method: "PUT",
           headers: { "Content-Type": file.type },
           body: file,
@@ -161,31 +142,30 @@ export function useUploadPhoto() {
         // Step 3: finalize. Backend runs hash + SafeSearch then returns the
         // public URL only on pass.
         setProgress("finalizing");
-        const finalRes = await fetch(
-          `${apiBase()}/api/uploads/${uploadId}/finalize`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-
-        if (finalRes.status === 451) {
-          throw new UploadError(
-            "csam_hash_match",
-            "This image cannot be uploaded.",
+        try {
+          const final = await apiPost<FinalizeResponse>(
+            `/api/uploads/${signed.uploadId}/finalize`,
+            undefined,
           );
+          return final.publicUrl;
+        } catch (e) {
+          if (e instanceof ApiError) {
+            if (e.status === 451) {
+              throw new UploadError(
+                "csam_hash_match",
+                "This image cannot be uploaded.",
+              );
+            }
+            if (e.status === 422) {
+              throw new UploadError(
+                "safesearch_blocked",
+                "This image was blocked by safety review.",
+              );
+            }
+            throw new UploadError("server_error", "Could not finalize upload.");
+          }
+          throw e;
         }
-        if (finalRes.status === 422) {
-          throw new UploadError(
-            "safesearch_blocked",
-            "This image was blocked by safety review.",
-          );
-        }
-        if (!finalRes.ok) {
-          throw new UploadError("server_error", "Could not finalize upload.");
-        }
-        const { publicUrl } = (await finalRes.json()) as FinalizeResponse;
-        return publicUrl;
       } catch (err) {
         if (err instanceof UploadError) throw err;
         throw new UploadError("network_error", "Network error during upload.");

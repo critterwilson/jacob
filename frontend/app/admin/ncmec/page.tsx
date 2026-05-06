@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type NcmecCase = {
   caseId: string;
@@ -28,15 +27,10 @@ type NcmecCase = {
   failureReason: string | null;
 };
 
-async function authFetch(token: string, path: string, init?: RequestInit) {
-  return fetch(`${API}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
+function errorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
+  if (e instanceof Error) return e.message;
+  return fallback;
 }
 
 export default function AdminNcmecPage() {
@@ -51,13 +45,12 @@ export default function AdminNcmecPage() {
     setLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, "/api/admin/ncmec/pending");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ cases: NcmecCase[] }>(
+        "/api/admin/ncmec/pending",
+      );
       setCases(data.cases);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(errorMessage(e, "Failed to load"));
     } finally {
       setLoading(false);
     }
@@ -75,28 +68,11 @@ export default function AdminNcmecPage() {
     if (typed !== "SUBMIT") return;
     setActionState((s) => ({ ...s, [caseId]: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/ncmec/${caseId}/submit`, {
-        method: "POST",
-        body: JSON.stringify({ confirm: "SUBMIT" }),
-      });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body?.error?.message) msg = body.error.message;
-        } catch {
-          /* fall through */
-        }
-        throw new Error(msg);
-      }
+      await apiPost(`/api/admin/ncmec/${caseId}/submit`, { confirm: "SUBMIT" });
       await load();
       setActionState((s) => ({ ...s, [caseId]: "done" }));
     } catch (e) {
-      setActionState((s) => ({
-        ...s,
-        [caseId]: e instanceof Error ? e.message : "error",
-      }));
+      setActionState((s) => ({ ...s, [caseId]: errorMessage(e, "error") }));
     }
   };
 
@@ -111,18 +87,10 @@ export default function AdminNcmecPage() {
     }
     setActionState((s) => ({ ...s, [caseId]: "loading" }));
     try {
-      const token = await user.getIdToken();
-      const res = await authFetch(token, `/api/admin/ncmec/${caseId}/withdraw`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiPost(`/api/admin/ncmec/${caseId}/withdraw`, { reason });
       await load();
     } catch (e) {
-      setActionState((s) => ({
-        ...s,
-        [caseId]: e instanceof Error ? e.message : "error",
-      }));
+      setActionState((s) => ({ ...s, [caseId]: errorMessage(e, "error") }));
     }
   };
 

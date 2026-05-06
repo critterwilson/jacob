@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/auth-context";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { ApiError, apiPost } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 type Props = {
   gid: string;
   joinMode: "open" | "request";
   onJoined?: () => void;
 };
+
+type JoinResponse = { joined?: boolean; pending?: boolean };
 
 export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
   const { user } = useAuth();
@@ -23,27 +25,20 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
     setState("pending");
     setErrorMsg(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API_URL}/api/groups/${gid}/join-requests`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        setErrorMsg(err?.error?.message ?? "Failed to join.");
-        setState("error");
-        return;
-      }
-      const data = (await res.json()) as { joined?: boolean; pending?: boolean };
+      const data = await apiPost<JoinResponse>(
+        `/api/groups/${gid}/join-requests`,
+        { message },
+      );
       if (data.joined) {
         setState("done");
         onJoined?.();
       } else {
         setState("done");
       }
-    } catch {
-      setErrorMsg("Network error.");
+    } catch (e) {
+      setErrorMsg(
+        e instanceof ApiError ? e.message || "Failed to join." : "Network error.",
+      );
       setState("error");
     }
   };

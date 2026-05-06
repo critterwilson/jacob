@@ -22,6 +22,13 @@ vi.mock("@/lib/auth-context", () => ({
   }),
 }));
 
+// lib/api reads Firebase auth via @/lib/firebase. Tests run without real
+// Firebase env, so stub the module before useReport (via @/lib/api) loads it.
+vi.mock("@/lib/firebase", () => ({
+  auth: { currentUser: null },
+  firestore: {},
+}));
+
 const muteFn = vi.fn();
 const unmuteFn = vi.fn();
 const blockFn = vi.fn();

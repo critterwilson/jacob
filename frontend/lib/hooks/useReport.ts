@@ -2,9 +2,8 @@
 
 import { useCallback, useState } from "react";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type ReportReason =
   | "harassment"
@@ -55,30 +54,19 @@ export function useReport() {
       }
       setSubmitting(true);
       try {
-        const token = await user.getIdToken();
-        const res = await fetch(`${API}/api/reports`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(args),
-        });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as
-            | { error?: ReportError }
-            | null;
-          const msg = body?.error?.message ?? `HTTP ${res.status}`;
-          const code = body?.error?.code ?? "report_failed";
-          setError({ code, message: msg });
-          return null;
-        }
-        return (await res.json()) as SubmitReportResult;
+        return await apiPost<SubmitReportResult>("/api/reports", args);
       } catch (e) {
-        setError({
-          code: "network_error",
-          message: e instanceof Error ? e.message : "Network error",
-        });
+        if (e instanceof ApiError) {
+          setError({
+            code: e.code,
+            message: e.message || `HTTP ${e.status}`,
+          });
+        } else {
+          setError({
+            code: "network_error",
+            message: e instanceof Error ? e.message : "Network error",
+          });
+        }
         return null;
       } finally {
         setSubmitting(false);

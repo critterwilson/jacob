@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ApiError, apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 export type SearchHit = {
@@ -28,9 +29,6 @@ type SearchState = {
 };
 
 const DEBOUNCE_MS = 300;
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 /**
  * Debounced fetch against `/api/search`.
@@ -65,36 +63,30 @@ export function useSearch(q: string, page: number = 1, perPage: number = 8) {
     timer.current = setTimeout(async () => {
       const ctrl = new AbortController();
       controller.current = ctrl;
+      const params = new URLSearchParams({
+        q: trimmed,
+        page: String(page),
+        perPage: String(perPage),
+      });
       try {
-        const token = await user.getIdToken();
-        const url = new URL(`${API_BASE}/api/search`);
-        url.searchParams.set("q", trimmed);
-        url.searchParams.set("page", String(page));
-        url.searchParams.set("perPage", String(perPage));
-
-        const res = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: ctrl.signal,
-        });
-        if (!res.ok) {
+        const data = await apiGet<SearchResponse>(
+          `/api/search?${params.toString()}`,
+          { signal: ctrl.signal },
+        );
+        setState({ data, loading: false, error: null });
+      } catch (err) {
+        if (err instanceof ApiError) {
+          if (err.code === "aborted") return;
           const msg =
-            res.status === 503
+            err.status === 503
               ? "Search is temporarily unavailable."
-              : res.status === 429
+              : err.status === 429
                 ? "Too many searches — slow down."
                 : "Search failed.";
           setState({ data: null, loading: false, error: msg });
           return;
         }
-        const data = (await res.json()) as SearchResponse;
-        setState({ data, loading: false, error: null });
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        setState({
-          data: null,
-          loading: false,
-          error: "Search failed.",
-        });
+        setState({ data: null, loading: false, error: "Search failed." });
       }
     }, DEBOUNCE_MS);
 

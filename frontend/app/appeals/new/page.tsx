@@ -3,9 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const SUBJECT_TYPES = [
   { value: "message", label: "A message of mine that was hidden" },
@@ -47,32 +46,19 @@ export default function NewAppealPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}/api/appeals`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          subject: { type: subjectType, ref: subjectRef.trim() },
-          body,
-        }),
+      const data = await apiPost<{ appealId: string }>("/api/appeals", {
+        subject: { type: subjectType, ref: subjectRef.trim() },
+        body,
       });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const data = await res.json();
-          if (data?.error?.message) msg = data.error.message;
-        } catch {
-          /* fall through */
-        }
-        throw new Error(msg);
-      }
-      const data = await res.json();
       router.replace(`/appeals/${data.appealId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Submit failed");
+      setError(
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : e instanceof Error
+            ? e.message
+            : "Submit failed",
+      );
     } finally {
       setSubmitting(false);
     }

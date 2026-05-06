@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Banner, Button, Card, Heading } from "@/components/ui";
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
   type ExportStatus,
@@ -64,27 +65,13 @@ export default function ExportPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}/api/account/export`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        let code = `HTTP ${res.status}`;
-        try {
-          const body = (await res.json()) as { error?: { code?: string } };
-          if (body?.error?.code) code = body.error.code;
-        } catch {
-          // ignore — keep the HTTP fallback above
-        }
-        throw new Error(code);
-      }
+      await apiPost("/api/account/export", {});
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Request failed");
+      if (e instanceof ApiError) {
+        setError(e.code || `HTTP ${e.status}`);
+      } else {
+        setError(e instanceof Error ? e.message : "Request failed");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -92,7 +79,12 @@ export default function ExportPage() {
 
   const onDownload = async () => {
     if (!user || !job.jobId || job.status !== "ready") return;
+    // The download endpoint redirects to a signed GCS URL; we follow the
+    // redirect and navigate the window to the final URL. lib/api.ts hides
+    // the underlying Response (returns parsed JSON), so this stays as a
+    // raw fetch — we need `res.redirected` / `res.url` semantics.
     const token = await user.getIdToken();
+    // eslint-disable-next-line no-restricted-syntax
     const res = await fetch(
       `${API}/api/account/export/${encodeURIComponent(job.jobId)}/download`,
       {

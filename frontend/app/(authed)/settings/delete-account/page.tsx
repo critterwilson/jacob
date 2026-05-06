@@ -7,10 +7,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Banner, Button, Heading, Input } from "@/components/ui";
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useDeletionStatus } from "@/lib/hooks/useDeletionStatus";
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const ConfirmSchema = z.object({
   confirmation: z.literal("DELETE"),
@@ -72,16 +71,15 @@ export default function DeleteAccountPage() {
             setSubmitting(true);
             setSubmitError(null);
             try {
-              const token = await user.getIdToken();
-              const res = await fetch(`${API}/api/account/delete/cancel`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              await apiPost("/api/account/delete/cancel", undefined);
               router.replace("/home");
             } catch (e) {
               setSubmitError(
-                e instanceof Error ? e.message : "Cancel failed",
+                e instanceof ApiError
+                  ? e.message || `HTTP ${e.status}`
+                  : e instanceof Error
+                    ? e.message
+                    : "Cancel failed",
               );
             } finally {
               setSubmitting(false);
@@ -99,21 +97,18 @@ export default function DeleteAccountPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(`${API}/api/account/delete`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ keepBody: values.keepBody }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await apiPost("/api/account/delete", { keepBody: values.keepBody });
       // Backend revoked refresh tokens; sign the client out and bounce home.
       await signOut();
       router.replace("/");
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : "Request failed");
+      setSubmitError(
+        e instanceof ApiError
+          ? e.message || `HTTP ${e.status}`
+          : e instanceof Error
+            ? e.message
+            : "Request failed",
+      );
       setSubmitting(false);
     }
   };

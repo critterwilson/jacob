@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Banner } from "@/components/ui";
+import { ApiError, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Invite } from "@/lib/hooks/useInvites";
 
@@ -79,17 +80,13 @@ export function InviteList({ gid, invites }: Props) {
     setRevoking(inviteId);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/groups/${gid}/invites/${inviteId}`,
-        { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+      await apiDelete(`/api/groups/${gid}/invites/${inviteId}`);
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? e.message || "Failed to revoke invite."
+          : "Something went wrong.",
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        setError(err?.error?.message ?? "Failed to revoke invite.");
-      }
-    } catch {
-      setError("Something went wrong.");
     } finally {
       setRevoking(null);
     }

@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 const joinSchema = z.object({
@@ -54,37 +55,23 @@ function JoinForm() {
     setSubmitting(true);
 
     try {
-      const token = await user.getIdToken();
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/groups/join`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ code: values.code }),
-        },
+      const { groupId } = await apiPost<{ groupId: string }>(
+        "/api/groups/join",
+        { code: values.code },
       );
-
-      if (res.status === 409) {
-        setSubmitError("You are already a member of this group.");
-        return;
-      }
-      if (res.status === 404) {
-        setSubmitError("Invite code not found. Double-check and try again.");
-        return;
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        setSubmitError(err?.error?.message ?? "Failed to join group.");
-        return;
-      }
-
-      const { groupId } = (await res.json()) as { groupId: string };
       router.push(`/groups/${groupId}`);
-    } catch {
-      setSubmitError("Something went wrong. Please try again.");
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 409) {
+          setSubmitError("You are already a member of this group.");
+        } else if (e.status === 404) {
+          setSubmitError("Invite code not found. Double-check and try again.");
+        } else {
+          setSubmitError(e.message || "Failed to join group.");
+        }
+      } else {
+        setSubmitError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

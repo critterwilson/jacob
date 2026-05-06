@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { ApiError, apiGet } from "@/lib/api";
 
 type Payload = {
   reports?: { received?: number; byCategory?: Record<string, number> };
@@ -45,13 +45,15 @@ export default function TransparencyPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/transparency/latest`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    apiGet<Report>("/api/transparency/latest")
       .then(setReport)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+      .catch((e: unknown) => {
+        if (e instanceof ApiError) {
+          setError(e.message || `HTTP ${e.status}`);
+        } else {
+          setError(e instanceof Error ? e.message : "Failed to load");
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
