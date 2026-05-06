@@ -92,7 +92,7 @@ def test_group_health_query_returns_per_day_severity(db) -> None:  # type: ignor
         {"groupId": gid, "createdAt": now, "severity": 1}
     )
 
-    rows = group_health.severity_by_day(db, gid=gid, days=7, now=now)
+    rows = group_health.sentiment_trend(db, gid=gid, days=7, now=now)
     by_day = {r["day"]: r for r in rows}
 
     yesterday = (now - timedelta(days=1)).date().isoformat()
