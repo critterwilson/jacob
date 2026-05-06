@@ -1,3 +1,5 @@
+*[REVISED 2026-05-06]*
+
 ## In plain words
 
 JACOB is a small messaging app for Christian small groups. We collect the
@@ -70,6 +72,18 @@ the minimum each one needs:
   — we send uploaded images and the text of new messages to these APIs for
   automated safety classification. Results are returned to us and not used
   by Google to improve their products.
+- **Sentry** (operated by Functional Software, Inc.) — we send backend and
+  frontend exception telemetry (stack traces, request metadata, and a
+  request ID) to Sentry to investigate errors. Full message bodies and
+  user-supplied media are not sent.
+- **Typesense** — we run a self-hosted Typesense search sidecar on Google
+  Cloud Run that holds an index of message bodies and your display name
+  so that in-group search works. Typesense is operationally a separate
+  component from Firestore even though we host it ourselves.
+- **Google BigQuery** (operated by Google LLC) — once a day we copy a
+  snapshot of message metadata into BigQuery so leaders can see
+  group-level activity counts. See "How long we keep it" below for how
+  long these analytics copies persist.
 - **NCMEC (National Center for Missing & Exploited Children)** — if our
   systems flag content that matches a known child sexual abuse material
   (CSAM) hash, we are legally required to report it to NCMEC. We share only
@@ -105,6 +119,14 @@ account:
 - Audit log entries that record significant moderation events (such as a
   ban or a CSAM report) are retained as required by law and our moderation
   policy.
+- **Analytics warehouse copies.** Once a day we copy message metadata into
+  a BigQuery analytics dataset (see "Who we share it with"). These copies
+  are *not* removed by the deletion cascade above — each day's snapshot
+  is a frozen record of what Firestore contained that morning. Deleted
+  content stops appearing in *future* daily snapshots, but historical
+  snapshots are retained for the analytics dataset's own retention
+  window (90 days). Talk to us if you need an analytics-warehouse copy
+  expedited.
 
 ## Your rights
 
