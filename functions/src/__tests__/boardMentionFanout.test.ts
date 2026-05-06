@@ -12,11 +12,15 @@ import type { Firestore } from "firebase-admin/firestore";
 
 type DocData = { exists: boolean };
 
-function makeDb(opts: { blockedUids?: string[]; addMock?: Mock }): {
+type FanoutCall = { recipientUid: string; notifId: string; data: Record<string, unknown> };
+
+function makeDb(opts: { blockedUids?: string[] }): {
   db: Firestore;
-  addMock: Mock;
+  setMock: Mock;
+  calls: FanoutCall[];
 } {
-  const addMock = opts.addMock ?? vi.fn().mockResolvedValue({});
+  const calls: FanoutCall[] = [];
+  const setMock = vi.fn().mockImplementation(async () => undefined);
   const db = {
     collection: vi.fn().mockImplementation((col: string) => ({
       doc: vi.fn().mockImplementation((docId: string) => ({
@@ -29,18 +33,23 @@ function makeDb(opts: { blockedUids?: string[]; addMock?: Mock }): {
                 (opts.blockedUids ?? []).includes(docId) &&
                 subDocId === "alice",
             } as DocData),
+            set: vi.fn().mockImplementation(async (data: Record<string, unknown>) => {
+              if (col === "users" && subCol === "notifications") {
+                calls.push({ recipientUid: docId, notifId: subDocId, data });
+                setMock(data);
+              }
+            }),
           })),
-          add: addMock,
         })),
       })),
     })),
   } as unknown as Firestore;
-  return { db, addMock };
+  return { db, setMock, calls };
 }
 
 describe("fanOutMentions on boards", () => {
   it("writes board_mention notifications, skips blocker", async () => {
-    const { db, addMock } = makeDb({ blockedUids: ["bob"] });
+    const { db, setMock, calls } = makeDb({ blockedUids: ["bob"] });
     await fanOutMentions(db, {
       authorUid: "alice",
       mentions: ["bob", "carol"],
@@ -50,19 +59,19 @@ describe("fanOutMentions on boards", () => {
         boardId: "b1",
       },
       isMember: async () => true,
+      eventId: "evt1",
     });
-    expect(addMock).toHaveBeenCalledTimes(1);
-    const [[firstArg]] = addMock.mock.calls as [
-      [{ kind: string; boardId: string; messageRef: string; fromUid: string }],
-    ];
-    expect(firstArg.kind).toBe("board_mention");
-    expect(firstArg.boardId).toBe("b1");
-    expect(firstArg.messageRef).toBe("boards/b1/posts/p1");
-    expect(firstArg.fromUid).toBe("alice");
+    expect(setMock).toHaveBeenCalledTimes(1);
+    expect(calls[0].recipientUid).toBe("carol");
+    expect(calls[0].notifId).toBe("mention_evt1_carol");
+    expect(calls[0].data.kind).toBe("board_mention");
+    expect(calls[0].data.boardId).toBe("b1");
+    expect(calls[0].data.messageRef).toBe("boards/b1/posts/p1");
+    expect(calls[0].data.fromUid).toBe("alice");
   });
 
   it("skips self-mention", async () => {
-    const { db, addMock } = makeDb({});
+    const { db, setMock } = makeDb({});
     await fanOutMentions(db, {
       authorUid: "alice",
       mentions: ["alice"],
@@ -72,12 +81,13 @@ describe("fanOutMentions on boards", () => {
         boardId: "b1",
       },
       isMember: async () => true,
+      eventId: "evt1",
     });
-    expect(addMock).not.toHaveBeenCalled();
+    expect(setMock).not.toHaveBeenCalled();
   });
 
   it("isMember=false suppresses fan-out (parity with group path)", async () => {
-    const { db, addMock } = makeDb({});
+    const { db, setMock } = makeDb({});
     await fanOutMentions(db, {
       authorUid: "alice",
       mentions: ["bob"],
@@ -87,7 +97,8 @@ describe("fanOutMentions on boards", () => {
         groupId: "g1",
       },
       isMember: async () => false,
+      eventId: "evt1",
     });
-    expect(addMock).not.toHaveBeenCalled();
+    expect(setMock).not.toHaveBeenCalled();
   });
 });

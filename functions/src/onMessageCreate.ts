@@ -140,6 +140,7 @@ export async function fanOutMentionNotifications(
   mid: string,
   authorUid: string,
   mentions: string[],
+  eventId: string,
 ): Promise<void> {
   await fanOutMentions(db, {
     authorUid,
@@ -158,6 +159,7 @@ export async function fanOutMentionNotifications(
         .get();
       return snap.exists;
     },
+    eventId,
   });
 }
 
@@ -227,7 +229,7 @@ export const onMessageCreate = onDocumentCreated(
     const authorUid = (data.authorUid as string | undefined) ?? "";
     if (mentions.length > 0 && authorUid) {
       try {
-        await fanOutMentionNotifications(db, gid, mid, authorUid, mentions);
+        await fanOutMentionNotifications(db, gid, mid, authorUid, mentions, event.id);
         logger.info("mention_fanout_done", {
           gid,
           mid,

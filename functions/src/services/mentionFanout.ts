@@ -8,6 +8,12 @@
  *
  * Boards (T32) have no membership concept — pass `async () => true`.
  * Group chat (T27) checks `groups/{gid}/members/{uid}`.
+ *
+ * Idempotency: callers pass the trigger's `event.id`. Notification doc
+ * ids are deterministic — `mention_${eventId}_${recipientUid}` — so a
+ * redelivered trigger overwrites the same doc instead of creating a new
+ * one per recipient. Mirrors the reply-notification pattern in
+ * `onMessageWrite.ts`.
  */
 
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
@@ -27,9 +33,10 @@ export async function fanOutMentions(
     mentions: string[];
     payload: MentionNotificationPayload;
     isMember: (uid: string) => Promise<boolean>;
+    eventId: string;
   },
 ): Promise<void> {
-  const { authorUid, mentions, payload, isMember } = args;
+  const { authorUid, mentions, payload, isMember, eventId } = args;
   await Promise.all(
     mentions.map(async (recipientUid) => {
       if (recipientUid === authorUid) return;
@@ -48,7 +55,8 @@ export async function fanOutMentions(
         .collection("users")
         .doc(recipientUid)
         .collection("notifications")
-        .add({
+        .doc(`mention_${eventId}_${recipientUid}`)
+        .set({
           ...payload,
           fromUid: authorUid,
           createdAt: FieldValue.serverTimestamp(),

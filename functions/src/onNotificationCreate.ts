@@ -6,8 +6,11 @@
  * and device list, sends FCM to each registered device, then stamps the
  * notification doc with `deliveredAt` or `failedAt`.
  *
- * Idempotency: the trigger fires once per create. Retried delivery
- * re-sends, but FCM deduplicates within 4 h via `collapse_key`.
+ * Idempotency: Cloud Functions delivery is at-least-once. We dedupe on
+ * `event.id` via a marker doc at
+ * `users/{uid}/notifications/{nid}/_events/{eventId}`, written inside a
+ * transaction before any task is enqueued. Same pattern as
+ * `onMessageWrite.ts` and `onReactionWrite.ts`.
  *
  * P3 options: region us-central1, maxInstances 10, retry false.
  */
@@ -20,6 +23,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 
 import { tryReserveFcmQuota, type FcmPayload } from "./services/fcm";
 import type { SendFcmTaskPayload } from "./sendFcmTask";
+import { eventMarker } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -108,6 +112,21 @@ export const onNotificationCreate = onDocumentCreated(
     const db = getFirestore();
     const notifRef = db.collection("users").doc(uid).collection("notifications").doc(nid);
 
+    // Idempotency guard: bail if we have already processed this event id.
+    // Cloud Functions delivery is at-least-once; without this every redelivery
+    // would re-enqueue the per-device FCM tasks and produce duplicate pushes.
+    const eventRef = notifRef.collection("_events").doc(event.id);
+    const reserved = await db.runTransaction(async (txn) => {
+      const eventSnap = await txn.get(eventRef);
+      if (eventSnap.exists) return false;
+      txn.set(eventRef, eventMarker());
+      return true;
+    });
+    if (!reserved) {
+      logger.info("notification_event_already_processed", { uid, nid, eventId: event.id });
+      return;
+    }
+
     const prefKey = KIND_TO_PREF[notif.kind] ?? null;
     if (prefKey !== null) {
       const prefSnap = await db
@@ -147,6 +166,17 @@ export const onNotificationCreate = onDocumentCreated(
 
     const payload = buildPayload(notif, uid);
 
+    // Initialise the counters BEFORE enqueuing so a worker that lands
+    // between `enqueue()` and the trigger's post-loop write can't be
+    // clobbered by a hard `delivered: 0` / `failed: 0` reset. Workers
+    // race each other safely because `FieldValue.increment` is
+    // commutative; the post-loop write only updates `enqueued` totals.
+    await notifRef.update({
+      enqueuedAt: FieldValue.serverTimestamp(),
+      delivered: 0,
+      failed: 0,
+    });
+
     // H2: enqueue one Cloud Task per device. The `sendFcmTask` worker
     // (in sendFcmTask.ts) handles the FCM send and incrementally
     // updates `delivered`/`failed` counters on this notif doc. The
@@ -168,15 +198,7 @@ export const onNotificationCreate = onDocumentCreated(
       enqueued += 1;
     }
 
-    // Initialise the counters so the worker's `FieldValue.increment`
-    // calls land on a known shape. Workers race each other safely
-    // because increment is commutative.
-    await notifRef.update({
-      enqueued,
-      enqueuedAt: FieldValue.serverTimestamp(),
-      delivered: 0,
-      failed: 0,
-    });
+    await notifRef.update({ enqueued });
 
     logger.info("notification_dispatched", {
       uid,
