@@ -62,6 +62,29 @@ a `csam_match_detected` event. The case lands in
   `/admin/ncmec` and type `SUBMIT` to confirm. The backend
   records the operator action.
 
+## Manual NCMEC submission workflow (C3)
+
+End-to-end ladder of who does what when a CSAM hash match fires:
+
+| Stage                  | Actor          | Action                                                                                                                                                                  |
+| ---------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Detection**          | upload backend | Hash match in `check_hash_service` → upload rejected with 451; `moderation_queue` row written; `services.moderation.report_to_ncmec` called.                            |
+| **Quarantine**         | upload backend | Object moved to `_held/<sha256>` with `retainedUntil` 90 days out (lifecycle won't delete before then).                                                                 |
+| **Operator notice**    | upload backend | Two side-effects: (1) CRITICAL log line `MANUAL_ACTION_REQUIRED ncmec_report ...` (Sentry-visible, dashboard-visible); (2) `ncmec_cases/<id>` doc created with `status="pending"` so the case appears in the operator queue at `/admin/ncmec`. |
+| **Operator file**      | on-call admin  | Open `/admin/ncmec`, follow the "Manual NCMEC submission (until the HTTPS integration lands)" steps below to file with NCMEC.                                           |
+| **Mark filed**         | on-call admin  | Click **Submit** on the case. Backend records the operator action, sets status `submitted`, and writes the NCMEC report id when known.                                  |
+| **Audit log entry**    | backend        | The Submit / Withdraw transitions write to `audit_log` (actor + timestamp + previous status) automatically.                                                             |
+
+The CRITICAL log line is the canary the on-call dashboard watches; the
+`ncmec_cases` queue is the persistent record. Either alone is the cue
+to act, both together make the bypass impossible to miss.
+
+`JACOB_NCMEC_SUBMIT_DISABLED` (default `true`) is the kill-switch on
+the *automatic* HTTPS submission path. Until the NCMEC HTTPS integration
+ships there is no auto-submit anywhere, so the env's effective behaviour
+is "log + write the case row" regardless of value. Flip to `false` only
+in the deploy that actually wires up the live submission code.
+
 ## Manual NCMEC submission (until the HTTPS integration lands)
 
 The Submit endpoint in v1 records the operator's intent + a

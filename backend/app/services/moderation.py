@@ -37,7 +37,7 @@ import logging
 import os
 import urllib.request
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 try:
     import sentry_sdk as _sentry_sdk
@@ -52,6 +52,11 @@ DISABLE_MODERATION_ENV = "JACOB_DISABLE_MODERATION"
 HASH_PROVIDER_ENV = "JACOB_HASH_PROVIDER"
 HASH_SERVICE_URL_ENV = "JACOB_HASH_SERVICE_URL"
 NCMEC_ENDPOINT_ENV = "JACOB_NCMEC_ENDPOINT"
+# C3 — explicit kill-switch for automatic NCMEC submission. Default true
+# because the HTTPS integration isn't wired in v1; flipping this to false
+# is meaningless until that lands. Operators handle submission manually
+# via /admin/ncmec — see docs/runbooks/csam-incident.md.
+NCMEC_AUTOSUBMIT_DISABLED_ENV = "JACOB_NCMEC_SUBMIT_DISABLED"
 
 # Recognised non-URL provider sentinels.
 _PROVIDER_DISABLED = "disabled"
@@ -168,18 +173,70 @@ def check_hash_service(image_hash: str) -> HashCheckResult:
     return HashCheckResult(matched=bool(body.get("matched")), source=body.get("source"))
 
 
-def report_to_ncmec(*, image_hash: str, uploader_uid: str, object_name: str) -> None:
-    """NCMEC report stub.
+def ncmec_autosubmit_disabled() -> bool:
+    """Return True when the auto-submit-to-NCMEC kill-switch is on.
 
-    In v1 we only log + record the intent. Real submission to the
-    CyberTipline must be wired up before launch — see lawyer-review
-    checklist. The error log makes the gap loud during pre-launch QA.
+    Defaults to True so the HTTPS-call path stays inert until the
+    integration is deliberately enabled (which today means: there is
+    no integration, so this always defaults to disabled).
+    """
+    raw = os.environ.get(NCMEC_AUTOSUBMIT_DISABLED_ENV, "true").lower()
+    return raw not in {"0", "false", "no"}
+
+
+def report_to_ncmec(
+    *,
+    image_hash: str,
+    uploader_uid: str,
+    object_name: str,
+    db: Any | None = None,
+    hash_source: str | None = None,
+) -> str | None:
+    """Surface a CSAM hash match for operator handling (C3).
+
+    Behaviour, when called by the upload-finalize path:
+
+    * Always logs at CRITICAL with the case shape so the bypass is loud
+      in Cloud Logging and trips dashboards / Sentry.
+    * If `db` is supplied, creates a row in `ncmec_cases` (the operator
+      queue surfaced at `/admin/ncmec` — same collection the case
+      service uses) so the manual-handoff queue lights up automatically
+      on each detection. Returns the case id; otherwise returns None.
+
+    The HTTPS call to NCMEC's CyberTipline is intentionally NOT made.
+    `JACOB_NCMEC_SUBMIT_DISABLED` (default true) is the kill-switch for
+    that path; until the integration lands, every detection becomes a
+    "manual NCMEC submission required" line in the runbook. See
+    `docs/runbooks/csam-incident.md` for the operator workflow.
     """
     endpoint = os.environ.get(NCMEC_ENDPOINT_ENV)
-    logger.error(
-        "ncmec_report_stub hash=%s uploader=%s object=%s endpoint=%s",
+    autosubmit_disabled = ncmec_autosubmit_disabled()
+    logger.critical(
+        "MANUAL_ACTION_REQUIRED ncmec_report hash=%s uploader=%s object=%s "
+        "endpoint=%s autosubmit_disabled=%s — operator must file "
+        "manually via /admin/ncmec (see docs/runbooks/csam-incident.md).",
         image_hash,
         uploader_uid,
         object_name,
         endpoint or "<unset>",
+        autosubmit_disabled,
     )
+
+    case_id: str | None = None
+    if db is not None:
+        # Lazy-import to avoid a circular ncmec ↔ moderation pull-in at
+        # module load time.
+        from app.services import ncmec as ncmec_service
+
+        case_id = ncmec_service.create_case(
+            db,
+            hash_source=hash_source or "upload_pipeline",
+            hash_value=image_hash,
+            evidence={
+                "gcsPath": object_name,
+                "sha256": image_hash,
+                "source": "upload_finalize",
+            },
+            suspect_uid=uploader_uid,
+        )
+    return case_id

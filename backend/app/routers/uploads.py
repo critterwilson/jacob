@@ -227,6 +227,8 @@ def finalize_upload(
             image_hash=image_hash,
             uploader_uid=user.uid,
             object_name=object_name,
+            db=db,
+            hash_source=hash_result.source,
         )
         doc_ref.update({"status": "rejected_csam"})
         logger.error(
