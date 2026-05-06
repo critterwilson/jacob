@@ -37,13 +37,18 @@ NOQA_MARKER = "# noqa: not-banned"
 
 
 def _is_router_write(decorator: ast.expr) -> bool:
-    """True if this is `@router.<method>(...)` with method in WRITE_METHODS."""
+    """True if this is `@<*router*>.<method>(...)` with method in WRITE_METHODS.
+
+    Matches any module-level binding whose name contains "router" — so
+    `router`, `admin_router`, `appellant_router`, `org_router`,
+    `public_router`, etc. all get linted, not just the bare `router` name.
+    """
     if not isinstance(decorator, ast.Call):
         return False
     func = decorator.func
     if not isinstance(func, ast.Attribute):
         return False
-    if not isinstance(func.value, ast.Name) or func.value.id != "router":
+    if not isinstance(func.value, ast.Name) or "router" not in func.value.id:
         return False
     return func.attr in WRITE_METHODS
 
