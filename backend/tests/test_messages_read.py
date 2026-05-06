@@ -210,6 +210,36 @@ def test_public_group_returns_top_level_only_to_non_member() -> None:
     assert ids == {"t1"}
 
 
+def test_banned_authors_past_messages_remain_visible_to_members() -> None:
+    """M9 / destructive-path: banning is non-retroactive. A user's previously-
+    posted messages must keep appearing for other members.
+
+    Bans block the *write path* via `require_not_banned`; the read path has
+    no author-ban filter (and shouldn't — that would let a moderation
+    decision evaporate audit trails and break thread continuity). This test
+    documents the design and would fail if someone added a well-meaning
+    `if author in bans: return None` to `_filter_for_visibility`.
+    """
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db, group_ref = _member_setup(group_exists=True, member_exists=True)
+    snaps = [
+        _msg_snap(mid="m1", author="banned-bob", body="from before the ban"),
+        _msg_snap(mid="m2", author="alice", body="reply"),
+    ]
+    messages_col = group_ref.collection.return_value
+    chain = messages_col.where.return_value.order_by.return_value
+    chain.limit.return_value.stream.return_value = iter(snaps)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.get("/api/groups/g1/messages")
+    assert res.status_code == 200
+    ids = {m["id"] for m in res.json()["messages"]}
+    assert {"m1", "m2"} <= ids
+
+
 def test_member_sees_hidden_message_redacted_to_other_authors() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db, group_ref = _member_setup(group_exists=True, member_exists=True)
