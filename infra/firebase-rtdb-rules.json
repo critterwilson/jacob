@@ -37,7 +37,7 @@
       "$gid": {
         "$sessionId": {
           ".read": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists()",
-          ".write": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists()",
+          ".write": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists() && (!data.exists() || data.child('leaderUid').val() == auth.uid)",
           ".validate": "newData.hasChildren(['videoId','paused','positionSec','leaderUid','updatedAt']) && newData.child('leaderUid').val() == auth.uid"
         }
       }
