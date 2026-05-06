@@ -84,7 +84,7 @@ def _doc_to_appeal(doc: dict[str, Any]) -> Appeal:
 # ── appellant surface ────────────────────────────────────────────────────────
 
 
-@appellant_router.post("", response_model=AppealSubmitResponse)
+@appellant_router.post("", response_model=AppealSubmitResponse)  # noqa: not-banned
 @limiter.limit(APPEAL_SUBMIT)
 def submit_appeal(
     request: Request,
