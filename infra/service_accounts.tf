@@ -73,6 +73,23 @@ resource "google_service_account" "jacob_scheduler_deletions" {
   description  = "OIDC identity used by Cloud Scheduler to invoke the finalize_deletions Cloud Run job."
 }
 
+# ── Typesense sidecar runtime SA ──────────────────────────────────────────────
+#
+# Without an explicit SA, the Cloud Run service falls back to the default
+# Compute Engine SA (PROJECT_NUMBER-compute@developer.gserviceaccount.com),
+# which carries roles/editor by default. Typesense is internet-facing
+# open-source software — a compromise of the container would inherit
+# project-wide editor on that SA.
+#
+# Scope is intentionally minimal: only secretAccessor on the Typesense
+# admin-key secret (bound at the secret resource in typesense.tf).
+resource "google_service_account" "jacob_typesense" {
+  project      = var.project_id
+  account_id   = "jacob-typesense"
+  display_name = "JACOB Typesense (search sidecar)"
+  description  = "Runtime SA for the Typesense Cloud Run service. Only reads the typesense-admin-key secret."
+}
+
 # ── project-level role bindings (non-bucket): jacob-api ──────────────────────
 #
 # Bucket bindings live in buckets.tf — see comment above.
@@ -164,10 +181,14 @@ resource "google_project_iam_member" "jacob_exports_logging" {
 
 # Required to mint V4 signed URLs without a key file. The job impersonates
 # itself via IAM signBlob — see https://cloud.google.com/storage/docs/access-control/signed-urls#signing-iam.
-resource "google_project_iam_member" "jacob_exports_token_creator" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountTokenCreator"
-  member  = "serviceAccount:${google_service_account.jacob_exports.email}"
+#
+# Bound on the SA resource itself (not project-wide) so a bug in
+# process_export_jobs cannot escalate by impersonating any other SA in
+# the project — the only principal it can sign tokens for is itself.
+resource "google_service_account_iam_member" "jacob_exports_self_signer" {
+  service_account_id = google_service_account.jacob_exports.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.jacob_exports.email}"
 }
 
 # Allows the exports SA to read SendGrid + other secrets from Secret Manager.
