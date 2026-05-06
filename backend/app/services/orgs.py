@@ -186,14 +186,26 @@ def remove_admin(
     last-admin invariant mirrors T22's leader-count rule but lives in
     the service layer because the rule can't enumerate a subcollection).
     """
-    admins = list(db.collection("orgs").document(org_id).collection("admins").stream())
-    by_uid = {snap.id for snap in admins}
-    if uid not in by_uid:
-        return False, "not_admin"
-    if len(by_uid) <= 1:
-        return False, "last_admin"
-    db.collection("orgs").document(org_id).collection("admins").document(uid).delete()
-    return True, None
+    # Wrapped in a transaction so two concurrent removes against the last
+    # two admins cannot both pass the >1 guard and brick the org.
+    admins_coll = db.collection("orgs").document(org_id).collection("admins")
+    target_ref = admins_coll.document(uid)
+
+    @gcf.transactional
+    def _txn(txn: Any) -> tuple[bool, str | None]:
+        target_snap = txn.get(target_ref)
+        if not target_snap.exists:
+            return False, "not_admin"
+        # Re-read the admins subcollection through the transaction so
+        # concurrent writes serialize through the same snapshot.
+        remaining = sum(1 for _ in txn.get(admins_coll))
+        if remaining <= 1:
+            return False, "last_admin"
+        txn.delete(target_ref)
+        return True, None
+
+    result: tuple[bool, str | None] = _txn(db.transaction())
+    return result
 
 
 def list_org_groups(db: Any, org_id: str) -> list[dict[str, Any]]:

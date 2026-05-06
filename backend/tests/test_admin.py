@@ -13,6 +13,7 @@ Coverage:
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI, HTTPException
@@ -330,3 +331,83 @@ def test_ban_reason_exactly_500_chars_is_valid() -> None:
             json={"reason": "x" * 500, "duration": "24h"},
         )
     assert res.status_code == 200
+
+
+# ── H-BACK-2: prefix-search sentinel ─────────────────────────────────────────
+
+
+class _PrefixSearchDB:
+    """Records every where(...) call so we can pin the prefix range bounds.
+
+    The admin search endpoints build a Firestore prefix query as
+    `where(field, ">=", q).where(field, "<=", q + "\\uf8ff")`. A regression
+    that drops the U+F8FF sentinel collapses the upper bound to exact
+    equality and silently breaks partial-prefix matches.
+    """
+
+    def __init__(self, matches: list[dict[str, Any]]) -> None:
+        self.where_calls: list[tuple[str, str, Any]] = []
+        self._matches = matches
+
+    def collection(self, name: str) -> _PrefixSearchDB:
+        return self
+
+    def where(self, field: str, op: str, value: Any) -> _PrefixSearchDB:
+        self.where_calls.append((field, op, value))
+        return self
+
+    def order_by(self, *_a: Any, **_kw: Any) -> _PrefixSearchDB:
+        return self
+
+    def limit(self, _n: int) -> _PrefixSearchDB:
+        return self
+
+    def stream(self) -> Any:
+        for entry in self._matches:
+            snap = MagicMock()
+            snap.id = entry["id"]
+            snap.exists = True
+            snap.to_dict.return_value = {k: v for k, v in entry.items() if k != "id"}
+            yield snap
+
+    def document(self, _doc_id: str) -> MagicMock:
+        # search_users issues a per-doc bans lookup after the prefix query.
+        ban_snap = MagicMock()
+        ban_snap.exists = False
+        doc = MagicMock()
+        doc.get.return_value = ban_snap
+        return doc
+
+
+def test_search_users_partial_prefix_uses_unicode_sentinel() -> None:
+    """Pin the U+F8FF sentinel so the prefix range covers `alic*`, not just `alic`."""
+    db = _PrefixSearchDB(
+        matches=[
+            {"id": "u1", "displayName": "alice", "email": "a@x"},
+            {"id": "u2", "displayName": "alicia", "email": "b@x"},
+        ]
+    )
+    with patch("app.routers.admin._db", return_value=db):
+        res = TestClient(_admin_app()).get("/api/admin/users?q=alic")
+    assert res.status_code == 200, res.text
+    names = sorted(u["displayName"] for u in res.json()["users"])
+    assert names == ["alice", "alicia"]
+    # Bounds: `>= alic` paired with `<= alic`. If the sentinel is
+    # dropped the upper bound collapses to "alic" and "alicia" disappears.
+    upper_calls = [c for c in db.where_calls if c[1] == "<="]
+    assert ("displayName", "<=", "alic") in upper_calls
+
+
+def test_search_groups_partial_prefix_uses_unicode_sentinel() -> None:
+    db = _PrefixSearchDB(
+        matches=[
+            {"id": "g1", "name": "men of valor", "memberCount": 4},
+            {"id": "g2", "name": "men's bible study", "memberCount": 3},
+        ]
+    )
+    with patch("app.routers.admin._db", return_value=db):
+        res = TestClient(_admin_app()).get("/api/admin/groups?q=men")
+    assert res.status_code == 200, res.text
+    assert {g["name"] for g in res.json()["groups"]} == {"men of valor", "men's bible study"}
+    upper_calls = [c for c in db.where_calls if c[1] == "<="]
+    assert ("name", "<=", "men") in upper_calls
