@@ -49,7 +49,7 @@ default Compute Engine SA is **not** used by any JACOB workload.
 | `jacob-scheduler-daily-verse@${project}.iam.gserviceaccount.com`| OIDC identity — Cloud Scheduler daily-verse job (T33)         |
 | `jacob-scheduler-weekly-digest@${project}.iam.gserviceaccount.com` | OIDC identity — Cloud Scheduler weekly-digest job (T35)    |
 | `jacob-scheduler-exports@${project}.iam.gserviceaccount.com`    | OIDC identity — Cloud Scheduler process-export-jobs job (T38) |
-| `jacob-scheduler-cleanup-devices@${project}.iam.gserviceaccount.com` | OIDC identity — Cloud Scheduler cleanup-stale-devices job (T34) |
+| `jacob-cleanup-devices@${project}.iam.gserviceaccount.com`      | OIDC identity — Cloud Scheduler cleanup-stale-devices job (T34) |
 
 Wire them into `terraform.<env>.tfvars` after the first apply — the module
 emits each email as a Terraform output.
