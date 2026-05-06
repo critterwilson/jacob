@@ -53,6 +53,17 @@ type Props = {
   archived?: boolean;
   isMyReaction?: (mid: string, slug: string) => boolean;
   onToggleReaction?: (mid: string, slug: string) => void;
+  /**
+   * Optional adapter from the `useReactions` hook that turns a base
+   * `reactionCounts` map into one with optimistic deltas applied — so
+   * the chip count bumps locally on click instead of waiting for the
+   * next 10s poll. When omitted, the raw `reactionCounts` from the
+   * message is used as-is.
+   */
+  mergeReactionCounts?: (
+    mid: string,
+    base: Record<string, number> | undefined,
+  ) => Record<string, number>;
   members?: Member[];
   readonly?: boolean;
 };
@@ -69,6 +80,7 @@ export function MessageItem({
   archived = false,
   isMyReaction,
   onToggleReaction,
+  mergeReactionCounts,
   members,
   readonly = false,
 }: Props) {
@@ -282,7 +294,11 @@ export function MessageItem({
         {!isDeleted && !readonly && onToggleReaction && isMyReaction && (
           <ReactionBar
             mid={message.id}
-            reactionCounts={message.reactionCounts}
+            reactionCounts={
+              mergeReactionCounts
+                ? mergeReactionCounts(message.id, message.reactionCounts)
+                : message.reactionCounts
+            }
             isMyReaction={isMyReaction}
             onToggle={onToggleReaction}
           />

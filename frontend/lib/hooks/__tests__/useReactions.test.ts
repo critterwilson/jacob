@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/firebase", () => ({ auth: { currentUser: null } }));
@@ -77,7 +77,9 @@ describe("useReactions hydration", () => {
     const messages: Message[] = [baseMessage({ id: "m1", myReactions: ["pray"] })];
     const { result } = renderHook(() => useReactions("g1", messages));
     await waitFor(() => expect(result.current.isMyReaction("m1", "pray")).toBe(true));
-    await result.current.toggle("m1", "pray");
+    await act(async () => {
+      await result.current.toggle("m1", "pray");
+    });
     // toggle on existing reaction should DELETE, not POST another reaction.
     expect(mockApiDelete).toHaveBeenCalled();
     expect(mockApiPost).not.toHaveBeenCalled();
@@ -89,7 +91,9 @@ describe("useReactions hydration", () => {
       ({ messages }: { messages: Message[] }) => useReactions("g1", messages),
       { initialProps: { messages: initialMsgs } },
     );
-    await result.current.toggle("m1", "amen");
+    await act(async () => {
+      await result.current.toggle("m1", "amen");
+    });
     expect(result.current.isMyReaction("m1", "amen")).toBe(true);
     // Stale message stream comes back without amen — optimistic should hold.
     rerender({ messages: [baseMessage({ id: "m1", myReactions: [] })] });
@@ -97,5 +101,55 @@ describe("useReactions hydration", () => {
     // Fresh stream confirms amen → optimistic clears.
     rerender({ messages: [baseMessage({ id: "m1", myReactions: ["amen"] })] });
     expect(result.current.isMyReaction("m1", "amen")).toBe(true);
+  });
+});
+
+describe("useReactions count merging (M-FRONT-4)", () => {
+  it("bumps base count by +1 while a react is in flight", async () => {
+    const messages: Message[] = [
+      baseMessage({ id: "m1", myReactions: [], reactionCounts: { amen: 3 } }),
+    ];
+    const { result } = renderHook(() => useReactions("g1", messages));
+    expect(result.current.mergeReactionCounts("m1", { amen: 3 })).toEqual({ amen: 3 });
+    await act(async () => {
+      await result.current.toggle("m1", "amen");
+    });
+    expect(result.current.mergeReactionCounts("m1", { amen: 3 })).toEqual({ amen: 4 });
+  });
+
+  it("bumps base count by -1 while an unreact is in flight", async () => {
+    const messages: Message[] = [
+      baseMessage({ id: "m1", myReactions: ["amen"], reactionCounts: { amen: 3 } }),
+    ];
+    const { result } = renderHook(() => useReactions("g1", messages));
+    await waitFor(() => expect(result.current.isMyReaction("m1", "amen")).toBe(true));
+    await act(async () => {
+      await result.current.toggle("m1", "amen");
+    });
+    expect(result.current.mergeReactionCounts("m1", { amen: 3 })).toEqual({ amen: 2 });
+  });
+
+  it("rolls back the +1 on API error", async () => {
+    mockApiPost.mockRejectedValueOnce(new Error("net"));
+    const messages: Message[] = [
+      baseMessage({ id: "m1", myReactions: [], reactionCounts: { amen: 3 } }),
+    ];
+    const { result } = renderHook(() => useReactions("g1", messages));
+    await act(async () => {
+      await result.current.toggle("m1", "amen");
+    });
+    expect(result.current.mergeReactionCounts("m1", { amen: 3 })).toEqual({ amen: 3 });
+    expect(result.current.isMyReaction("m1", "amen")).toBe(false);
+  });
+
+  it("surfaces a brand-new slug not in baseCounts", async () => {
+    const messages: Message[] = [
+      baseMessage({ id: "m1", myReactions: [], reactionCounts: {} }),
+    ];
+    const { result } = renderHook(() => useReactions("g1", messages));
+    await act(async () => {
+      await result.current.toggle("m1", "fire");
+    });
+    expect(result.current.mergeReactionCounts("m1", {})).toEqual({ fire: 1 });
   });
 });

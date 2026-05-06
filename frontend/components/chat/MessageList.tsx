@@ -55,7 +55,11 @@ export function MessageList({
   const { isMuted } = useMutes();
   const { isBlocked } = useBlocks();
   const { members } = useMembers(gid);
-  const { isMyReaction, toggle: toggleReaction } = useReactions(gid, messages);
+  const {
+    isMyReaction,
+    toggle: toggleReaction,
+    mergeReactionCounts,
+  } = useReactions(gid, messages);
   const [expandedMutes, setExpandedMutes] = useState<Set<string>>(new Set());
 
   // Scroll to bottom only when new messages arrive (not on older-page loads).
@@ -165,6 +169,7 @@ export function MessageList({
                   ? undefined
                   : (mid, slug) => void toggleReaction(mid, slug)
               }
+              mergeReactionCounts={readonly ? undefined : mergeReactionCounts}
               readonly={readonly}
             />
           );
