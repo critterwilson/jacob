@@ -370,7 +370,7 @@ locals {
 
 resource "google_service_account" "jacob_scheduler_cleanup_devices" {
   project      = var.project_id
-  account_id   = "jacob-scheduler-cleanup-devices"
+  account_id   = "jacob-cleanup-devices"
   display_name = "JACOB Cloud Scheduler — cleanup-stale-devices invoker"
 }
 
