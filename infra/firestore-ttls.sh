@@ -42,7 +42,7 @@ for cg in "${COLLECTION_GROUPS[@]}"; do
   echo "→ enabling TTL on expiresAt for collection-group=${cg}"
   gcloud firestore fields ttls update expiresAt \
     --collection-group="${cg}" \
-    --enable \
+    --enable-ttl \
     --project="${PROJECT_ID}"
 done
 
