@@ -508,6 +508,7 @@ def edit_message(
     Returns 403 `not_author`, 409 `edit_window_expired` or `deleted`,
     404 `message_not_found`.
     """
+    require_not_archived(membership)
     db = get_firestore()
     ref = db.collection("groups").document(gid).collection("messages").document(mid)
 
@@ -567,6 +568,7 @@ def delete_message(
     """Soft-delete a message. Author or leader. Idempotent — calling
     delete twice returns 200 with the existing soft-deleted doc.
     """
+    require_not_archived(membership)
     db = get_firestore()
     ref = db.collection("groups").document(gid).collection("messages").document(mid)
 
