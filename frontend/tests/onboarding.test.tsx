@@ -441,4 +441,78 @@ describe("useUser", () => {
     ).length;
     expect(after).toBeGreaterThan(before);
   });
+
+  it("preserves the prior profile on a transport error (does not zero it)", async () => {
+    const { useUser } = await import("@/lib/hooks/useUser");
+
+    // First call returns a real profile.
+    nextBootstrap = {
+      hasProfile: true,
+      profile: {
+        uid: "uid-1",
+        displayName: "Alice",
+        email: "alice@example.com",
+        photoURL: null,
+        role: "member",
+        schemaVersion: 1,
+        isMinor: false,
+        createdAt: null,
+      },
+    };
+
+    let hook: ReturnType<typeof useUser> | undefined;
+    function Probe() {
+      hook = useUser("uid-1");
+      return null;
+    }
+    render(<Probe />);
+    await waitFor(() => expect(hook?.profile?.displayName).toBe("Alice"));
+
+    // Now make the next bootstrap call throw a transport-style error
+    // (TypeError mimics a fetch network failure — `lib/api.ts` surfaces
+    // that as `ApiError(0, "network_error", …)`). The hook must keep
+    // the prior profile.
+    pushHandler(
+      (url, method) =>
+        url.includes("/api/users/me/bootstrap") && method === "GET",
+      () => {
+        throw new TypeError("Failed to fetch");
+      },
+    );
+
+    await hook!.refresh();
+    await waitFor(() => expect(hook?.loading).toBe(false));
+    expect(hook?.profile?.displayName).toBe("Alice");
+  });
+
+  it("zeros the profile on a definitive 200 hasProfile=false response", async () => {
+    const { useUser } = await import("@/lib/hooks/useUser");
+
+    nextBootstrap = {
+      hasProfile: true,
+      profile: {
+        uid: "uid-1",
+        displayName: "Alice",
+        email: "alice@example.com",
+        photoURL: null,
+        role: "member",
+        schemaVersion: 1,
+        isMinor: false,
+        createdAt: null,
+      },
+    };
+
+    let hook: ReturnType<typeof useUser> | undefined;
+    function Probe() {
+      hook = useUser("uid-1");
+      return null;
+    }
+    render(<Probe />);
+    await waitFor(() => expect(hook?.profile?.displayName).toBe("Alice"));
+
+    // A definitive 200 with hasProfile=false should clear the profile.
+    nextBootstrap = { hasProfile: false, profile: null };
+    await hook!.refresh();
+    await waitFor(() => expect(hook?.profile).toBeNull());
+  });
 });

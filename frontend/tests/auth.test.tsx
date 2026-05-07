@@ -216,6 +216,21 @@ describe("SignInForm", () => {
     ).toBeInTheDocument();
   });
 
+  it("humanizes auth/user-disabled (banned account) on sign-in", async () => {
+    vi.mocked(fbAuth.signInWithEmailAndPassword).mockRejectedValue(
+      Object.assign(new Error("disabled"), { code: "auth/user-disabled" }),
+    );
+
+    render(<SignInForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "banned@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "anything12!a");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    expect(
+      await screen.findByText(/account has been disabled/i),
+    ).toBeInTheDocument();
+  });
+
   it("redirects to / after Google sign-in", async () => {
     vi.mocked(fbAuth.signInWithPopup).mockResolvedValue({
       user: { uid: "g1", emailVerified: true },
@@ -274,7 +289,7 @@ describe("SignUpForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("creates account, sends verification, and redirects to /onboarding", async () => {
+  it("creates account, sends verification, and redirects to /verify-email", async () => {
     const fakeUser = { uid: "alice", emailVerified: false };
     vi.mocked(fbAuth.createUserWithEmailAndPassword).mockResolvedValue({
       user: fakeUser,
@@ -292,7 +307,7 @@ describe("SignUpForm", () => {
     await waitFor(() =>
       expect(fbAuth.sendEmailVerification).toHaveBeenCalledWith(fakeUser),
     );
-    expect(mockPush).toHaveBeenCalledWith("/onboarding");
+    expect(mockPush).toHaveBeenCalledWith("/verify-email");
   });
 
   it("shows email-already-in-use as a friendly message", async () => {

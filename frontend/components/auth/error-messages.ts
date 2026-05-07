@@ -28,6 +28,8 @@ export function humanizeAuthError(err: unknown): string {
       return "Sign-in was cancelled.";
     case "auth/email-not-verified":
       return "Please verify your email before signing in. Check your inbox.";
+    case "auth/user-disabled":
+      return "This account has been disabled. If you think this is a mistake, you can submit an appeal.";
     default:
       return "Something went wrong. Please try again.";
   }
