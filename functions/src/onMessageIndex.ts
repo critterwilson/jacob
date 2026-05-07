@@ -160,16 +160,33 @@ function indexStateRef(db: Firestore, day: string) {
   return db.collection("search_state").doc(`index-${day}`);
 }
 
-export async function tryReserveIndexQuota(
+/**
+ * Read the current daily index-write count without mutating it. Used as
+ * the pre-flight cap check so an over-cap event never spends a Typesense
+ * write before being rejected.
+ */
+export async function peekIndexQuota(
   db: Firestore,
   day: string,
-  cap: number = DAILY_CAP,
-): Promise<number | null> {
+): Promise<number> {
+  const ref = indexStateRef(db, day);
+  const snap = await ref.get();
+  return (snap.exists ? snap.data()?.count ?? 0 : 0) as number;
+}
+
+/**
+ * Debit the daily quota by one and return the new count. Called only
+ * after a successful Typesense upsert so a 30s outage doesn't permanently
+ * burn the day's quota on writes that never landed.
+ */
+export async function debitIndexQuota(
+  db: Firestore,
+  day: string,
+): Promise<number> {
   const ref = indexStateRef(db, day);
   return await db.runTransaction(async (txn) => {
     const snap = await txn.get(ref);
     const current = (snap.exists ? snap.data()?.count ?? 0 : 0) as number;
-    if (current >= cap) return null;
     txn.set(
       ref,
       {
@@ -223,7 +240,10 @@ export const onMessageIndex = onDocumentWritten(
     const { gid, mid } = event.params;
     const db = getFirestore();
 
-    // Idempotency guard.
+    // Pre-flight idempotency check (read-only). The marker is committed
+    // AFTER the Typesense call succeeds — a transient outage that throws
+    // here must not consume the dedup slot for the retry, otherwise
+    // failed writes silently leave a permanently un-indexed message.
     const eventRef = db
       .collection("groups")
       .doc(gid)
@@ -231,14 +251,8 @@ export const onMessageIndex = onDocumentWritten(
       .doc(mid)
       .collection("_index_events")
       .doc(event.id);
-
-    const wasFresh = await db.runTransaction(async (txn) => {
-      const snap = await txn.get(eventRef);
-      if (snap.exists) return false;
-      txn.set(eventRef, eventMarker());
-      return true;
-    });
-    if (!wasFresh) {
+    const eventSnap = await eventRef.get();
+    if (eventSnap.exists) {
       logger.info("search_index_duplicate_event", { eventId: event.id, gid, mid });
       return;
     }
@@ -259,14 +273,18 @@ export const onMessageIndex = onDocumentWritten(
       if (action === "delete") {
         await client.deleteById(mid);
         recordSuccess();
+        // Marker committed only on success — a thrown delete will retry.
+        await eventRef.set(eventMarker({ action: "delete" }));
         logger.info("search_index_deleted", { gid, mid, eventId: event.id });
         return;
       }
-      // Quota — only spent on writes, not deletes (delete cleanup must
-      // always succeed regardless of cap).
+
+      // Pre-flight cap check (peek, no write). Avoids paying Typesense
+      // for an over-cap write only to throw it away on the response.
+      // The actual debit happens after the upsert succeeds — see below.
       const day = todayKey();
-      const newCount = await tryReserveIndexQuota(db, day);
-      if (newCount === null) {
+      const peeked = await peekIndexQuota(db, day);
+      if (peeked >= DAILY_CAP) {
         logger.error("search_index_quota_exceeded", {
           gid,
           mid,
@@ -274,14 +292,6 @@ export const onMessageIndex = onDocumentWritten(
           cap: DAILY_CAP,
         });
         return;
-      }
-      if (newCount === Math.floor(DAILY_CAP * QUOTA_WARN_RATIO)) {
-        logger.warn("search_index_quota_warning", {
-          day,
-          count: newCount,
-          cap: DAILY_CAP,
-          threshold: QUOTA_WARN_RATIO,
-        });
       }
 
       // Resolve authorDisplayName best-effort.
@@ -305,6 +315,21 @@ export const onMessageIndex = onDocumentWritten(
       const doc = buildIndexedMessage(mid, gid, afterData!, authorDisplayName);
       await client.upsert(doc);
       recordSuccess();
+
+      // Quota debit + marker write happen after the upsert lands. A
+      // partial failure here (quota write succeeds, marker write fails,
+      // or vice versa) is fine: Typesense upsert is idempotent on id,
+      // so a retried delivery just overwrites the same doc.
+      const newCount = await debitIndexQuota(db, day);
+      if (newCount === Math.floor(DAILY_CAP * QUOTA_WARN_RATIO)) {
+        logger.warn("search_index_quota_warning", {
+          day,
+          count: newCount,
+          cap: DAILY_CAP,
+          threshold: QUOTA_WARN_RATIO,
+        });
+      }
+      await eventRef.set(eventMarker({ action: "upsert" }));
       logger.info("search_index_upserted", { gid, mid, eventId: event.id });
     } catch (err) {
       recordFailure();

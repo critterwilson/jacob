@@ -110,36 +110,11 @@
       ]
     },
     {
-      "collectionGroup": "groups",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "orgId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "groups",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "orgId", "order": "ASCENDING" },
-        { "fieldPath": "archivedAt", "order": "ASCENDING" },
-        { "fieldPath": "memberCount", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "joinRequests",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "requestedAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "boards",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "archivedAt", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
       ]
     },
     {
@@ -152,43 +127,11 @@
       ]
     },
     {
-      "collectionGroup": "replies",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "deletedAt", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "readAt", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "sermons",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "deletedAt", "order": "ASCENDING" },
-        { "fieldPath": "sermonDate", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "deletedAt", "order": "ASCENDING" },
-        { "fieldPath": "startsAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "parentEventId", "order": "ASCENDING" },
-        { "fieldPath": "startsAt", "order": "ASCENDING" }
       ]
     },
     {

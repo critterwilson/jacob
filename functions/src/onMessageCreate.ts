@@ -34,6 +34,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 
 import { type Policy, runTextModeration } from "./services/textModeration";
 import { fanOutMentions } from "./services/mentionFanout";
+import { claimEventOnce } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -177,6 +178,29 @@ export const onMessageCreate = onDocumentCreated(
     const body = (data.body as string | undefined) ?? "";
     const { gid, mid } = event.params;
     const db = getFirestore();
+
+    // Top-level idempotency guard. Each subhandler still has its own marker
+    // (msg-mod queue id, mention notification id, audience queue id) so a
+    // partial failure can be retried, but the top-level marker short-circuits
+    // the whole trigger when a clean redelivery follows a fully-successful
+    // run. Mirrors the pattern in onMessageWrite.
+    const messageRef = db
+      .collection("groups")
+      .doc(gid)
+      .collection("messages")
+      .doc(mid);
+    const topEventRef = messageRef.collection("_events").doc(event.id);
+    const wasFresh = await claimEventOnce(db, topEventRef, {
+      trigger: "onMessageCreate",
+    });
+    if (!wasFresh) {
+      logger.info("onMessageCreate duplicate event skipped", {
+        gid,
+        mid,
+        eventId: event.id,
+      });
+      return;
+    }
 
     // Moderation (non-fatal: failures are logged; fan-out always runs)
     if (body.trim()) {

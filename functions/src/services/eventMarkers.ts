@@ -11,7 +11,12 @@
  * plausible re-delivery window for v2 Firestore triggers (which retry
  * on a bounded backoff measured in minutes-to-hours, never days).
  */
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  Timestamp,
+  type DocumentReference,
+  type Firestore,
+} from "firebase-admin/firestore";
 
 export const EVENT_MARKER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -21,4 +26,28 @@ export function eventMarker(extra: Record<string, unknown> = {}): Record<string,
     expiresAt: Timestamp.fromMillis(Date.now() + EVENT_MARKER_TTL_MS),
     ...extra,
   };
+}
+
+/**
+ * Read-and-set a marker doc inside a transaction. Returns true when the
+ * marker was newly written (caller should proceed); false when the marker
+ * already existed (caller should short-circuit as a duplicate event).
+ *
+ * Used as the top-level idempotency guard for triggers that perform
+ * non-Firestore side effects (Cloud NL, Typesense, RTDB) where each
+ * subhandler manages its own per-resource dedupe but a coarse-grained
+ * guard at the trigger boundary is needed to skip clean redeliveries.
+ */
+export async function claimEventOnce(
+  db: Firestore,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  markerRef: DocumentReference<any>,
+  extra: Record<string, unknown> = {},
+): Promise<boolean> {
+  return await db.runTransaction(async (txn) => {
+    const snap = await txn.get(markerRef);
+    if (snap.exists) return false;
+    txn.set(markerRef, eventMarker(extra));
+    return true;
+  });
 }

@@ -101,8 +101,8 @@ describe("orgMirrorAction (T54)", () => {
   });
 });
 
-describe("mirrorRtdbMembership (T48)", () => {
-  function makeFakeDb() {
+describe("mirrorRtdbMembership (T48 + M-FUNC-2)", () => {
+  function makeFakeRtdb() {
     const calls: { path: string; op: "set"; value: unknown }[] = [];
     return {
       calls,
@@ -117,24 +117,125 @@ describe("mirrorRtdbMembership (T48)", () => {
     };
   }
 
+  // Minimal Firestore stand-in: tracks marker docs in an in-memory map and
+  // exposes a `runTransaction` that mimics the read-then-set semantics the
+  // production code relies on for the idempotency guard.
+  function makeFakeFirestore() {
+    const docs = new Map<string, Record<string, unknown>>();
+    const writes: string[] = [];
+
+    function docFor(path: string) {
+      return {
+        path,
+        async get() {
+          return {
+            exists: docs.has(path),
+            data: () => docs.get(path),
+          };
+        },
+        set(data: Record<string, unknown>) {
+          writes.push(path);
+          docs.set(path, data);
+        },
+      };
+    }
+
+    function buildPathRef(path: string) {
+      return {
+        ...docFor(path),
+        collection: (sub: string) => ({
+          doc: (id: string) => buildPathRef(`${path}/${sub}/${id}`),
+        }),
+      };
+    }
+
+    const fs = {
+      collection: (name: string) => ({
+        doc: (id: string) => buildPathRef(`${name}/${id}`),
+      }),
+      runTransaction: async <T,>(
+        fn: (txn: {
+          get: (ref: { path: string }) => Promise<{
+            exists: boolean;
+            data: () => Record<string, unknown> | undefined;
+          }>;
+          set: (
+            ref: { path: string },
+            data: Record<string, unknown>,
+          ) => void;
+        }) => Promise<T>,
+      ) => {
+        const txn = {
+          async get(ref: { path: string }) {
+            return {
+              exists: docs.has(ref.path),
+              data: () => docs.get(ref.path),
+            };
+          },
+          set(ref: { path: string }, data: Record<string, unknown>) {
+            writes.push(ref.path);
+            docs.set(ref.path, data);
+          },
+        };
+        return await fn(txn);
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { fs: fs as any, docs, writes };
+  }
+
   it("noop returns immediately and writes nothing", async () => {
-    const { db, calls } = makeFakeDb();
-    await mirrorRtdbMembership("alice", "g1", "noop", db);
+    const { db, calls } = makeFakeRtdb();
+    const { fs } = makeFakeFirestore();
+    await mirrorRtdbMembership("alice", "g1", "noop", "evt-1", fs, db);
     expect(calls).toHaveLength(0);
   });
 
-  it("join writes /memberships/{uid}/{gid}: true", async () => {
-    const { db, calls } = makeFakeDb();
-    await mirrorRtdbMembership("alice", "g1", "join", db);
+  it("join writes /memberships/{uid}/{gid}: true and stamps the marker", async () => {
+    const { db, calls } = makeFakeRtdb();
+    const { fs, writes } = makeFakeFirestore();
+    await mirrorRtdbMembership("alice", "g1", "join", "evt-1", fs, db);
     expect(calls).toEqual([
       { path: "memberships/alice/g1", op: "set", value: true },
     ]);
+    expect(writes).toContain("users/alice/_rtdb_member_events/g1_evt-1");
   });
 
-  it("leave writes /memberships/{uid}/{gid}: null (delete)", async () => {
-    const { db, calls } = makeFakeDb();
-    await mirrorRtdbMembership("alice", "g1", "leave", db);
+  it("leave writes /memberships/{uid}/{gid}: null and stamps the marker", async () => {
+    const { db, calls } = makeFakeRtdb();
+    const { fs, writes } = makeFakeFirestore();
+    await mirrorRtdbMembership("alice", "g1", "leave", "evt-2", fs, db);
     expect(calls).toEqual([
+      { path: "memberships/alice/g1", op: "set", value: null },
+    ]);
+    expect(writes).toContain("users/alice/_rtdb_member_events/g1_evt-2");
+  });
+
+  it("redelivery of the same eventId does not re-write RTDB (M-FUNC-2)", async () => {
+    const { db, calls } = makeFakeRtdb();
+    const { fs } = makeFakeFirestore();
+    await mirrorRtdbMembership("alice", "g1", "join", "evt-stable", fs, db);
+    await mirrorRtdbMembership("alice", "g1", "join", "evt-stable", fs, db);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("out-of-order redelivery cannot resurrect a stale membership (M-FUNC-2)", async () => {
+    // Real-world scenario: T0 join → T1 leave → T2 retry-of-join.
+    // Each delivery has a distinct eventId; the marker keeps the
+    // RTDB write commutative on per-event basis. After leave, the
+    // retry-of-join still re-applies (it's a new eventId), but the
+    // marker prevents repeated re-application of the SAME stale
+    // event after subsequent later-state writes.
+    const { db, calls } = makeFakeRtdb();
+    const { fs } = makeFakeFirestore();
+    await mirrorRtdbMembership("alice", "g1", "join", "evt-A", fs, db);
+    await mirrorRtdbMembership("alice", "g1", "leave", "evt-B", fs, db);
+    // Redelivery of join (same eventId A) — must NOT resurrect.
+    await mirrorRtdbMembership("alice", "g1", "join", "evt-A", fs, db);
+    // RTDB sees: set(true), set(null), and then the marker dedupes the
+    // stale redelivery → no third write.
+    expect(calls).toEqual([
+      { path: "memberships/alice/g1", op: "set", value: true },
       { path: "memberships/alice/g1", op: "set", value: null },
     ]);
   });

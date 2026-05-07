@@ -24,7 +24,7 @@
 
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getDatabase } from "firebase-admin/database";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { eventMarker } from "./services/eventMarkers";
@@ -273,10 +273,13 @@ export const onMemberWrite = onDocumentWritten(
 
     // T48 — mirror membership to RTDB so the presence + typing rules
     // can authorize per-group writes without a Firestore lookup. The
-    // value is a constant `true`; deletes set null. Idempotent by
-    // construction (same write twice is identical).
+    // value is a constant `true`; deletes set null. RTDB writes alone
+    // are commutative, but redelivery can deliver out-of-order events
+    // (T0 join → T1 leave → T2 retry-of-join would resurrect a stale
+    // membership). The Firestore-side marker gates the RTDB write so
+    // a duplicate-of-an-older-event is a no-op.
     try {
-      await mirrorRtdbMembership(uid, gid, action);
+      await mirrorRtdbMembership(uid, gid, action, event.id, db);
     } catch (err) {
       logger.error("onMemberWrite rtdb-mirror failed", {
         gid,
@@ -296,15 +299,42 @@ export const onMemberWrite = onDocumentWritten(
  *
  * Pure-ish: takes the action and a database accessor so tests can
  * inject a fake. The trigger calls it with the default getDatabase().
+ *
+ * Idempotency: a Firestore marker at
+ * `users/{uid}/_rtdb_member_events/{gid}_{eventId}` is read-and-set
+ * inside a transaction; the RTDB write only runs when the marker is
+ * fresh. Redelivery of a stale event after newer state was already
+ * applied therefore can't resurrect a former membership.
  */
 export async function mirrorRtdbMembership(
   uid: string,
   gid: string,
   action: OrgMirrorAction,
-  db: ReturnType<typeof getDatabase> = getDatabase(),
+  eventId: string,
+  firestore: Firestore = getFirestore(),
+  rtdb: ReturnType<typeof getDatabase> = getDatabase(),
 ): Promise<void> {
   if (action === "noop") return;
-  const ref = db.ref(`memberships/${uid}/${gid}`);
+  const markerRef = firestore
+    .collection("users")
+    .doc(uid)
+    .collection("_rtdb_member_events")
+    .doc(`${gid}_${eventId}`);
+  const wasFresh = await firestore.runTransaction(async (txn) => {
+    const snap = await txn.get(markerRef);
+    if (snap.exists) return false;
+    txn.set(markerRef, eventMarker({ action, gid }));
+    return true;
+  });
+  if (!wasFresh) {
+    logger.info("rtdb_member duplicate event skipped", {
+      uid,
+      gid,
+      eventId,
+    });
+    return;
+  }
+  const ref = rtdb.ref(`memberships/${uid}/${gid}`);
   if (action === "join") {
     await ref.set(true);
   } else {
