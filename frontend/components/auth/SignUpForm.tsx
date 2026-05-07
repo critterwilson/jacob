@@ -40,7 +40,10 @@ export function SignUpForm() {
         values.password,
       );
       await sendEmailVerification(cred.user);
-      router.push("/onboarding");
+      // Hold the user on the verify-email interstitial until Firebase
+      // confirms the link was clicked. Symmetric with SignInForm, which
+      // already blocks unverified accounts at sign-in.
+      router.push("/verify-email");
     } catch (err) {
       setSubmitError(humanizeAuthError(err));
     } finally {

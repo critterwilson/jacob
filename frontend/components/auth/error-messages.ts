@@ -28,6 +28,12 @@ export function humanizeAuthError(err: unknown): string {
       return "Sign-in was cancelled.";
     case "auth/email-not-verified":
       return "Please verify your email before signing in. Check your inbox.";
+    case "auth/user-disabled":
+      // Firebase emits this when an admin has disabled the account
+      // (typically after a ban). Tell the user clearly and point them
+      // at support so they can appeal — generic "something went wrong"
+      // looked like a transient bug and led to repeated retries.
+      return "Your account has been disabled. If you think this is a mistake, contact support@jacob.app.";
     default:
       return "Something went wrong. Please try again.";
   }
