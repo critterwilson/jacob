@@ -47,11 +47,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # Targets the staging Firebase Hosting URL. Runs on every PR (not just
-    # frontend/** changes) because CORS / API regressions land via backend
-    # PRs too — the very class of bug this suite exists to catch. Required
-    # check; failures should not be hidden behind continue-on-error.
+    # The frontend runs LOCALLY (Next.js prod build on :3000) wired to a
+    # Firebase Auth **emulator** on :9099, so the suite no longer hammers
+    # real-Firebase signin/signup endpoints — those rate-limited every PR
+    # with TOO_MANY_ATTEMPTS_TRY_LATER. Backend calls still hit staging
+    # Cloud Run; staging accepts emulator-issued tokens because deploy.yml
+    # sets `JACOB_ALLOW_EMULATOR_TOKENS=1` on staging only (forbidden in
+    # prod by `Settings._block_emulator_tokens_in_production`).
+    #
+    # Runs on every PR (not just frontend/** changes) because CORS / API
+    # regressions land via backend PRs too — the very class of bug this
+    # suite exists to catch. Required check; failures should not be hidden
+    # behind continue-on-error.
     timeout-minutes: 25
+    env:
+      JACOB_E2E_FIREBASE_PROJECT_ID: "jacob-staging-494515"
+      PLAYWRIGHT_API_URL: "https://jacob-backend-7fk543coqq-uc.a.run.app"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -61,24 +72,59 @@ jobs:
         with:
           node-version: "20"
           cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - run: pnpm install --frozen-lockfile
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
       - name: Install Playwright Chromium
         run: pnpm --filter jacob-frontend exec playwright install --with-deps chromium
-      - name: Run E2E suite against staging
+
+      - name: Look up shared E2E user UID on staging
+        # One-shot real-Firebase admin call (not subject to the signin/signup
+        # rate limits). Result is exported into $GITHUB_ENV so subsequent
+        # steps can seed the same UID into the emulator.
         env:
-          # Both default to staging in code, but pinned here so a future
-          # secret-rotation doesn't silently flip the target.
-          PLAYWRIGHT_BASE_URL: "https://jacob-frontend--jacob-staging-494515.us-central1.hosted.app"
-          PLAYWRIGHT_API_URL: "https://jacob-backend-7fk543coqq-uc.a.run.app"
+          JACOB_E2E_USER_EMAIL: ${{ secrets.JACOB_E2E_USER_EMAIL }}
+          JACOB_E2E_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.JACOB_E2E_FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [[ -z "$JACOB_E2E_USER_EMAIL" || -z "$JACOB_E2E_FIREBASE_SERVICE_ACCOUNT" ]]; then
+            echo "::warning::JACOB_E2E_USER_EMAIL or JACOB_E2E_FIREBASE_SERVICE_ACCOUNT not set — shared-account tests will skip."
+            exit 0
+          fi
+          node frontend/e2e/scripts/fetch-staging-uid.mjs >> "$GITHUB_ENV"
+
+      - name: Build frontend (with emulator config baked in)
+        # NEXT_PUBLIC_* env vars are inlined at build time, so they MUST be
+        # set here, not just at runtime. The build then knows to call the
+        # local Auth emulator on the client and the staging backend for /api.
+        env:
+          NEXT_PUBLIC_USE_FIREBASE_EMULATOR: "true"
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: "jacob-staging-494515"
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "jacob-staging-494515.firebaseapp.com"
+          NEXT_PUBLIC_FIREBASE_API_KEY: "fake-api-key-for-emulator"
+          NEXT_PUBLIC_FIREBASE_APP_ID: "fake-app-id-for-emulator"
+          NEXT_PUBLIC_API_URL: "https://jacob-backend-7fk543coqq-uc.a.run.app"
+        run: pnpm --filter jacob-frontend build
+
+      - name: Boot Auth emulator + frontend, run Playwright
+        env:
+          # Tests + admin SDK both detect emulator mode via this var. The
+          # emulator's host:port matches firebase.json's auth.port.
+          FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099"
+          PLAYWRIGHT_BASE_URL: "http://localhost:3000"
           JACOB_E2E_USER_EMAIL: ${{ secrets.JACOB_E2E_USER_EMAIL }}
           JACOB_E2E_USER_PASSWORD: ${{ secrets.JACOB_E2E_USER_PASSWORD }}
-          # Firebase Admin SDK service-account key (base64'd JSON) for the
-          # staging project. Unlocks the auth / forgot-password / onboarding
-          # tests that previously scraped Mailinator. Tests skip cleanly
-          # when this is unset, so the suite stays green-with-skips while
-          # the secret is being provisioned. See frontend/e2e/README.md.
-          JACOB_E2E_FIREBASE_SERVICE_ACCOUNT: ${{ secrets.JACOB_E2E_FIREBASE_SERVICE_ACCOUNT }}
-        run: pnpm --filter jacob-frontend test:e2e
+          # JACOB_E2E_USER_UID is exported into $GITHUB_ENV by the lookup
+          # step above and propagated into this step's env automatically.
+        run: |
+          firebase emulators:exec \
+            --only auth \
+            --project "$JACOB_E2E_FIREBASE_PROJECT_ID" \
+            "bash frontend/e2e/scripts/run-with-emulator.sh"
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,6 +132,13 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 14
+      - name: Upload frontend server log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-server-log
+          path: frontend-server.log
+          retention-days: 7
 
   backend-lint:
     name: "Backend — ruff, black, mypy"

@@ -8,7 +8,7 @@ import {
   submitSignUp,
 } from "./helpers/auth";
 import {
-  generateResetLink,
+  resetPasswordViaAdmin,
   verifyEmailViaAdmin,
 } from "./helpers/firebaseAdmin";
 import { expect, test } from "./helpers/fixtures";
@@ -40,35 +40,12 @@ test.describe("forgot password", () => {
       timeout: 10_000,
     });
 
-    // Step 2 — generate the same reset link Firebase would have emailed
-    //  via the Admin SDK. The link points at Firebase's hosted reset page
-    //  (`<project>.firebaseapp.com/__/auth/action?mode=resetPassword&...`),
-    //  same form as the link we used to scrape from Mailinator.
-    const resetLink = await generateResetLink(freshEmail.email);
-
-    // Step 3 — open the reset link, set a new password.
+    // Step 2+3 — actually reset the password via the Admin SDK helper.
+    // In staging mode this navigates Firebase's hosted reset page; in
+    // emulator mode it sets the password directly to keep the test off
+    // the emulator's (volatile) reset UI markup.
     const newPassword = STRONG_PASSWORD + "!new";
-    const resetPage = await page.context().newPage();
-    await resetPage.goto(resetLink, { waitUntil: "domcontentloaded" });
-    // Firebase's hosted reset page renders an input with name="password"
-    // and a save button. We target both with broad selectors so a Firebase
-    // template change doesn't immediately break the test.
-    const passwordField = resetPage
-      .locator(
-        'input[name="password"], input[type="password"]:not([name="newPassword2"])',
-      )
-      .first();
-    await passwordField.waitFor({ state: "visible", timeout: 15_000 });
-    await passwordField.fill(newPassword);
-    await resetPage
-      .getByRole("button", { name: /save|reset|confirm/i })
-      .first()
-      .click();
-    // Wait for Firebase's "Password updated" confirmation.
-    await resetPage
-      .getByText(/password.*(updated|changed|reset)/i)
-      .waitFor({ timeout: 15_000 });
-    await resetPage.close();
+    await resetPasswordViaAdmin(page, freshEmail.email, newPassword);
 
     // Step 4 — sign in with the new password.
     await gotoSignIn(page);
