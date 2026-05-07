@@ -32,17 +32,17 @@ export function SearchResultRow({ hit, onNavigate }: Props) {
     <Link
       href={hitHref(hit)}
       onClick={onNavigate}
-      className="flex flex-col gap-1 rounded-md px-3 py-2 text-sm hover:bg-blue-50"
+      className="flex flex-col gap-1 rounded-md px-3 py-2 text-sm hover:bg-ink-overlay"
       data-testid="search-result-row"
     >
-      <div className="flex items-baseline justify-between gap-2 text-xs text-gray-500">
+      <div className="flex items-baseline justify-between gap-2 text-xs text-cream-muted">
         <span className="truncate">
           {hit.authorDisplayName ?? hit.authorUid}
         </span>
         <time>{date}</time>
       </div>
       <p
-        className="text-sm text-gray-800"
+        className="text-sm text-cream"
         // SAFE: sanitiseSnippet escapes everything and re-allows ONLY <mark>.
         // See frontend/lib/search-snippet.ts.
         dangerouslySetInnerHTML={{ __html: safeSnippet }}

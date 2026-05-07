@@ -34,7 +34,7 @@ export default function WatchSessionPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center text-sm text-cream-muted">
         Loading…
       </div>
     );
@@ -42,10 +42,10 @@ export default function WatchSessionPage() {
   if (!session) {
     return (
       <div className="mx-auto max-w-3xl p-6">
-        <Link href={`/groups/${gid}/chat`} className="text-xs text-gray-500">
+        <Link href={`/groups/${gid}/chat`} className="text-xs text-cream-muted">
           ← Group
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Watch session not found.</p>
+        <p className="mt-4 text-sm text-cream-muted">Watch session not found.</p>
       </div>
     );
   }
@@ -63,13 +63,13 @@ export default function WatchSessionPage() {
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-6">
       <header>
-        <Link href={`/groups/${gid}/chat`} className="text-xs text-gray-500">
+        <Link href={`/groups/${gid}/chat`} className="text-xs text-cream-muted">
           ← Group
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">
           {session.title ?? "Watch Together"}
         </h1>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-cream-muted">
           Hosted by{" "}
           <span className="font-mono">{session.leaderUid}</span> ·{" "}
           {session.attendees.length} attendee
@@ -77,7 +77,7 @@ export default function WatchSessionPage() {
         </p>
       </header>
 
-      <div className="aspect-video w-full overflow-hidden rounded border border-gray-200 bg-black">
+      <div className="aspect-video w-full overflow-hidden rounded border border-line bg-black">
         {ended ? (
           <div className="flex h-full items-center justify-center text-white">
             Session ended.
@@ -93,7 +93,7 @@ export default function WatchSessionPage() {
         )}
       </div>
 
-      <section className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-700">
+      <section className="rounded border border-line bg-ink-raised p-4 text-sm text-cream-muted">
         {ended ? (
           <p>Session ended {new Date(session.endedAt!).toLocaleString()}.</p>
         ) : isLeader ? (
@@ -111,7 +111,7 @@ export default function WatchSessionPage() {
             <button
               type="button"
               onClick={end}
-              className="rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+              className="rounded border border-terracotta/40 px-3 py-1 text-sm text-terracotta hover:bg-terracotta/10"
             >
               End session
             </button>
@@ -120,7 +120,7 @@ export default function WatchSessionPage() {
             href={session.sourceUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+            className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
           >
             Open on YouTube ↗
           </a>

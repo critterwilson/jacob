@@ -73,11 +73,11 @@ export function CreateGroupForm() {
           id="name"
           type="text"
           {...register("name")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
+          className="mt-1 block w-full rounded border border-line bg-ink-raised px-3 py-2 text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
           placeholder="e.g. Sunday Morning Study"
         />
         {errors.name && (
-          <p role="alert" className="mt-1 text-sm text-red-600">
+          <p role="alert" className="mt-1 text-sm text-terracotta">
             {errors.name.message}
           </p>
         )}
@@ -91,11 +91,11 @@ export function CreateGroupForm() {
           id="description"
           rows={3}
           {...register("description")}
-          className="mt-1 block w-full rounded border border-gray-300 px-3 py-2"
+          className="mt-1 block w-full rounded border border-line bg-ink-raised px-3 py-2 text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
           placeholder="What does your group focus on?"
         />
         {errors.description && (
-          <p role="alert" className="mt-1 text-sm text-red-600">
+          <p role="alert" className="mt-1 text-sm text-terracotta">
             {errors.description.message}
           </p>
         )}
@@ -114,7 +114,7 @@ export function CreateGroupForm() {
       </div>
 
       {submitError && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-terracotta">
           {submitError}
         </p>
       )}
@@ -122,7 +122,7 @@ export function CreateGroupForm() {
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+        className="w-full rounded bg-gold px-4 py-2 font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
       >
         {submitting ? "Creating…" : "Create group"}
       </button>

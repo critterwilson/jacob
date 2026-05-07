@@ -57,10 +57,10 @@ export function SearchBar() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl rounded-lg bg-white shadow-xl"
+        className="w-full max-w-xl rounded-lg bg-ink-raised shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-gray-200 px-4 py-3">
+        <div className="border-b border-line px-4 py-3">
           <input
             ref={inputRef}
             type="search"
@@ -71,24 +71,24 @@ export function SearchBar() {
             }}
             placeholder="Search messages…"
             aria-label="Search query"
-            className="w-full text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none"
+            className="w-full bg-transparent text-sm text-cream placeholder:text-cream-dim focus:outline-none"
             maxLength={200}
           />
         </div>
 
         <div className="max-h-80 overflow-y-auto p-2">
           {loading && (
-            <p className="px-3 py-2 text-xs text-gray-500" role="status">
+            <p className="px-3 py-2 text-xs text-cream-muted" role="status">
               Searching…
             </p>
           )}
           {error && (
-            <p className="px-3 py-2 text-xs text-red-600" role="alert">
+            <p className="px-3 py-2 text-xs text-terracotta" role="alert">
               {error}
             </p>
           )}
           {!loading && !error && data && data.hits.length === 0 && q.trim() && (
-            <p className="px-3 py-2 text-xs text-gray-400">No matches.</p>
+            <p className="px-3 py-2 text-xs text-cream-dim">No matches.</p>
           )}
           {data?.hits.map((hit) => (
             <SearchResultRow
@@ -100,11 +100,11 @@ export function SearchBar() {
         </div>
 
         {data && data.total > data.hits.length && (
-          <div className="flex justify-end border-t border-gray-200 px-4 py-2">
+          <div className="flex justify-end border-t border-line px-4 py-2">
             <button
               type="button"
               onClick={goToFullPage}
-              className="text-xs font-medium text-blue-600 hover:underline"
+              className="text-xs font-medium text-gold hover:underline"
             >
               View all {data.total} results →
             </button>

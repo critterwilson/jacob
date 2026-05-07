@@ -11,9 +11,9 @@
 import { useActiveIncidents } from "@/lib/hooks/useActiveIncidents";
 
 const SEVERITY_STYLES: Record<string, string> = {
-  SEV1: "bg-red-600 text-white",
-  SEV2: "bg-amber-500 text-white",
-  SEV3: "bg-blue-600 text-white",
+  SEV1: "bg-terracotta text-cream",
+  SEV2: "bg-parchment-amber text-ink",
+  SEV3: "bg-lake text-cream",
 };
 
 export function IncidentBanner() {

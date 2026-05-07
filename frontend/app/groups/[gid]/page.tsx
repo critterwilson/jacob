@@ -59,7 +59,7 @@ export default function GroupPage({ params }: Props) {
   if (authLoading || groupLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -69,8 +69,8 @@ export default function GroupPage({ params }: Props) {
   if (!group) {
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <p className="text-gray-500">Group not found.</p>
-        <Link href="/groups" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
+        <p className="text-cream-muted">Group not found.</p>
+        <Link href="/groups" className="mt-4 inline-block text-sm text-gold hover:underline">
           Back to groups
         </Link>
       </main>
@@ -86,35 +86,35 @@ export default function GroupPage({ params }: Props) {
             resourceType="group"
             resourceId={gid}
             groupId={gid}
-            className="text-xs text-gray-400 hover:text-gray-600"
+            className="text-xs text-cream-dim hover:text-cream-muted"
           />
-          <Link href="/groups" className="text-sm text-blue-600 hover:underline">
+          <Link href="/groups" className="text-sm text-gold hover:underline">
             All groups
           </Link>
         </div>
       </div>
 
       {group.description && (
-        <p className="mb-4 text-gray-600">{group.description}</p>
+        <p className="mb-4 text-cream-muted">{group.description}</p>
       )}
 
-      <p className="mb-6 text-sm text-gray-500">
+      <p className="mb-6 text-sm text-cream-muted">
         {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
         {group.isPrivate && " · Private"}
       </p>
 
       <Link
         href={`/groups/${gid}/chat`}
-        className="mb-6 inline-block rounded bg-blue-600 px-4 py-2 font-medium text-white"
+        className="mb-6 inline-block rounded bg-gold px-4 py-2 font-medium text-ink"
       >
         Open chat
       </Link>
 
       {isLeader && (
-        <section className="mt-8 rounded border border-gray-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-gray-700">Invite code</h2>
+        <section className="mt-8 rounded border border-line p-4">
+          <h2 className="mb-3 text-sm font-semibold text-cream-muted">Invite code</h2>
           <p className="mb-3 font-mono text-lg tracking-widest">{currentCode}</p>
-          <p className="mb-3 text-sm text-gray-500">
+          <p className="mb-3 text-sm text-cream-muted">
             Share this code with people you want to invite. They can join at{" "}
             <span className="font-mono text-xs">/join?code={currentCode}</span>.
           </p>
@@ -122,12 +122,12 @@ export default function GroupPage({ params }: Props) {
             type="button"
             onClick={() => void handleRotate()}
             disabled={rotating}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50"
+            className="rounded border border-line px-3 py-1.5 text-sm hover:bg-ink-raised disabled:opacity-50"
           >
             {rotating ? "Rotating…" : "Generate new code"}
           </button>
           {rotateError && (
-            <p role="alert" className="mt-2 text-sm text-red-600">
+            <p role="alert" className="mt-2 text-sm text-terracotta">
               {rotateError}
             </p>
           )}

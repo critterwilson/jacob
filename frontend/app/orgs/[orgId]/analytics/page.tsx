@@ -16,21 +16,21 @@ export default function OrgAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center text-sm text-cream-muted">
         Loading…
       </div>
     );
   }
   if (error?.status === 403) {
     return (
-      <div className="p-6 text-sm text-gray-700">
+      <div className="p-6 text-sm text-cream-muted">
         You don&apos;t have permission to view this org&apos;s dashboard.
       </div>
     );
   }
   if (!data) {
     return (
-      <div className="p-6 text-sm text-gray-700">
+      <div className="p-6 text-sm text-cream-muted">
         No analytics data yet.
       </div>
     );
@@ -42,7 +42,7 @@ export default function OrgAnalyticsPage() {
         <div>
           <Link
             href={`/orgs/${orgId}`}
-            className="text-xs text-gray-500 hover:text-gray-700"
+            className="text-xs text-cream-muted hover:text-cream-muted"
           >
             ← Org dashboard
           </Link>
@@ -56,8 +56,8 @@ export default function OrgAnalyticsPage() {
               onClick={() => setRange(r)}
               className={`rounded border px-3 py-1 ${
                 range === r
-                  ? "border-blue-500 bg-blue-50 text-blue-700"
-                  : "border-gray-300"
+                  ? "border-gold bg-gold/15 text-gold"
+                  : "border-line"
               }`}
             >
               {r}
@@ -66,7 +66,7 @@ export default function OrgAnalyticsPage() {
         </div>
       </header>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-cream-muted">
         Aggregated across the {data.groupCount} group
         {data.groupCount === 1 ? "" : "s"} attached to this org. No
         per-member numbers — see the runbook on what these signals are
@@ -79,18 +79,18 @@ export default function OrgAnalyticsPage() {
         <Stat label="Messages (approx)" value={data.totalMessages} />
       </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-cream-muted">
           Event attendance
         </h2>
         {data.eventAttendance.length === 0 ? (
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-cream-muted">
             No events in the last {range}.
           </p>
         ) : (
           <table className="mt-2 w-full text-xs">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-gray-500">
+              <tr className="border-b border-line text-left text-cream-muted">
                 <th className="py-1">Event</th>
                 <th>Going</th>
                 <th>Attended</th>
@@ -102,7 +102,7 @@ export default function OrgAnalyticsPage() {
                 const rate =
                   e.rsvpGoing > 0 ? Math.round((e.attended / e.rsvpGoing) * 100) : 0;
                 return (
-                  <tr key={e.eventId} className="border-b border-gray-100">
+                  <tr key={e.eventId} className="border-b border-line">
                     <td className="py-1">{e.title}</td>
                     <td>{e.rsvpGoing}</td>
                     <td>{e.attended}</td>
@@ -115,16 +115,16 @@ export default function OrgAnalyticsPage() {
         )}
       </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-cream-muted">
           Sentiment trend
         </h2>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-cream-muted">
           Daily average of moderation severity. Aggregate only — no
           per-member signal here.
         </p>
         {data.sentimentTrend.length === 0 ? (
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-cream-muted">
             No moderation events in the last {range}.
           </p>
         ) : (
@@ -132,7 +132,7 @@ export default function OrgAnalyticsPage() {
             {data.sentimentTrend.map((p) => (
               <li
                 key={p.day}
-                className="flex justify-between rounded bg-gray-50 px-2 py-1"
+                className="flex justify-between rounded bg-ink-raised px-2 py-1"
               >
                 <span>{p.day}</span>
                 <span>
@@ -144,13 +144,13 @@ export default function OrgAnalyticsPage() {
         )}
       </section>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-cream-muted">
           Per-group breakdown
         </h2>
         <table className="mt-2 w-full text-xs">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-gray-500">
+            <tr className="border-b border-line text-left text-cream-muted">
               <th className="py-1">Group</th>
               <th>Members</th>
               <th>Messages (approx)</th>
@@ -159,11 +159,11 @@ export default function OrgAnalyticsPage() {
           </thead>
           <tbody>
             {data.groups.map((g) => (
-              <tr key={g.gid} className="border-b border-gray-100">
+              <tr key={g.gid} className="border-b border-line">
                 <td className="py-1">
                   <Link
                     href={`/groups/${g.gid}/chat`}
-                    className="text-blue-700 hover:underline"
+                    className="text-gold hover:underline"
                   >
                     {g.name}
                   </Link>
@@ -182,8 +182,8 @@ export default function OrgAnalyticsPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-gray-200 bg-white p-4">
-      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+    <div className="rounded border border-line bg-ink-raised p-4">
+      <p className="text-xs uppercase tracking-wide text-cream-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );

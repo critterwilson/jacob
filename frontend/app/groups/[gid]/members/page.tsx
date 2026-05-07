@@ -59,7 +59,7 @@ export default function MembersPage({ params }: Props) {
     void callApi(`/api/groups/${gid}/founder/transfer`, { targetUid: uid });
 
   if (authLoading || membersLoading) {
-    return <p className="p-4 text-sm text-gray-500">Loading…</p>;
+    return <p className="p-4 text-sm text-cream-muted">Loading…</p>;
   }
   if (!user) return null;
 
@@ -74,12 +74,12 @@ export default function MembersPage({ params }: Props) {
         <h1 className="text-2xl font-semibold">{group?.name ?? "Group"} members</h1>
         <Link
           href={`/groups/${gid}`}
-          className="text-sm text-blue-600 hover:underline"
+          className="text-sm text-gold hover:underline"
         >
           Back
         </Link>
       </div>
-      <p className="mb-6 text-sm text-gray-500">
+      <p className="mb-6 text-sm text-cream-muted">
         {leaderCount} {leaderCount === 1 ? "leader" : "leaders"} ·{" "}
         {members.length} total
       </p>
@@ -87,13 +87,13 @@ export default function MembersPage({ params }: Props) {
       {error && (
         <p
           role="alert"
-          className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700"
+          className="mb-4 rounded bg-terracotta/10 p-3 text-sm text-terracotta"
         >
           {error}
         </p>
       )}
 
-      <ul className="divide-y divide-gray-200 rounded border border-gray-200">
+      <ul className="divide-y divide-gray-200 rounded border border-line">
         {members.map((m) => {
           const isFounderRow = group?.founderUid === m.uid;
           const isSelf = m.uid === user.uid;
@@ -104,24 +104,24 @@ export default function MembersPage({ params }: Props) {
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{m.displayName}</p>
-                <code className="text-xs text-gray-500">{m.uid}</code>
+                <code className="text-xs text-cream-muted">{m.uid}</code>
                 <div className="mt-1 flex gap-1">
                   <span
                     className={`rounded px-2 py-0.5 text-xs font-medium ${
                       m.role === "leader"
-                        ? "bg-blue-100 text-blue-800"
-                        : "bg-gray-100 text-gray-700"
+                        ? "bg-gold/15 text-cream"
+                        : "bg-ink-overlay text-cream-muted"
                     }`}
                   >
                     {m.role}
                   </span>
                   {isFounderRow && (
-                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                    <span className="rounded bg-parchment-amber/20 px-2 py-0.5 text-xs font-medium text-parchment-amber">
                       founder
                     </span>
                   )}
                   {isSelf && (
-                    <span className="rounded bg-gray-50 px-2 py-0.5 text-xs text-gray-500">
+                    <span className="rounded bg-ink-raised px-2 py-0.5 text-xs text-cream-muted">
                       you
                     </span>
                   )}
@@ -134,7 +134,7 @@ export default function MembersPage({ params }: Props) {
                       type="button"
                       onClick={() => promote(m.uid)}
                       disabled={pending !== null}
-                      className="rounded border border-blue-300 px-3 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                      className="rounded border border-line px-3 py-1 text-xs text-gold hover:bg-gold/15 disabled:opacity-50"
                     >
                       Promote
                     </button>
@@ -144,7 +144,7 @@ export default function MembersPage({ params }: Props) {
                       type="button"
                       onClick={() => demote(m.uid)}
                       disabled={pending !== null}
-                      className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
                     >
                       Demote
                     </button>
@@ -154,7 +154,7 @@ export default function MembersPage({ params }: Props) {
                       type="button"
                       onClick={() => transferFounder(m.uid)}
                       disabled={pending !== null}
-                      className="rounded border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                      className="rounded border border-parchment-amber/50 px-3 py-1 text-xs text-parchment-amber hover:bg-parchment-amber/15 disabled:opacity-50"
                     >
                       Make founder
                     </button>

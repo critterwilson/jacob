@@ -24,7 +24,7 @@ export function PhotoView({ src, alt, className = "" }: Props) {
   const v1280 = deriveVariantUrl(src, 1280);
 
   return (
-    <div className={`relative aspect-[4/3] overflow-hidden rounded border border-gray-200 ${className}`}>
+    <div className={`relative aspect-[4/3] overflow-hidden rounded border border-line ${className}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

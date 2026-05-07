@@ -45,7 +45,7 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
 
   if (state === "done") {
     return (
-      <p className="text-sm font-medium text-green-700">
+      <p className="text-sm font-medium text-sage">
         {joinMode === "open" ? "Joined!" : "Request sent — awaiting approval."}
       </p>
     );
@@ -59,7 +59,7 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
           onChange={(e) => setMessage(e.target.value)}
           maxLength={280}
           placeholder="Optional message to the leader…"
-          className="w-full rounded border border-gray-200 px-3 py-2 text-sm"
+          className="w-full rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
           rows={2}
         />
       )}
@@ -68,7 +68,7 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
           <button
             type="button"
             onClick={() => setShowMessage(true)}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-soft"
           >
             Request to join
           </button>
@@ -77,14 +77,14 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
             type="button"
             onClick={() => void submit()}
             disabled={state === "pending"}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
           >
             {state === "pending" ? "…" : joinMode === "open" ? "Join" : "Send request"}
           </button>
         )}
       </div>
       {(state === "error") && errorMsg && (
-        <p role="alert" className="text-sm text-red-600">{errorMsg}</p>
+        <p role="alert" className="text-sm text-terracotta">{errorMsg}</p>
       )}
     </div>
   );

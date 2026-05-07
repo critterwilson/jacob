@@ -34,10 +34,10 @@ export function DiscoverFilters({ audience, q, onAudienceChange, onQChange }: Pr
         value={inputQ}
         onChange={(e) => setInputQ(e.target.value)}
         placeholder="Search groups…"
-        className="rounded border border-gray-200 px-3 py-1.5 text-sm"
+        className="rounded border border-line bg-ink-raised px-3 py-1.5 text-sm text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
         aria-label="Search groups"
       />
-      <div className="inline-flex rounded border border-gray-200 text-sm" role="group" aria-label="Filter by audience">
+      <div className="inline-flex rounded border border-line text-sm" role="group" aria-label="Filter by audience">
         {AUDIENCES.map((a) => (
           <button
             key={a.value}
@@ -46,8 +46,8 @@ export function DiscoverFilters({ audience, q, onAudienceChange, onQChange }: Pr
             aria-pressed={audience === a.value}
             className={`px-3 py-1.5 first:rounded-l last:rounded-r ${
               audience === a.value
-                ? "bg-blue-600 text-white"
-                : "bg-white text-gray-700 hover:bg-gray-50"
+                ? "bg-gold text-ink"
+                : "bg-ink-raised text-cream-muted hover:bg-ink-overlay"
             }`}
           >
             {a.label}

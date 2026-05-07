@@ -21,7 +21,7 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500" role="status">
+        <span className="text-sm text-cream-muted" role="status">
           Loading…
         </span>
       </div>

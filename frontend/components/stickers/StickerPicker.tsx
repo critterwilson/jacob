@@ -38,7 +38,7 @@ export function StickerPicker({ value, onChange, groupAudience }: Props) {
     return (
       <div
         aria-label="Loading stickers"
-        className="h-8 w-64 animate-pulse rounded bg-gray-100"
+        className="h-8 w-64 animate-pulse rounded bg-ink-overlay"
       />
     );
   }

@@ -37,7 +37,7 @@ export default function ReadOnlyGroupPage({ params }: Props) {
   if (authLoading || groupLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -47,8 +47,8 @@ export default function ReadOnlyGroupPage({ params }: Props) {
   if (!group) {
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <p className="text-gray-500">Group not found or private.</p>
-        <Link href="/discover" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
+        <p className="text-cream-muted">Group not found or private.</p>
+        <Link href="/discover" className="mt-4 inline-block text-sm text-gold hover:underline">
           ← Back to discover
         </Link>
       </main>
@@ -58,15 +58,15 @@ export default function ReadOnlyGroupPage({ params }: Props) {
   return (
     <main className="flex h-screen flex-col">
       {/* Header */}
-      <header className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3">
+      <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
         <div>
-          <Link href="/discover" className="text-xs text-gray-500 hover:underline">
+          <Link href="/discover" className="text-xs text-cream-muted hover:underline">
             ← Discover
           </Link>
           <h1 className="mt-0.5 text-base font-semibold">{group.name}</h1>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-cream-dim">
             Read-only ·{" "}
-            <span className="font-medium text-blue-600">
+            <span className="font-medium text-gold">
               {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
             </span>
           </p>
@@ -78,7 +78,7 @@ export default function ReadOnlyGroupPage({ params }: Props) {
       </header>
 
       {/* Read-only notice */}
-      <div className="shrink-0 border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+      <div className="shrink-0 border-b border-parchment-amber/30 bg-parchment-amber/15 px-4 py-2 text-xs text-parchment-amber">
         You&apos;re viewing this group in read-only mode. Join to participate.
       </div>
 

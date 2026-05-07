@@ -50,26 +50,26 @@ export default function OrgTransparencyPage() {
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <header>
         <h1 className="text-2xl font-semibold">Org transparency report</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-cream-muted">
           Aggregated counts for groups attached to this org.
         </p>
       </header>
 
       {(loading || authLoading) && (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       )}
       {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded border border-terracotta/40 bg-terracotta/10 px-4 py-2 text-sm text-terracotta">
           {error}
         </div>
       )}
       {!loading && !error && !report && (
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-cream-muted">
           No published reports for this org yet.
         </p>
       )}
       {report && (
-        <pre className="overflow-x-auto rounded bg-gray-50 p-3 text-xs">
+        <pre className="overflow-x-auto rounded bg-ink-raised p-3 text-xs">
           {JSON.stringify(report.payload, null, 2)}
         </pre>
       )}
