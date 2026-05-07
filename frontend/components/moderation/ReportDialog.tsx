@@ -104,18 +104,18 @@ export function ReportDialog({
         aria-modal="true"
         aria-labelledby="report-dialog-title"
         tabIndex={-1}
-        className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl outline-none"
+        className="relative w-full max-w-md rounded-lg bg-ink-raised p-6 shadow-pop outline-none"
       >
         <h2 id="report-dialog-title" className="mb-1 text-lg font-semibold">
           Report this {resourceType}
         </h2>
-        <p className="mb-4 text-sm text-gray-600">
+        <p className="mb-4 text-sm text-cream-muted">
           Reports go to JACOB&apos;s moderation team. We review every report.
         </p>
 
         {success ? (
           <div className="space-y-4" data-testid="report-success">
-            <p className="rounded bg-green-50 p-3 text-sm text-green-800">
+            <p className="rounded bg-sage/15 p-3 text-sm text-sage">
               {success.dedup
                 ? "Thanks — we already have this report on file."
                 : "Thanks — your report has been sent for review."}
@@ -124,7 +124,7 @@ export function ReportDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft"
               >
                 Close
               </button>
@@ -141,14 +141,14 @@ export function ReportDialog({
             <div>
               <label
                 htmlFor={reasonId}
-                className="mb-1 block text-sm font-medium text-gray-800"
+                className="mb-1 block text-sm font-medium text-cream"
               >
                 Reason
               </label>
               <select
                 id={reasonId}
                 {...register("reason")}
-                className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded border border-line bg-ink-overlay px-2 py-1 text-sm text-cream focus:outline-none focus-visible:shadow-glow-gold"
               >
                 {reasonOptions.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -157,7 +157,7 @@ export function ReportDialog({
                 ))}
               </select>
               {errors.reason && (
-                <p className="mt-1 text-xs text-red-600">
+                <p className="mt-1 text-xs text-terracotta">
                   {errors.reason.message}
                 </p>
               )}
@@ -166,7 +166,7 @@ export function ReportDialog({
             <div>
               <label
                 htmlFor={contextId}
-                className="mb-1 block text-sm font-medium text-gray-800"
+                className="mb-1 block text-sm font-medium text-cream"
               >
                 Add context (optional, max 500 chars)
               </label>
@@ -175,10 +175,10 @@ export function ReportDialog({
                 rows={4}
                 maxLength={500}
                 {...register("context")}
-                className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded border border-line bg-ink-overlay px-2 py-1 text-sm text-cream focus:outline-none focus-visible:shadow-glow-gold"
               />
               {errors.context && (
-                <p className="mt-1 text-xs text-red-600">
+                <p className="mt-1 text-xs text-terracotta">
                   {errors.context.message}
                 </p>
               )}
@@ -187,7 +187,7 @@ export function ReportDialog({
             {error && (
               <p
                 role="alert"
-                className="rounded bg-red-50 p-2 text-xs text-red-700"
+                className="rounded bg-terracotta/15 p-2 text-xs text-terracotta"
               >
                 {error.message}
               </p>
@@ -197,14 +197,14 @@ export function ReportDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded border border-gray-300 px-4 py-2 text-sm"
+                className="rounded border border-line px-4 py-2 text-sm text-cream hover:bg-ink-overlay"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
               >
                 {submitting ? "Sending…" : "Submit report"}
               </button>

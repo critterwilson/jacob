@@ -80,7 +80,7 @@ function JoinForm() {
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -90,7 +90,7 @@ function JoinForm() {
   return (
     <main className="mx-auto max-w-sm px-4 py-10">
       <h1 className="mb-2 text-2xl font-semibold">Join a group</h1>
-      <p className="mb-8 text-sm text-gray-600">
+      <p className="mb-8 text-sm text-cream-muted">
         Enter the invite code someone shared with you.
       </p>
 
@@ -110,18 +110,18 @@ function JoinForm() {
             autoComplete="off"
             spellCheck={false}
             {...register("code")}
-            className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 font-mono uppercase tracking-widest"
+            className="mt-1 block w-full rounded border border-line px-3 py-2 font-mono uppercase tracking-widest"
             placeholder="XXXXXXXX"
           />
           {errors.code && (
-            <p role="alert" className="mt-1 text-sm text-red-600">
+            <p role="alert" className="mt-1 text-sm text-terracotta">
               {errors.code.message}
             </p>
           )}
         </div>
 
         {submitError && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-terracotta">
             {submitError}
           </p>
         )}
@@ -129,7 +129,7 @@ function JoinForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+          className="w-full rounded bg-gold px-4 py-2 font-medium text-ink disabled:opacity-50"
         >
           {submitting ? "Joining…" : "Join group"}
         </button>
@@ -143,7 +143,7 @@ export default function JoinPage() {
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center">
-          <span className="text-sm text-gray-500">Loading…</span>
+          <span className="text-sm text-cream-muted">Loading…</span>
         </main>
       }
     >

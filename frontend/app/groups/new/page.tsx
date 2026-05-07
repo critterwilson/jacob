@@ -20,7 +20,7 @@ export default function NewGroupPage() {
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -31,7 +31,7 @@ export default function NewGroupPage() {
     <main className="mx-auto max-w-lg px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Create a group</h1>
-        <Link href="/groups" className="text-sm text-blue-600 hover:underline">
+        <Link href="/groups" className="text-sm text-gold hover:underline">
           Back to groups
         </Link>
       </div>

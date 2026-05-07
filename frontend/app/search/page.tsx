@@ -45,7 +45,7 @@ function SearchInner() {
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500" role="status">
+        <span className="text-sm text-cream-muted" role="status">
           Loading…
         </span>
       </main>
@@ -56,7 +56,7 @@ function SearchInner() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
-      <h1 className="text-lg font-semibold text-gray-900">Search messages</h1>
+      <h1 className="text-lg font-semibold text-cream">Search messages</h1>
 
       <form onSubmit={onSubmit} className="flex gap-2">
         <input
@@ -66,33 +66,33 @@ function SearchInner() {
           placeholder="Find a message…"
           aria-label="Search query"
           maxLength={200}
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 rounded-md border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
         />
         <button
           type="submit"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft"
         >
           Search
         </button>
       </form>
 
       {loading && (
-        <p className="text-sm text-gray-500" role="status">
+        <p className="text-sm text-cream-muted" role="status">
           Searching…
         </p>
       )}
       {error && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="text-sm text-terracotta" role="alert">
           {error}
         </p>
       )}
       {!loading && !error && data && data.hits.length === 0 && q.trim() && (
-        <p className="text-sm text-gray-500">No matches found.</p>
+        <p className="text-sm text-cream-muted">No matches found.</p>
       )}
 
       {data && data.hits.length > 0 && (
         <>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-cream-muted">
             {data.total} result{data.total === 1 ? "" : "s"}
           </p>
           <ul className="flex flex-col gap-1">
@@ -112,18 +112,18 @@ function SearchInner() {
                 type="button"
                 onClick={() => onPageChange(Math.max(1, page - 1))}
                 disabled={page <= 1}
-                className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
               >
                 ← Previous
               </button>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-cream-muted">
                 Page {page} of {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
-                className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
               >
                 Next →
               </button>
@@ -140,7 +140,7 @@ export default function SearchPage() {
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center">
-          <span className="text-sm text-gray-500" role="status">
+          <span className="text-sm text-cream-muted" role="status">
             Loading…
           </span>
         </main>

@@ -66,66 +66,66 @@ export default function OrgGroupsPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-8">
       <header>
-        <Link href={`/orgs/${orgId}`} className="text-xs text-gray-500 hover:text-gray-700">
+        <Link href={`/orgs/${orgId}`} className="text-xs text-cream-muted hover:text-cream-muted">
           ← Org dashboard
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Groups</h1>
       </header>
 
-      <section className="rounded border border-gray-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="rounded border border-line bg-ink-raised p-4">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-cream-muted">
           Attach existing group
         </h2>
-        <p className="mb-2 text-xs text-gray-500">
+        <p className="mb-2 text-xs text-cream-muted">
           The group&apos;s leader receives a consent email with a code. Paste
           that code here on the second attempt.
         </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <label className="block text-xs text-gray-500">Group ID</label>
+            <label className="block text-xs text-cream-muted">Group ID</label>
             <input
               value={attachGid}
               onChange={(e) => setAttachGid(e.target.value)}
               placeholder="g-xxxxxxxx"
-              className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+              className="w-full rounded border border-line px-2 py-1 text-sm"
             />
           </div>
           <div className="flex-1">
-            <label className="block text-xs text-gray-500">
+            <label className="block text-xs text-cream-muted">
               Consent code (optional)
             </label>
             <input
               value={consentToken}
               onChange={(e) => setConsentToken(e.target.value)}
               placeholder="from leader email"
-              className="w-full rounded border border-gray-300 px-2 py-1 text-sm font-mono"
+              className="w-full rounded border border-line px-2 py-1 text-sm font-mono"
             />
           </div>
           <button
             type="button"
             onClick={attach}
             disabled={!attachGid || pending}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+            className="rounded bg-gold px-3 py-1 text-sm text-ink disabled:opacity-40"
           >
             {pending ? "…" : "Attach"}
           </button>
         </div>
-        {attachInfo && <p className="mt-2 text-xs text-green-700">{attachInfo}</p>}
+        {attachInfo && <p className="mt-2 text-xs text-sage">{attachInfo}</p>}
         {attachError && (
-          <p className="mt-2 text-xs text-red-600">{attachError}</p>
+          <p className="mt-2 text-xs text-terracotta">{attachError}</p>
         )}
       </section>
 
       {loading ? (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       ) : error ? (
-        <p className="text-sm text-red-600">{error.message}</p>
+        <p className="text-sm text-terracotta">{error.message}</p>
       ) : groups.length === 0 ? (
-        <p className="text-sm text-gray-500">No groups attached yet.</p>
+        <p className="text-sm text-cream-muted">No groups attached yet.</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-cream-muted">
               <th className="py-2">Name</th>
               <th>Members</th>
               <th>Created</th>
@@ -135,29 +135,29 @@ export default function OrgGroupsPage() {
           </thead>
           <tbody>
             {groups.map((g) => (
-              <tr key={g.gid} className="border-b border-gray-100">
+              <tr key={g.gid} className="border-b border-line">
                 <td className="py-2">
                   <Link
                     href={`/groups/${g.gid}/chat`}
-                    className="text-blue-700 hover:underline"
+                    className="text-gold hover:underline"
                   >
                     {g.name}
                   </Link>
-                  <p className="font-mono text-xs text-gray-500">{g.gid}</p>
+                  <p className="font-mono text-xs text-cream-muted">{g.gid}</p>
                 </td>
                 <td>{g.memberCount}</td>
-                <td className="text-xs text-gray-500">
+                <td className="text-xs text-cream-muted">
                   {g.createdAt
                     ? new Date(g.createdAt).toLocaleDateString()
                     : "—"}
                 </td>
                 <td>
                   {g.archivedAt ? (
-                    <span className="rounded bg-gray-200 px-1 py-0.5 text-xs">
+                    <span className="rounded bg-ink-overlay px-1 py-0.5 text-xs">
                       archived
                     </span>
                   ) : (
-                    <span className="rounded bg-green-100 px-1 py-0.5 text-xs text-green-700">
+                    <span className="rounded bg-sage/20 px-1 py-0.5 text-xs text-sage">
                       active
                     </span>
                   )}
@@ -166,7 +166,7 @@ export default function OrgGroupsPage() {
                   <button
                     type="button"
                     onClick={() => detach(g.gid)}
-                    className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                    className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10"
                   >
                     Detach
                   </button>

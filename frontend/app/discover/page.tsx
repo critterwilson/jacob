@@ -21,7 +21,7 @@ export default function DiscoverPage() {
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -29,7 +29,7 @@ export default function DiscoverPage() {
   if (!user) {
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <p className="text-gray-500">Sign in to discover groups.</p>
+        <p className="text-cream-muted">Sign in to discover groups.</p>
       </main>
     );
   }
@@ -46,17 +46,17 @@ export default function DiscoverPage() {
       />
 
       {state.status === "loading" && (
-        <p className="text-sm text-gray-500">Loading…</p>
+        <p className="text-sm text-cream-muted">Loading…</p>
       )}
 
       {state.status === "error" && (
-        <p role="alert" className="text-sm text-red-600">{state.message}</p>
+        <p role="alert" className="text-sm text-terracotta">{state.message}</p>
       )}
 
       {state.status === "ok" && (
         <>
           {state.groups.length === 0 ? (
-            <p className="py-12 text-center text-gray-500">No groups found.</p>
+            <p className="py-12 text-center text-cream-muted">No groups found.</p>
           ) : (
             <div className="space-y-4">
               {state.groups.map((g) => (
@@ -68,7 +68,7 @@ export default function DiscoverPage() {
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="mt-6 w-full rounded border border-gray-200 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="mt-6 w-full rounded border border-line py-2 text-sm text-cream-muted hover:bg-ink-raised"
             >
               Load more
             </button>

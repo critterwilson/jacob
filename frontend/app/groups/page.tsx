@@ -21,7 +21,7 @@ export default function GroupsPage() {
   if (authLoading || groupsLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -35,13 +35,13 @@ export default function GroupsPage() {
         <div className="flex gap-3">
           <Link
             href="/join"
-            className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+            className="rounded border border-line px-3 py-2 text-sm hover:bg-ink-raised"
           >
             Join with code
           </Link>
           <Link
             href="/groups/new"
-            className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white"
+            className="rounded bg-gold px-3 py-2 text-sm font-medium text-ink"
           >
             New group
           </Link>
@@ -49,18 +49,18 @@ export default function GroupsPage() {
       </div>
 
       {groups.length === 0 ? (
-        <div className="rounded border border-dashed border-gray-300 p-8 text-center text-gray-500">
+        <div className="rounded border border-dashed border-line p-8 text-center text-cream-muted">
           <p className="mb-4">You have not joined any groups yet.</p>
           <div className="flex justify-center gap-3">
             <Link
               href="/groups/new"
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+              className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink"
             >
               Create a group
             </Link>
             <Link
               href="/join"
-              className="rounded border border-gray-300 px-4 py-2 text-sm"
+              className="rounded border border-line px-4 py-2 text-sm"
             >
               Join with code
             </Link>
@@ -72,17 +72,17 @@ export default function GroupsPage() {
             <li key={group.id}>
               <Link
                 href={`/groups/${group.id}`}
-                className="flex items-center justify-between rounded border border-gray-200 p-4 hover:bg-gray-50"
+                className="flex items-center justify-between rounded border border-line p-4 hover:bg-ink-raised"
               >
                 <div>
                   <p className="font-medium">{group.name}</p>
                   {group.description && (
-                    <p className="mt-0.5 text-sm text-gray-500 line-clamp-1">
+                    <p className="mt-0.5 text-sm text-cream-muted line-clamp-1">
                       {group.description}
                     </p>
                   )}
                 </div>
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-cream-dim">
                   {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
                 </span>
               </Link>

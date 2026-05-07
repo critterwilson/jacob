@@ -42,7 +42,7 @@ export default function AnalyticsPage({ params }: Props) {
   if (authLoading || membershipLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
   }
@@ -53,13 +53,13 @@ export default function AnalyticsPage({ params }: Props) {
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Group analytics</h1>
-        <Link href={`/groups/${gid}`} className="text-sm text-blue-600 hover:underline">
+        <Link href={`/groups/${gid}`} className="text-sm text-gold hover:underline">
           ← Back
         </Link>
       </div>
 
       {/* Range toggle */}
-      <div className="mb-8 inline-flex rounded border border-gray-200 text-sm" role="group">
+      <div className="mb-8 inline-flex rounded border border-line text-sm" role="group">
         {(["7d", "30d"] as const).map((r) => (
           <button
             key={r}
@@ -68,8 +68,8 @@ export default function AnalyticsPage({ params }: Props) {
             aria-pressed={range === r}
             className={`px-4 py-1.5 first:rounded-l last:rounded-r ${
               range === r
-                ? "bg-blue-600 text-white"
-                : "bg-white text-gray-700 hover:bg-gray-50"
+                ? "bg-gold text-ink"
+                : "bg-ink-raised text-cream-muted hover:bg-ink-raised"
             }`}
           >
             {r}
@@ -80,20 +80,20 @@ export default function AnalyticsPage({ params }: Props) {
       {state.status === "loading" && <AnalyticsSkeleton />}
 
       {state.status === "error" && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-terracotta">
           {state.message}
         </p>
       )}
 
       {state.status === "ok" && state.data.totalMessages === 0 && (
-        <p className="py-16 text-center text-gray-500">
+        <p className="py-16 text-center text-cream-muted">
           Quiet week — see you next Sunday
         </p>
       )}
 
       {state.status === "ok" && state.data.totalMessages > 0 && (
         <div className="space-y-10">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-cream-muted">
             {state.data.totalMessages} messages in the last {range}
             {" · "}Includes through{" "}
             {new Date(state.data.generatedAt).toLocaleDateString()}
@@ -107,7 +107,7 @@ export default function AnalyticsPage({ params }: Props) {
           <section>
             <h2 className="mb-4 text-base font-semibold">Sticker mix</h2>
             {state.data.stickerMix.length === 0 ? (
-              <p className="text-sm text-gray-500">No stickers used this period.</p>
+              <p className="text-sm text-cream-muted">No stickers used this period.</p>
             ) : (
               <StickerMixChart items={state.data.stickerMix} />
             )}
@@ -126,12 +126,12 @@ export default function AnalyticsPage({ params }: Props) {
 function AnalyticsSkeleton() {
   return (
     <div className="animate-pulse space-y-8" aria-hidden>
-      <div className="h-4 w-48 rounded bg-gray-200" />
-      <div className="h-48 rounded bg-gray-100" />
-      <div className="h-60 rounded bg-gray-100" />
+      <div className="h-4 w-48 rounded bg-ink-overlay" />
+      <div className="h-48 rounded bg-ink-overlay" />
+      <div className="h-60 rounded bg-ink-overlay" />
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-4 rounded bg-gray-200" />
+          <div key={i} className="h-4 rounded bg-ink-overlay" />
         ))}
       </div>
     </div>

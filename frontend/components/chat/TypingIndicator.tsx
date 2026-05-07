@@ -30,7 +30,7 @@ export function TypingIndicator({
     <p
       aria-live="polite"
       aria-atomic="true"
-      className="px-2 py-1 text-xs italic text-gray-500"
+      className="px-2 py-1 text-xs italic text-cream-muted"
     >
       {label}
     </p>

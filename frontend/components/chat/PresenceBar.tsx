@@ -19,7 +19,7 @@ export function PresenceBar({
       role="status"
       aria-live="off"
       title={online.map((o: PresenceEntry) => o.uid).join(", ")}
-      className="text-xs text-green-700"
+      className="text-xs text-sage"
     >
       <span aria-hidden="true">●</span> {online.length} online
     </div>

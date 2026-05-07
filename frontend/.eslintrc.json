@@ -23,6 +23,14 @@
       {
         "selector": "CallExpression[callee.name='fetch']",
         "message": "Use the typed apiGet/apiPost/apiPatch/apiDelete from @/lib/api instead of raw fetch(). The wrapper attaches the Firebase ID token, normalises errors as ApiError, and handles retries / CORS / aborts uniformly. Legitimate exceptions (direct cross-origin uploads to signed URLs, etc.) need an inline `// eslint-disable-next-line no-restricted-syntax` with a short why."
+      },
+      {
+        "selector": "Literal[value=/(?:^|\\s)(?:bg-white|(?:bg|text|border)-(?:gray|blue|red|amber|green)-(?:50|100|200|300|400|500|600|700|800|900))(?=\\s|$)/]",
+        "message": "Use design-system tokens (bg-ink/-raised/-overlay, text-cream/-muted/-dim, bg-gold, text-terracotta/sage/parchment-amber/lake, border-line) instead of legacy Tailwind palette classes. See frontend/styles/tokens.css and docs/design-system.md."
+      },
+      {
+        "selector": "TemplateElement[value.raw=/(?:^|\\s)(?:bg-white|(?:bg|text|border)-(?:gray|blue|red|amber|green)-(?:50|100|200|300|400|500|600|700|800|900))(?=\\s|$)/]",
+        "message": "Use design-system tokens (bg-ink/-raised/-overlay, text-cream/-muted/-dim, bg-gold, text-terracotta/sage/parchment-amber/lake, border-line) instead of legacy Tailwind palette classes. See frontend/styles/tokens.css and docs/design-system.md."
       }
     ]
   },

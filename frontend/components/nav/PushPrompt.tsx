@@ -44,18 +44,18 @@ export function PushPrompt({ uid }: Props) {
     <div
       role="banner"
       aria-label="Enable push notifications"
-      className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm"
+      className="flex items-start gap-3 rounded-lg border border-line bg-ink-raised px-4 py-3 text-sm"
     >
-      <span className="mt-0.5 shrink-0 text-blue-500">🔔</span>
+      <span className="mt-0.5 shrink-0 text-gold">🔔</span>
       <div className="flex-1">
-        <p className="font-medium text-blue-900">Stay in the loop</p>
-        <p className="text-blue-700">
+        <p className="font-medium text-cream">Stay in the loop</p>
+        <p className="text-cream-muted">
           Get notified about mentions, replies, and announcements in your groups.
         </p>
         {/* iOS PWA note */}
         {typeof navigator !== "undefined" &&
           /iphone|ipad/i.test(navigator.userAgent) && (
-            <p className="mt-1 text-xs text-blue-600">
+            <p className="mt-1 text-xs text-cream-muted">
               On iOS, push notifications require installing JACOB to your home screen (Safari → Share → Add to Home Screen).
             </p>
           )}
@@ -63,13 +63,13 @@ export function PushPrompt({ uid }: Props) {
       <div className="flex shrink-0 gap-2">
         <button
           onClick={enable}
-          className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          className="rounded bg-gold px-3 py-1.5 text-xs font-medium text-ink hover:bg-gold-soft"
         >
           Enable
         </button>
         <button
           onClick={dismiss}
-          className="rounded border border-blue-300 px-3 py-1.5 text-xs text-blue-700 hover:bg-blue-100"
+          className="rounded border border-line px-3 py-1.5 text-xs text-cream hover:bg-ink-overlay"
         >
           Not now
         </button>

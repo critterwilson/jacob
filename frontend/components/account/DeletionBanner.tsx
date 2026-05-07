@@ -22,7 +22,7 @@ export function DeletionBanner() {
   return (
     <div
       role="alert"
-      className="border-b border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+      className="border-b border-terracotta/40 bg-terracotta/10 px-4 py-3 text-sm text-terracotta"
     >
       <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
         <span>
@@ -31,7 +31,7 @@ export function DeletionBanner() {
         </span>
         <Link
           href="/settings/delete-account"
-          className="shrink-0 rounded border border-red-400 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+          className="shrink-0 rounded border border-terracotta bg-ink-raised px-3 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay"
         >
           Cancel
         </Link>

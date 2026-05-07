@@ -7,11 +7,9 @@
 /*
  * Global defaults
  *
- * Sets the new ink ground and cream type as the default for any surface
- * that has not yet been migrated. Existing surfaces with explicit
- * background classes (bg-white, bg-blue-50, etc.) still render their
- * own colors; this only catches the page background and the body type
- * defaults.
+ * Sets the ink ground and cream type as the default for the page
+ * background and body type. Surface utilities (bg-ink-raised,
+ * bg-ink-overlay) handle elevated cards on top of this base.
  *
  * Source of truth: docs/design-system.md
  */

@@ -58,14 +58,14 @@ export default function OrgSettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </div>
     );
   }
   if (!org) {
     return (
       <div className="p-8">
-        <p className="text-sm text-gray-700">Org not found.</p>
+        <p className="text-sm text-cream-muted">Org not found.</p>
       </div>
     );
   }
@@ -73,37 +73,37 @@ export default function OrgSettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-8">
       <header>
-        <Link href={`/orgs/${orgId}`} className="text-xs text-gray-500 hover:text-gray-700">
+        <Link href={`/orgs/${orgId}`} className="text-xs text-cream-muted hover:text-cream">
           ← Org dashboard
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Settings</h1>
       </header>
 
-      <section className="space-y-3 rounded border border-gray-200 bg-white p-4">
+      <section className="space-y-3 rounded border border-line bg-ink-raised p-4">
         <label className="block text-sm">
-          <span className="text-xs text-gray-500">Name</span>
+          <span className="text-xs text-cream-muted">Name</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+            className="mt-1 w-full rounded border border-line bg-ink-overlay px-2 py-1 text-cream focus:outline-none focus-visible:shadow-glow-gold"
           />
         </label>
         <label className="block text-sm">
-          <span className="text-xs text-gray-500">Description</span>
+          <span className="text-xs text-cream-muted">Description</span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+            className="mt-1 w-full rounded border border-line bg-ink-overlay px-2 py-1 text-cream focus:outline-none focus-visible:shadow-glow-gold"
           />
         </label>
         <label className="block text-sm">
-          <span className="text-xs text-gray-500">Primary color (hex)</span>
+          <span className="text-xs text-cream-muted">Primary color (hex)</span>
           <input
             value={primaryColor}
             onChange={(e) => setPrimaryColor(e.target.value)}
             placeholder="#0E5CAB"
-            className="mt-1 w-40 rounded border border-gray-300 px-2 py-1 font-mono"
+            className="mt-1 w-40 rounded border border-line bg-ink-overlay px-2 py-1 font-mono text-cream focus:outline-none focus-visible:shadow-glow-gold"
           />
         </label>
         <div className="flex items-center gap-2 pt-1">
@@ -111,14 +111,14 @@ export default function OrgSettingsPage() {
             type="button"
             onClick={save}
             disabled={saving}
-            className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+            className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save"}
           </button>
-          {info && <span className="text-xs text-green-700">{info}</span>}
-          {error && <span className="text-xs text-red-600">{error}</span>}
+          {info && <span className="text-xs text-sage">{info}</span>}
+          {error && <span className="text-xs text-terracotta">{error}</span>}
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-cream-muted">
           Logo upload (via the existing moderation pipeline) lands in a
           follow-up. AI-policy toggles land with T43–T47 if those tickets
           ship.
@@ -243,18 +243,18 @@ function BrandingSection({ orgId }: { orgId: string }) {
   };
 
   return (
-    <section className="space-y-4 rounded border border-gray-200 bg-white p-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+    <section className="space-y-4 rounded border border-line bg-ink-raised p-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-cream-muted">
         Branding & domains
       </h2>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-terracotta">{error}</p>}
       {loading ? (
-        <p className="text-xs text-gray-500">Loading…</p>
+        <p className="text-xs text-cream-muted">Loading…</p>
       ) : (
         <>
           <div>
             <h3 className="text-sm font-medium">JACOB subdomain</h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-cream-muted">
               Claim a `*.jacob.app` host. Members visit
               `&lt;your-name&gt;.jacob.app`. Claims are unique platform-wide.
             </p>
@@ -266,7 +266,7 @@ function BrandingSection({ orgId }: { orgId: string }) {
                 <button
                   type="button"
                   onClick={releaseSub}
-                  className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                  className="rounded border border-terracotta px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10"
                 >
                   Release
                 </button>
@@ -279,13 +279,13 @@ function BrandingSection({ orgId }: { orgId: string }) {
                     setSubdomain(e.target.value.toLowerCase().trim())
                   }
                   placeholder="our-church"
-                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                  className="flex-1 rounded border border-line bg-ink-overlay px-2 py-1 text-sm text-cream focus:outline-none focus-visible:shadow-glow-gold"
                 />
                 <button
                   type="button"
                   onClick={claimSub}
                   disabled={!subdomain || subPending}
-                  className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+                  className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
                 >
                   {subPending ? "…" : "Claim"}
                 </button>
@@ -293,9 +293,9 @@ function BrandingSection({ orgId }: { orgId: string }) {
             )}
           </div>
 
-          <div className="border-t border-gray-100 pt-3">
+          <div className="border-t border-line pt-3">
             <h3 className="text-sm font-medium">Custom domain</h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-cream-muted">
               Map a domain you already own (e.g. `groups.your-church.org`).
               Verify via TXT record; an operator provisions the cert
               (5–30 minutes once verified).
@@ -310,12 +310,12 @@ function BrandingSection({ orgId }: { orgId: string }) {
                   <span
                     className={
                       status.customDomain.status === "active"
-                        ? "text-green-700"
+                        ? "text-sage"
                         : status.customDomain.status === "verified"
-                          ? "text-amber-700"
+                          ? "text-parchment-amber"
                           : status.customDomain.status === "failed"
-                            ? "text-red-700"
-                            : "text-gray-700"
+                            ? "text-terracotta"
+                            : "text-cream-muted"
                     }
                   >
                     {status.customDomain.status}
@@ -331,26 +331,26 @@ function BrandingSection({ orgId }: { orgId: string }) {
                       </span>{" "}
                       with value:
                       <br />
-                      <code className="mt-1 block break-all rounded bg-gray-100 p-2 text-[11px]">
+                      <code className="mt-1 block break-all rounded bg-ink-overlay p-2 text-[11px]">
                         {status.customDomain.txtRecord}
                       </code>
                     </p>
                   )}
                 {status.message && (
-                  <p className="text-xs text-gray-500">{status.message}</p>
+                  <p className="text-xs text-cream-muted">{status.message}</p>
                 )}
                 <div className="flex gap-2 pt-1">
                   <button
                     type="button"
                     onClick={load}
-                    className="rounded border border-gray-300 px-2 py-0.5 text-xs hover:bg-gray-50"
+                    className="rounded border border-line px-2 py-0.5 text-xs text-cream hover:bg-ink-overlay"
                   >
                     Re-check status
                   </button>
                   <button
                     type="button"
                     onClick={releaseVanity}
-                    className="rounded border border-red-300 px-2 py-0.5 text-xs text-red-700 hover:bg-red-50"
+                    className="rounded border border-terracotta px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10"
                   >
                     Release
                   </button>
@@ -364,13 +364,13 @@ function BrandingSection({ orgId }: { orgId: string }) {
                     setVanityHost(e.target.value.toLowerCase().trim())
                   }
                   placeholder="groups.your-church.org"
-                  className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-mono"
+                  className="flex-1 rounded border border-line bg-ink-overlay px-2 py-1 text-sm font-mono text-cream focus:outline-none focus-visible:shadow-glow-gold"
                 />
                 <button
                   type="button"
                   onClick={claimVanity}
                   disabled={!vanityHost || vanityPending}
-                  className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+                  className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
                 >
                   {vanityPending ? "…" : "Claim"}
                 </button>

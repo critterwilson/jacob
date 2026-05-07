@@ -16,14 +16,14 @@ export default function OrgDashboardPage() {
   if (orgLoading || dashboardLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <span className="text-sm text-gray-500">Loading…</span>
+        <span className="text-sm text-cream-muted">Loading…</span>
       </div>
     );
   }
   if (error?.status === 403) {
     return (
       <div className="p-8">
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-cream-muted">
           You don&apos;t have permission to view this org.
         </p>
       </div>
@@ -32,7 +32,7 @@ export default function OrgDashboardPage() {
   if (!org) {
     return (
       <div className="p-8">
-        <p className="text-sm text-gray-700">Org not found.</p>
+        <p className="text-sm text-cream-muted">Org not found.</p>
       </div>
     );
   }
@@ -41,34 +41,34 @@ export default function OrgDashboardPage() {
     <div className="mx-auto max-w-4xl space-y-8 p-8">
       <header className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-gray-500">
+          <p className="text-xs uppercase tracking-wide text-cream-muted">
             {org.audience}
           </p>
           <h1 className="text-3xl font-semibold">{org.name}</h1>
-          <p className="mt-1 text-sm text-gray-600">{org.description}</p>
+          <p className="mt-1 text-sm text-cream-muted">{org.description}</p>
         </div>
         <nav className="space-x-2 text-sm">
           <Link
             href={`/orgs/${orgId}/groups`}
-            className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+            className="rounded border border-line px-3 py-1 hover:bg-ink-raised"
           >
             Groups
           </Link>
           <Link
             href={`/orgs/${orgId}/admins`}
-            className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+            className="rounded border border-line px-3 py-1 hover:bg-ink-raised"
           >
             Admins
           </Link>
           <Link
             href={`/orgs/${orgId}/analytics`}
-            className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+            className="rounded border border-line px-3 py-1 hover:bg-ink-raised"
           >
             Analytics
           </Link>
           <Link
             href={`/orgs/${orgId}/settings`}
-            className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+            className="rounded border border-line px-3 py-1 hover:bg-ink-raised"
           >
             Settings
           </Link>
@@ -88,16 +88,16 @@ export default function OrgDashboardPage() {
         </section>
       )}
 
-      <section className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+      <section className="rounded border border-line bg-ink-raised p-4 text-sm text-cream-muted">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-cream-muted">
           About this org
         </h2>
         <dl className="mt-2 grid grid-cols-2 gap-y-1">
-          <dt className="text-gray-500">Slug</dt>
+          <dt className="text-cream-muted">Slug</dt>
           <dd className="font-mono text-xs">{org.slug}</dd>
-          <dt className="text-gray-500">Audience</dt>
+          <dt className="text-cream-muted">Audience</dt>
           <dd>{org.audience}</dd>
-          <dt className="text-gray-500">Created</dt>
+          <dt className="text-cream-muted">Created</dt>
           <dd>
             {org.createdAt
               ? new Date(org.createdAt).toLocaleDateString()
@@ -105,7 +105,7 @@ export default function OrgDashboardPage() {
           </dd>
           {org.customSubdomain && (
             <>
-              <dt className="text-gray-500">Subdomain</dt>
+              <dt className="text-cream-muted">Subdomain</dt>
               <dd className="font-mono text-xs">{org.customSubdomain}.jacob.app</dd>
             </>
           )}
@@ -127,10 +127,10 @@ function Stat({
   return (
     <div
       className={`rounded border p-4 ${
-        highlight ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"
+        highlight ? "border-parchment-amber/50 bg-parchment-amber/15" : "border-line bg-ink-raised"
       }`}
     >
-      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-cream-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );

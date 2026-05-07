@@ -27,7 +27,7 @@ export default function EventDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-500">
+      <div className="flex min-h-screen items-center justify-center text-sm text-cream-muted">
         Loading…
       </div>
     );
@@ -35,10 +35,10 @@ export default function EventDetailPage() {
   if (!event) {
     return (
       <div className="mx-auto max-w-2xl p-6">
-        <Link href={`/groups/${gid}/events`} className="text-xs text-gray-500">
+        <Link href={`/groups/${gid}/events`} className="text-xs text-cream-muted">
           ← Events
         </Link>
-        <p className="mt-4 text-sm text-gray-700">Event not found.</p>
+        <p className="mt-4 text-sm text-cream-muted">Event not found.</p>
       </div>
     );
   }
@@ -50,27 +50,27 @@ export default function EventDetailPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-6">
-      <Link href={`/groups/${gid}/events`} className="text-xs text-gray-500">
+      <Link href={`/groups/${gid}/events`} className="text-xs text-cream-muted">
         ← Events
       </Link>
       <header className="mt-3">
         <h1 className="text-2xl font-semibold">{event.title}</h1>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-cream-muted">
           {startsAt.toLocaleString()} — {new Date(event.endsAt).toLocaleString()}
         </p>
         {event.location && (
-          <p className="text-sm text-gray-600">📍 {event.location}</p>
+          <p className="text-sm text-cream-muted">📍 {event.location}</p>
         )}
       </header>
 
       {event.description && (
-        <p className="mt-4 whitespace-pre-wrap text-sm text-gray-800">
+        <p className="mt-4 whitespace-pre-wrap text-sm text-cream">
           {event.description}
         </p>
       )}
 
-      <section className="mt-6 space-y-2 rounded border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+      <section className="mt-6 space-y-2 rounded border border-line bg-ink-raised p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-cream-muted">
           RSVP
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -82,13 +82,13 @@ export default function EventDetailPage() {
                 const ok = await rsvp(event.eventId, s);
                 setActionInfo(ok ? `RSVP set to ${s}` : "RSVP failed");
               }}
-              className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+              className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
             >
               {s}
             </button>
           ))}
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-cream-muted">
           {event.rsvpGoing} going · {event.rsvpMaybe} maybe · {event.rsvpNo} no
           · {event.attendedCount} attended
         </p>
@@ -106,7 +106,7 @@ export default function EventDetailPage() {
             );
           }}
           disabled={!checkInOpen}
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+          className="rounded bg-gold px-3 py-1 text-sm text-ink disabled:opacity-40"
           title={
             checkInOpen
               ? "I'm here"
@@ -117,7 +117,7 @@ export default function EventDetailPage() {
         </button>
         <a
           href={`${API}/api/groups/${encodeURIComponent(gid)}/events/${encodeURIComponent(event.eventId)}.ics`}
-          className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50"
+          className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
         >
           Add to calendar
         </a>
@@ -129,14 +129,14 @@ export default function EventDetailPage() {
             const ok = await deleteEvent(event.eventId);
             if (ok) window.location.assign(`/groups/${gid}/events`);
           }}
-          className="rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+          className="rounded border border-terracotta/40 px-3 py-1 text-sm text-terracotta hover:bg-terracotta/10"
         >
           Delete
         </button>
       </section>
 
       {actionInfo && (
-        <p className="mt-3 text-xs text-gray-500">{actionInfo}</p>
+        <p className="mt-3 text-xs text-cream-muted">{actionInfo}</p>
       )}
     </main>
   );
