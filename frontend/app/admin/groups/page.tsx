@@ -84,7 +84,7 @@ export default function AdminGroupsPage() {
                   <> · Created {new Date(g.createdAt).toLocaleDateString()}</>
                 )}
               </p>
-              <p className="truncate text-xs text-cream-dim">{g.gid}</p>
+              <p className="truncate text-xs text-cream-muted">{g.gid}</p>
             </div>
             <Link
               href={`/groups/${g.gid}`}

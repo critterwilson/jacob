@@ -98,7 +98,7 @@ export default function AdminIncidentsPage() {
       </header>
 
       <section className="space-y-3 rounded border border-line bg-ink-raised p-4">
-        <h2 className="text-eyebrow uppercase tracking-wider text-cream-dim">
+        <h2 className="text-eyebrow uppercase tracking-wider text-cream-muted">
           Declare incident
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -167,7 +167,7 @@ export default function AdminIncidentsPage() {
       ) : (
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-dim">
+            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-muted">
               <th className="py-2">Severity</th>
               <th>Title</th>
               <th>Until</th>
@@ -200,7 +200,7 @@ export default function AdminIncidentsPage() {
                   <td className="text-xs">
                     {new Date(i.displayUntil).toLocaleString()}
                     {expired && (
-                      <span className="ml-1 text-cream-dim">(expired)</span>
+                      <span className="ml-1 text-cream-muted">(expired)</span>
                     )}
                   </td>
                   <td className="text-xs text-cream-muted">

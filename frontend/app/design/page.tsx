@@ -119,7 +119,7 @@ export default function DesignSystemShowcase() {
         <Tile label="Text">
           <Swatch name="cream" hex="#F5EFE0" />
           <Swatch name="cream-muted" hex="#C9C2B3" />
-          <Swatch name="cream-dim" hex="#8E8878" />
+          <Swatch name="cream-muted" hex="#8E8878" />
         </Tile>
         <Tile label="Accent">
           <Swatch name="gold" hex="#C9A95C" />
@@ -187,7 +187,7 @@ export default function DesignSystemShowcase() {
           </div>
           <div className="space-y-1">
             <Eyebrow>caption · 12 / 1.40 · sans 500</Eyebrow>
-            <p className="max-w-2xl text-caption text-cream-dim">
+            <p className="max-w-2xl text-caption text-cream-muted">
               Footnote-grade. Timestamps, captions, smallest legible.
             </p>
           </div>
@@ -342,7 +342,7 @@ export default function DesignSystemShowcase() {
         </div>
       </Section>
 
-      <footer className="border-t border-line pt-8 text-body-sm text-cream-dim">
+      <footer className="border-t border-line pt-8 text-body-sm text-cream-muted">
         Source: <code className="font-mono">docs/design-system.md</code> ·
         Tokens: <code className="font-mono">frontend/styles/tokens.css</code> ·
         Primitives: <code className="font-mono">frontend/components/ui/</code>

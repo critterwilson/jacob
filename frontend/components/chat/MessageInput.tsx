@@ -113,7 +113,7 @@ export function MessageInput({ gid, archived = false, onTyping }: Props) {
 
   const mentionInputClass =
     "flex-1 resize-none rounded border border-line bg-ink-overlay px-3 py-2 " +
-    "font-sans text-body text-cream placeholder:text-cream-dim " +
+    "font-sans text-body text-cream placeholder:text-cream-muted " +
     "transition-colors duration-fast " +
     "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 

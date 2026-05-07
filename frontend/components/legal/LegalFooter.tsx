@@ -14,7 +14,7 @@ export function LegalFooter() {
   return (
     <footer
       aria-label="Legal"
-      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-caption text-cream-dim"
+      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-caption text-cream-muted"
     >
       <Link href="/privacy" variant="muted" className="text-caption">
         Privacy

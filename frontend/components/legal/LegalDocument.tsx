@@ -85,7 +85,7 @@ export function LegalDocument({ slug, title }: LegalDocumentProps) {
         dangerouslySetInnerHTML={{ __html: html }}
       />
 
-      <footer className="border-t border-line pt-4 text-caption text-cream-dim">
+      <footer className="border-t border-line pt-4 text-caption text-cream-muted">
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <Link href="/privacy" variant="muted" className="text-caption">
             Privacy

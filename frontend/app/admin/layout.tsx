@@ -49,7 +49,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <nav className="w-48 shrink-0 border-r border-line bg-ink-raised p-4">
-        <p className="mb-4 text-eyebrow uppercase tracking-wider text-cream-dim">
+        <p className="mb-4 text-eyebrow uppercase tracking-wider text-cream-muted">
           Admin
         </p>
         <ul className="space-y-1">

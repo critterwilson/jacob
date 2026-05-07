@@ -6,6 +6,7 @@ import { type ReactNode, useState } from "react";
 import { DeletionBanner } from "@/components/account/DeletionBanner";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 const navLinks = [
   { href: "/groups", label: "Chats" },
@@ -126,6 +127,11 @@ function CloseIcon() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const closeDrawer = () => setDrawerOpen(false);
+  const drawerRef = useFocusTrap<HTMLDivElement>({
+    active: drawerOpen,
+    onEscape: closeDrawer,
+  });
 
   return (
     <div className="flex min-h-screen bg-ink text-cream">
@@ -164,14 +170,21 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         {/* Mobile drawer */}
         {drawerOpen && (
-          <div className="fixed inset-0 z-40 flex md:hidden">
-            <div
-              className="fixed inset-0 bg-black/60"
-              aria-hidden="true"
-              onClick={() => setDrawerOpen(false)}
+          <div
+            ref={drawerRef}
+            id="mobile-nav"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Main navigation"
+            className="fixed inset-0 z-40 flex md:hidden"
+          >
+            <button
+              type="button"
+              aria-label="Dismiss navigation menu"
+              onClick={closeDrawer}
+              className="fixed inset-0 cursor-default bg-black/60 focus:outline-none focus-visible:shadow-glow-gold"
             />
             <nav
-              id="mobile-nav"
               aria-label="Main navigation"
               className="relative z-50 flex w-64 flex-col bg-ink-raised shadow-pop"
             >
@@ -180,7 +193,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   aria-label="Close navigation menu"
-                  onClick={() => setDrawerOpen(false)}
+                  onClick={closeDrawer}
                   className={
                     "rounded p-1 text-cream-muted " +
                     "hover:bg-ink hover:text-cream " +
@@ -191,10 +204,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </button>
               </div>
               <div className="flex-1">
-                <NavLinks onNavigate={() => setDrawerOpen(false)} />
+                <NavLinks onNavigate={closeDrawer} />
               </div>
               <div className="border-t border-line px-2 py-3">
-                <SignOutButton onNavigate={() => setDrawerOpen(false)} />
+                <SignOutButton onNavigate={closeDrawer} />
               </div>
             </nav>
           </div>

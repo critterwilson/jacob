@@ -64,8 +64,8 @@ const STATUS_LABELS: Record<Status, string> = {
 const STATUS_CLASSES: Record<Status, string> = {
   active: "bg-sage/20 text-sage",
   expired: "bg-parchment-amber/20 text-parchment-amber",
-  revoked: "bg-ink text-cream-dim",
-  used_up: "bg-ink text-cream-dim",
+  revoked: "bg-ink text-cream-muted",
+  used_up: "bg-ink text-cream-muted",
 };
 
 type Props = { gid: string; invites: Invite[] };
@@ -102,7 +102,7 @@ export function InviteList({ gid, invites }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-body-sm">
           <thead>
-            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-dim">
+            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-muted">
               <th className="py-2 pr-4 font-normal">Code</th>
               <th className="py-2 pr-4 font-normal">Expires</th>
               <th className="py-2 pr-4 font-normal">Uses left</th>

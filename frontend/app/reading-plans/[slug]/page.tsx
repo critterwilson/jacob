@@ -46,7 +46,7 @@ export default function ReadingPlanDetailPage() {
         <Heading level={1} size="lg">
           {plan.title}
         </Heading>
-        <p className="text-caption text-cream-dim">{plan.duration} days</p>
+        <p className="text-caption text-cream-muted">{plan.duration} days</p>
         <p className="text-body text-cream-muted">{plan.description}</p>
         {streak > 0 && (
           <p className="inline-flex items-center gap-2 rounded-full border border-parchment-amber/40 bg-parchment-amber/10 px-3 py-1 text-caption font-medium text-parchment-amber">

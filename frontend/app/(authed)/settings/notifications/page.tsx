@@ -85,7 +85,7 @@ export default function NotificationsPage() {
 
       {error && <Banner tone="error">{error}</Banner>}
 
-      <p className="text-caption text-cream-dim">
+      <p className="text-caption text-cream-muted">
         Push notifications require browser permission. You can revoke access in
         your browser settings at any time.
       </p>

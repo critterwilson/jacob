@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { MessageItem } from "@/components/chat/MessageItem";
 import { ThreadReplyInput } from "@/components/chat/ThreadReplyInput";
 import { Eyebrow } from "@/components/ui";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useReactions } from "@/lib/hooks/useReactions";
 import { useThreadMessages } from "@/lib/hooks/useThreadMessages";
 import type { Message } from "@/lib/hooks/useGroupMessages";
@@ -55,8 +56,19 @@ export function ThreadPanel({
   const hasParticipated =
     parentMessage.participants?.includes(currentUserUid) ?? false;
 
+  const trapRef = useFocusTrap<HTMLElement>({
+    active: true,
+    onEscape: onClose,
+  });
+
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-ink-raised">
+    <aside
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Thread"
+      className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-ink-raised"
+    >
       <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
         <h2 className="flex items-center gap-2 text-body-sm font-semibold text-cream">
           Thread
@@ -121,7 +133,7 @@ export function ThreadPanel({
             )}
 
             {messages.length === 0 && (
-              <p className="mt-8 text-center text-body-sm text-cream-dim">
+              <p className="mt-8 text-center text-body-sm text-cream-muted">
                 No replies yet. Start the thread!
               </p>
             )}

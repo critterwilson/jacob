@@ -174,7 +174,7 @@ export default function AdminFlagsPage() {
       )}
 
       <section className="rounded border border-line bg-ink-raised p-4">
-        <h2 className="mb-2 text-eyebrow uppercase tracking-wider text-cream-dim">
+        <h2 className="mb-2 text-eyebrow uppercase tracking-wider text-cream-muted">
           Create flag
         </h2>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -223,7 +223,7 @@ export default function AdminFlagsPage() {
       ) : (
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-dim">
+            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-muted">
               <th className="py-2">Key</th>
               <th>Enabled</th>
               <th>%</th>

@@ -15,7 +15,7 @@ export function Eyebrow({ className, children, ...rest }: EyebrowProps) {
   return (
     <span
       className={cn(
-        "font-sans text-eyebrow uppercase text-cream-dim",
+        "font-sans text-eyebrow uppercase text-cream-muted",
         className,
       )}
       {...rest}

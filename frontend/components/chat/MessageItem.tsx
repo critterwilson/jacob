@@ -187,14 +187,14 @@ export function MessageItem({
           <span className="text-body-sm font-semibold text-cream">
             {author.displayName}
           </span>
-          <time className="text-caption text-cream-dim">{timestamp}</time>
+          <time className="text-caption text-cream-muted">{timestamp}</time>
           {message.editedAt && !isDeleted && (
-            <span className="text-caption text-cream-dim">(edited)</span>
+            <span className="text-caption text-cream-muted">(edited)</span>
           )}
         </div>
 
         {isDeleted ? (
-          <p className="text-body-sm italic text-cream-dim">[message removed]</p>
+          <p className="text-body-sm italic text-cream-muted">[message removed]</p>
         ) : shouldHideBody ? (
           <div className="flex items-center gap-2">
             <p className="text-body-sm italic text-parchment-amber">
@@ -384,7 +384,7 @@ export function MessageItem({
               resourceType="message"
               resourceId={message.id}
               groupId={gid}
-              className={cn(actionChip, "flex items-center text-cream-dim")}
+              className={cn(actionChip, "flex items-center text-cream-muted")}
             />
           )}
         </div>

@@ -53,7 +53,7 @@ export function PhotoUpload({
         className={
           "flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden " +
           "rounded-full border-2 border-dashed border-line bg-ink-overlay " +
-          "text-cream-dim transition-colors duration-fast " +
+          "text-cream-muted transition-colors duration-fast " +
           "hover:border-gold-soft hover:text-gold-soft " +
           "focus:outline-none focus-visible:shadow-glow-gold"
         }
@@ -78,7 +78,7 @@ export function PhotoUpload({
         {uploading && statusLabel && (
           <p className="text-body-sm text-cream-muted">{statusLabel}</p>
         )}
-        <p className="text-caption text-cream-dim">
+        <p className="text-caption text-cream-muted">
           Photos are scanned for safety before they appear.
         </p>
       </div>

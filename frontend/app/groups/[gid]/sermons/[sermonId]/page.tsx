@@ -81,7 +81,7 @@ export default function SermonDetailPage() {
       <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-body-sm">
         {sermon.preacher && (
           <>
-            <dt className="text-eyebrow uppercase tracking-wider text-cream-dim">
+            <dt className="text-eyebrow uppercase tracking-wider text-cream-muted">
               Preacher
             </dt>
             <dd className="text-cream">{sermon.preacher}</dd>
@@ -89,7 +89,7 @@ export default function SermonDetailPage() {
         )}
         {sermon.scripture && (
           <>
-            <dt className="text-eyebrow uppercase tracking-wider text-cream-dim">
+            <dt className="text-eyebrow uppercase tracking-wider text-cream-muted">
               Scripture
             </dt>
             <dd className="text-gold-soft">{sermon.scripture}</dd>
@@ -97,7 +97,7 @@ export default function SermonDetailPage() {
         )}
         {sermon.sermonDate && (
           <>
-            <dt className="text-eyebrow uppercase tracking-wider text-cream-dim">
+            <dt className="text-eyebrow uppercase tracking-wider text-cream-muted">
               Date
             </dt>
             <dd className="text-cream">

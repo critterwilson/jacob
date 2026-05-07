@@ -35,13 +35,13 @@ export function PostCard({ boardId, post }: Props) {
           )}
           {formatTime(post)}
         </span>
-        <span className="text-caption text-cream-dim">
+        <span className="text-caption text-cream-muted">
           {post.replyCount} {post.replyCount === 1 ? "reply" : "replies"}
         </span>
       </div>
 
       {hidden ? (
-        <p className="italic text-body-sm text-cream-dim">
+        <p className="italic text-body-sm text-cream-muted">
           This post was hidden by automated moderation.
         </p>
       ) : (

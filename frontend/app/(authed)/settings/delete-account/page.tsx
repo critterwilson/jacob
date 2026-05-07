@@ -127,7 +127,7 @@ export default function DeleteAccountPage() {
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
         <fieldset className="space-y-3 rounded-lg border border-line bg-ink-raised p-4">
-          <legend className="px-1 text-eyebrow uppercase tracking-wider text-cream-dim">
+          <legend className="px-1 text-eyebrow uppercase tracking-wider text-cream-muted">
             What about your messages?
           </legend>
           <label className="flex cursor-pointer items-start gap-2 text-body-sm">

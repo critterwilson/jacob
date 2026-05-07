@@ -70,7 +70,7 @@ export default function BlockedSettingsPage() {
         </ul>
       )}
 
-      <p className="text-caption text-cream-dim">
+      <p className="text-caption text-cream-muted">
         <Link href="/home" variant="muted">
           Back to home
         </Link>

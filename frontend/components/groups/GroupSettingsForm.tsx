@@ -79,7 +79,7 @@ export function GroupSettingsForm({ gid, group }: Props) {
           {...register("description")}
           error={errors.description?.message}
         />
-        <p className="text-right text-caption text-cream-dim">
+        <p className="text-right text-caption text-cream-muted">
           {(description ?? "").length}/500
         </p>
       </div>
