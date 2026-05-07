@@ -78,15 +78,23 @@ headers for the rest of the render.
    When the cert is active, manually update
    `orgs/{orgId}.customDomain.status = "active"` and
    `certStatus = "active"` (admin SDK; no UI today).
-6. **Identity Platform**: also add the new origin to the Firebase
-   Auth authorized-domains list:
+6. **Firebase Auth authorized-domains**: also add the new origin to
+   the Firebase Auth authorized-domains list. JACOB uses the
+   single-tenant Firebase Auth surface (not the Identity Platform
+   tenant model), so the `gcloud identity-platform tenants update`
+   command does **not** apply here. Update via:
 
-   ```bash
-   gcloud identity-platform tenants update <tenant> \
-     --authorized-domains=jacob.app,groups.our-church.org,...
-   ```
+   - **Firebase Console** (recommended): Authentication → Settings
+     → "Authorized domains" tab → "Add domain" → enter
+     `groups.our-church.org` → Save. Repeat per claimed vanity
+     domain.
+   - Or via the Identity Toolkit Admin REST API
+     (`projects.updateConfig`) on the project's
+     `authorizedDomains` field, which is the same setting under a
+     different surface.
 
-   Without this, OAuth sign-in (Google) fails on the new origin.
+   Without this, OAuth sign-in (Google) fails on the new origin
+   with `auth/unauthorized-domain`.
 
 ## "TLS still pending after 4 hours" failure mode
 

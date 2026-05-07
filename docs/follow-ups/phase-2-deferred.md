@@ -69,9 +69,15 @@ Run service and nothing else.
 **Where:** `infra/buckets.tf:101-110` — only a SetStorageClass-to-COLDLINE rule
 at age 365 days; no Delete rule.
 **What's needed:** Add a Delete lifecycle rule at age 2 557 days (≈7 years) and
-document the retention policy in `docs/runbooks/media-moderation.md`.
-Requires legal/counsel sign-off per existing comment; file a ticket before
+document the retention policy alongside the existing media-moderation flow in
+`docs/moderation-pipeline.md` (or, when the L14 work is picked up, split that
+out into a dedicated `docs/runbooks/media-moderation.md`). Requires
+legal/counsel sign-off per existing comment; file a ticket before
 implementing.
+
+**Status (2026-05-06):** still open. Phase 3 spec §3 mapped this onto T63
+(NCMEC retention) for absorption; T63 shipped (#163) without the lifecycle
+rule. Now tracked in `docs/follow-ups/phase-3-deferred.md`.
 
 ---
 

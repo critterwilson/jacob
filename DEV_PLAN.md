@@ -1,5 +1,7 @@
 # JACOB — Phase 1 Dev Plan
- 
+
+> **Status (2026-05-06):** Phase 1 plan; useful as historical context for *why* each surface was originally designed the way it was. Several implementation paths in the per-task specs below are **superseded** by the M1–M6 data-layer migration: every task that originally described direct Firestore client SDK writes or `onSnapshot` realtime now goes through `/api/*` and the HTTP polling pattern. See `docs/data-layer-migration-plan.md` for the current frontend ↔ backend boundary, and `CLAUDE.md` ("Architectural rule of thumb", "Polling and event hygiene", "Default-deny rules + backend-mediated writes") for the live conventions. When working a Phase 1 task today, treat the spec as direction-of-travel and read the current `backend/app/routers/` + `frontend/lib/hooks/` for the actual contract.
+
 This is the development plan for Phase 1 of JACOB (the MVP for Christian small-group pilots). Read `CLAUDE.md` first — it pins the conventions every task here inherits.
  
 ## How to use this document with Sonnet

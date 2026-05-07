@@ -1,8 +1,28 @@
 # ADR 0001 — Rate Limit Strategy
 
-**Status:** Accepted  
-**Date:** 2026-05-01  
+**Status:** Accepted, partially superseded by M4 (data-layer migration)
+**Date:** 2026-05-01
 **Task:** T17
+
+---
+
+> **Superseded-by note (2026-05-06).** The "Message posting (direct
+> Firestore path)" section below assumes the frontend writes messages
+> directly via the Firestore client SDK. That premise no longer
+> holds: the M1–M6 data-layer migration (see
+> `docs/data-layer-migration-plan.md`) routes **every** end-user
+> write through the FastAPI backend. Message posting now goes
+> through `POST /api/groups/{gid}/messages` — i.e., **Option A** in
+> the trade-off below — and is rate-limited like any other
+> endpoint via `slowapi`. The Cloud Function circuit-breaker that
+> Option B contemplated is therefore unnecessary at the Firestore
+> tier; the backend slowapi limit (defined in
+> `backend/app/limits.py`, applied via the keying logic in
+> `backend/app/middleware/rate_limit.py`) is the authoritative
+> rate-limit surface for posts and every other write.
+>
+> The auth-surface and backend-endpoint sections of this ADR remain
+> accurate.
 
 ---
 

@@ -71,7 +71,7 @@ JACOB is a small-group messaging web app for Christian small groups. The fronten
     ├── data-layer-migration-plan.md
     ├── adr/                    # ADRs (0001–0010 currently)
     ├── runbooks/               # operational runbooks
-    ├── follow-ups/             # phase-1-deferred.md, phase-2-deferred.md
+    ├── follow-ups/             # phase-1-deferred.md, phase-2-deferred.md, phase-3-deferred.md, phase-3-parked.md
     └── legal/                  # internal legal-team source docs
 ```
 
