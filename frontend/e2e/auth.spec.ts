@@ -62,6 +62,14 @@ test.describe("auth", () => {
       ]);
     }
 
+    // /groups lives outside the (authed) route group and so does NOT render
+    // the AppShell sidebar — the UI sign-out button only exists on /home and
+    // its siblings. Navigate there explicitly before exercising signOut.
+    await page.goto("/home", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("navigation", { name: /main navigation/i }),
+    ).toBeVisible({ timeout: 15_000 });
+
     // 4. Sign out.
     await signOut(page);
     await expect(page).toHaveURL(/\/sign-in/);
