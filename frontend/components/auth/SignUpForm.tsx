@@ -40,7 +40,10 @@ export function SignUpForm() {
         values.password,
       );
       await sendEmailVerification(cred.user);
-      router.push("/onboarding");
+      // Email/password signups land on /verify-email until they click the
+      // verification link. Google sign-in (below) is already verified by
+      // the provider, so it skips this gate.
+      router.push("/verify-email");
     } catch (err) {
       setSubmitError(humanizeAuthError(err));
     } finally {

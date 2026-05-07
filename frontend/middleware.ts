@@ -98,9 +98,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-  const protectedRoute =
-    pathname.startsWith("/groups/") || pathname.startsWith("/chat/");
-  if (protectedRoute) {
+  if (!isPublicPath(pathname)) {
     const hasProfile =
       request.cookies.get("jacob-has-profile")?.value === "1";
     if (!hasProfile) {
@@ -111,6 +109,39 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next({
     request: { headers: requestHeaders },
   });
+}
+
+// Routes that must remain reachable without a profile cookie:
+//   - the landing page and marketing/legal pages,
+//   - the auth flow (sign-in / sign-up / forgot-password / verify-email),
+//   - /onboarding itself (target of the redirect — gating it would loop),
+//   - /join (invite-acceptance landing — handled separately by its own
+//     auth check),
+//   - /transparency (public report).
+// Everything else (groups, chat, boards, discover, devotionals, sermons,
+// search, orgs, admin, appeals, reading-plans, home, settings, …) is
+// gated. /api/* and static asset paths are excluded by `config.matcher`.
+const PUBLIC_PREFIXES = [
+  "/sign-in",
+  "/sign-up",
+  "/forgot-password",
+  "/verify-email",
+  "/onboarding",
+  "/privacy",
+  "/terms",
+  "/guidelines",
+  "/faq",
+  "/about",
+  "/join",
+  "/transparency",
+];
+
+function isPublicPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  for (const prefix of PUBLIC_PREFIXES) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true;
+  }
+  return false;
 }
 
 // Run on every page request EXCEPT static assets, the service worker,

@@ -95,6 +95,8 @@ export function useUser(uid: string | undefined): UseUserResult {
         signal: ctl.signal,
       });
       if (ctl.signal.aborted) return;
+      // 200 with hasProfile=false is a definitive "no profile" — clear
+      // local state and the gate cookie so the onboarding redirect fires.
       setHasProfileCookie(res.hasProfile);
       setState({
         loading: false,
@@ -102,15 +104,22 @@ export function useUser(uid: string | undefined): UseUserResult {
       });
     } catch (err) {
       if (ctl.signal.aborted) return;
-      // ApiError is the canonical shape; transport failures surface as
-      // ApiError(0, "network_error", ...) and are treated identically to
-      // "no profile" so the onboarding redirect still fires. The 401
-      // case (token revoked / sign-out race) also lands here.
       if (err instanceof ApiError) {
-        // Surfaced for diagnostics; the SPA recovers by retrying on the
-        // next mount.
-        if (err.code !== "aborted") {
-          console.warn("user_bootstrap_failed", err.code, err.status);
+        if (err.code === "aborted") return;
+        // Transport failures (`network_error`, `cors_blocked`) and 5xx
+        // surface here. They are NOT evidence the user has no profile —
+        // zeroing `profile` would race the onboarding redirect on a
+        // momentary network blip. Keep the previous state and let the
+        // next mount / refresh retry. Auth-level errors (401/403) still
+        // clear the profile so a revoked token doesn't leave stale data.
+        const transient =
+          err.code === "network_error" ||
+          err.code === "cors_blocked" ||
+          err.status >= 500;
+        console.warn("user_bootstrap_failed", err.code, err.status);
+        if (transient) {
+          setState((prev) => ({ loading: false, profile: prev.profile }));
+          return;
         }
       }
       setState({ loading: false, profile: null });

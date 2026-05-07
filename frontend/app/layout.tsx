@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { EB_Garamond, Inter } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
+import { AppRegistrations } from "@/components/AppRegistrations";
 import { IncidentBanner } from "@/components/IncidentBanner";
 import { SentryInit } from "@/components/SentryInit";
 import { AuthProvider } from "@/lib/auth-context";
@@ -75,6 +76,7 @@ export default function RootLayout({
         </a>
         <SentryInit />
         <AuthProvider>
+          <AppRegistrations />
           <WorkspaceOrgProvider org={org}>
             <IncidentBanner />
             {children}
