@@ -401,10 +401,12 @@ def list_board_posts(
                 code="invalid_cursor",
                 message="Cursor is malformed",
             )
-        cursor_ts, _doc_id = decoded
-        # Cursor is on createdAt; pinned-first ordering is preserved by
-        # Firestore index.
-        query = query.start_after({"pinnedAt": None, "createdAt": cursor_ts})
+        cursor_ts, cursor_doc_id = decoded
+        # Include __name__ as a tie-breaker so posts with identical
+        # createdAt aren't skipped or duplicated at the page boundary.
+        query = query.order_by("__name__", direction=fb_firestore.Query.DESCENDING).start_after(
+            {"pinnedAt": None, "createdAt": cursor_ts, "__name__": cursor_doc_id}
+        )
 
     query = query.limit(limit + 1)
 
@@ -488,8 +490,12 @@ def list_board_replies(
                 code="invalid_cursor",
                 message="Cursor is malformed",
             )
-        cursor_ts, _doc_id = decoded
-        query = query.start_after({"createdAt": cursor_ts})
+        cursor_ts, cursor_doc_id = decoded
+        # Include __name__ as a tie-breaker so replies with identical
+        # createdAt aren't skipped or duplicated at the page boundary.
+        query = query.order_by("__name__", direction=fb_firestore.Query.ASCENDING).start_after(
+            {"createdAt": cursor_ts, "__name__": cursor_doc_id}
+        )
 
     query = query.limit(limit + 1)
 

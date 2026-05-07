@@ -4,11 +4,14 @@ import logging.config
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.errors import http_exception_handler, validation_exception_handler
+from app.errors import (
+    http_exception_handler,
+    rate_limit_exceeded_handler,
+    validation_exception_handler,
+)
 from app.middleware.logging import StructuredLoggingMiddleware
 from app.middleware.rate_limit import limiter
 from app.routers import (
@@ -106,7 +109,7 @@ app.add_middleware(StructuredLoggingMiddleware)
 # dispatches by class at runtime, so the narrower signatures are safe.
 app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 app.include_router(groups.router)
 app.include_router(messages.router)

@@ -343,15 +343,89 @@ def _delete_reactions_by_user(db: Any, uid: str) -> int:
 
 
 def _delete_event_rsvps(db: Any, uid: str) -> int:
-    """Delete `groups/{gid}/events/{eid}/rsvps/{uid}` rows."""
-    cg = db.collection_group("rsvps")
+    """Delete `groups/{gid}/events/{eid}/rsvps/{uid}` rows.
+
+    The RSVP doc id is the user's uid, so a CG filter on `__name__` is
+    far cheaper than streaming every RSVP and filtering in Python.
+    """
+    cg = db.collection_group("rsvps").where("__name__", "==", uid)
     count = 0
     for snap in cg.stream():
-        if snap.id != uid:
-            continue
         snap.reference.delete()
         count += 1
     return count
+
+
+def _delete_others_blocks_and_mutes(db: Any, uid: str) -> dict[str, int]:
+    """Delete every other user's `users/{otherUid}/blocks/{uid}` and
+    `users/{otherUid}/mutes/{uid}` rows so a deleted account no longer
+    appears in anyone else's mute/block lists.
+
+    The user's own `blocks` / `mutes` subcollections are removed by
+    `_delete_user_subcollections`; this is the inverse direction.
+    """
+    counts = {"blocks": 0, "mutes": 0}
+    for subcol in ("blocks", "mutes"):
+        cg = db.collection_group(subcol).where("__name__", "==", uid)
+        for snap in cg.stream():
+            snap.reference.delete()
+            counts[subcol] += 1
+    return counts
+
+
+def _delete_ban(db: Any, uid: str) -> bool:
+    """Drop `bans/{uid}` so a re-registered uid (admin-issued, not the
+    same person — see auth) doesn't inherit a stale ban.
+    """
+    ref = db.collection("bans").document(uid)
+    snap = ref.get()
+    if not getattr(snap, "exists", False):
+        return False
+    ref.delete()
+    return True
+
+
+def _end_watch_sessions(db: Any, uid: str) -> int:
+    """Mark any in-progress watch sessions led by the deleted user as
+    ended. Mirrors `end_watch_session` semantics: stamp `endedAt`.
+    """
+    cg = db.collection_group("watch_sessions").where("leaderUid", "==", uid)
+    count = 0
+    for snap in cg.stream():
+        data = snap.to_dict() or {}
+        if data.get("endedAt") is not None:
+            continue
+        snap.reference.update({"endedAt": fb_firestore.SERVER_TIMESTAMP})
+        count += 1
+    return count
+
+
+def _handle_founder_groups(db: Any, uid: str) -> dict[str, int]:
+    """For each group whose `founderUid` matches the deleted user:
+
+    - Pick a remaining leader (by `leaderUids` denorm) as the new founder.
+    - If no other leader exists, archive the group with a system reason.
+
+    MUST run before `_delete_group_memberships` so the deleted user is
+    still in `leaderUids` and we can reason about the leader set.
+    """
+    counts = {"transferred": 0, "archived": 0}
+    for snap in db.collection("groups").where("founderUid", "==", uid).stream():
+        data = snap.to_dict() or {}
+        candidates = [lu for lu in (data.get("leaderUids") or []) if lu and lu != uid]
+        if candidates:
+            snap.reference.update({"founderUid": candidates[0]})
+            counts["transferred"] += 1
+        elif data.get("archivedAt") is None:
+            snap.reference.update(
+                {
+                    "archivedAt": fb_firestore.SERVER_TIMESTAMP,
+                    "archivedBy": "system",
+                    "archiveReason": "founder_deleted",
+                }
+            )
+            counts["archived"] += 1
+    return counts
 
 
 def _tombstone_board_content(db: Any, uid: str, *, keep_body: bool) -> dict[str, int]:
@@ -414,13 +488,18 @@ def finalize_account(uid: str) -> dict[str, Any]:
       1. Disable the Firebase Auth account so no fresh tokens can be minted.
       2. Tombstone authored messages + boards posts/replies.
       3. Delete reactions / RSVPs / reports filed by the user.
-      4. Delete group + org memberships (decrementing memberCount; the
+      4. End in-progress watch sessions the user was leading.
+      5. Hand off founder status (or archive groups with no other leader)
+         BEFORE removing the user's memberships, so we can read leaderUids.
+      6. Delete group + org memberships (decrementing memberCount; the
          onMemberWrite trigger handles leaderCount + leaderUids).
-      5. Delete avatar + private-profile + every subcollection under
+      7. Drop the user's `bans/{uid}` row + every other user's
+         `blocks/{uid}` / `mutes/{uid}`.
+      8. Delete avatar + private-profile + every subcollection under
          `users/{uid}`.
-      6. Best-effort search-sidecar cleanup.
-      7. Delete `users/{uid}` doc.
-      8. Audit log with actorUid="system".
+      9. Best-effort search-sidecar cleanup.
+     10. Delete `users/{uid}` doc.
+     11. Audit log with actorUid="system".
     """
     db = _db()
     user_ref = db.collection("users").document(uid)
@@ -444,8 +523,12 @@ def finalize_account(uid: str) -> dict[str, Any]:
     reactions_deleted = _delete_reactions_by_user(db, uid)
     rsvps_deleted = _delete_event_rsvps(db, uid)
     reports_deleted = _delete_reports_by_user(db, uid)
+    watch_sessions_ended = _end_watch_sessions(db, uid)
+    founder_handoff = _handle_founder_groups(db, uid)
     group_memberships = _delete_group_memberships(db, uid)
     org_memberships = _delete_org_memberships(db, uid)
+    ban_dropped = _delete_ban(db, uid)
+    others_blocks_mutes = _delete_others_blocks_and_mutes(db, uid)
     typesense_deleted = _delete_typesense_messages(uid)
 
     _delete_avatar(photo_url if isinstance(photo_url, str) else None)
@@ -465,8 +548,14 @@ def finalize_account(uid: str) -> dict[str, Any]:
         "reactionsDeleted": reactions_deleted,
         "rsvpsDeleted": rsvps_deleted,
         "reportsDeleted": reports_deleted,
+        "watchSessionsEnded": watch_sessions_ended,
+        "founderTransferred": founder_handoff["transferred"],
+        "founderArchived": founder_handoff["archived"],
         "groupMemberships": group_memberships,
         "orgMemberships": org_memberships,
+        "banDropped": ban_dropped,
+        "othersBlocksDeleted": others_blocks_mutes["blocks"],
+        "othersMutesDeleted": others_blocks_mutes["mutes"],
         "typesenseDeleted": typesense_deleted,
         "userSubcollections": subcol_counts,
     }
@@ -479,7 +568,9 @@ def finalize_account(uid: str) -> dict[str, Any]:
 
     logger.info(
         "finalize complete uid=%s tombstoned=%d board_posts=%d board_replies=%d "
-        "reactions=%d rsvps=%d reports=%d group_members=%d org_members=%d",
+        "reactions=%d rsvps=%d reports=%d group_members=%d org_members=%d "
+        "watch_sessions=%d founder_transferred=%d founder_archived=%d "
+        "ban_dropped=%s others_blocks=%d others_mutes=%d",
         uid,
         tombstoned,
         boards["posts"],
@@ -489,6 +580,12 @@ def finalize_account(uid: str) -> dict[str, Any]:
         reports_deleted,
         group_memberships,
         org_memberships,
+        watch_sessions_ended,
+        founder_handoff["transferred"],
+        founder_handoff["archived"],
+        ban_dropped,
+        others_blocks_mutes["blocks"],
+        others_blocks_mutes["mutes"],
     )
 
     try:
@@ -507,6 +604,12 @@ def finalize_account(uid: str) -> dict[str, Any]:
         "reportsDeleted": reports_deleted,
         "groupMemberships": group_memberships,
         "orgMemberships": org_memberships,
+        "watchSessionsEnded": watch_sessions_ended,
+        "founderTransferred": founder_handoff["transferred"],
+        "founderArchived": founder_handoff["archived"],
+        "banDropped": ban_dropped,
+        "othersBlocksDeleted": others_blocks_mutes["blocks"],
+        "othersMutesDeleted": others_blocks_mutes["mutes"],
     }
 
 

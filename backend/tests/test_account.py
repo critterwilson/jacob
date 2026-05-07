@@ -306,6 +306,16 @@ def test_finalize_on_time_full_pipeline() -> None:
         patch("app.services.deletion._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
         patch("app.services.deletion.firebase_auth.update_user") as upd,
+        patch("app.services.deletion._end_watch_sessions", return_value=0),
+        patch(
+            "app.services.deletion._handle_founder_groups",
+            return_value={"transferred": 0, "archived": 0},
+        ),
+        patch("app.services.deletion._delete_ban", return_value=False),
+        patch(
+            "app.services.deletion._delete_others_blocks_and_mutes",
+            return_value={"blocks": 0, "mutes": 0},
+        ),
         patch("importlib.import_module") as imp,
     ):
         gcs_mod = MagicMock()
@@ -340,6 +350,16 @@ def test_finalize_with_keep_body_false_clears_body() -> None:
         patch("app.services.deletion._db", return_value=db),
         patch("app.services.audit._db", return_value=db),
         patch("app.services.deletion.firebase_auth.update_user"),
+        patch("app.services.deletion._end_watch_sessions", return_value=0),
+        patch(
+            "app.services.deletion._handle_founder_groups",
+            return_value={"transferred": 0, "archived": 0},
+        ),
+        patch("app.services.deletion._delete_ban", return_value=False),
+        patch(
+            "app.services.deletion._delete_others_blocks_and_mutes",
+            return_value={"blocks": 0, "mutes": 0},
+        ),
     ):
         deletion.finalize_account("alice")
 
@@ -389,6 +409,11 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
         patch("app.services.deletion._delete_reactions_by_user", _wrap("reactions", 0)),
         patch("app.services.deletion._delete_event_rsvps", _wrap("rsvps", 3)),
         patch("app.services.deletion._delete_reports_by_user", _wrap("reports", 1)),
+        patch("app.services.deletion._end_watch_sessions", _wrap("watch", 2)),
+        patch(
+            "app.services.deletion._handle_founder_groups",
+            _wrap("founder", {"transferred": 1, "archived": 1}),
+        ),
         patch(
             "app.services.deletion._delete_group_memberships",
             _wrap("group_members", 4),
@@ -396,6 +421,11 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
         patch(
             "app.services.deletion._delete_org_memberships",
             _wrap("org_members", 1),
+        ),
+        patch("app.services.deletion._delete_ban", _wrap("ban", True)),
+        patch(
+            "app.services.deletion._delete_others_blocks_and_mutes",
+            _wrap("others", {"blocks": 2, "mutes": 1}),
         ),
         patch(
             "app.services.deletion._delete_user_subcollections",
@@ -411,8 +441,12 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
         "reactions": 1,
         "rsvps": 1,
         "reports": 1,
+        "watch": 1,
+        "founder": 1,
         "group_members": 1,
         "org_members": 1,
+        "ban": 1,
+        "others": 1,
         "subcollections": 1,
         "typesense": 1,
     }
@@ -423,10 +457,180 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
     assert result["reportsDeleted"] == 1
     assert result["groupMemberships"] == 4
     assert result["orgMemberships"] == 1
+    assert result["watchSessionsEnded"] == 2
+    assert result["founderTransferred"] == 1
+    assert result["founderArchived"] == 1
+    assert result["banDropped"] is True
+    assert result["othersBlocksDeleted"] == 2
+    assert result["othersMutesDeleted"] == 1
     # Audit payload mirrors the result fanout.
     audit_set = db._audit_col.document().set.call_args[0][0]
     assert audit_set["payload"]["boardPostsTombstoned"] == 2
     assert audit_set["payload"]["userSubcollections"]["notifications"] == 7
+    assert audit_set["payload"]["watchSessionsEnded"] == 2
+    assert audit_set["payload"]["banDropped"] is True
+    assert audit_set["payload"]["othersBlocksDeleted"] == 2
+
+
+# ── M-BACK-14: cascade-gap helpers ───────────────────────────────────────
+
+
+def test_delete_event_rsvps_uses_name_filter() -> None:
+    """RSVP cleanup filters by `__name__` server-side instead of streaming
+    every RSVP and filtering in Python."""
+    db = MagicMock()
+    cg_filtered = MagicMock()
+    snap1 = MagicMock()
+    snap1.reference = MagicMock()
+    snap2 = MagicMock()
+    snap2.reference = MagicMock()
+    cg_filtered.stream.return_value = iter([snap1, snap2])
+    cg_query = MagicMock()
+    cg_query.where.return_value = cg_filtered
+    db.collection_group.return_value = cg_query
+
+    n = deletion._delete_event_rsvps(db, "alice")
+
+    assert n == 2
+    db.collection_group.assert_called_with("rsvps")
+    where_args = cg_query.where.call_args[0]
+    assert where_args[0] == "__name__"
+    assert where_args[1] == "=="
+    assert where_args[2] == "alice"
+    snap1.reference.delete.assert_called_once()
+    snap2.reference.delete.assert_called_once()
+
+
+def test_delete_others_blocks_and_mutes() -> None:
+    """Other users' blocks/mutes pointing at the deleted uid are removed
+    via two CG queries — one per subcollection."""
+    db = MagicMock()
+    block_snap = MagicMock()
+    block_snap.reference = MagicMock()
+    mute_snap = MagicMock()
+    mute_snap.reference = MagicMock()
+
+    by_name: dict[str, MagicMock] = {}
+
+    def _cg(name: str) -> MagicMock:
+        cg = MagicMock()
+        filtered = MagicMock()
+        if name == "blocks":
+            filtered.stream.return_value = iter([block_snap])
+        elif name == "mutes":
+            filtered.stream.return_value = iter([mute_snap])
+        else:
+            filtered.stream.return_value = iter([])
+        cg.where.return_value = filtered
+        by_name[name] = cg
+        return cg
+
+    db.collection_group.side_effect = _cg
+
+    counts = deletion._delete_others_blocks_and_mutes(db, "alice")
+
+    assert counts == {"blocks": 1, "mutes": 1}
+    assert "blocks" in by_name
+    assert "mutes" in by_name
+    block_args = by_name["blocks"].where.call_args[0]
+    assert block_args[0] == "__name__"
+    assert block_args[2] == "alice"
+    block_snap.reference.delete.assert_called_once()
+    mute_snap.reference.delete.assert_called_once()
+
+
+def test_delete_ban_returns_false_when_no_row() -> None:
+    db = MagicMock()
+    ref = MagicMock()
+    snap = MagicMock()
+    snap.exists = False
+    ref.get.return_value = snap
+    db.collection.return_value.document.return_value = ref
+
+    assert deletion._delete_ban(db, "alice") is False
+    ref.delete.assert_not_called()
+
+
+def test_delete_ban_deletes_row_when_present() -> None:
+    db = MagicMock()
+    ref = MagicMock()
+    snap = MagicMock()
+    snap.exists = True
+    ref.get.return_value = snap
+    db.collection.return_value.document.return_value = ref
+
+    assert deletion._delete_ban(db, "alice") is True
+    ref.delete.assert_called_once()
+
+
+def test_end_watch_sessions_skips_already_ended() -> None:
+    db = MagicMock()
+    active = MagicMock()
+    active.to_dict.return_value = {"endedAt": None}
+    active.reference = MagicMock()
+    ended = MagicMock()
+    ended.to_dict.return_value = {"endedAt": datetime(2026, 4, 1, tzinfo=UTC)}
+    ended.reference = MagicMock()
+
+    cg = MagicMock()
+    cg.where.return_value.stream.return_value = iter([active, ended])
+    db.collection_group.return_value = cg
+
+    n = deletion._end_watch_sessions(db, "alice")
+
+    assert n == 1
+    db.collection_group.assert_called_with("watch_sessions")
+    where_args = cg.where.call_args[0]
+    assert where_args[0] == "leaderUid"
+    assert where_args[2] == "alice"
+    active.reference.update.assert_called_once()
+    ended.reference.update.assert_not_called()
+
+
+def test_handle_founder_groups_transfers_to_remaining_leader() -> None:
+    db = MagicMock()
+    group_snap = MagicMock()
+    group_snap.to_dict.return_value = {"leaderUids": ["alice", "bob"]}
+    group_snap.reference = MagicMock()
+    db.collection.return_value.where.return_value.stream.return_value = iter([group_snap])
+
+    counts = deletion._handle_founder_groups(db, "alice")
+
+    assert counts == {"transferred": 1, "archived": 0}
+    update_args = group_snap.reference.update.call_args[0][0]
+    assert update_args == {"founderUid": "bob"}
+
+
+def test_handle_founder_groups_archives_when_no_other_leader() -> None:
+    db = MagicMock()
+    group_snap = MagicMock()
+    group_snap.to_dict.return_value = {"leaderUids": ["alice"], "archivedAt": None}
+    group_snap.reference = MagicMock()
+    db.collection.return_value.where.return_value.stream.return_value = iter([group_snap])
+
+    counts = deletion._handle_founder_groups(db, "alice")
+
+    assert counts == {"transferred": 0, "archived": 1}
+    update_args = group_snap.reference.update.call_args[0][0]
+    assert update_args["archivedBy"] == "system"
+    assert update_args["archiveReason"] == "founder_deleted"
+    assert "archivedAt" in update_args
+
+
+def test_handle_founder_groups_skips_already_archived() -> None:
+    db = MagicMock()
+    group_snap = MagicMock()
+    group_snap.to_dict.return_value = {
+        "leaderUids": ["alice"],
+        "archivedAt": datetime(2026, 4, 1, tzinfo=UTC),
+    }
+    group_snap.reference = MagicMock()
+    db.collection.return_value.where.return_value.stream.return_value = iter([group_snap])
+
+    counts = deletion._handle_founder_groups(db, "alice")
+
+    assert counts == {"transferred": 0, "archived": 0}
+    group_snap.reference.update.assert_not_called()
 
 
 def test_find_users_due_uses_cutoff() -> None:

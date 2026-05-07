@@ -23,6 +23,7 @@ from app.deps import (
     require_leader,
     require_member,
     require_member_or_public,
+    require_not_archived,
     require_not_banned,
 )
 from app.errors import APIError
@@ -232,6 +233,7 @@ def promote_member(
     membership: MembershipContext = Depends(require_leader),
 ) -> LeaderActionResponse:
     """Promote a member to leader. Caller must be a leader of this group."""
+    require_not_archived(membership)
     db = _db()
     actor_uid = membership.uid
 
@@ -285,6 +287,7 @@ def demote_member(
     """Demote a leader to member. Founder cannot be demoted; self-demote
     requires more than one leader.
     """
+    require_not_archived(membership)
     db = _db()
     actor_uid = membership.uid
     group_data = membership.group
@@ -891,6 +894,7 @@ def update_group(
     Mirrors `firestore.rules:217-247`. Refuses to touch `archivedAt` —
     that lives on `/archive` and `/unarchive`.
     """
+    require_not_archived(membership)
     supplied = body.model_dump(exclude_unset=True)
     if not supplied:
         raise APIError(
