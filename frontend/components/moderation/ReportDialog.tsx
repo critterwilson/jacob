@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import {
   type ReportReason,
   type ReportResourceType,
@@ -51,7 +52,10 @@ export function ReportDialog({
 }: Props) {
   const reasonId = useId();
   const contextId = useId();
-  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: open,
+    onEscape: onClose,
+  });
   const { submit, submitting, error } = useReport();
   const [success, setSuccess] = useState<{ dedup: boolean } | null>(null);
 
@@ -65,19 +69,11 @@ export function ReportDialog({
     defaultValues: { reason: "harassment", context: "" },
   });
 
-  // Close on Escape and reset state when re-opening.
   useEffect(() => {
     if (!open) return;
     setSuccess(null);
     reset({ reason: "harassment", context: "" });
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    // Move focus into the dialog
-    requestAnimationFrame(() => dialogRef.current?.focus());
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose, reset]);
+  }, [open, reset]);
 
   if (!open) return null;
 
@@ -95,19 +91,20 @@ export function ReportDialog({
   };
 
   return (
-    <div
-      role="presentation"
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Dismiss report dialog"
+        onClick={onClose}
+        className="fixed inset-0 cursor-default bg-black/40 focus:outline-none focus-visible:shadow-glow-gold"
+      />
       <div
-        ref={dialogRef}
+        ref={trapRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="report-dialog-title"
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl outline-none"
+        className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl outline-none"
       >
         <h2 id="report-dialog-title" className="mb-1 text-lg font-semibold">
           Report this {resourceType}

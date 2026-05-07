@@ -53,7 +53,7 @@ export function Scripture({
         &ldquo;{children}&rdquo;
       </blockquote>
       {reference && (
-        <figcaption className="font-sans text-caption text-cream-dim">
+        <figcaption className="font-sans text-caption text-cream-muted">
           {href ? (
             <a
               href={href}

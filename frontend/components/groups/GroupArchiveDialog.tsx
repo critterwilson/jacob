@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Banner, Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 type Props = {
   gid: string;
@@ -14,7 +15,7 @@ type Props = {
 
 const reasonTextareaClass =
   "mt-1 block w-full resize-none rounded border border-line bg-ink-overlay px-3 py-2 " +
-  "font-sans text-body text-cream placeholder:text-cream-dim " +
+  "font-sans text-body text-cream placeholder:text-cream-muted " +
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 
@@ -24,6 +25,15 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const closeDialog = () => {
+    setOpen(false);
+    setError(null);
+  };
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: open,
+    onEscape: closeDialog,
+  });
 
   const handleConfirm = async () => {
     if (!user) return;
@@ -67,13 +77,20 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
       </Button>
 
       {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="archive-dialog-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-line bg-ink-overlay p-6 shadow-pop">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Dismiss dialog"
+            onClick={closeDialog}
+            className="fixed inset-0 cursor-default bg-black/60 focus:outline-none focus-visible:shadow-glow-gold"
+          />
+          <div
+            ref={trapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archive-dialog-title"
+            className="relative w-full max-w-md rounded-2xl border border-line bg-ink-overlay p-6 shadow-pop"
+          >
             <h2
               id="archive-dialog-title"
               className="mb-3 font-display text-display-sm text-cream"
@@ -117,10 +134,7 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
                 type="button"
                 variant="secondary"
                 size="md"
-                onClick={() => {
-                  setOpen(false);
-                  setError(null);
-                }}
+                onClick={closeDialog}
               >
                 Cancel
               </Button>

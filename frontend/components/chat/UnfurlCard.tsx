@@ -33,7 +33,7 @@ export function UnfurlCard({ unfurl }: { unfurl: Unfurl }) {
       )}
       <div className="min-w-0 flex-1">
         {unfurl.siteName && (
-          <p className="truncate text-caption uppercase tracking-wide text-cream-dim">
+          <p className="truncate text-caption uppercase tracking-wide text-cream-muted">
             {unfurl.siteName}
           </p>
         )}
@@ -46,7 +46,7 @@ export function UnfurlCard({ unfurl }: { unfurl: Unfurl }) {
           </p>
         )}
         {!hasMetadata && (
-          <p className="text-caption text-cream-dim">{unfurl.url}</p>
+          <p className="text-caption text-cream-muted">{unfurl.url}</p>
         )}
       </div>
     </a>

@@ -167,7 +167,7 @@ export default function AdminFlagDetailPage() {
       </header>
 
       <section className="space-y-3 rounded border border-line bg-ink-raised p-4">
-        <h2 className="text-eyebrow uppercase tracking-wider text-cream-dim">
+        <h2 className="text-eyebrow uppercase tracking-wider text-cream-muted">
           Configuration
         </h2>
 
@@ -203,7 +203,7 @@ export default function AdminFlagDetailPage() {
         </label>
 
         <fieldset className="space-y-2">
-          <legend className="text-eyebrow uppercase tracking-wider text-cream-dim">
+          <legend className="text-eyebrow uppercase tracking-wider text-cream-muted">
             Cohort overrides (comma- or whitespace-separated)
           </legend>
           <label className="block text-sm">
@@ -259,7 +259,7 @@ export default function AdminFlagDetailPage() {
       </section>
 
       <section className="space-y-2 rounded border border-line bg-ink-raised p-4">
-        <h2 className="text-eyebrow uppercase tracking-wider text-cream-dim">
+        <h2 className="text-eyebrow uppercase tracking-wider text-cream-muted">
           Audit history
         </h2>
         {audit.length === 0 ? (

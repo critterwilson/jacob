@@ -113,7 +113,7 @@ export function MessageList({
       )}
 
       {visible.length === 0 && (
-        <p className="mt-12 text-center text-body-sm text-cream-dim">
+        <p className="mt-12 text-center text-body-sm text-cream-muted">
           No messages yet. Be the first to say something!
         </p>
       )}
@@ -136,7 +136,7 @@ export function MessageList({
             return (
               <div
                 key={msg.id}
-                className="flex items-center gap-2 px-4 py-2 text-caption italic text-cream-dim transition-colors duration-fast hover:bg-ink-raised"
+                className="flex items-center gap-2 px-4 py-2 text-caption italic text-cream-muted transition-colors duration-fast hover:bg-ink-raised"
               >
                 <span>Muted user</span>
                 <button

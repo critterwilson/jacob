@@ -16,7 +16,7 @@ type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
 
 const textareaBase =
   "min-h-[6rem] w-full rounded border bg-ink-overlay px-3 py-2 " +
-  "font-sans text-body text-cream placeholder:text-cream-dim " +
+  "font-sans text-body text-cream placeholder:text-cream-muted " +
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:shadow-glow-gold focus-visible:border-gold " +
   "disabled:cursor-not-allowed disabled:opacity-60";

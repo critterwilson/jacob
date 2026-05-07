@@ -104,7 +104,7 @@ export function QueueRow({
             </p>
           )}
           {item.createdAt && (
-            <p className="text-xs text-cream-dim">{formatAge(item.createdAt)}</p>
+            <p className="text-xs text-cream-muted">{formatAge(item.createdAt)}</p>
           )}
         </div>
         <span className="shrink-0 rounded bg-ink-overlay px-2 py-0.5 text-xs font-medium text-parchment-amber">

@@ -22,7 +22,7 @@ import {
 
 const inputClass =
   "w-full rounded border border-line bg-ink-overlay px-3 py-2 " +
-  "font-sans text-body-sm text-cream placeholder:text-cream-dim " +
+  "font-sans text-body-sm text-cream placeholder:text-cream-muted " +
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 

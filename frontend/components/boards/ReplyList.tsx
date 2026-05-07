@@ -34,9 +34,9 @@ export function ReplyList({ replies }: Props) {
               key={reply.replyId}
               className="rounded-lg border border-line bg-ink-raised p-3"
             >
-              <p className="text-caption text-cream-dim">{formatTime(reply)}</p>
+              <p className="text-caption text-cream-muted">{formatTime(reply)}</p>
               {hidden ? (
-                <p className="mt-1 italic text-body-sm text-cream-dim">
+                <p className="mt-1 italic text-body-sm text-cream-muted">
                   This reply was hidden by automated moderation.
                 </p>
               ) : (

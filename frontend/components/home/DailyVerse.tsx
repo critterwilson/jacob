@@ -19,7 +19,7 @@ export function DailyVerse() {
   if (!verse) {
     return (
       <Card surface="raised">
-        <p className="text-body-sm italic text-cream-dim">
+        <p className="text-body-sm italic text-cream-muted">
           A new verse will appear shortly.
         </p>
       </Card>

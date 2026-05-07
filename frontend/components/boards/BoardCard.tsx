@@ -25,7 +25,7 @@ export function BoardCard({ board }: Props) {
               </p>
             )}
           </div>
-          <span className="shrink-0 whitespace-nowrap text-caption text-cream-dim">
+          <span className="shrink-0 whitespace-nowrap text-caption text-cream-muted">
             {board.postCount} {board.postCount === 1 ? "post" : "posts"}
           </span>
         </div>

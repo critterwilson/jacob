@@ -22,7 +22,6 @@ exports[`design tokens — resolved Tailwind theme > boxShadow includes raise / 
 exports[`design tokens — resolved Tailwind theme > colors include the JACOB palette (ink, cream, gold, semantic) 1`] = `
 {
   "cream": "var(--color-cream)",
-  "cream-dim": "var(--color-cream-dim)",
   "cream-muted": "var(--color-cream-muted)",
   "gold": "var(--color-gold)",
   "gold-deep": "var(--color-gold-deep)",

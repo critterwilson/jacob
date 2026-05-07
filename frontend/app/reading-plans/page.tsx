@@ -39,7 +39,7 @@ export default function ReadingPlansIndexPage() {
                   <h2 className="font-display text-display-sm text-cream">
                     {p.title}
                   </h2>
-                  <p className="text-caption text-cream-dim">
+                  <p className="text-caption text-cream-muted">
                     {p.duration} days
                   </p>
                   <p className="text-body text-cream-muted">{p.description}</p>

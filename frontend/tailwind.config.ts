@@ -32,7 +32,6 @@ const config: Config = {
         // Text
         cream: "var(--color-cream)",
         "cream-muted": "var(--color-cream-muted)",
-        "cream-dim": "var(--color-cream-dim)",
 
         // Accent
         gold: "var(--color-gold)",

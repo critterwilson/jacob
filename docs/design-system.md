@@ -30,8 +30,7 @@ The palette is **dark-first**. A page sits on deep ink navy. Type is warm cream.
 | Token              | Hex       | Use                                                                 |
 |--------------------|-----------|---------------------------------------------------------------------|
 | `cream`            | `#F5EFE0` | Primary text. Warm off-white. ~16.5:1 on ink (AAA).                 |
-| `cream-muted`      | `#C9C2B3` | Secondary text. Helper copy, descriptions. ~10.2:1 on ink (AAA).    |
-| `cream-dim`        | `#8E8878` | Tertiary text. Timestamps, captions, eyebrows. ~5.4:1 on ink (AA).  |
+| `cream-muted`      | `#C9C2B3` | Secondary/tertiary text. Helper copy, timestamps, captions, eyebrows. ~10.2:1 on ink (AAA), AA on raised/overlay. |
 
 Cream is reserved for ink/raised/overlay grounds. Never put cream on cream. There is no `text-black` — pages don't go light without an explicit decision.
 
@@ -215,7 +214,8 @@ Quick reference for the contrast pairs we'll actually use. **Verify each pair wi
 | `cream`             | `ink`            | 16.5 : 1      | AAA (large + body)               |
 | `cream`             | `ink-raised`     | 14.0 : 1      | AAA (large + body)               |
 | `cream-muted`       | `ink`            | 10.2 : 1      | AAA (large + body)               |
-| `cream-dim`         | `ink`            | 5.4 : 1       | AA (large + body)                |
+| `cream-muted`       | `ink-raised`     | 8.9 : 1       | AAA (large + body)               |
+| `cream-muted`       | `ink-overlay`    | 7.8 : 1       | AAA (large + body)               |
 | `gold`              | `ink`            | 7.4 : 1       | AAA (large + body)               |
 | `gold`              | `ink-raised`     | 6.3 : 1       | AAA (large), AA (body)           |
 | `terracotta`        | `ink`            | 4.9 : 1       | AA (large + body) — borderline   |

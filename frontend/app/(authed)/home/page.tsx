@@ -85,7 +85,7 @@ export default function HomePage() {
                   className="flex items-center justify-between px-4 py-3 transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:bg-ink-overlay focus-visible:shadow-glow-gold"
                 >
                   <span className="text-body text-cream">{group.name}</span>
-                  <span className="text-caption text-cream-dim">
+                  <span className="text-caption text-cream-muted">
                     {group.memberCount}{" "}
                     {group.memberCount === 1 ? "member" : "members"}
                   </span>

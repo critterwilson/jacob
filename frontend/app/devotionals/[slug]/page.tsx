@@ -121,7 +121,7 @@ export default function DevotionalPage() {
         </p>
       )}
 
-      <footer className="border-t border-line pt-4 text-caption text-cream-dim">
+      <footer className="border-t border-line pt-4 text-caption text-cream-muted">
         {devotional.sourceAttribution}
       </footer>
     </main>

@@ -42,7 +42,6 @@ describe("design tokens — resolved Tailwind theme", () => {
         "line-strong",
         "cream",
         "cream-muted",
-        "cream-dim",
         "gold",
         "gold-soft",
         "gold-deep",

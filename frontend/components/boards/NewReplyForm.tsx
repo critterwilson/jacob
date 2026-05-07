@@ -26,7 +26,7 @@ type Props = {
 
 const replyBodyClass =
   "w-full resize-none rounded border border-line bg-ink-overlay px-3 py-2 " +
-  "font-sans text-body text-cream placeholder:text-cream-dim " +
+  "font-sans text-body text-cream placeholder:text-cream-muted " +
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 

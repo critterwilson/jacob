@@ -1,5 +1,6 @@
 "use client";
 
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import type { PinnedMessage } from "@/lib/hooks/usePinnedMessages";
 
 type Props = {
@@ -17,17 +18,25 @@ export function PinnedSheet({
   onUnpin,
   onClose,
 }: Props) {
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: true,
+    onEscape: onClose,
+  });
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Pinned messages"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <button
+        type="button"
+        aria-label="Dismiss pinned messages"
+        onClick={onClose}
+        className="fixed inset-0 cursor-default bg-black/60 focus:outline-none focus-visible:shadow-glow-gold"
+      />
       <div
-        className="w-full max-w-lg rounded-t-2xl border border-line bg-ink-overlay p-5 shadow-pop sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pinned messages"
+        className="relative w-full max-w-lg rounded-t-2xl border border-line bg-ink-overlay p-5 shadow-pop sm:rounded-2xl"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-body font-semibold text-cream">
@@ -51,7 +60,7 @@ export function PinnedSheet({
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-body-sm text-cream">{msg.body}</p>
-                <p className="mt-0.5 text-caption text-cream-dim">
+                <p className="mt-0.5 text-caption text-cream-muted">
                   by {msg.authorUid}
                 </p>
               </div>
