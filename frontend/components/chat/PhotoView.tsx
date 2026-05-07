@@ -6,6 +6,8 @@
  * Wrapped in a fixed aspect-ratio container to prevent CLS.
  */
 
+import { safeImageSrc } from "@/lib/safeUrl";
+
 type Props = {
   src: string;
   alt: string;
@@ -19,15 +21,17 @@ function deriveVariantUrl(originalUrl: string, width: 320 | 640 | 1280): string 
 }
 
 export function PhotoView({ src, alt, className = "" }: Props) {
-  const v320 = deriveVariantUrl(src, 320);
-  const v640 = deriveVariantUrl(src, 640);
-  const v1280 = deriveVariantUrl(src, 1280);
+  const safeSrc = safeImageSrc(src);
+  if (!safeSrc) return null;
+  const v320 = deriveVariantUrl(safeSrc, 320);
+  const v640 = deriveVariantUrl(safeSrc, 640);
+  const v1280 = deriveVariantUrl(safeSrc, 1280);
 
   return (
     <div className={`relative aspect-[4/3] overflow-hidden rounded border border-line ${className}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={safeSrc}
         srcSet={`${v320} 320w, ${v640} 640w, ${v1280} 1280w`}
         sizes="(max-width: 768px) 320px, 640px"
         alt={alt}

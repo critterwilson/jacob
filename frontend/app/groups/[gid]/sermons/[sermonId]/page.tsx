@@ -5,6 +5,7 @@ import { useMemo } from "react";
 
 import { Button, Eyebrow, Heading, Link } from "@/components/ui";
 import { useGroupSermons } from "@/lib/hooks/useGroupSermons";
+import { safeHttpUrl, safeImageSrc } from "@/lib/safeUrl";
 
 export default function SermonDetailPage() {
   const params = useParams();
@@ -52,6 +53,9 @@ export default function SermonDetailPage() {
     }
   };
 
+  const safeSourceUrl = safeHttpUrl(sermon.sourceUrl);
+  const safeThumbnail = safeImageSrc(sermon.thumbnail);
+
   return (
     <main className="mx-auto max-w-3xl space-y-5 p-6">
       <Link
@@ -62,10 +66,10 @@ export default function SermonDetailPage() {
         ← Sermon archive
       </Link>
 
-      {sermon.thumbnail && (
+      {safeThumbnail && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={sermon.thumbnail}
+          src={safeThumbnail}
           alt=""
           className="w-full rounded-lg border border-line object-cover"
         />
@@ -108,14 +112,16 @@ export default function SermonDetailPage() {
       </dl>
 
       <div className="flex flex-wrap gap-3">
-        <a
-          href={sermon.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-10 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
-        >
-          Open source ↗
-        </a>
+        {safeSourceUrl && (
+          <a
+            href={safeSourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-10 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
+          >
+            Open source ↗
+          </a>
+        )}
         {/* T50 will replace this with an inline Watch Together flow.
             Until then, the link above is the path. */}
         <Button

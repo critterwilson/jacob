@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth-context";
 import { useWatchSession } from "@/lib/hooks/useWatchSession";
+import { safeHttpUrl } from "@/lib/safeUrl";
 
 export default function WatchSessionPage() {
   const params = useParams();
@@ -57,8 +58,10 @@ export default function WatchSessionPage() {
   // initial render). The leader / follower sync uses the IFrame API
   // when wired in a follow-up; v1 ships a "Watch in sync via the
   // YouTube embed; tap pause/play together" pattern with an explicit
-  // re-sync button.
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${session.videoId}?rel=0&modestbranding=1`;
+  // re-sync button. videoId is encodeURIComponent'd so a malicious
+  // sermon-add payload can't break out of the path segment.
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.videoId)}?rel=0&modestbranding=1`;
+  const safeSourceUrl = safeHttpUrl(session.sourceUrl);
 
   return (
     <main className="mx-auto max-w-4xl space-y-4 p-6">
@@ -87,6 +90,7 @@ export default function WatchSessionPage() {
           <iframe
             src={embedUrl}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
             allowFullScreen
             className="h-full w-full"
           />
@@ -116,14 +120,16 @@ export default function WatchSessionPage() {
               End session
             </button>
           )}
-          <a
-            href={session.sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
-          >
-            Open on YouTube ↗
-          </a>
+          {safeSourceUrl && (
+            <a
+              href={safeSourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
+            >
+              Open on YouTube ↗
+            </a>
+          )}
         </div>
       )}
     </main>

@@ -19,6 +19,7 @@ import {
   type Sermon,
   useGroupSermons,
 } from "@/lib/hooks/useGroupSermons";
+import { safeImageSrc } from "@/lib/safeUrl";
 
 const inputClass =
   "w-full rounded border border-line bg-ink-overlay px-3 py-2 " +
@@ -193,6 +194,7 @@ export default function SermonsListPage() {
 }
 
 function SermonRow({ gid, sermon }: { gid: string; sermon: Sermon }) {
+  const safeThumbnail = safeImageSrc(sermon.thumbnail);
   return (
     <li>
       <NextLink
@@ -200,10 +202,10 @@ function SermonRow({ gid, sermon }: { gid: string; sermon: Sermon }) {
         className="block rounded-lg focus:outline-none focus-visible:shadow-glow-gold"
       >
         <Card surface="raised" interactive padding="sm" className="space-y-2">
-          {sermon.thumbnail && (
+          {safeThumbnail && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={sermon.thumbnail}
+              src={safeThumbnail}
               alt=""
               className="aspect-video w-full rounded-md border border-line object-cover"
             />
