@@ -102,18 +102,17 @@ export function useUser(uid: string | undefined): UseUserResult {
       });
     } catch (err) {
       if (ctl.signal.aborted) return;
-      // ApiError is the canonical shape; transport failures surface as
-      // ApiError(0, "network_error", ...) and are treated identically to
-      // "no profile" so the onboarding redirect still fires. The 401
-      // case (token revoked / sign-out race) also lands here.
-      if (err instanceof ApiError) {
-        // Surfaced for diagnostics; the SPA recovers by retrying on the
-        // next mount.
-        if (err.code !== "aborted") {
-          console.warn("user_bootstrap_failed", err.code, err.status);
-        }
+      // Distinguish transport / server failures from the legitimate
+      // "200 with hasProfile=false" branch handled above. A flaky
+      // network or a transient 5xx must NOT zero a previously-loaded
+      // profile — onboarding-gate consumers (`app/onboarding/page.tsx`)
+      // would otherwise redirect a healthy user back to onboarding on
+      // every blip. Retain the prior profile and let the next refresh
+      // (or the SPA's natural retry on the next mount) repair state.
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("user_bootstrap_failed", err.code, err.status);
       }
-      setState({ loading: false, profile: null });
+      setState((prev) => ({ loading: false, profile: prev.profile }));
     }
   }, [uid]);
 

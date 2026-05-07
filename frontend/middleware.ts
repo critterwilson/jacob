@@ -12,9 +12,13 @@ import { type NextRequest, NextResponse } from "next/server";
 //    in `app/layout.tsx` reads them and hydrates the client-side
 //    workspace-org context.
 //
-// 2. **Onboarding gate (existing).** A best-effort UX redirect for
-//    protected routes — real access control lives in FastAPI deps.
+// 2. **Onboarding gate.** A best-effort UX redirect that runs on every
+//    request inside the matcher and bounces users without a JACOB
+//    profile to `/onboarding`. The single source of truth is the
+//    `PUBLIC_PATHS` allow-list below; everything else is gated.
 //    `jacob-has-profile` is set by `GET /api/users/me/bootstrap` (M2).
+//    Real access control still lives in FastAPI deps — this is purely
+//    a UX rail so profileless users don't see half-broken pages.
 //
 // The host lookup is short-cached in the edge worker's module scope
 // to keep the latency overhead under ~5ms once warm. TTL is 5 minutes;
@@ -98,9 +102,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-  const protectedRoute =
-    pathname.startsWith("/groups/") || pathname.startsWith("/chat/");
-  if (protectedRoute) {
+  if (requiresProfile(pathname)) {
     const hasProfile =
       request.cookies.get("jacob-has-profile")?.value === "1";
     if (!hasProfile) {
@@ -111,6 +113,41 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next({
     request: { headers: requestHeaders },
   });
+}
+
+// Single source of truth for "this path can be visited without a JACOB
+// profile". Anything not in this set requires the `jacob-has-profile`
+// cookie set by `GET /api/users/me/bootstrap`. Static assets and
+// `/api/*` are excluded by the matcher below, not here.
+//
+// `/onboarding` and `/verify-email` are intentionally open: they are
+// the routes where a profileless / unverified user is supposed to land,
+// so gating them would create a redirect loop.
+const PUBLIC_PATHS = new Set<string>([
+  "/",
+  "/sign-in",
+  "/sign-up",
+  "/forgot-password",
+  "/verify-email",
+  "/onboarding",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/guidelines",
+  "/faq",
+  "/transparency",
+  "/design",
+]);
+
+function requiresProfile(pathname: string): boolean {
+  // Exact-match the path against the public set. Any nested path under
+  // a top-level segment that isn't in the set still requires a profile
+  // — e.g. `/admin/users` is gated even though `/about` is public.
+  if (PUBLIC_PATHS.has(pathname)) return false;
+  // `/design` is a developer surface with sub-pages; treat the whole
+  // tree as public so we don't gate the design system on staging.
+  if (pathname === "/design" || pathname.startsWith("/design/")) return false;
+  return true;
 }
 
 // Run on every page request EXCEPT static assets, the service worker,

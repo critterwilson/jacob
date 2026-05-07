@@ -274,7 +274,10 @@ describe("SignUpForm", () => {
     ).toBeInTheDocument();
   });
 
-  it("creates account, sends verification, and redirects to /onboarding", async () => {
+  it("creates account, sends verification, and redirects to /verify-email", async () => {
+    // H-FRONT-3: email/password sign-up must hold the user on the
+    // verification interstitial until Firebase confirms the link was
+    // clicked. /onboarding is reached only after emailVerified flips.
     const fakeUser = { uid: "alice", emailVerified: false };
     vi.mocked(fbAuth.createUserWithEmailAndPassword).mockResolvedValue({
       user: fakeUser,
@@ -292,7 +295,7 @@ describe("SignUpForm", () => {
     await waitFor(() =>
       expect(fbAuth.sendEmailVerification).toHaveBeenCalledWith(fakeUser),
     );
-    expect(mockPush).toHaveBeenCalledWith("/onboarding");
+    expect(mockPush).toHaveBeenCalledWith("/verify-email");
   });
 
   it("shows email-already-in-use as a friendly message", async () => {
