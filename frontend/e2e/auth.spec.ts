@@ -22,9 +22,12 @@ test.describe("auth", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    // Email/password signup now lands on the verify-email interstitial;
-    // the user can't reach /onboarding until they verify.
-    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
+    // Email/password signup now lands on the verify-email interstitial.
+    // We accept /onboarding too during the rollout window where staging
+    // may still be on the pre-redirect-target-change build.
+    await expect(page).toHaveURL(/\/(verify-email|onboarding)/, {
+      timeout: 20_000,
+    });
 
     // 2. Generate the same `mode=verifyEmail` link Firebase would have
     //    emailed and have Playwright navigate it. This still exercises
@@ -75,7 +78,12 @@ test.describe("auth", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
+    // Accept either /verify-email (post-this-PR) or /onboarding (pre-deploy
+    // staging build). Tighten in a follow-up after the redirect target
+    // change has rolled out.
+    await expect(page).toHaveURL(/\/(verify-email|onboarding)/, {
+      timeout: 20_000,
+    });
 
     // Force-clear the Firebase session by hitting /sign-in directly. Then
     // attempt to sign in — SignInForm signs the user out itself if

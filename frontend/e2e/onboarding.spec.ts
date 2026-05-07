@@ -25,10 +25,13 @@ test.describe("onboarding", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    // Email/password signup lands on /verify-email until the link is
-    // clicked. The admin call below mints+navigates that link, then the
-    // page.goto("/onboarding") that follows replaces the polling redirect.
-    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
+    // Email/password signup lands on /verify-email; the admin call below
+    // mints+navigates that link, then page.goto("/onboarding") replaces
+    // the polling redirect. /onboarding is also accepted during the
+    // rollout window where staging may still be on the older build.
+    await expect(page).toHaveURL(/\/(verify-email|onboarding)/, {
+      timeout: 20_000,
+    });
 
     // Verify the email so the onboarding endpoint accepts the request.
     await verifyEmailViaAdmin(page, freshEmail.email);

@@ -24,7 +24,11 @@ test.describe("forgot password", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
+    // Accept either /verify-email or /onboarding during the rollout
+    // window — staging may still be on the pre-this-PR build.
+    await expect(page).toHaveURL(/\/(verify-email|onboarding)/, {
+      timeout: 20_000,
+    });
     await verifyEmailViaAdmin(page, freshEmail.email);
 
     // Step 1 — request a password reset through the real form so the
