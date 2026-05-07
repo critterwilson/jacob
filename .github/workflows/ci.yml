@@ -45,6 +45,8 @@ jobs:
   frontend-e2e:
     name: "Frontend — Playwright E2E"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Targets the staging Firebase Hosting URL. Runs on every PR (not just
     # frontend/** changes) because CORS / API regressions land via backend
     # PRs too — the very class of bug this suite exists to catch. Required

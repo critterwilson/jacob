@@ -23,11 +23,43 @@ deploy fails closed instead of inheriting staging origins.
 
 ## Comma-in-value gotcha
 
-`gcloud run deploy --set-env-vars KEY1=VAL1,KEY2=VAL2` uses `,` as the
-key separator, so any value containing a comma (like a multi-origin CORS
-list) needs the alternate-delimiter syntax: `--set-env-vars "^@^KEY1=...@KEY2=..."`.
-The deploy workflow already uses this; one-off `gcloud run services
-update` commands need it too.
+`gcloud run deploy --update-env-vars KEY1=VAL1,KEY2=VAL2` uses `,` as
+the key separator, so any value containing a comma (like a multi-origin
+CORS list) needs the alternate-delimiter syntax:
+`--update-env-vars "^@^KEY1=...@KEY2=..."`. The deploy workflow already
+uses this; one-off `gcloud run services update` commands need it too.
+
+## `--update-env-vars` vs `--set-env-vars` (read this before adding env vars)
+
+The deploy workflow uses **`--update-env-vars`**, which only touches the
+keys listed on the command line. Anything else attached to the service
+out of band — extra env vars set with `gcloud run services update`,
+secrets bound via `--set-secrets`, env vars added through the console —
+survives every CI deploy untouched.
+
+`--set-env-vars` is the destructive sibling: it **REPLACES the entire
+literal-env-vars set** on every push, silently wiping anything not
+listed in the workflow. We hit this in practice (the
+`JACOB_HASH_PROVIDER` env var was getting clobbered on every staging
+deploy), so the workflow was switched to `--update-env-vars`.
+
+Implications when adding a new backend env var:
+
+- If the var is set at deploy time (workflow input, secret, computed
+  value): add it to the `--update-env-vars` line in `deploy.yml`. It
+  will be set/refreshed on every deploy.
+- If the var is set out of band (via `gcloud run services update` or
+  the console): it stays sticky across deploys. No workflow change
+  needed.
+- Removing a var from the `--update-env-vars` line does **not** unset
+  it on the service — `--update-env-vars` only adds/updates. Use
+  `gcloud run services update --remove-env-vars KEY` for that, or add
+  `--remove-env-vars` to the deploy step.
+
+If you ever need to *replace* the full env-var set (e.g. a clean-room
+rebuild), do that as a deliberate one-off `gcloud run services update
+--clear-env-vars` plus a fresh set, not by flipping the workflow back to
+`--set-env-vars`.
 
 ## Manual one-off update
 
@@ -52,7 +84,7 @@ the image SHA and per-deploy env vars**:
 | Service account binding                                   | `infra/cloud-run.tf`                                     |
 | Public unauthenticated invocation (`allow-unauthenticated`) | `cloud-run.tf` `google_cloud_run_v2_service_iam_member`  |
 | Image SHA per deploy                                      | `gcloud run deploy` step in `.github/workflows/deploy.yml` |
-| Per-deploy env vars (`ENVIRONMENT`, `CORS_ALLOWED_ORIGINS`) | `--set-env-vars` step in `deploy.yml`                    |
+| Per-deploy env vars (`ENVIRONMENT`, `CORS_ALLOWED_ORIGINS`) | `--update-env-vars` step in `deploy.yml`                 |
 
 The split is intentional: the gcloud step rolls images on every CI run,
 which would otherwise fight Terraform's image attribute. The TF
