@@ -166,3 +166,84 @@ def test_list_board_posts_requires_auth() -> None:
     client = TestClient(_app(user=None))
     res = client.get("/api/boards/b1/posts")
     assert res.status_code == 401
+
+
+# ── M-BACK-6: cursor tie-break (start_after on createdAt + __name__) ────
+
+
+def test_list_board_posts_cursor_passes_doc_id_for_tie_break() -> None:
+    """When a cursor is provided the query orders by __name__ in addition
+    to pinnedAt/createdAt, and start_after gets all three fields — so
+    posts with identical createdAt at the page boundary don't drop or
+    duplicate on page 2."""
+    import base64
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = MagicMock()
+    posts_col = db.collection.return_value.document.return_value.collection.return_value
+    where_chain = posts_col.where.return_value.order_by.return_value.order_by.return_value
+    name_order_chain = where_chain.order_by.return_value
+    name_order_chain.start_after.return_value.limit.return_value.stream.return_value = iter([])
+
+    base = datetime(2026, 5, 1, tzinfo=UTC)
+    cursor_str = (
+        base64.urlsafe_b64encode(f"{base.isoformat()}|p-cursor".encode())
+        .decode("ascii")
+        .rstrip("=")
+    )
+
+    with patch("app.routers.boards._db", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get(f"/api/boards/b1/posts?cursor={cursor_str}")
+    assert res.status_code == 200
+
+    # The query chain MUST include order_by("__name__", ...) before start_after.
+    # And start_after MUST receive createdAt AND __name__ (plus the existing
+    # pinnedAt anchor).
+    name_order_calls = where_chain.order_by.call_args_list
+    assert any(
+        "__name__" in (call.args + tuple(call.kwargs.values())) for call in name_order_calls
+    ), "expected order_by('__name__', ...) for cursor tie-break"
+    sa_calls = name_order_chain.start_after.call_args_list
+    assert sa_calls, "expected start_after call after the __name__ order_by"
+    arg = sa_calls[0].args[0]
+    assert "createdAt" in arg
+    assert "__name__" in arg
+    assert arg["__name__"] == "p-cursor"
+
+
+def test_list_board_replies_cursor_passes_doc_id_for_tie_break() -> None:
+    """Replies cursor pagination also tie-breaks on __name__."""
+    import base64
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = MagicMock()
+    replies_col = MagicMock()
+    posts = db.collection.return_value.document.return_value.collection.return_value
+    posts.document.return_value.collection.return_value = replies_col
+    created_chain = replies_col.order_by.return_value
+    name_order_chain = created_chain.order_by.return_value
+    name_order_chain.start_after.return_value.limit.return_value.stream.return_value = iter([])
+
+    base = datetime(2026, 5, 1, tzinfo=UTC)
+    cursor_str = (
+        base64.urlsafe_b64encode(f"{base.isoformat()}|r-cursor".encode())
+        .decode("ascii")
+        .rstrip("=")
+    )
+
+    with patch("app.routers.boards._db", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get(f"/api/boards/b1/posts/p1/replies?cursor={cursor_str}")
+    assert res.status_code == 200
+
+    name_order_calls = created_chain.order_by.call_args_list
+    assert any(
+        "__name__" in (call.args + tuple(call.kwargs.values())) for call in name_order_calls
+    ), "expected order_by('__name__', ...) for cursor tie-break"
+    sa_calls = name_order_chain.start_after.call_args_list
+    assert sa_calls, "expected start_after call after the __name__ order_by"
+    arg = sa_calls[0].args[0]
+    assert "createdAt" in arg
+    assert "__name__" in arg
+    assert arg["__name__"] == "r-cursor"
