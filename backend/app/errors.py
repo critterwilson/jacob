@@ -68,3 +68,24 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError) 
             }
         },
     )
+
+
+async def rate_limit_exceeded_handler(_: Request, exc: Exception) -> JSONResponse:
+    """slowapi's default 429 handler returns `{"detail": "..."}` which
+    breaks the `{"error": {"code","message","details"}}` contract.
+    Re-shape it here, while preserving the standard `Retry-After`/
+    `X-RateLimit-*` headers slowapi attaches.
+    """
+    detail = getattr(exc, "detail", None) or "Rate limit exceeded"
+    headers = getattr(exc, "headers", None) or {}
+    return JSONResponse(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        content={
+            "error": {
+                "code": "rate_limited",
+                "message": str(detail),
+                "details": {},
+            }
+        },
+        headers=headers,
+    )
