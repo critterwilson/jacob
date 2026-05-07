@@ -12,8 +12,14 @@
  *
  * Thresholds are set conservatively per the review:
  *   - backend p95 latency > 1 s sustained for 5 minutes
- *   - backend 5xx rate > 1 % over 5 minutes (50+ requests sample)
+ *   - backend 5xx count > 0.01 events/s sustained for 5 minutes
+ *     (≈ one 5xx every 100 s — this is an absolute count threshold,
+ *     NOT a ratio of 5xx vs total. A true ratio would need a
+ *     numerator/denominator pair, which Cloud Monitoring exposes via a
+ *     two-condition policy; we deliberately keep the simpler count
+ *     threshold for now.)
  *   - Firestore reads > 80 % of the configured daily budget
+ *     (delta-aligned over 24h, so the threshold is reads-per-day)
  *   - GCP monthly spend > $100 (separate from the existing
  *     `monthly` budget so this is the early-warning alert; the
  *     existing one remains the kill-switch at the configured ceiling)
@@ -27,8 +33,8 @@ variable "alert_p95_latency_seconds" {
   default     = 1.0
 }
 
-variable "alert_5xx_rate_threshold" {
-  description = "Fractional 5xx rate above which the backend error-rate alert fires (e.g. 0.01 = 1%)."
+variable "alert_5xx_count_threshold_per_second" {
+  description = "Absolute 5xx count rate (events/second, ALIGN_RATE-aligned over 60s) above which the backend error alert fires. NOT a ratio of 5xx vs total — that would need a two-condition numerator/denominator policy. Default 0.01 ≈ one 5xx every 100s."
   type        = number
   default     = 0.01
 }
@@ -84,16 +90,20 @@ resource "google_monitoring_alert_policy" "backend_p95_latency" {
   }
 }
 
-# Backend 5xx rate. Compares the fraction of `response_code_class=5xx`
-# requests against the total request rate.
+# Backend 5xx count rate. ALIGN_RATE on `request_count` filtered to
+# `response_code_class=5xx` is requests-per-second — an absolute count
+# threshold, NOT a ratio of 5xx vs total. A true ratio would need a
+# numerator/denominator pair (Cloud Monitoring two-condition policy);
+# we deliberately keep this simpler count threshold and surface that
+# in the variable name and docstring so reviewers know what it is.
 resource "google_monitoring_alert_policy" "backend_5xx_rate" {
-  display_name          = "jacob-backend-5xx-rate-${var.env}"
+  display_name          = "jacob-backend-5xx-count-${var.env}"
   combiner              = "OR"
   project               = var.project_id
   notification_channels = local.notification_channels
 
   conditions {
-    display_name = "Backend 5xx rate over threshold"
+    display_name = "Backend 5xx count rate over threshold"
 
     condition_threshold {
       filter = join(" AND ", [
@@ -104,7 +114,7 @@ resource "google_monitoring_alert_policy" "backend_5xx_rate" {
       ])
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = var.alert_5xx_rate_threshold
+      threshold_value = var.alert_5xx_count_threshold_per_second
 
       aggregations {
         alignment_period     = "60s"
@@ -122,6 +132,14 @@ resource "google_monitoring_alert_policy" "backend_5xx_rate" {
 
 # Firestore daily read volume. Guards the free-tier ceiling and surfaces
 # pathological N+1 / unbounded query regressions before they hit billing.
+#
+# `read_count` is a cumulative counter. With `ALIGN_DELTA` and an
+# `alignment_period` of one day, each aligned point is the number of
+# reads that occurred in the last 24 hours — so the threshold value is
+# in reads-per-day and can be compared directly against the daily
+# budget. (The previous `ALIGN_RATE` form here yielded mean
+# reads-per-second over 24h, which made the budget-fraction threshold
+# effectively unreachable.)
 resource "google_monitoring_alert_policy" "firestore_read_volume" {
   display_name          = "jacob-firestore-reads-${var.env}"
   combiner              = "OR"
@@ -142,7 +160,7 @@ resource "google_monitoring_alert_policy" "firestore_read_volume" {
 
       aggregations {
         alignment_period     = "86400s"
-        per_series_aligner   = "ALIGN_RATE"
+        per_series_aligner   = "ALIGN_DELTA"
         cross_series_reducer = "REDUCE_SUM"
       }
     }

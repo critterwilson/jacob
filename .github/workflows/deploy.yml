@@ -92,16 +92,21 @@ jobs:
           fi
 
       - name: Deploy to Cloud Run
-        # `^@^` switches gcloud's --set-env-vars key delimiter from ',' to
-        # '@' so commas inside the CORS allowlist value are preserved
-        # instead of being parsed as additional env-var keys.
+        # `--update-env-vars` only touches the named keys, leaving any
+        # out-of-band env vars (e.g. JACOB_HASH_PROVIDER, secrets attached
+        # via `gcloud run services update`) intact. `--set-env-vars` would
+        # REPLACE the entire literal-env-vars set on every push and
+        # silently wipe anything not listed here. `^@^` switches gcloud's
+        # key delimiter from ',' to '@' so commas inside the CORS
+        # allowlist value are preserved instead of being parsed as
+        # additional env-var keys.
         run: |
           gcloud run deploy jacob-backend \
             --image "us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jacob-images/jacob-backend:${{ github.sha }}" \
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}" \
+            --update-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}"
 
   # ── Functions + Firestore rules: firebase deploy ──────────────────────────
