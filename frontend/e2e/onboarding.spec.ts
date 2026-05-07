@@ -25,7 +25,10 @@ test.describe("onboarding", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
+    // Email/password signup lands on /verify-email until the link is
+    // clicked. The admin call below mints+navigates that link, then the
+    // page.goto("/onboarding") that follows replaces the polling redirect.
+    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
 
     // Verify the email so the onboarding endpoint accepts the request.
     await verifyEmailViaAdmin(page, freshEmail.email);

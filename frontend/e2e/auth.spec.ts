@@ -22,7 +22,9 @@ test.describe("auth", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
+    // Email/password signup now lands on the verify-email interstitial;
+    // the user can't reach /onboarding until they verify.
+    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
 
     // 2. Generate the same `mode=verifyEmail` link Firebase would have
     //    emailed and have Playwright navigate it. This still exercises
@@ -73,7 +75,7 @@ test.describe("auth", () => {
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
     await submitSignUp(page);
-    await expect(page).toHaveURL(/\/onboarding/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/verify-email/, { timeout: 20_000 });
 
     // Force-clear the Firebase session by hitting /sign-in directly. Then
     // attempt to sign in — SignInForm signs the user out itself if
