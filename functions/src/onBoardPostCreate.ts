@@ -25,6 +25,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 
 import { type Policy, runTextModeration } from "./services/textModeration";
 import { fanOutMentions } from "./services/mentionFanout";
+import { claimEventOnce } from "./services/eventMarkers";
 
 if (!getApps().length) {
   initializeApp();
@@ -55,6 +56,27 @@ export const onBoardPostCreate = onDocumentCreated(
     const body = (data.body as string | undefined) ?? "";
     const { boardId, postId } = event.params;
     const db = getFirestore();
+
+    // Top-level idempotency guard — defensive layer beyond the per-subhandler
+    // markers (text-moderation queue id, mention fanout per-uid notification
+    // id). Mirrors the pattern from onMessageWrite + onMessageCreate.
+    const postRef = db
+      .collection("boards")
+      .doc(boardId)
+      .collection("posts")
+      .doc(postId);
+    const topEventRef = postRef.collection("_events").doc(event.id);
+    const wasFresh = await claimEventOnce(db, topEventRef, {
+      trigger: "onBoardPostCreate",
+    });
+    if (!wasFresh) {
+      logger.info("onBoardPostCreate duplicate event skipped", {
+        boardId,
+        postId,
+        eventId: event.id,
+      });
+      return;
+    }
 
     if (body.trim()) {
       try {

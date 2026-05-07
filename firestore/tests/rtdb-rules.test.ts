@@ -113,6 +113,51 @@ describe("M5 RTDB — presence", () => {
         .set({ lastSeenAt: Date.now(), status: "weird" }),
     );
   });
+
+  // M-FIRE-3: extras rejection. Without `$other: { ".validate": false }`,
+  // a member could write `presence/{gid}/{uid}/foo = 'bar'` indefinitely
+  // and squat unbounded keys under their presence node.
+  it("rejects extra keys not in the schema (M-FIRE-3)", async () => {
+    await seedMembership("g1", "alice");
+    await assertFails(
+      authedDb("alice")
+        .ref("presence/g1/alice")
+        .set({
+          lastSeenAt: Date.now(),
+          status: "online",
+          foo: "bar", // unschema'd
+        }),
+    );
+  });
+
+  it("rejects writing an arbitrary child key under the presence node (M-FIRE-3)", async () => {
+    await seedMembership("g1", "alice");
+    await assertFails(
+      authedDb("alice").ref("presence/g1/alice/foo").set("bar"),
+    );
+  });
+
+  // M-FIRE-3 / L-FIRE-1: lastSeenAt must not be unbounded into the future.
+  // A 60s clock-skew slack is fine; a year in the future is not.
+  it("rejects lastSeenAt set unreasonably far in the future (L-FIRE-1)", async () => {
+    await seedMembership("g1", "alice");
+    const farFuture = Date.now() + 365 * 24 * 60 * 60 * 1000;
+    await assertFails(
+      authedDb("alice")
+        .ref("presence/g1/alice")
+        .set({ lastSeenAt: farFuture, status: "online" }),
+    );
+  });
+
+  it("accepts lastSeenAt within the 60s clock-skew window (L-FIRE-1)", async () => {
+    await seedMembership("g1", "alice");
+    const slightlyFuture = Date.now() + 30_000; // 30s ahead
+    await assertSucceeds(
+      authedDb("alice")
+        .ref("presence/g1/alice")
+        .set({ lastSeenAt: slightlyFuture, status: "online" }),
+    );
+  });
 });
 
 describe("M5 RTDB — typing", () => {
@@ -132,6 +177,33 @@ describe("M5 RTDB — typing", () => {
       authedDb("alice")
         .ref("typing/g1/bob")
         .set({ startedAt: Date.now() }),
+    );
+  });
+
+  // M-FIRE-3
+  it("rejects extra keys under typing payload (M-FIRE-3)", async () => {
+    await seedMembership("g1", "alice");
+    await assertFails(
+      authedDb("alice")
+        .ref("typing/g1/alice")
+        .set({ startedAt: Date.now(), foo: "bar" }),
+    );
+  });
+
+  it("rejects writing an arbitrary child key under typing node (M-FIRE-3)", async () => {
+    await seedMembership("g1", "alice");
+    await assertFails(
+      authedDb("alice").ref("typing/g1/alice/foo").set("bar"),
+    );
+  });
+
+  it("rejects startedAt unreasonably far in the future (L-FIRE-1)", async () => {
+    await seedMembership("g1", "alice");
+    const farFuture = Date.now() + 365 * 24 * 60 * 60 * 1000;
+    await assertFails(
+      authedDb("alice")
+        .ref("typing/g1/alice")
+        .set({ startedAt: farFuture }),
     );
   });
 });
