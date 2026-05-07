@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -89,6 +90,18 @@ class Settings(BaseSettings):
     # (`ENVIRONMENT=staging` etc); local dev leaves it as "development".
     environment: str = "development"
 
+    # When True, `get_current_user` falls back to verifying Firebase Auth
+    # **emulator** tokens (unsigned, alg=none) after the real-JWKS path
+    # fails. Set on the staging Cloud Run service (`JACOB_ALLOW_EMULATOR_TOKENS=1`)
+    # so the Playwright suite can hit it with tokens minted by a local
+    # Auth emulator without burning real-Firebase rate limits.
+    #
+    # SECURITY: enabling this lets anyone forge a Bearer token claiming
+    # any uid for the staging project. Hard-blocked in production by the
+    # `_block_emulator_tokens_in_production` validator below — staging
+    # holds throwaway data only.
+    jacob_allow_emulator_tokens: bool = False
+
     # T55 — custom domains. Subdomain claims live under
     # `*.{jacob_base_domain}` (the wildcard mapping itself is a one-time
     # infra step, see docs/runbooks/custom-domains.md). The reserved
@@ -101,6 +114,18 @@ class Settings(BaseSettings):
         "api,www,admin,status,dashboard,help,blog,mail,smtp,imap,"
         "ns1,ns2,app,auth,docs,static,support,internal,platform"
     )
+
+    @model_validator(mode="after")
+    def _block_emulator_tokens_in_production(self) -> "Settings":
+        # Hard fail-closed: production must never accept emulator tokens.
+        # Catches a misconfigured deploy that copies the staging env-var
+        # into prod by mistake.
+        if self.jacob_allow_emulator_tokens and self.environment == "production":
+            raise ValueError(
+                "JACOB_ALLOW_EMULATOR_TOKENS=1 is forbidden in production "
+                "(would accept signature-less Firebase tokens for any uid)."
+            )
+        return self
 
     @property
     def cors_origins_list(self) -> list[str]:

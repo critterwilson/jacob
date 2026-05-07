@@ -45,15 +45,33 @@ test.describe("auth", () => {
     // whether prior runs raced ahead.
     await expect(page).toHaveURL(/\/(onboarding|home|groups)/, { timeout: 20_000 });
 
+    // /onboarding has no sidebar, so the UI sign-out flow can't be exercised
+    // until the user is past it. Complete onboarding so step 4 has a real
+    // page (with the sidebar) to sign out from. We accept this also widens
+    // the test's coverage to include onboarding — that's a feature, not a
+    // bug, given how often /onboarding is on the path.
+    if (/\/onboarding/.test(page.url())) {
+      await page
+        .getByLabel(/display name/i)
+        .fill(`Playwright ${freshEmail.localPart.slice(-6)}`);
+      await page.getByRole("radio", { name: /18 or older/i }).check();
+      await page.locator("#communityGuidelines").check();
+      await Promise.all([
+        page.waitForURL(/\/groups/, { timeout: 30_000 }),
+        page.getByRole("button", { name: /complete profile/i }).click(),
+      ]);
+    }
+
     // 4. Sign out.
     await signOut(page);
     await expect(page).toHaveURL(/\/sign-in/);
 
     // 5. Sign back in to prove the sign-out actually cleared the session
-    //    (vs. just routing away from a still-authed page).
+    //    (vs. just routing away from a still-authed page). The user is
+    //    onboarded now so they should land somewhere with the sidebar.
     await fillSignInForm(page, freshEmail.email, STRONG_PASSWORD);
     await submitSignIn(page);
-    await expect(page).toHaveURL(/\/(onboarding|home|groups)/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/(home|groups)/, { timeout: 20_000 });
   });
 
   test("wrong password shows an error and stays on /sign-in", async ({ page }) => {

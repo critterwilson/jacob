@@ -105,26 +105,36 @@ export async function signOut(page: Page): Promise<void> {
  * the Firebase Auth signup endpoint (per-IP rate limits).
  *
  * Set `JACOB_E2E_USER_EMAIL` / `JACOB_E2E_USER_PASSWORD` in CI / local env.
- * The account must already be:
- *   - registered in the staging Firebase project,
- *   - email-verified,
- *   - onboarded (i.e. has a `users/{uid}` profile doc).
+ *
+ * In **emulator mode** the shared user is seeded into the local Auth
+ * emulator at the start of the CI run with the same UID it has on staging
+ * (so the staging Firestore profile lookup still finds the existing
+ * `users/{uid}` doc). The seed reads `JACOB_E2E_USER_UID`, populated by
+ * `frontend/e2e/scripts/fetch-staging-uid.mjs`. If the UID isn't set the
+ * seed never ran, so the user doesn't exist in the emulator and signin
+ * would fail — we skip cleanly instead.
+ *
+ * In **staging mode** the account must already be registered, email-
+ * verified, and onboarded on the staging Firebase project.
  *
  * If the env vars aren't set, we call `test.skip()` rather than throwing
- * so CI is green-with-skips instead of red. The skipped tests are listed
- * in the run report; once secrets land, every skip flips to a real run.
+ * so CI is green-with-skips instead of red.
  */
 export function sharedAccountCredentials(): { email: string; password: string } {
   const email = process.env.JACOB_E2E_USER_EMAIL;
   const password = process.env.JACOB_E2E_USER_PASSWORD;
-  if (!email || !password) {
+  const inEmulator = !!process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  const seedRan = !inEmulator || !!process.env.JACOB_E2E_USER_UID;
+  if (!email || !password || !seedRan) {
     test.skip(
       true,
-      "Missing JACOB_E2E_USER_EMAIL / JACOB_E2E_USER_PASSWORD — set the " +
-        "shared-account secrets in CI / local env to enable this test.",
+      "Shared-account credentials not available: set " +
+        "JACOB_E2E_USER_EMAIL / JACOB_E2E_USER_PASSWORD" +
+        (inEmulator
+          ? " (and ensure the emulator-seed step ran with JACOB_E2E_USER_UID)."
+          : "."),
     );
-    // Unreachable; test.skip throws internally. Cast to satisfy the
-    // type-checker.
+    // Unreachable; test.skip throws internally.
     return { email: "", password: "" };
   }
   return { email, password };

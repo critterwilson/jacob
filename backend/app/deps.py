@@ -14,16 +14,24 @@ the already-fetched group document so handlers don't need to re-read it.
 
 from __future__ import annotations
 
+import base64
+import json
+import logging
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+import firebase_admin
 from fastapi import Depends, Header, Path, Request, status
 from firebase_admin import auth as firebase_auth
 
+from app.config import get_settings
 from app.errors import APIError
 from app.models.user import CurrentUser
 from app.services.firebase import get_firestore, init_firebase_admin
+
+logger = logging.getLogger(__name__)
 
 _BEARER_PREFIX = "Bearer "
 
@@ -35,6 +43,59 @@ def _unauthenticated(message: str) -> APIError:
         message=message,
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _b64url_decode(segment: str) -> bytes:
+    # JWT segments are base64url without padding.
+    padded = segment + "=" * (-len(segment) % 4)
+    return base64.urlsafe_b64decode(padded)
+
+
+def _decode_emulator_token(token: str, expected_project: str) -> dict[str, Any]:
+    """Decode an unsigned (alg=none) Firebase Auth emulator-issued ID token.
+
+    Only used as a fallback after `verify_id_token` has rejected the token
+    AND `settings.jacob_allow_emulator_tokens` is True (gated to non-prod).
+    The emulator never produces RS256 tokens, so requiring `alg: none` here
+    is the load-bearing check: it prevents a real-but-tampered RS256 token
+    from sneaking past `verify_id_token` into this signature-less path.
+
+    Verifies aud, iss, exp. Raises ValueError on any failure.
+    """
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("malformed jwt")
+
+    header_obj = json.loads(_b64url_decode(parts[0]))
+    if not isinstance(header_obj, dict) or header_obj.get("alg") != "none":
+        raise ValueError(
+            f"emulator path requires alg=none, got "
+            f"{header_obj.get('alg') if isinstance(header_obj, dict) else type(header_obj)!r}"
+        )
+
+    payload_obj = json.loads(_b64url_decode(parts[1]))
+    if not isinstance(payload_obj, dict):
+        raise ValueError("payload must be a JSON object")
+    payload: dict[str, Any] = payload_obj
+
+    if payload.get("aud") != expected_project:
+        raise ValueError(f"bad aud {payload.get('aud')!r}")
+
+    expected_iss = f"https://securetoken.google.com/{expected_project}"
+    if payload.get("iss") != expected_iss:
+        raise ValueError(f"bad iss {payload.get('iss')!r}")
+
+    exp = payload.get("exp")
+    if not isinstance(exp, int | float) or exp < time.time():
+        raise ValueError("expired")
+
+    # `verify_id_token` normalizes user_id/sub → uid; mirror that here so
+    # downstream code reads `decoded["uid"]` uniformly.
+    uid = payload.get("uid") or payload.get("user_id") or payload.get("sub")
+    if not isinstance(uid, str) or not uid:
+        raise ValueError("missing uid")
+    payload["uid"] = uid
+    return payload
 
 
 def get_current_user(
@@ -52,6 +113,7 @@ def get_current_user(
     if not token:
         raise _unauthenticated("Empty bearer token")
 
+    decoded: dict[str, Any] | None = None
     try:
         decoded = firebase_auth.verify_id_token(token)
     except firebase_auth.ExpiredIdTokenError:
@@ -59,11 +121,26 @@ def get_current_user(
     except firebase_auth.RevokedIdTokenError:
         raise _unauthenticated("Token revoked") from None
     except firebase_auth.InvalidIdTokenError:
-        raise _unauthenticated("Invalid token") from None
+        # Fall through to the emulator-token path if the gate is open.
+        decoded = None
     except Exception:
-        # firebase-admin can surface various transport / decoding errors;
-        # treat them all as 401 rather than leaking details to the client.
-        raise _unauthenticated("Token verification failed") from None
+        decoded = None
+
+    if decoded is None:
+        settings = get_settings()
+        if not settings.jacob_allow_emulator_tokens:
+            raise _unauthenticated("Invalid token")
+        try:
+            project_id = firebase_admin.get_app().project_id
+        except Exception:
+            project_id = None
+        if not project_id:
+            raise _unauthenticated("Invalid token")
+        try:
+            decoded = _decode_emulator_token(token, project_id)
+        except Exception as exc:
+            logger.info("emulator_token_rejected reason=%s", exc)
+            raise _unauthenticated("Invalid token") from None
 
     user = CurrentUser(
         uid=decoded["uid"],

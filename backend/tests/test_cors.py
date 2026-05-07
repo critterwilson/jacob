@@ -107,3 +107,22 @@ def test_cors_origins_explicit_overrides_default_in_any_env() -> None:
         "https://prod.example.com",
         "https://other.example.com",
     ]
+
+
+def test_emulator_tokens_forbidden_in_production() -> None:
+    """The Settings validator must refuse a config that would let prod
+    accept signature-less Firebase Auth emulator tokens.
+    """
+    import pytest
+
+    from app.config import Settings
+
+    with pytest.raises(ValueError, match="forbidden in production"):
+        Settings(jacob_allow_emulator_tokens=True, environment="production")
+
+
+def test_emulator_tokens_allowed_in_staging() -> None:
+    from app.config import Settings
+
+    s = Settings(jacob_allow_emulator_tokens=True, environment="staging")
+    assert s.jacob_allow_emulator_tokens is True

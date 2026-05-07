@@ -91,6 +91,19 @@ jobs:
             echo 'origins=${{ secrets.CORS_ALLOWED_ORIGINS }}' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve emulator-token flag
+        id: emu
+        # Staging-only: lets the Playwright suite hit the staging backend
+        # with tokens issued by a local Firebase Auth emulator, sidestepping
+        # the real-Firebase rate limits (TOO_MANY_ATTEMPTS_TRY_LATER) that
+        # were blocking every PR. Forbidden in prod by `Settings._block_emulator_tokens_in_production`.
+        run: |
+          if [[ "${{ needs.setup.outputs.target }}" == "staging" ]]; then
+            echo 'flag=1' >> "$GITHUB_OUTPUT"
+          else
+            echo 'flag=0' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to Cloud Run
         # `--update-env-vars` only touches the named keys, leaving any
         # out-of-band env vars (e.g. JACOB_HASH_PROVIDER, secrets attached
@@ -106,7 +119,7 @@ jobs:
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
-            --update-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}" \
+            --update-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}@JACOB_ALLOW_EMULATOR_TOKENS=${{ steps.emu.outputs.flag }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}"
 
   # ── Functions + Firestore rules: firebase deploy ──────────────────────────
