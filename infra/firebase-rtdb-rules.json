@@ -18,7 +18,13 @@
         ".read": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists()",
         "$uid": {
           ".write": "auth != null && auth.uid == $uid && root.child('memberships').child($uid).child($gid).exists()",
-          ".validate": "newData.hasChildren(['lastSeenAt','status']) && newData.child('status').isString() && (newData.child('status').val() == 'online' || newData.child('status').val() == 'offline') && newData.child('lastSeenAt').isNumber() && newData.child('lastSeenAt').val() <= now + 60000",
+          ".validate": "newData.hasChildren(['lastSeenAt','status'])",
+          "lastSeenAt": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
+          "status": {
+            ".validate": "newData.isString() && (newData.val() == 'online' || newData.val() == 'offline')"
+          },
           "$other": { ".validate": false }
         }
       }
@@ -29,7 +35,10 @@
         ".read": "auth != null && root.child('memberships').child(auth.uid).child($gid).exists()",
         "$uid": {
           ".write": "auth != null && auth.uid == $uid && root.child('memberships').child($uid).child($gid).exists()",
-          ".validate": "newData.hasChildren(['startedAt']) && newData.child('startedAt').isNumber() && newData.child('startedAt').val() <= now + 60000",
+          ".validate": "newData.hasChildren(['startedAt'])",
+          "startedAt": {
+            ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+          },
           "$other": { ".validate": false }
         }
       }
