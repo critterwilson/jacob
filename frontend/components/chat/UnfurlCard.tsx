@@ -5,14 +5,18 @@
 // via GCS is a follow-up; for v1 we render the OG URL directly.
 
 import type { Unfurl } from "@/components/chat/MessageBody";
+import { safeHttpUrl, safeImageSrc } from "@/lib/safeUrl";
 
 export function UnfurlCard({ unfurl }: { unfurl: Unfurl }) {
+  const safeUrl = safeHttpUrl(unfurl.url);
+  const safeImageUrl = safeImageSrc(unfurl.imageUrl);
+  if (!safeUrl) return null;
   const hasMetadata =
-    unfurl.title || unfurl.description || unfurl.imageUrl || unfurl.siteName;
+    unfurl.title || unfurl.description || safeImageUrl || unfurl.siteName;
 
   return (
     <a
-      href={unfurl.url}
+      href={safeUrl}
       target="_blank"
       rel="noopener noreferrer"
       className={
@@ -21,10 +25,10 @@ export function UnfurlCard({ unfurl }: { unfurl: Unfurl }) {
         "focus:outline-none focus-visible:shadow-glow-gold"
       }
     >
-      {unfurl.imageUrl && (
+      {safeImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={unfurl.imageUrl}
+          src={safeImageUrl}
           alt=""
           referrerPolicy="no-referrer"
           loading="lazy"
