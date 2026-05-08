@@ -48,4 +48,4 @@ done
 
 echo
 echo "Done. TTL takes effect on the next daily sweep (within 24h of doc expiry)."
-echo "Verify with: gcloud firestore fields list --project=${PROJECT_ID} --filter='ttlConfig:*'"
+echo "Verify with: gcloud firestore fields ttls list --project=${PROJECT_ID} --filter='ttlConfig:*'"
