@@ -79,7 +79,7 @@ locals {
 
 resource "google_monitoring_uptime_check_config" "frontend" {
   display_name = "jacob-frontend-${var.env}"
-  timeout      = "10s"
+  timeout      = "30s"
   period       = "60s"
   project      = var.project_id
 
@@ -101,7 +101,7 @@ resource "google_monitoring_uptime_check_config" "frontend" {
 
 resource "google_monitoring_uptime_check_config" "backend_health" {
   display_name = "jacob-backend-health-${var.env}"
-  timeout      = "10s"
+  timeout      = "30s"
   period       = "60s"
   project      = var.project_id
 
