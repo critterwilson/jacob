@@ -285,29 +285,46 @@ def test_key_func_falls_back_to_ip_when_no_uid() -> None:
     assert result != "user-abc"
 
 
-def test_key_func_uses_x_forwarded_for_when_no_uid() -> None:
-    """H-BACK-3: behind Cloud Run's LB, request.client.host is the LB's IP.
+def test_key_func_uses_lb_attested_xff_not_leftmost() -> None:
+    """H1: GCP HTTPS LB appends `<client>, <LB>` to X-Forwarded-For.
 
-    Without consulting X-Forwarded-For, every unauthenticated request
-    shares one rate-limit bucket. The keyfunc must walk XFF and pick the
-    leftmost public address.
+    The leftmost entry is whatever the caller sent — attacker-controlled.
+    The keyfunc must pick the LB-attested client (second-to-last entry),
+    not the leftmost value, or a caller rotating a fresh XFF per request
+    bypasses per-IP rate limits.
     """
     mock_request = MagicMock(spec=Request)
     del mock_request.state.uid
-    mock_request.headers = {"x-forwarded-for": "8.8.8.8, 10.0.0.1, 169.254.0.1"}
+    # Attacker spoofs "8.8.8.8" in their outgoing XFF; GLB then appends
+    # the real client (1.2.3.4) followed by its own egress (169.254.1.1).
+    mock_request.headers = {"x-forwarded-for": "8.8.8.8, 1.2.3.4, 169.254.1.1"}
     mock_request.client = MagicMock()
-    mock_request.client.host = "10.0.0.1"  # the LB
-    assert _key_by_uid_or_ip(mock_request) == "8.8.8.8"
+    mock_request.client.host = "169.254.1.1"
+    assert _key_by_uid_or_ip(mock_request) == "1.2.3.4"
 
 
-def test_key_func_skips_private_xff_hops() -> None:
-    """Skip private/internal hops in XFF and find the originating client."""
-    mock_request = MagicMock(spec=Request)
-    del mock_request.state.uid
-    mock_request.headers = {"x-forwarded-for": "10.0.0.1, 192.168.1.5, 1.1.1.1"}
-    mock_request.client = MagicMock()
-    mock_request.client.host = "10.0.0.1"
-    assert _key_by_uid_or_ip(mock_request) == "1.1.1.1"
+def test_key_func_rotated_spoof_maps_to_same_bucket() -> None:
+    """Two requests from one real client with different attacker-supplied
+    XFF prefixes must hash to the same bucket — the LB-attested
+    second-to-last entry is identical in both.
+    """
+    real_client = "203.0.113.7"
+    lb = "169.254.1.1"
+
+    req_a = MagicMock(spec=Request)
+    del req_a.state.uid
+    req_a.headers = {"x-forwarded-for": f"1.1.1.1, {real_client}, {lb}"}
+    req_a.client = MagicMock()
+    req_a.client.host = lb
+
+    req_b = MagicMock(spec=Request)
+    del req_b.state.uid
+    req_b.headers = {"x-forwarded-for": f"2.2.2.2, {real_client}, {lb}"}
+    req_b.client = MagicMock()
+    req_b.client.host = lb
+
+    assert _key_by_uid_or_ip(req_a) == real_client
+    assert _key_by_uid_or_ip(req_b) == real_client
 
 
 def test_key_func_falls_back_to_remote_when_no_xff() -> None:
