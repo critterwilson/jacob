@@ -14,19 +14,19 @@ freely. Tests mock `_client()` and the public functions directly.
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from app.config import get_settings
 from app.errors import APIError
 
+# Env-var names retained for docs/tests; reads go through Settings.
 QUARANTINE_BUCKET_ENV = "JACOB_MEDIA_QUARANTINE_BUCKET"
 PUBLIC_BUCKET_ENV = "JACOB_MEDIA_PUBLIC_BUCKET"
 SIGNED_URL_TTL_MINUTES = 5
 
 
-def _bucket_name(env_var: str) -> str:
-    value = os.environ.get(env_var)
+def _require_bucket(value: str, env_var: str) -> str:
     if not value:
         raise APIError(
             status_code=500,
@@ -37,11 +37,11 @@ def _bucket_name(env_var: str) -> str:
 
 
 def quarantine_bucket_name() -> str:
-    return _bucket_name(QUARANTINE_BUCKET_ENV)
+    return _require_bucket(get_settings().jacob_media_quarantine_bucket, QUARANTINE_BUCKET_ENV)
 
 
 def public_bucket_name() -> str:
-    return _bucket_name(PUBLIC_BUCKET_ENV)
+    return _require_bucket(get_settings().jacob_media_public_bucket, PUBLIC_BUCKET_ENV)
 
 
 def _client() -> Any:

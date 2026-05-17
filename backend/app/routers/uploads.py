@@ -229,6 +229,8 @@ def finalize_upload(
             object_name=object_name,
             db=db,
             hash_source=hash_result.source,
+            size_bytes=len(image_bytes),
+            content_type=content_type,
         )
         doc_ref.update({"status": "rejected_csam"})
         logger.error(

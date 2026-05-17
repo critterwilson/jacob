@@ -15,10 +15,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.deps import get_current_user
-from app.errors import http_exception_handler
+from app.errors import APIError, http_exception_handler
 from app.models.user import CurrentUser
 from app.routers.uploads import router
-from app.services import moderation
+from app.services import moderation, storage
 
 
 def _make_app(uid: str = "alice") -> FastAPI:
@@ -278,6 +278,35 @@ def test_finalize_csam_hit_returns_451_and_records_queue() -> None:
     assert args["status"] == "pending"
 
 
+def test_finalize_csam_threads_size_and_content_type_to_ncmec() -> None:
+    """M6 — finalize_upload threads file size and MIME type from the
+    uploaded object into report_to_ncmec so the NCMEC CyberTipline
+    submission has the required file metadata."""
+    db = _make_finalize_db(uploader_uid="alice", mime_type="image/png")
+    ncmec_mock = MagicMock()
+    image_payload = b"image-bytes-of-known-length"  # 27 bytes
+
+    with (
+        patch("app.routers.uploads._db", return_value=db),
+        patch(
+            "app.routers.uploads.storage.download_quarantine_object",
+            return_value=image_payload,
+        ),
+        patch(
+            "app.routers.uploads.moderation.check_hash_service",
+            return_value=moderation.HashCheckResult(matched=True, source="ncmec"),
+        ),
+        patch("app.routers.uploads.storage.quarantine_permanently", MagicMock()),
+        patch("app.routers.uploads.moderation.report_to_ncmec", ncmec_mock),
+    ):
+        TestClient(_make_app()).post("/api/uploads/abc/finalize")
+
+    ncmec_mock.assert_called_once()
+    kwargs = ncmec_mock.call_args.kwargs
+    assert kwargs["size_bytes"] == len(image_payload)
+    assert kwargs["content_type"] == "image/png"
+
+
 def test_finalize_safesearch_fail_returns_422_and_quarantines() -> None:
     db = _make_finalize_db(uploader_uid="alice")
     quarantine_mock = MagicMock()
@@ -336,6 +365,37 @@ def test_finalize_already_finalized_returns_409() -> None:
         res = TestClient(_make_app()).post("/api/uploads/abc/finalize")
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "upload_already_finalized"
+
+
+# ── M5 — storage bucket settings flow through Settings ───────────────────────
+
+
+def test_storage_bucket_names_read_via_settings(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """M5 — storage bucket env vars now flow through Settings, not raw
+    os.environ. Setting the env still drives the helper because the
+    autouse conftest fixture clears the Settings lru_cache."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("JACOB_MEDIA_QUARANTINE_BUCKET", "bucket-q")
+    monkeypatch.setenv("JACOB_MEDIA_PUBLIC_BUCKET", "bucket-p")
+    get_settings.cache_clear()
+    assert storage.quarantine_bucket_name() == "bucket-q"
+    assert storage.public_bucket_name() == "bucket-p"
+
+
+def test_storage_bucket_unset_raises_500(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Missing bucket config still fails closed at first use with the
+    `config_error` shape, mirroring the pre-Settings behaviour."""
+    from app.config import get_settings
+
+    monkeypatch.delenv("JACOB_MEDIA_QUARANTINE_BUCKET", raising=False)
+    monkeypatch.delenv("JACOB_MEDIA_PUBLIC_BUCKET", raising=False)
+    get_settings.cache_clear()
+    import pytest
+
+    with pytest.raises(APIError) as exc:
+        storage.quarantine_bucket_name()
+    assert exc.value.detail["error"]["code"] == "config_error"
 
 
 # ── 403 banned coverage (PR1 sweep) ─────────────────────────────────────────

@@ -76,6 +76,23 @@ def _active_router_db() -> MagicMock | None:
 
 
 @pytest.fixture(autouse=True)
+def _reset_settings_cache():
+    """Clear the `get_settings` lru_cache around each test.
+
+    Several service modules now read configuration through `get_settings()`
+    rather than `os.environ.get(...)` directly (see M5 cleanup). Tests use
+    `monkeypatch.setenv(...)` to swap values; without a fresh cache the
+    first `get_settings()` call freezes the values for the rest of the
+    process. Clearing before AND after isolates tests from each other.
+    """
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _default_no_real_firestore():
     """Default-mock `app.deps.get_firestore` so deps that need Firestore can
     run without ADC. The mock returns "no bans for any uid" by default.
