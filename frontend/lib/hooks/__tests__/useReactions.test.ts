@@ -85,6 +85,35 @@ describe("useReactions hydration", () => {
     expect(mockApiPost).not.toHaveBeenCalled();
   });
 
+  it("drops optimisticRemove entries when the parent message disappears", async () => {
+    // L4 — if the message is deleted server-side between toggle and
+    // the next poll, the optimistic-remove entry was holding forever
+    // because the cleanup only ran when the message was still present.
+    const initialMsgs: Message[] = [
+      baseMessage({ id: "m1", myReactions: ["amen"] }),
+    ];
+    const { result, rerender } = renderHook(
+      ({ messages }: { messages: Message[] }) => useReactions("g1", messages),
+      { initialProps: { messages: initialMsgs } },
+    );
+    // User un-reacts → optimisticRemove holds the entry.
+    await act(async () => {
+      await result.current.toggle("m1", "amen");
+    });
+    expect(result.current.isMyReaction("m1", "amen")).toBe(false);
+    // Stale poll: message still present but still shows the reaction.
+    // optimisticRemove should still hold so the chip stays toggled off.
+    rerender({ messages: [baseMessage({ id: "m1", myReactions: ["amen"] })] });
+    expect(result.current.isMyReaction("m1", "amen")).toBe(false);
+    // Now the message is deleted server-side and drops out of the list.
+    // optimisticRemove must be cleaned up — otherwise the entry persists
+    // indefinitely and `mergeReactionCounts` would keep subtracting.
+    rerender({ messages: [] });
+    expect(result.current.mergeReactionCounts("m1", { amen: 1 })).toEqual({
+      amen: 1,
+    });
+  });
+
   it("optimistic add survives a hydrate from a stale message stream", async () => {
     const initialMsgs: Message[] = [baseMessage({ id: "m1", myReactions: [] })];
     const { result, rerender } = renderHook(

@@ -339,17 +339,35 @@ def _doc_to_reply(doc_id: str, data: dict[str, Any]) -> BoardReply:
     )
 
 
-def _encode_cursor(created_at: datetime, doc_id: str) -> str:
-    payload = f"{created_at.isoformat()}|{doc_id}".encode()
+def _encode_cursor(
+    created_at: datetime,
+    doc_id: str,
+    pinned_at: datetime | None = None,
+) -> str:
+    # `pinnedAt` is a 3rd, optional field for board-posts pagination.
+    # When the boundary page lands inside a pinned bucket, the next
+    # `start_after` must carry the pinnedAt value or the order-by-pinnedAt
+    # clause skips the rest of the bucket. Legacy 2-field cursors are
+    # still accepted by the decoder.
+    pinned_str = pinned_at.isoformat() if pinned_at is not None else ""
+    payload = f"{created_at.isoformat()}|{doc_id}|{pinned_str}".encode()
     return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
 
 
-def _decode_cursor(cursor: str) -> tuple[datetime, str] | None:
+def _decode_cursor(
+    cursor: str,
+) -> tuple[datetime, str, datetime | None] | None:
     try:
         padded = cursor + "=" * (-len(cursor) % 4)
         raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
-        ts_str, doc_id = raw.split("|", 1)
-        return datetime.fromisoformat(ts_str), doc_id
+        parts = raw.split("|", 2)
+        if len(parts) == 2:
+            # Legacy 2-field cursor (no pinnedAt) — accept for back-compat.
+            ts_str, doc_id = parts
+            return datetime.fromisoformat(ts_str), doc_id, None
+        ts_str, doc_id, pinned_str = parts
+        pinned_at = datetime.fromisoformat(pinned_str) if pinned_str else None
+        return datetime.fromisoformat(ts_str), doc_id, pinned_at
     except Exception:  # noqa: BLE001
         return None
 
@@ -401,11 +419,18 @@ def list_board_posts(
                 code="invalid_cursor",
                 message="Cursor is malformed",
             )
-        cursor_ts, cursor_doc_id = decoded
+        cursor_ts, cursor_doc_id, cursor_pinned_at = decoded
         # Include __name__ as a tie-breaker so posts with identical
         # createdAt aren't skipped or duplicated at the page boundary.
+        # The `pinnedAt` value carries from the previous page so a
+        # boundary that falls inside the pinned bucket doesn't skip the
+        # remaining pinned posts on page 2.
         query = query.order_by("__name__", direction=fb_firestore.Query.DESCENDING).start_after(
-            {"pinnedAt": None, "createdAt": cursor_ts, "__name__": cursor_doc_id}
+            {
+                "pinnedAt": cursor_pinned_at,
+                "createdAt": cursor_ts,
+                "__name__": cursor_doc_id,
+            }
         )
 
     query = query.limit(limit + 1)
@@ -425,8 +450,9 @@ def list_board_posts(
     if has_more and snaps:
         last_data = snaps[-1].to_dict() or {}
         last_ts = _ts_to_dt(last_data.get("createdAt"))
+        last_pinned = _ts_to_dt(last_data.get("pinnedAt"))
         if last_ts is not None:
-            next_cursor = _encode_cursor(last_ts, snaps[-1].id)
+            next_cursor = _encode_cursor(last_ts, snaps[-1].id, last_pinned)
 
     return BoardPostsResponse(posts=posts, nextCursor=next_cursor)
 
@@ -490,7 +516,7 @@ def list_board_replies(
                 code="invalid_cursor",
                 message="Cursor is malformed",
             )
-        cursor_ts, cursor_doc_id = decoded
+        cursor_ts, cursor_doc_id, _ = decoded
         # Include __name__ as a tie-breaker so replies with identical
         # createdAt aren't skipped or duplicated at the page boundary.
         query = query.order_by("__name__", direction=fb_firestore.Query.ASCENDING).start_after(

@@ -99,6 +99,9 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   if (!isPublicPath(pathname)) {
+    // UX hint only — not an auth gate. The cookie is mirrored from the
+    // bootstrap response and can be spoofed; real access control lives
+    // in FastAPI deps (`get_current_user` + `require_member` etc.).
     const hasProfile =
       request.cookies.get("jacob-has-profile")?.value === "1";
     if (!hasProfile) {

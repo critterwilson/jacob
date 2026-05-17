@@ -250,6 +250,26 @@ runbook. Requires legal/counsel sign-off per existing comment in
 
 ---
 
+## `leaderUids` backfill — operator task, no longer urgent
+
+**Where:** `infra/scripts/backfill_group_leaders.py` (H5 follow-up). The
+script reconciles `groups/{gid}.leaderUids` from the `members`
+subcollection so the discover endpoint stops falling back to the
+per-group N+1 scan for pre-`onMemberWrite` groups. Running it requires
+`firebase-admin` installed locally and a service-account credential.
+
+**Status:** Parked as an operator task. PR #233 (deletion-cascade —
+H3) made the founder-fallback in `finalize_account` resilient to a
+stale or missing `leaderUids` denorm: the founder-handoff path reads
+the `members` subcollection directly when the array is empty, so a
+stale denorm no longer blocks account deletion. The backfill is still
+worth running once for the discover-endpoint perf win, but it is no
+longer urgent.
+
+**Complexity:** Trivial — one script, one credential.
+
+---
+
 ## M4 — `announce_message` fan-out blocks the request thread
 
 **Where:** `backend/app/routers/groups.py` — `announce_message`

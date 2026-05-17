@@ -758,10 +758,35 @@ def finalize_account(uid: str) -> dict[str, Any]:
     }
 
 
+_FIND_USERS_DUE_PAGE = 200
+
+
 def find_users_due(now: datetime | None = None) -> list[str]:
-    """UIDs whose deletionRequestedAt + 14d <= now."""
+    """UIDs whose deletionRequestedAt + 14d <= now.
+
+    Paginates by `deletionRequestedAt` ascending so a future scale event
+    (a thousand grace-window expiries on the same tick) doesn't surprise
+    the daily job with an unbounded `stream()`.
+    """
     now = now or datetime.now(UTC)
     cutoff = now - timedelta(days=GRACE_PERIOD_DAYS)
     db = _db()
-    query = db.collection("users").where("deletionRequestedAt", "<=", cutoff)
-    return [snap.id for snap in query.stream()]
+    uids: list[str] = []
+    last_snap: Any = None
+    while True:
+        query = (
+            db.collection("users")
+            .where("deletionRequestedAt", "<=", cutoff)
+            .order_by("deletionRequestedAt")
+            .limit(_FIND_USERS_DUE_PAGE)
+        )
+        if last_snap is not None:
+            query = query.start_after(last_snap)
+        batch = list(query.stream())
+        if not batch:
+            break
+        uids.extend(snap.id for snap in batch)
+        if len(batch) < _FIND_USERS_DUE_PAGE:
+            break
+        last_snap = batch[-1]
+    return uids

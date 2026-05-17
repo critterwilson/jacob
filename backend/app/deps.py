@@ -123,7 +123,10 @@ def get_current_user(
     except firebase_auth.InvalidIdTokenError:
         # Fall through to the emulator-token path if the gate is open.
         decoded = None
-    except Exception:
+    except Exception as exc:
+        # Catches JWKS transport / DNS / clock-skew failures so Sentry
+        # can distinguish a Google outage from an invalid-token spike.
+        logger.warning("verify_id_token_failed reason=%s", exc)
         decoded = None
 
     if decoded is None:

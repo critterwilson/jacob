@@ -212,6 +212,105 @@ def test_list_board_posts_cursor_passes_doc_id_for_tie_break() -> None:
     assert arg["__name__"] == "p-cursor"
 
 
+# ── L1: page boundary inside the pinned bucket carries pinnedAt forward ───
+
+
+def _post_snap_with_pinned(
+    *, pid: str, pinned_at: datetime | None, created_at: datetime
+) -> MagicMock:
+    snap = MagicMock()
+    snap.id = pid
+    snap.exists = True
+    snap.to_dict.return_value = {
+        "authorUid": "bob",
+        "body": "x",
+        "createdAt": created_at,
+        "pinnedAt": pinned_at,
+    }
+    return snap
+
+
+def test_list_board_posts_next_cursor_encodes_pinned_at() -> None:
+    """When a page boundary falls inside the pinned bucket (the last item
+    on the page has a non-null pinnedAt), the emitted cursor must encode
+    that pinnedAt so page 2's start_after can resume inside the bucket.
+    Without this, page 2 would skip the rest of the pinned posts.
+    """
+    import base64
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = MagicMock()
+    posts_col = db.collection.return_value.document.return_value.collection.return_value
+
+    pinned_a = datetime(2026, 5, 3, tzinfo=UTC)
+    pinned_b = datetime(2026, 5, 2, tzinfo=UTC)
+    created_a = datetime(2026, 5, 1, tzinfo=UTC)
+    created_b = datetime(2026, 4, 30, tzinfo=UTC)
+    # Three snaps: limit=2 ⇒ has_more, last returned is still pinned.
+    snaps = [
+        _post_snap_with_pinned(pid="p1", pinned_at=pinned_a, created_at=created_a),
+        _post_snap_with_pinned(pid="p2", pinned_at=pinned_b, created_at=created_b),
+        _post_snap_with_pinned(pid="p3", pinned_at=None, created_at=created_b),
+    ]
+    chain = posts_col.where.return_value.order_by.return_value.order_by.return_value
+    chain.limit.return_value.stream.return_value = iter(snaps)
+
+    with patch("app.routers.boards._db", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get("/api/boards/b1/posts?limit=2")
+    assert res.status_code == 200
+    body = res.json()
+    assert [p["postId"] for p in body["posts"]] == ["p1", "p2"]
+    assert body["nextCursor"], "expected a next cursor with more pages"
+
+    # The cursor must round-trip to (createdAt, doc_id, pinnedAt).
+    padded = body["nextCursor"] + "=" * (-len(body["nextCursor"]) % 4)
+    raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    parts = raw.split("|", 2)
+    assert len(parts) == 3, f"expected 3-field cursor, got {parts!r}"
+    ts_str, doc_id, pinned_str = parts
+    assert doc_id == "p2"
+    assert datetime.fromisoformat(ts_str) == created_b
+    assert pinned_str, "expected non-empty pinnedAt in cursor"
+    assert datetime.fromisoformat(pinned_str) == pinned_b
+
+
+def test_list_board_posts_cursor_with_pinned_passes_it_to_start_after() -> None:
+    """A cursor that encodes pinnedAt must be decoded and passed to
+    start_after — otherwise page 2 hardcodes pinnedAt=None and skips the
+    rest of the pinned bucket."""
+    import base64
+
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = MagicMock()
+    posts_col = db.collection.return_value.document.return_value.collection.return_value
+    where_chain = posts_col.where.return_value.order_by.return_value.order_by.return_value
+    name_order_chain = where_chain.order_by.return_value
+    name_order_chain.start_after.return_value.limit.return_value.stream.return_value = iter([])
+
+    base = datetime(2026, 5, 1, tzinfo=UTC)
+    pinned = datetime(2026, 5, 4, tzinfo=UTC)
+    cursor_str = (
+        base64.urlsafe_b64encode(f"{base.isoformat()}|p-cursor|{pinned.isoformat()}".encode())
+        .decode("ascii")
+        .rstrip("=")
+    )
+
+    with patch("app.routers.boards._db", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get(f"/api/boards/b1/posts?cursor={cursor_str}")
+    assert res.status_code == 200
+
+    sa_calls = name_order_chain.start_after.call_args_list
+    assert sa_calls, "expected start_after call"
+    arg = sa_calls[0].args[0]
+    assert (
+        arg["pinnedAt"] == pinned
+    ), f"start_after must receive the decoded pinnedAt, not None; got {arg!r}"
+    assert arg["createdAt"] == base
+    assert arg["__name__"] == "p-cursor"
+
+
 def test_list_board_replies_cursor_passes_doc_id_for_tie_break() -> None:
     """Replies cursor pagination also tie-breaks on __name__."""
     import base64

@@ -108,15 +108,42 @@ def test_hash_provider_noop_logs_warning(monkeypatch, caplog) -> None:  # type: 
     assert any("csam_hash_check_noop" in r.message for r in caplog.records)
 
 
-def test_hash_provider_invalid_value_raises(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Random strings (non-URL, non-sentinel) fail closed."""
+def test_hash_provider_invalid_value_raises_at_boot(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Random strings (non-URL, non-sentinel) fail-closed at Settings load.
+
+    N1 — validation lives on the pydantic model_validator, so a
+    misconfigured container fails to start rather than rejecting the
+    first user upload.
+    """
+    from app.config import Settings, get_settings
+
     monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
     monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, "totally-not-a-url")
-    _force_production_env(monkeypatch)
+    get_settings.cache_clear()
     import pytest
+    from pydantic import ValidationError
 
-    with pytest.raises(RuntimeError, match="not a recognised sentinel"):
-        moderation.check_hash_service("deadbeef")
+    with pytest.raises(ValidationError, match="not a recognised sentinel"):
+        Settings()
+
+
+def test_hash_provider_valid_url_accepted_at_boot(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """http(s):// URLs pass the boot-time validator."""
+    from app.config import Settings, get_settings
+
+    monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, "https://hash.example.com/x")
+    get_settings.cache_clear()
+    assert Settings().jacob_hash_provider == "https://hash.example.com/x"
+
+
+def test_hash_provider_sentinels_accepted_at_boot(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """'disabled' and 'noop' pass the boot-time validator."""
+    from app.config import Settings, get_settings
+
+    for sentinel in ("disabled", "noop"):
+        monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, sentinel)
+        get_settings.cache_clear()
+        assert Settings().jacob_hash_provider == sentinel
 
 
 def test_hash_provider_legacy_url_env_still_works(monkeypatch) -> None:  # type: ignore[no-untyped-def]

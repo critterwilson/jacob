@@ -80,16 +80,24 @@ export function useReactions(gid: string, messages?: readonly Message[]) {
       });
       return changed ? next : prev;
     });
+    const presentMids = new Set<string>();
+    for (const m of messages) presentMids.add(m.id);
     setOptimisticRemove((prev) => {
       let changed = false;
       const next = new Set(prev);
       prev.forEach((k) => {
         const [mid] = splitKey(k);
-        // Only drop the pending remove once the server-of-record for that
-        // message has come back without the slug. If the message hasn't
-        // been re-fetched yet, hold the optimistic state.
-        const messageStillPresent = messages.some((m) => m.id === mid);
-        if (messageStillPresent && !serverHas.has(k)) {
+        if (!presentMids.has(mid)) {
+          // Message was deleted server-side between the toggle and the
+          // next poll — there's no chip left to render the optimistic
+          // state against. Drop the entry so it doesn't persist forever.
+          next.delete(k);
+          changed = true;
+          return;
+        }
+        // Drop the pending remove once the server-of-record for that
+        // message has come back without the slug.
+        if (!serverHas.has(k)) {
           next.delete(k);
           changed = true;
         }

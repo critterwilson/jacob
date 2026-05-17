@@ -117,6 +117,19 @@ def test_unexpected_verifier_error_returns_401(client: TestClient) -> None:
     assert res.json()["error"]["code"] == "unauthenticated"
 
 
+def test_unexpected_verifier_error_emits_warning_log(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """L3 — JWKS / transport / clock-skew failures must log a warning so
+    Sentry can distinguish a Google outage from an invalid-token spike."""
+    with _patch_verify(side_effect=RuntimeError("jwks fetch failed")):
+        with caplog.at_level("WARNING", logger="app.deps"):
+            client.get("/me", headers={"Authorization": "Bearer t"})
+    matched = [r for r in caplog.records if "verify_id_token_failed" in r.message]
+    assert matched, "expected verify_id_token_failed warning log line"
+    assert "jwks fetch failed" in matched[0].message
+
+
 def test_non_admin_forbidden(client: TestClient) -> None:
     with _patch_verify(return_value={"uid": "alice", "admin": False}):
         res = client.get("/admin", headers={"Authorization": "Bearer t"})

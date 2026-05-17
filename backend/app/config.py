@@ -167,6 +167,26 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_hash_provider(self) -> "Settings":
+        # Fail-closed at boot if JACOB_HASH_PROVIDER is set to something
+        # that isn't a recognised sentinel or http(s) URL. Previously the
+        # bad-value check lived in services/moderation, so a typo only
+        # surfaced at first-upload — misconfigured deploys then rejected
+        # real user uploads. Validating here means the container fails to
+        # start, which is the louder + safer signal.
+        explicit = (self.jacob_hash_provider or "").strip()
+        if not explicit:
+            return self
+        if explicit in ("disabled", "noop"):
+            return self
+        if explicit.startswith("http://") or explicit.startswith("https://"):
+            return self
+        raise ValueError(
+            f"JACOB_HASH_PROVIDER={explicit!r} is not a recognised sentinel "
+            "('disabled', 'noop') and not an http(s) URL."
+        )
+
     @property
     def cors_origins_list(self) -> list[str]:
         if self.cors_allowed_origins:
