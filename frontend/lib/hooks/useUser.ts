@@ -49,6 +49,12 @@ export type UseUserResult =
  */
 export function setHasProfileCookie(hasProfile: boolean): void {
   if (typeof document === "undefined") return;
+  // Same-origin prod already received Set-Cookie from the backend, so
+  // the cookie is on this document. Skip the redundant write to keep
+  // dev-tools noise down. (Idempotent either way.)
+  const alreadyHasProfile = document.cookie.includes("jacob-has-profile=1");
+  if (hasProfile && alreadyHasProfile) return;
+  if (!hasProfile && !document.cookie.includes("jacob-has-profile=")) return;
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
   if (hasProfile) {
     document.cookie = `jacob-has-profile=1; path=/; SameSite=Lax${secure}`;

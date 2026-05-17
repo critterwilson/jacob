@@ -899,11 +899,15 @@ def test_cleanup_rtdb_for_user_swallows_per_gid_errors() -> None:
 
 def test_find_users_due_uses_cutoff() -> None:
     db = MagicMock()
-    where_mock = MagicMock()
-    db.collection.return_value.where.return_value = where_mock
+    # N2 — query now chains .where().order_by().limit() before .stream().
+    paged_chain = (
+        db.collection.return_value.where.return_value.order_by.return_value.limit.return_value
+    )
     snap1 = MagicMock(id="alice")
     snap2 = MagicMock(id="bob")
-    where_mock.stream.return_value = iter([snap1, snap2])
+    # First page returns both UIDs; second page (start_after) returns empty.
+    paged_chain.stream.return_value = iter([snap1, snap2])
+    paged_chain.start_after.return_value.stream.return_value = iter([])
 
     fixed_now = datetime(2026, 5, 1, tzinfo=UTC)
     with patch("app.services.deletion._db", return_value=db):
@@ -914,3 +918,25 @@ def test_find_users_due_uses_cutoff() -> None:
     assert args[1] == "<="
     cutoff = args[2]
     assert cutoff == fixed_now - timedelta(days=14)
+
+
+def test_find_users_due_paginates_across_pages() -> None:
+    """N2 — find_users_due streams in 200-uid pages, advancing with
+    start_after. A future-scale cutoff that matches >200 users must not
+    truncate the result."""
+    db = MagicMock()
+    base = db.collection.return_value.where.return_value.order_by.return_value
+    page_limit_chain = base.limit.return_value
+    # First full page (200 uids), trigger pagination; second short page ends loop.
+    first_page = [MagicMock(id=f"u{i}") for i in range(200)]
+    second_page = [MagicMock(id="last")]
+    page_limit_chain.stream.return_value = iter(first_page)
+    page_limit_chain.start_after.return_value.stream.return_value = iter(second_page)
+
+    with patch("app.services.deletion._db", return_value=db):
+        due = deletion.find_users_due(now=datetime(2026, 5, 1, tzinfo=UTC))
+
+    assert len(due) == 201
+    assert due[-1] == "last"
+    # start_after must be invoked exactly once (after the first full page).
+    page_limit_chain.start_after.assert_called_once_with(first_page[-1])
