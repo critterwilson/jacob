@@ -2,44 +2,39 @@
 
 Key function: prefer the authenticated user's UID (set on request.state by
 get_current_user), fall back to the originating client IP for
-unauthenticated routes. Cloud Run sits behind a Google load balancer that
-terminates the connection and forwards the original IP in
-X-Forwarded-For; without consulting that header, every unauthenticated
-request shares one bucket (the LB's IP).
+unauthenticated routes.
+
+Client-IP extraction is **position-based, not content-based**. Cloud Run
+sits behind a Google HTTPS load balancer that appends exactly two entries
+to X-Forwarded-For — `<client-IP-as-seen-by-the-LB>, <LB-forwarding-rule-IP>`
+— regardless of what the caller supplied. The LB-attested client IP is
+therefore the second-to-last entry; anything before is attacker-controlled
+and a caller rotating a fresh leftmost value per request would otherwise
+trivially bypass per-IP limits.
 """
 
 from __future__ import annotations
-
-import ipaddress
 
 from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 
-def _is_internal(ip: str) -> bool:
-    try:
-        addr = ipaddress.ip_address(ip)
-    except ValueError:
-        return True
-    return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
-
-
 def _client_ip(request: Request) -> str:
-    """Left-most non-internal value of X-Forwarded-For; else direct peer.
+    """Return the GCP-LB-attested client IP, or the direct peer.
 
-    uvicorn's --proxy-headers will already rewrite request.client.host to
-    the leftmost forwarded address, but we read X-Forwarded-For directly
-    too: it covers paths where the proxy-headers rewrite is unavailable
-    (e.g. behind a misconfigured proxy or in unit tests) and lets us skip
-    intermediate private hops.
+    GCP HTTPS LB always appends `<client>, <LB>` to X-Forwarded-For, so
+    the trusted value is the second-to-last entry. When XFF is missing
+    or has fewer than two entries (local dev, unit tests), fall back to
+    the direct peer.
     """
     xff = request.headers.get("x-forwarded-for")
     if xff:
-        for raw in xff.split(","):
-            candidate = raw.strip()
-            if candidate and not _is_internal(candidate):
-                return candidate
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if len(parts) >= 2:
+            return parts[-2]
+        if len(parts) == 1:
+            return parts[0]
     return get_remote_address(request)
 
 
