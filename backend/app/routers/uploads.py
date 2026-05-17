@@ -209,7 +209,12 @@ def finalize_upload(
         ) from None
 
     image_hash = moderation.hash_image(image_bytes)
-    hash_result = moderation.check_hash_service(image_hash)
+    size_bytes = len(image_bytes)
+    hash_result = moderation.check_hash_service(
+        image_hash,
+        size_bytes=size_bytes,
+        content_type=content_type,
+    )
     if hash_result.matched:
         storage.quarantine_permanently(object_name)
         db.collection("moderation_queue").document(upload_id).set(
@@ -229,6 +234,8 @@ def finalize_upload(
             object_name=object_name,
             db=db,
             hash_source=hash_result.source,
+            size_bytes=size_bytes,
+            content_type=content_type,
         )
         doc_ref.update({"status": "rejected_csam"})
         logger.error(

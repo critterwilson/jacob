@@ -76,6 +76,23 @@ def _active_router_db() -> MagicMock | None:
 
 
 @pytest.fixture(autouse=True)
+def _reset_settings_cache():
+    """Clear the @lru_cache on `get_settings()` before each test.
+
+    M5 — moderation/CSAM/NCMEC/storage/appeals env vars now flow through
+    `Settings` instead of `os.environ.get`. Tests freely call
+    `monkeypatch.setenv(...)`; without a fresh Settings each test, the
+    cached instance would carry stale values across tests and the
+    monkeypatched env-var would never reach the consumer.
+    """
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _default_no_real_firestore():
     """Default-mock `app.deps.get_firestore` so deps that need Firestore can
     run without ADC. The mock returns "no bans for any uid" by default.

@@ -124,6 +124,56 @@ class Settings(BaseSettings):
         "ns1,ns2,app,auth,docs,static,support,internal,platform"
     )
 
+    # M5 — moderation/CSAM/NCMEC/storage/appeals env vars consolidated
+    # here so pydantic-settings type-checks them at boot. Previously each
+    # service called `os.environ.get(...)` ad-hoc, which silently
+    # tolerated typos in the env name (a misspelled JACOB_HASH_PROVIDER
+    # would fall through to `_resolve_hash_provider`'s legacy / default
+    # branch and bypass CSAM scanning in dev). Declaring them as fields
+    # also documents the full surface area in one place.
+
+    # T20 / moderation pipeline — dev/test bypass for SafeSearch + CSAM
+    # hash check. Production must leave this unset. See
+    # docs/moderation-pipeline.md.
+    jacob_disable_moderation: bool = False
+
+    # T20 / C2 — CSAM hash provider. Sentinels: "disabled", "noop".
+    # Any other value must be an http(s) URL. Unset in production
+    # makes `check_hash_service` raise (fail closed).
+    jacob_hash_provider: str = ""
+    # Legacy URL-only override; honoured only when jacob_hash_provider
+    # is unset. New deploys should use jacob_hash_provider.
+    jacob_hash_service_url: str = ""
+
+    # T63 / NCMEC — operator submit kill-switch on POST /admin/ncmec/{id}/submit.
+    # Set true to disable manual submission via the admin UI.
+    ncmec_submit_disabled: bool = False
+    # T63 / C3 — kill-switch for auto-submit from the upload-finalize
+    # pipeline. Default TRUE because the HTTPS integration isn't wired
+    # in v1; flipping false only meaningful once submit_case() does a
+    # real HTTPS POST. Operators handle each case manually via
+    # /admin/ncmec — see docs/runbooks/csam-incident.md.
+    jacob_ncmec_submit_disabled: bool = True
+    # T63 — NCMEC CyberTipline endpoint. Recorded in the
+    # MANUAL_ACTION_REQUIRED log line on hash-match (not actually called
+    # in v1, per ADR 0010).
+    jacob_ncmec_endpoint: str = ""
+
+    # T11 / uploads — GCS buckets for the moderation pipeline. Required
+    # in any environment that runs uploads; `_bucket_name` raises 500
+    # config_error if unset at request time.
+    jacob_media_quarantine_bucket: str = ""
+    jacob_media_public_bucket: str = ""
+
+    # T29 / analytics — automatically set by Google Cloud Run; used as
+    # the BigQuery project fallback when bq_project isn't explicitly set.
+    google_cloud_project: str = ""
+
+    # T64 / appeals — test-only override for the "different admin must
+    # decide" rule. Set true in single-admin deployments / dev so an
+    # admin can review their own action. NEVER set in production.
+    jacob_allow_self_appeal_review: bool = False
+
     @model_validator(mode="after")
     def _block_emulator_tokens_in_production(self) -> "Settings":
         # Hard fail-closed: production must never accept emulator tokens.

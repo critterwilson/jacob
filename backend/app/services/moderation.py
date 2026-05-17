@@ -34,7 +34,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -48,14 +47,13 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Env-var names pinned for documentation + back-compat with tests that
+# monkeypatch via these constants. The actual reads route through
+# `Settings` so pydantic-settings type-checks the values at boot.
 DISABLE_MODERATION_ENV = "JACOB_DISABLE_MODERATION"
 HASH_PROVIDER_ENV = "JACOB_HASH_PROVIDER"
 HASH_SERVICE_URL_ENV = "JACOB_HASH_SERVICE_URL"
 NCMEC_ENDPOINT_ENV = "JACOB_NCMEC_ENDPOINT"
-# C3 — explicit kill-switch for automatic NCMEC submission. Default true
-# because the HTTPS integration isn't wired in v1; flipping this to false
-# is meaningless until that lands. Operators handle submission manually
-# via /admin/ncmec — see docs/runbooks/csam-incident.md.
 NCMEC_AUTOSUBMIT_DISABLED_ENV = "JACOB_NCMEC_SUBMIT_DISABLED"
 
 # Recognised non-URL provider sentinels.
@@ -78,7 +76,7 @@ class HashCheckResult:
 
 
 def moderation_disabled() -> bool:
-    return os.environ.get(DISABLE_MODERATION_ENV, "").lower() in {"1", "true", "yes"}
+    return get_settings().jacob_disable_moderation
 
 
 def hash_image(image_bytes: bytes) -> str:
@@ -108,25 +106,38 @@ def _resolve_hash_provider() -> str:
     Returns one of: ``""`` (unset → caller fails closed in production,
     silently disabled in dev), ``"disabled"``, ``"noop"``, or a URL.
     """
-    explicit = os.environ.get(HASH_PROVIDER_ENV, "").strip()
+    settings = get_settings()
+    explicit = settings.jacob_hash_provider.strip()
     if explicit:
         return explicit
-    legacy_url = os.environ.get(HASH_SERVICE_URL_ENV, "").strip()
+    legacy_url = settings.jacob_hash_service_url.strip()
     if legacy_url:
         return legacy_url
-    if get_settings().environment == "development":
+    if settings.environment == "development":
         return _PROVIDER_DISABLED
     return ""
 
 
-def check_hash_service(image_hash: str) -> HashCheckResult:
+def check_hash_service(
+    image_hash: str,
+    *,
+    size_bytes: int | None = None,
+    content_type: str | None = None,
+) -> HashCheckResult:
     """CSAM hash lookup. Stub HTTP shape — vendor TBD before launch.
 
     The endpoint is expected to accept `{"hash": "<sha256>"}` and return
     `{"matched": bool, "source": "<list-name>"}`. Real integration must
     be in place before opening uploads to real users (see lawyer-review
     checklist in `docs/moderation-pipeline.md`).
+
+    `size_bytes` / `content_type` are threaded through from the upload
+    handler (M6) so they can be forwarded to a vendor API that wants
+    them and so they reach `report_to_ncmec` via the caller. The stub
+    POST body is unchanged — extending the wire format is gated on the
+    real vendor integration.
     """
+    _ = size_bytes, content_type  # forwarded by caller; not yet on the wire
     if moderation_disabled():
         return HashCheckResult(matched=False)
 
@@ -180,8 +191,7 @@ def ncmec_autosubmit_disabled() -> bool:
     integration is deliberately enabled (which today means: there is
     no integration, so this always defaults to disabled).
     """
-    raw = os.environ.get(NCMEC_AUTOSUBMIT_DISABLED_ENV, "true").lower()
-    return raw not in {"0", "false", "no"}
+    return get_settings().jacob_ncmec_submit_disabled
 
 
 def report_to_ncmec(
@@ -191,6 +201,8 @@ def report_to_ncmec(
     object_name: str,
     db: Any | None = None,
     hash_source: str | None = None,
+    size_bytes: int | None = None,
+    content_type: str | None = None,
 ) -> str | None:
     """Surface a CSAM hash match for operator handling (C3).
 
@@ -209,7 +221,7 @@ def report_to_ncmec(
     "manual NCMEC submission required" line in the runbook. See
     `docs/runbooks/csam-incident.md` for the operator workflow.
     """
-    endpoint = os.environ.get(NCMEC_ENDPOINT_ENV)
+    endpoint = get_settings().jacob_ncmec_endpoint or None
     autosubmit_disabled = ncmec_autosubmit_disabled()
     logger.critical(
         "MANUAL_ACTION_REQUIRED ncmec_report hash=%s uploader=%s object=%s "
@@ -236,6 +248,13 @@ def report_to_ncmec(
                 "gcsPath": object_name,
                 "sha256": image_hash,
                 "source": "upload_finalize",
+                # M6 — operator queue at /admin/ncmec/pending was showing
+                # sizeBytes: 0 / contentType: null on every auto-created
+                # case. Both are known at the call site and required for
+                # the operator to triage the case without re-fetching
+                # the bytes.
+                "sizeBytes": size_bytes,
+                "contentType": content_type,
             },
             suspect_uid=uploader_uid,
         )

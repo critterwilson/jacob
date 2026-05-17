@@ -244,12 +244,13 @@ def test_finalize_csam_hit_returns_451_and_records_queue() -> None:
     db = _make_finalize_db(uploader_uid="alice")
     quarantine_mock = MagicMock()
     ncmec_mock = MagicMock()
+    image_bytes = b"image-bytes"  # 11 bytes; matches len() below
 
     with (
         patch("app.routers.uploads._db", return_value=db),
         patch(
             "app.routers.uploads.storage.download_quarantine_object",
-            return_value=b"image-bytes",
+            return_value=image_bytes,
         ),
         patch(
             "app.routers.uploads.moderation.check_hash_service",
@@ -276,6 +277,13 @@ def test_finalize_csam_hit_returns_451_and_records_queue() -> None:
     args = db._moderation_doc.set.call_args[0][0]
     assert args["reason"] == "csam_hash_match"
     assert args["status"] == "pending"
+
+    # M6 — finalize threads sizeBytes (the actual byte count, not the
+    # client-claimed one) and contentType through to report_to_ncmec so
+    # the operator queue has them on the case row.
+    ncmec_kwargs = ncmec_mock.call_args.kwargs
+    assert ncmec_kwargs["size_bytes"] == len(image_bytes)
+    assert ncmec_kwargs["content_type"] == "image/jpeg"
 
 
 def test_finalize_safesearch_fail_returns_422_and_quarantines() -> None:

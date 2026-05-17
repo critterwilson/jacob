@@ -196,6 +196,33 @@ def test_report_to_ncmec_creates_case_when_db_supplied(monkeypatch) -> None:  # 
     assert captured["kwargs"]["suspect_uid"] == "alice"
 
 
+def test_report_to_ncmec_evidence_includes_size_and_content_type(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """M6: operator-queue cases now carry sizeBytes + contentType."""
+    monkeypatch.delenv(moderation.NCMEC_ENDPOINT_ENV, raising=False)
+
+    captured: dict[str, object] = {}
+
+    def _fake_create_case(db, **kwargs):  # type: ignore[no-untyped-def]
+        captured["kwargs"] = kwargs
+        return "case-id-456"
+
+    with patch("app.services.ncmec.create_case", _fake_create_case):
+        moderation.report_to_ncmec(
+            image_hash="deadbeef",
+            uploader_uid="alice",
+            object_name="uploads/alice/abc.jpg",
+            db="<sentinel-db>",
+            hash_source="PhotoDNA",
+            size_bytes=12_345,
+            content_type="image/jpeg",
+        )
+
+    evidence = captured["kwargs"]["evidence"]  # type: ignore[index]
+    assert evidence["sizeBytes"] == 12_345
+    assert evidence["contentType"] == "image/jpeg"
+    assert evidence["gcsPath"] == "uploads/alice/abc.jpg"
+
+
 def test_ncmec_autosubmit_disabled_default_true(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.delenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, raising=False)
     assert moderation.ncmec_autosubmit_disabled() is True
