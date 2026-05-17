@@ -34,7 +34,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import urllib.request
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -48,6 +47,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Env-var names retained for docs/tests; reads go through Settings.
 DISABLE_MODERATION_ENV = "JACOB_DISABLE_MODERATION"
 HASH_PROVIDER_ENV = "JACOB_HASH_PROVIDER"
 HASH_SERVICE_URL_ENV = "JACOB_HASH_SERVICE_URL"
@@ -78,7 +78,7 @@ class HashCheckResult:
 
 
 def moderation_disabled() -> bool:
-    return os.environ.get(DISABLE_MODERATION_ENV, "").lower() in {"1", "true", "yes"}
+    return get_settings().jacob_disable_moderation
 
 
 def hash_image(image_bytes: bytes) -> str:
@@ -108,13 +108,14 @@ def _resolve_hash_provider() -> str:
     Returns one of: ``""`` (unset → caller fails closed in production,
     silently disabled in dev), ``"disabled"``, ``"noop"``, or a URL.
     """
-    explicit = os.environ.get(HASH_PROVIDER_ENV, "").strip()
+    settings = get_settings()
+    explicit = (settings.jacob_hash_provider or "").strip()
     if explicit:
         return explicit
-    legacy_url = os.environ.get(HASH_SERVICE_URL_ENV, "").strip()
+    legacy_url = (settings.jacob_hash_service_url or "").strip()
     if legacy_url:
         return legacy_url
-    if get_settings().environment == "development":
+    if settings.environment == "development":
         return _PROVIDER_DISABLED
     return ""
 
@@ -180,8 +181,7 @@ def ncmec_autosubmit_disabled() -> bool:
     integration is deliberately enabled (which today means: there is
     no integration, so this always defaults to disabled).
     """
-    raw = os.environ.get(NCMEC_AUTOSUBMIT_DISABLED_ENV, "true").lower()
-    return raw not in {"0", "false", "no"}
+    return get_settings().jacob_ncmec_submit_disabled
 
 
 def report_to_ncmec(
@@ -191,6 +191,8 @@ def report_to_ncmec(
     object_name: str,
     db: Any | None = None,
     hash_source: str | None = None,
+    size_bytes: int | None = None,
+    content_type: str | None = None,
 ) -> str | None:
     """Surface a CSAM hash match for operator handling (C3).
 
@@ -203,21 +205,28 @@ def report_to_ncmec(
       service uses) so the manual-handoff queue lights up automatically
       on each detection. Returns the case id; otherwise returns None.
 
+    `size_bytes` and `content_type` describe the offending object and are
+    embedded in the evidence dict so the operator filing the manual NCMEC
+    report has the file metadata required by the CyberTipline form
+    (NCMEC requires file size + MIME type per submission).
+
     The HTTPS call to NCMEC's CyberTipline is intentionally NOT made.
     `JACOB_NCMEC_SUBMIT_DISABLED` (default true) is the kill-switch for
     that path; until the integration lands, every detection becomes a
     "manual NCMEC submission required" line in the runbook. See
     `docs/runbooks/csam-incident.md` for the operator workflow.
     """
-    endpoint = os.environ.get(NCMEC_ENDPOINT_ENV)
+    endpoint = get_settings().jacob_ncmec_endpoint
     autosubmit_disabled = ncmec_autosubmit_disabled()
     logger.critical(
         "MANUAL_ACTION_REQUIRED ncmec_report hash=%s uploader=%s object=%s "
-        "endpoint=%s autosubmit_disabled=%s — operator must file "
-        "manually via /admin/ncmec (see docs/runbooks/csam-incident.md).",
+        "size=%s contentType=%s endpoint=%s autosubmit_disabled=%s — operator must "
+        "file manually via /admin/ncmec (see docs/runbooks/csam-incident.md).",
         image_hash,
         uploader_uid,
         object_name,
+        size_bytes if size_bytes is not None else "<unset>",
+        content_type or "<unset>",
         endpoint or "<unset>",
         autosubmit_disabled,
     )
@@ -228,15 +237,20 @@ def report_to_ncmec(
         # module load time.
         from app.services import ncmec as ncmec_service
 
+        evidence: dict[str, Any] = {
+            "gcsPath": object_name,
+            "sha256": image_hash,
+            "source": "upload_finalize",
+        }
+        if size_bytes is not None:
+            evidence["sizeBytes"] = size_bytes
+        if content_type:
+            evidence["contentType"] = content_type
         case_id = ncmec_service.create_case(
             db,
             hash_source=hash_source or "upload_pipeline",
             hash_value=image_hash,
-            evidence={
-                "gcsPath": object_name,
-                "sha256": image_hash,
-                "source": "upload_finalize",
-            },
+            evidence=evidence,
             suspect_uid=uploader_uid,
         )
     return case_id

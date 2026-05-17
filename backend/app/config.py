@@ -36,8 +36,39 @@ class Settings(BaseSettings):
 
     # T29 — BigQuery sticker analytics
     bq_analytics_dataset: str = "jacob_analytics"
-    bq_project: str = ""  # defaults to GOOGLE_CLOUD_PROJECT at runtime
+    bq_project: str = ""  # defaults to google_cloud_project at runtime
     jacob_analytics_enabled: bool = False
+
+    # Auto-populated on Cloud Run / GCF; falls through to bq_project /
+    # analytics when set. Declared explicitly so pydantic-settings owns
+    # the read instead of scattered `os.environ.get("GOOGLE_CLOUD_PROJECT")`.
+    google_cloud_project: str = ""
+
+    # T10 — Storage buckets. Empty defaults; storage helpers raise a
+    # 500 config_error when accessed without the bucket configured, so
+    # missing values fail closed at first use rather than at import.
+    jacob_media_quarantine_bucket: str = ""
+    jacob_media_public_bucket: str = ""
+
+    # T10 — Moderation pipeline knobs (previously read as raw env vars).
+    # See docs/moderation-pipeline.md and docs/runbooks/csam-incident.md.
+    jacob_disable_moderation: bool = False
+    jacob_hash_provider: str = ""
+    # Legacy URL-only var; honoured when jacob_hash_provider is unset.
+    jacob_hash_service_url: str = ""
+    jacob_ncmec_endpoint: str = ""
+    # C3 — kill-switch on auto-submission to NCMEC from the upload pipeline.
+    # Defaults to True because the HTTPS integration isn't wired yet; operators
+    # handle submissions manually via /admin/ncmec.
+    jacob_ncmec_submit_disabled: bool = True
+
+    # T63 — operator-side kill-switch on the manual NCMEC submit endpoint.
+    # Distinct from jacob_ncmec_submit_disabled (which gates the upload-finalize
+    # auto-path); this one is read by services/ncmec.submit_case.
+    ncmec_submit_disabled: bool = False
+
+    # T64 — appeals self-review override (test/dev only, see services/appeals.py).
+    jacob_allow_self_appeal_review: bool = False
 
     # T33 — Bible verse feed
     bible_api_base: str = "https://bible-api.com"

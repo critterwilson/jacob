@@ -15,20 +15,22 @@ until a successful submit lands.
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
 DEFAULT_RETENTION_DAYS = 90
+# Env-var name retained for docs/tests; the read goes through Settings.
 SUBMIT_DISABLED_ENV = "NCMEC_SUBMIT_DISABLED"
 
 
 def submit_disabled() -> bool:
-    return os.environ.get(SUBMIT_DISABLED_ENV, "").lower() in {"1", "true", "yes"}
+    return get_settings().ncmec_submit_disabled
 
 
 def create_case(

@@ -7,11 +7,11 @@ identical queries within the same Cloud Run instance.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from app.config import get_settings
 from app.models.analytics import (
     AnalyticsResponse,
     CadencePoint,
@@ -39,7 +39,8 @@ def _get_bq_client() -> Any:
             "Add it to pyproject.toml dependencies."
         ) from exc
 
-    project = os.environ.get("BQ_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    settings = get_settings()
+    project = settings.bq_project or settings.google_cloud_project or None
     return bigquery.Client(project=project)
 
 
@@ -82,7 +83,7 @@ def _run_queries(
     bq_project: str | None,
 ) -> AnalyticsResponse:
     client = _get_bq_client()
-    project = bq_project or os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+    project = bq_project or get_settings().google_cloud_project
     if not project:
         raise ValueError("BQ_PROJECT or GOOGLE_CLOUD_PROJECT must be set")
 

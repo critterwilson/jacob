@@ -196,6 +196,74 @@ def test_report_to_ncmec_creates_case_when_db_supplied(monkeypatch) -> None:  # 
     assert captured["kwargs"]["suspect_uid"] == "alice"
 
 
+def test_report_to_ncmec_evidence_includes_size_and_content_type() -> None:
+    """M6 — NCMEC CyberTipline form requires file size + MIME type;
+    `report_to_ncmec` threads them into the evidence dict when supplied."""
+    captured: dict[str, object] = {}
+
+    def _fake_create_case(db, **kwargs):  # type: ignore[no-untyped-def]
+        captured["evidence"] = kwargs["evidence"]
+        return "case-id"
+
+    with patch("app.services.ncmec.create_case", _fake_create_case):
+        moderation.report_to_ncmec(
+            image_hash="deadbeef",
+            uploader_uid="alice",
+            object_name="uploads/alice/abc.jpg",
+            db="<sentinel-db>",
+            size_bytes=12345,
+            content_type="image/jpeg",
+        )
+
+    evidence = captured["evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["sizeBytes"] == 12345
+    assert evidence["contentType"] == "image/jpeg"
+    # Existing evidence keys still present.
+    assert evidence["gcsPath"] == "uploads/alice/abc.jpg"
+    assert evidence["sha256"] == "deadbeef"
+
+
+def test_report_to_ncmec_evidence_omits_missing_size_and_type() -> None:
+    """When callers don't pass size/content_type, the evidence dict
+    only contains what's known — no `None` sentinels lingering."""
+    captured: dict[str, object] = {}
+
+    def _fake_create_case(db, **kwargs):  # type: ignore[no-untyped-def]
+        captured["evidence"] = kwargs["evidence"]
+        return "case-id"
+
+    with patch("app.services.ncmec.create_case", _fake_create_case):
+        moderation.report_to_ncmec(
+            image_hash="deadbeef",
+            uploader_uid="alice",
+            object_name="uploads/alice/abc.jpg",
+            db="<sentinel-db>",
+        )
+
+    evidence = captured["evidence"]
+    assert isinstance(evidence, dict)
+    assert "sizeBytes" not in evidence
+    assert "contentType" not in evidence
+
+
+def test_moderation_settings_read_via_get_settings(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """M5 — moderation knobs now flow through `Settings`, not raw os.environ."""
+    from app.config import get_settings
+    from app.services import moderation as mod
+
+    # Setting the env var still flips the behaviour, because Settings
+    # reads from the environment on instantiation and the conftest
+    # autouse fixture clears the lru_cache around each test.
+    monkeypatch.setenv("JACOB_DISABLE_MODERATION", "true")
+    get_settings.cache_clear()
+    assert mod.moderation_disabled() is True
+
+    monkeypatch.delenv("JACOB_DISABLE_MODERATION", raising=False)
+    get_settings.cache_clear()
+    assert mod.moderation_disabled() is False
+
+
 def test_ncmec_autosubmit_disabled_default_true(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.delenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, raising=False)
     assert moderation.ncmec_autosubmit_disabled() is True
