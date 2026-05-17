@@ -180,6 +180,56 @@ def test_announce_already_announced_returns_409() -> None:
     assert res.json()["error"]["code"] == "already_announced"
 
 
+def test_announce_re_reads_announcedAt_through_transaction() -> None:
+    """M2: announcedAt must be re-checked inside the txn.
+
+    Simulate a concurrent announce: the outer fast-path read sees
+    announcedAt=None, but by the time the txn opens, another caller has
+    already committed announcedAt. If announce_message re-reads through
+    the transaction (the correctness invariant) it sees the winner and
+    refuses with 409; if it trusts only the outer read, both callers
+    pin the message twice and double-fan-out the notifications.
+    """
+    mock_db = _make_announce_db(member_uids=["alice"])  # outer read: announcedAt=None
+
+    msg_ref = mock_db.collection("groups").document("g1").collection("messages").document("m1")
+    outer_snap = msg_ref.get.return_value  # original snapshot, announcedAt=None
+
+    fresh_snap = MagicMock()
+    fresh_snap.exists = True
+    fresh_snap.to_dict.return_value = {
+        "body": "Hello world",
+        "deletedAt": None,
+        "announcedAt": "ts",  # concurrent winner committed during our txn window
+    }
+
+    def _race_get(*args: object, **kwargs: object) -> MagicMock:
+        # Real Firestore signals a txn-scoped read via the `transaction=` kwarg.
+        if "transaction" in kwargs:
+            return fresh_snap
+        return outer_snap
+
+    msg_ref.get.side_effect = _race_get
+
+    txn = MagicMock()
+    update_calls: list[tuple[object, dict[str, object]]] = []
+    txn.update.side_effect = lambda ref, data: update_calls.append((ref, data))
+    mock_db.transaction.return_value = txn
+
+    with (
+        patch("app.routers.groups._db", return_value=mock_db),
+        patch("app.services.audit._db", return_value=mock_db),
+        patch("app.services.notifications._db", return_value=mock_db),
+    ):
+        res = TestClient(_make_app()).post("/api/groups/g1/messages/m1/announce")
+
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "already_announced"
+    # The txn raised before any update — the message must not be re-pinned or re-announced.
+    msg_updates = [data for (ref, data) in update_calls if ref is msg_ref]
+    assert msg_updates == []
+
+
 def test_announce_pins_message() -> None:
     """After announce, mid is in pinnedMessageIds."""
     captured: list[dict[str, object]] = []

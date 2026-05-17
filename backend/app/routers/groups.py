@@ -548,12 +548,6 @@ def announce_message(
             code="message_deleted",
             message="Cannot announce a deleted message",
         )
-    if msg_data.get("announcedAt") is not None:
-        raise APIError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="already_announced",
-            message="Message already announced",
-        )
 
     # Pin the message: shift out oldest if already at 5.
     pinned: list[str] = list(group_data.get("pinnedMessageIds") or [])
@@ -567,6 +561,22 @@ def announce_message(
 
     @gcf.transactional
     def _txn(transaction: Any) -> None:
+        # Re-read announcedAt through the txn so two concurrent announces
+        # cannot both pass the guard and double-write the announcement.
+        fresh_snap = msg_ref.get(transaction=transaction)
+        if not getattr(fresh_snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="message_not_found",
+                message="Message not found",
+            )
+        fresh_data = fresh_snap.to_dict() or {}
+        if fresh_data.get("announcedAt") is not None:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="already_announced",
+                message="Message already announced",
+            )
         transaction.update(
             msg_ref,
             {
