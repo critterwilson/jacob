@@ -50,7 +50,7 @@ export async function processSendFcmTask(
     db?: ReturnType<typeof getFirestore>;
     sendFcmFn?: (token: string, payload: FcmPayload) => Promise<void>;
   } = {},
-): Promise<{ status: "delivered" | "stale_token" | "failed"; reason?: string }> {
+): Promise<{ status: "delivered" | "stale_token" }> {
   const db = deps.db ?? getFirestore();
   const sendFcmImpl = deps.sendFcmFn ?? sendFcm;
   const notifRef = db.doc(data.notifPath);
@@ -100,7 +100,11 @@ export async function processSendFcmTask(
       deviceId: data.deviceId,
       error: reason,
     });
-    return { status: "failed", reason };
+    // Re-throw so the Cloud Tasks wrapper sees a failure and applies its
+    // retryConfig (maxAttempts: 3, minBackoffSeconds: 5). Returning a
+    // resolved value would mark the task delivered and consume the retry
+    // budget on a transient FCM error.
+    throw err;
   }
 }
 

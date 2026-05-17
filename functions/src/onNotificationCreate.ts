@@ -115,14 +115,17 @@ export const onNotificationCreate = onDocumentCreated(
     // Idempotency guard: bail if we have already processed this event id.
     // Cloud Functions delivery is at-least-once; without this every redelivery
     // would re-enqueue the per-device FCM tasks and produce duplicate pushes.
+    //
+    // The marker is written AFTER the enqueue loop (M3), not before. Writing
+    // it up-front means a partial enqueue failure leaves the marker set with
+    // some tasks never queued — and with `retry: false`, the trigger is not
+    // re-invoked, so those devices are permanently silent. By writing after,
+    // an enqueue failure leaves the marker unset, so any redelivery retries
+    // the whole loop. Workers can idempotency-check by `(notifPath, deviceId)`
+    // directly if a redelivery does produce duplicate tasks.
     const eventRef = notifRef.collection("_events").doc(event.id);
-    const reserved = await db.runTransaction(async (txn) => {
-      const eventSnap = await txn.get(eventRef);
-      if (eventSnap.exists) return false;
-      txn.set(eventRef, eventMarker());
-      return true;
-    });
-    if (!reserved) {
+    const eventSnap = await eventRef.get();
+    if (eventSnap.exists) {
       logger.info("notification_event_already_processed", { uid, nid, eventId: event.id });
       return;
     }
@@ -182,23 +185,34 @@ export const onNotificationCreate = onDocumentCreated(
     // updates `delivered`/`failed` counters on this notif doc. The
     // per-task retry budget is independent of this trigger's lifetime,
     // so a slow FCM call no longer holds the trigger open.
+    //
+    // M8: enqueue in parallel. A 200-member announcement with 2 devices
+    // each would otherwise issue 400 sequential round-trips to the Cloud
+    // Tasks API.
     const queue = getFunctions().taskQueue<SendFcmTaskPayload>("sendFcmTask");
-    let enqueued = 0;
-    for (const deviceSnap of devicesSnap.docs) {
-      const device = deviceSnap.data() as DeviceDoc;
-      const token = device.fcmToken;
-      if (!token) continue;
-      await queue.enqueue({
-        uid,
-        deviceId: deviceSnap.id,
-        fcmToken: token,
-        notifPath: notifRef.path,
-        fcmPayload: payload,
-      });
-      enqueued += 1;
-    }
+    const enqueueResults = await Promise.all(
+      devicesSnap.docs.map(async (deviceSnap): Promise<number> => {
+        const device = deviceSnap.data() as DeviceDoc;
+        const token = device.fcmToken;
+        if (!token) return 0;
+        await queue.enqueue({
+          uid,
+          deviceId: deviceSnap.id,
+          fcmToken: token,
+          notifPath: notifRef.path,
+          fcmPayload: payload,
+        });
+        return 1;
+      }),
+    );
+    const enqueued = enqueueResults.reduce((a, b) => a + b, 0);
 
     await notifRef.update({ enqueued });
+
+    // M3: mark this event processed only after all tasks are successfully
+    // enqueued. If Promise.all above rejects, we never reach this line and
+    // the marker stays unset, so any redelivery retries cleanly.
+    await eventRef.set(eventMarker());
 
     logger.info("notification_dispatched", {
       uid,

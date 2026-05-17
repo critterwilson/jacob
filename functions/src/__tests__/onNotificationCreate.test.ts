@@ -104,18 +104,32 @@ describe("buildPayload", () => {
 type DeviceFixture = { id: string; fcmToken: string };
 
 function makeNotifFirestoreStub(opts: { devices: DeviceFixture[] }) {
-  const seenEventMarkerPaths = new Set<string>();
+  const eventMarkerPaths = new Set<string>();
   const updateMock = vi.fn().mockResolvedValue(undefined);
+  const eventMarkerSetMock = vi.fn();
 
   function makeDocRef(pathParts: string[]) {
     const path = pathParts.join("/");
+    // Event marker docs live at .../_events/{eventId}. Their get() answers
+    // `{exists: ...}` from the in-memory set, and set() records the write.
+    const isEventMarker = pathParts.includes("_events");
     return {
       path,
       collection: (sub: string) => makeCollectionRef([...pathParts, sub]),
       update: updateMock,
-      // Doc-level get(): only used for notificationPrefs/main here; default
-      // to "no doc" so the default-allow branch is taken.
-      get: vi.fn().mockResolvedValue({ data: () => undefined }),
+      get: vi.fn().mockImplementation(async () => {
+        if (isEventMarker) {
+          return { exists: eventMarkerPaths.has(path) };
+        }
+        // notificationPrefs/main and similar: default to "no doc".
+        return { data: () => undefined };
+      }),
+      set: vi.fn().mockImplementation(async (data: unknown) => {
+        if (isEventMarker) {
+          eventMarkerPaths.add(path);
+          eventMarkerSetMock(path, data);
+        }
+      }),
     };
   }
 
@@ -136,30 +150,9 @@ function makeNotifFirestoreStub(opts: { devices: DeviceFixture[] }) {
 
   const db = {
     collection: (col: string) => makeCollectionRef([col]),
-    runTransaction: async (
-      fn: (txn: {
-        get: (ref: { path: string }) => Promise<{ exists: boolean }>;
-        set: (ref: { path: string }, data: unknown) => void;
-      }) => Promise<unknown>,
-    ) => {
-      const pendingPaths = new Set<string>();
-      const txn = {
-        get: async (ref: { path: string }) => {
-          pendingPaths.add(ref.path);
-          return { exists: seenEventMarkerPaths.has(ref.path) };
-        },
-        set: (ref: { path: string }, _data: unknown) => {
-          pendingPaths.add(ref.path);
-          seenEventMarkerPaths.add(ref.path);
-        },
-      };
-      const result = await fn(txn);
-      void pendingPaths;
-      return result;
-    },
   };
 
-  return { db, updateMock, seenEventMarkerPaths };
+  return { db, updateMock, eventMarkerPaths, eventMarkerSetMock };
 }
 
 describe("onNotificationCreate — at-least-once redelivery dedupe (H-FUNC-1)", () => {
@@ -203,5 +196,147 @@ describe("onNotificationCreate — at-least-once redelivery dedupe (H-FUNC-1)", 
     // Redelivery with the same event.id must hit the marker and bail.
     await (onNotificationCreate as unknown as (e: typeof event) => Promise<void>)(event);
     expect(enqueueMock).toHaveBeenCalledTimes(2); // unchanged — no extra tasks
+  });
+});
+
+describe("onNotificationCreate — marker write order (M3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("does NOT set the event marker if enqueue fails partway through", async () => {
+    // M3 regression: with the marker written BEFORE the enqueue loop, an
+    // enqueue failure left the marker set and zero tasks queued. With
+    // `retry: false`, no redelivery follows, so the notification was lost.
+    // Now the marker is written AFTER a successful enqueue — so any
+    // redelivery cleanly re-runs the loop.
+    let call = 0;
+    const enqueueMock = vi.fn().mockImplementation(async () => {
+      call += 1;
+      if (call === 2) throw new Error("cloud tasks 503");
+    });
+    (getFunctions as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      taskQueue: () => ({ enqueue: enqueueMock }),
+    });
+
+    const stub = makeNotifFirestoreStub({
+      devices: [
+        { id: "deviceA", fcmToken: "tokA" },
+        { id: "deviceB", fcmToken: "tokB" },
+        { id: "deviceC", fcmToken: "tokC" },
+      ],
+    });
+    (getFirestore as unknown as ReturnType<typeof vi.fn>).mockReturnValue(stub.db);
+
+    const event = {
+      id: "evt-partial-fail-1",
+      params: { uid: "alice", nid: "n1" },
+      data: {
+        data: () => ({
+          kind: "announcement",
+          groupId: "g1",
+          body: "Hi",
+        }),
+      },
+    } as unknown as Parameters<typeof onNotificationCreate>[0];
+
+    await expect(
+      (onNotificationCreate as unknown as (e: typeof event) => Promise<void>)(event),
+    ).rejects.toThrow("cloud tasks 503");
+
+    // Marker must NOT be set, so a redelivery can retry.
+    expect(stub.eventMarkerPaths.size).toBe(0);
+    expect(stub.eventMarkerSetMock).not.toHaveBeenCalled();
+  });
+
+  it("sets the event marker only after every enqueue succeeds", async () => {
+    const enqueueMock = vi.fn().mockResolvedValue(undefined);
+    (getFunctions as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      taskQueue: () => ({ enqueue: enqueueMock }),
+    });
+
+    const stub = makeNotifFirestoreStub({
+      devices: [
+        { id: "deviceA", fcmToken: "tokA" },
+        { id: "deviceB", fcmToken: "tokB" },
+      ],
+    });
+    (getFirestore as unknown as ReturnType<typeof vi.fn>).mockReturnValue(stub.db);
+
+    const event = {
+      id: "evt-happy-path",
+      params: { uid: "alice", nid: "n1" },
+      data: {
+        data: () => ({ kind: "announcement", groupId: "g1", body: "Hi" }),
+      },
+    } as unknown as Parameters<typeof onNotificationCreate>[0];
+
+    await (onNotificationCreate as unknown as (e: typeof event) => Promise<void>)(event);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    expect(stub.eventMarkerPaths.has(
+      "users/alice/notifications/n1/_events/evt-happy-path",
+    )).toBe(true);
+  });
+});
+
+describe("onNotificationCreate — parallel enqueue (M8)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("issues all per-device enqueues concurrently, not sequentially", async () => {
+    // M8 regression: a 200-member announcement with 2 devices each used to
+    // issue 400 sequential `queue.enqueue()` round-trips because the loop
+    // awaited each call. Now they fan out in parallel via Promise.all.
+    //
+    // Test shape: every enqueue() returns a deferred promise. If the impl
+    // is sequential, only the first one is ever called; the await keeps the
+    // rest pending. If it's parallel, all start before any resolves.
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const resolvers: Array<() => void> = [];
+    const enqueueMock = vi.fn().mockImplementation(() => {
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      return new Promise<void>((resolve) => {
+        resolvers.push(() => {
+          inFlight -= 1;
+          resolve();
+        });
+      });
+    });
+    (getFunctions as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      taskQueue: () => ({ enqueue: enqueueMock }),
+    });
+
+    const devices = Array.from({ length: 8 }, (_, i) => ({
+      id: `device${i}`,
+      fcmToken: `tok${i}`,
+    }));
+    const stub = makeNotifFirestoreStub({ devices });
+    (getFirestore as unknown as ReturnType<typeof vi.fn>).mockReturnValue(stub.db);
+
+    const event = {
+      id: "evt-parallel-1",
+      params: { uid: "alice", nid: "n1" },
+      data: {
+        data: () => ({ kind: "announcement", groupId: "g1", body: "Hi" }),
+      },
+    } as unknown as Parameters<typeof onNotificationCreate>[0];
+
+    const triggerDone = (onNotificationCreate as unknown as (
+      e: typeof event,
+    ) => Promise<void>)(event);
+
+    // Let the microtask queue drain so every parallel enqueue() has had a
+    // chance to register. With a sequential `for await` loop this would be 1.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(enqueueMock).toHaveBeenCalledTimes(8);
+    expect(peakInFlight).toBe(8);
+
+    // Resolve everything so the trigger can complete.
+    for (const r of resolvers) r();
+    await triggerDone;
   });
 });

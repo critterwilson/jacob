@@ -127,14 +127,20 @@ describe("processSendFcmTask", () => {
     );
   });
 
-  it("other failure: increments failed counter + records reason", async () => {
+  it("other failure: increments failed counter + records reason + re-throws (H2)", async () => {
     const { db } = makeDb();
     const sendFcmFn = vi.fn().mockRejectedValue(new Error("network down"));
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await processSendFcmTask(basePayload, { db: db as any, sendFcmFn });
+    // H2 regression: a transient FCM error MUST propagate out of the handler so
+    // the Cloud Tasks wrapper sees a failure and applies its retryConfig.
+    // Previously the handler caught + returned `{status: "failed"}`, which the
+    // wrapper awaited without re-throwing — Cloud Tasks then marked the task
+    // delivered and `maxAttempts: 3` was dead code.
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      processSendFcmTask(basePayload, { db: db as any, sendFcmFn }),
+    ).rejects.toThrow("network down");
 
-    expect(result).toEqual({ status: "failed", reason: "network down" });
     const notifRef = db._docs["users/alice/notifications/n1"];
     expect(notifRef.set).toHaveBeenCalledTimes(1);
     expect(notifRef.set).toHaveBeenCalledWith(
@@ -147,5 +153,21 @@ describe("processSendFcmTask", () => {
     );
     // Stale-token branch was NOT taken: device doc was not touched.
     expect(db._docs["users/alice/devices/dev-1"]).toBeUndefined();
+  });
+
+  it("stale token: does NOT re-throw — terminal, not retryable (H2)", async () => {
+    // Counterpart to the H2 regression above: stale tokens are a normal
+    // terminal outcome (device doc cleaned up + failed counter bumped) and
+    // must NOT trigger a Cloud Tasks retry. Verifies the throw added for
+    // transient errors did not regress this branch.
+    const { db } = makeDb();
+    const sendFcmFn = vi
+      .fn()
+      .mockRejectedValue(new StaleTokenError("token-abc"));
+
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      processSendFcmTask(basePayload, { db: db as any, sendFcmFn }),
+    ).resolves.toEqual({ status: "stale_token" });
   });
 });
