@@ -29,8 +29,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from firebase_admin import auth as firebase_auth
+from firebase_admin import db as firebase_db
 from firebase_admin import firestore as fb_firestore
 
+from app.config import get_settings
 from app.services.audit import write_audit_log
 from app.services.email import send_deletion_confirmation, send_deletion_finalized
 from app.services.firebase import init_firebase_admin
@@ -281,16 +283,22 @@ def _delete_private_subcollection(db: Any, uid: str) -> None:
         snap.reference.delete()
 
 
-def _delete_group_memberships(db: Any, uid: str) -> int:
+def _delete_group_memberships(db: Any, uid: str) -> tuple[int, list[str]]:
     """Remove the user's `groups/{gid}/members/{uid}` rows + decrement
     `memberCount` on each parent group.
 
     The `onMemberWrite` Cloud Function maintains `leaderCount` and
     `leaderUids` automatically, so the in-line decrement here is only for
     `memberCount` (which has no trigger).
+
+    Returns `(count, gids)` so the caller can drive RTDB cleanup
+    (`presence/{gid}/{uid}`, `typing/{gid}/{uid}`, `watch/{gid}/*`)
+    against exactly the groups the user was a member of without a
+    second CG query.
     """
     query = db.collection_group("members").where("uid", "==", uid)
     count = 0
+    gids: list[str] = []
     for snap in query.stream():
         # Path: `{collection}/{docId}/members/{uid}`. Only act on group
         # members; org members are handled separately below.
@@ -307,7 +315,8 @@ def _delete_group_memberships(db: Any, uid: str) -> int:
             )
         snap.reference.delete()
         count += 1
-    return count
+        gids.append(parent.id)
+    return count, gids
 
 
 def _delete_org_memberships(db: Any, uid: str) -> int:
@@ -316,6 +325,30 @@ def _delete_org_memberships(db: Any, uid: str) -> int:
     query = db.collection_group("members").where("uid", "==", uid)
     count = 0
     for snap in query.stream():
+        parent = snap.reference.parent.parent
+        if parent is None or parent.parent is None or parent.parent.id != "orgs":
+            continue
+        snap.reference.delete()
+        count += 1
+    return count
+
+
+def _delete_org_admins(db: Any, uid: str) -> int:
+    """Remove `orgs/{orgId}/admins/{uid}` rows.
+
+    Without this the deleted user keeps surfacing in
+    `/api/orgs/{orgId}/admins` and inflates the `last_admin` guard in
+    `orgs_service.remove_admin` — leaving a real surviving admin unable
+    to remove themselves because the zombie row keeps the count above 1.
+
+    The admin doc id is the user's uid, so a CG `__name__` filter is the
+    cheapest path; we still verify the parent is an `orgs` doc because
+    other collections may name a subcollection `admins` (the catch-all
+    keeps this defensive against future schema drift).
+    """
+    count = 0
+    cg = db.collection_group("admins").where("__name__", "==", uid)
+    for snap in cg.stream():
         parent = snap.reference.parent.parent
         if parent is None or parent.parent is None or parent.parent.id != "orgs":
             continue
@@ -400,19 +433,109 @@ def _end_watch_sessions(db: Any, uid: str) -> int:
     return count
 
 
+def _cleanup_rtdb_for_user(uid: str, gids: list[str]) -> dict[str, int]:
+    """Remove the deleted user's Realtime Database footprint (M4).
+
+    The Firestore member-doc delete already fires `onMemberWrite` which
+    clears `memberships/{uid}/{gid}` — that piece is left to the trigger
+    so the same code path handles ordinary leave-group events. Three
+    other RTDB locations have no trigger and would otherwise linger:
+
+      - `presence/{gid}/{uid}` — PresenceBar shows phantoms otherwise.
+      - `typing/{gid}/{uid}` — "X is typing" indicator for a ghost.
+      - `watch/{gid}/{sessionId}` where `leaderUid == uid` — a live
+        watch-party session the deleted user was leading.
+
+    The `gids` list comes from `_delete_group_memberships` so we only
+    touch groups the user was actually a member of (cheaper than a
+    shallow scan of the whole `watch` tree, and covers every legitimate
+    case — non-members can't hold presence/typing/leader state for a
+    group whose RTDB write rule requires membership).
+
+    Returns a per-key counter so the audit log records the fanout.
+    Best-effort: an RTDB error is logged but doesn't fail the
+    finalize-account transaction (the rest of the deletion is more
+    important than orphaned signal-channel rows).
+    """
+    counts = {"presence": 0, "typing": 0, "watch": 0}
+    if not gids:
+        return counts
+    url = get_settings().firebase_database_url or None
+    if not url:
+        logger.info(
+            "rtdb cleanup skipped uid=%s — FIREBASE_DATABASE_URL not configured",
+            uid,
+        )
+        return counts
+
+    for gid in gids:
+        for kind in ("presence", "typing"):
+            try:
+                firebase_db.reference(f"{kind}/{gid}/{uid}", url=url).delete()
+                counts[kind] += 1
+            except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+                logger.warning(
+                    "rtdb %s delete failed gid=%s uid=%s err=%s",
+                    kind,
+                    gid,
+                    uid,
+                    exc,
+                )
+
+        try:
+            sessions = firebase_db.reference(f"watch/{gid}", url=url).get() or {}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("rtdb watch read failed gid=%s err=%s", gid, exc)
+            continue
+        if not isinstance(sessions, dict):
+            continue
+        for session_id, session in sessions.items():
+            if not isinstance(session, dict):
+                continue
+            if session.get("leaderUid") != uid:
+                continue
+            try:
+                firebase_db.reference(f"watch/{gid}/{session_id}", url=url).delete()
+                counts["watch"] += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "rtdb watch delete failed gid=%s sid=%s err=%s",
+                    gid,
+                    session_id,
+                    exc,
+                )
+    return counts
+
+
 def _handle_founder_groups(db: Any, uid: str) -> dict[str, int]:
     """For each group whose `founderUid` matches the deleted user:
 
-    - Pick a remaining leader (by `leaderUids` denorm) as the new founder.
+    - Pick a remaining leader as the new founder.
     - If no other leader exists, archive the group with a system reason.
 
-    MUST run before `_delete_group_memberships` so the deleted user is
-    still in `leaderUids` and we can reason about the leader set.
+    Leader lookup tries the `leaderUids` denorm first (cheap, in-memory).
+    If that's empty or only contains the deleted user, fall back to a
+    fresh `members where role=="leader"` scan on the group's `members`
+    subcollection. The denorm is maintained by `onMemberWrite` but its
+    backfill is parked (H3): groups that pre-date the trigger can have
+    an empty `leaderUids` while still holding real leader rows, which
+    would otherwise cause this helper to archive a group that has
+    surviving leaders.
+
+    MUST run before `_delete_group_memberships` so the deleted user's
+    membership row is still present for the fallback scan.
     """
     counts = {"transferred": 0, "archived": 0}
     for snap in db.collection("groups").where("founderUid", "==", uid).stream():
         data = snap.to_dict() or {}
         candidates = [lu for lu in (data.get("leaderUids") or []) if lu and lu != uid]
+        if not candidates:
+            members_q = snap.reference.collection("members").where("role", "==", "leader").stream()
+            candidates = [
+                m.id
+                for m in members_q
+                if m.id != uid and (m.to_dict() or {}).get("role") == "leader"
+            ]
         if candidates:
             snap.reference.update({"founderUid": candidates[0]})
             counts["transferred"] += 1
@@ -490,16 +613,23 @@ def finalize_account(uid: str) -> dict[str, Any]:
       3. Delete reactions / RSVPs / reports filed by the user.
       4. End in-progress watch sessions the user was leading.
       5. Hand off founder status (or archive groups with no other leader)
-         BEFORE removing the user's memberships, so we can read leaderUids.
+         BEFORE removing the user's memberships, so we can read leaderUids
+         and fall back to the members subcollection (H3).
       6. Delete group + org memberships (decrementing memberCount; the
-         onMemberWrite trigger handles leaderCount + leaderUids).
-      7. Drop the user's `bans/{uid}` row + every other user's
+         onMemberWrite trigger handles leaderCount + leaderUids). Capture
+         the gid list for the RTDB sweep in step 9.
+      7. Sweep `orgs/{*}/admins/{uid}` rows (M1) — no trigger maintains
+         them, so a deleted org-admin would otherwise inflate the
+         `last_admin` guard in `orgs_service.remove_admin`.
+      8. Drop the user's `bans/{uid}` row + every other user's
          `blocks/{uid}` / `mutes/{uid}`.
-      8. Delete avatar + private-profile + every subcollection under
-         `users/{uid}`.
-      9. Best-effort search-sidecar cleanup.
-     10. Delete `users/{uid}` doc.
-     11. Audit log with actorUid="system".
+      9. Delete avatar + private-profile + every subcollection under
+         `users/{uid}`, then sweep RTDB presence/typing/watch state
+         (M4) for the gids captured in step 6 — `onMemberWrite` handles
+         `memberships/{uid}/{gid}` but nothing covers the other three.
+     10. Best-effort search-sidecar cleanup.
+     11. Delete `users/{uid}` doc.
+     12. Audit log with actorUid="system".
     """
     db = _db()
     user_ref = db.collection("users").document(uid)
@@ -525,8 +655,9 @@ def finalize_account(uid: str) -> dict[str, Any]:
     reports_deleted = _delete_reports_by_user(db, uid)
     watch_sessions_ended = _end_watch_sessions(db, uid)
     founder_handoff = _handle_founder_groups(db, uid)
-    group_memberships = _delete_group_memberships(db, uid)
+    group_memberships, gids_for_rtdb = _delete_group_memberships(db, uid)
     org_memberships = _delete_org_memberships(db, uid)
+    org_admins = _delete_org_admins(db, uid)
     ban_dropped = _delete_ban(db, uid)
     others_blocks_mutes = _delete_others_blocks_and_mutes(db, uid)
     typesense_deleted = _delete_typesense_messages(uid)
@@ -534,6 +665,7 @@ def finalize_account(uid: str) -> dict[str, Any]:
     _delete_avatar(photo_url if isinstance(photo_url, str) else None)
     _delete_private_subcollection(db, uid)
     subcol_counts = _delete_user_subcollections(db, uid)
+    rtdb_counts = _cleanup_rtdb_for_user(uid, gids_for_rtdb)
 
     # Capture email/name before the doc disappears.
     to_email = data.get("email", "")
@@ -553,11 +685,15 @@ def finalize_account(uid: str) -> dict[str, Any]:
         "founderArchived": founder_handoff["archived"],
         "groupMemberships": group_memberships,
         "orgMemberships": org_memberships,
+        "orgAdmins": org_admins,
         "banDropped": ban_dropped,
         "othersBlocksDeleted": others_blocks_mutes["blocks"],
         "othersMutesDeleted": others_blocks_mutes["mutes"],
         "typesenseDeleted": typesense_deleted,
         "userSubcollections": subcol_counts,
+        "rtdbPresenceDeleted": rtdb_counts["presence"],
+        "rtdbTypingDeleted": rtdb_counts["typing"],
+        "rtdbWatchDeleted": rtdb_counts["watch"],
     }
     write_audit_log(
         actor_uid="system",
@@ -569,8 +705,9 @@ def finalize_account(uid: str) -> dict[str, Any]:
     logger.info(
         "finalize complete uid=%s tombstoned=%d board_posts=%d board_replies=%d "
         "reactions=%d rsvps=%d reports=%d group_members=%d org_members=%d "
-        "watch_sessions=%d founder_transferred=%d founder_archived=%d "
-        "ban_dropped=%s others_blocks=%d others_mutes=%d",
+        "org_admins=%d watch_sessions=%d founder_transferred=%d founder_archived=%d "
+        "ban_dropped=%s others_blocks=%d others_mutes=%d "
+        "rtdb_presence=%d rtdb_typing=%d rtdb_watch=%d",
         uid,
         tombstoned,
         boards["posts"],
@@ -580,12 +717,16 @@ def finalize_account(uid: str) -> dict[str, Any]:
         reports_deleted,
         group_memberships,
         org_memberships,
+        org_admins,
         watch_sessions_ended,
         founder_handoff["transferred"],
         founder_handoff["archived"],
         ban_dropped,
         others_blocks_mutes["blocks"],
         others_blocks_mutes["mutes"],
+        rtdb_counts["presence"],
+        rtdb_counts["typing"],
+        rtdb_counts["watch"],
     )
 
     try:
@@ -604,12 +745,16 @@ def finalize_account(uid: str) -> dict[str, Any]:
         "reportsDeleted": reports_deleted,
         "groupMemberships": group_memberships,
         "orgMemberships": org_memberships,
+        "orgAdmins": org_admins,
         "watchSessionsEnded": watch_sessions_ended,
         "founderTransferred": founder_handoff["transferred"],
         "founderArchived": founder_handoff["archived"],
         "banDropped": ban_dropped,
         "othersBlocksDeleted": others_blocks_mutes["blocks"],
         "othersMutesDeleted": others_blocks_mutes["mutes"],
+        "rtdbPresenceDeleted": rtdb_counts["presence"],
+        "rtdbTypingDeleted": rtdb_counts["typing"],
+        "rtdbWatchDeleted": rtdb_counts["watch"],
     }
 
 
