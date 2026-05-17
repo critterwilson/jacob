@@ -29,8 +29,11 @@ vi.mock("@/lib/hooks/usePushSetup", () => ({
   usePushSetup: vi.fn(),
 }));
 
+const { mockRegisterPushToken } = vi.hoisted(() => ({
+  mockRegisterPushToken: vi.fn(async () => "device-abc123"),
+}));
 vi.mock("@/lib/push", () => ({
-  registerPushToken: vi.fn(async () => "device-abc123"),
+  registerPushToken: mockRegisterPushToken,
   touchDeviceLastSeen: vi.fn(async () => {}),
 }));
 
@@ -49,21 +52,32 @@ const mockLocalStorage = {
 };
 vi.stubGlobal("localStorage", mockLocalStorage);
 
+function setNotification(
+  permission: NotificationPermission,
+  requestPermissionResult: NotificationPermission = "granted",
+) {
+  const requestPermission = vi.fn(async () => requestPermissionResult);
+  Object.defineProperty(window, "Notification", {
+    writable: true,
+    configurable: true,
+    value: { permission, requestPermission },
+  });
+  return { requestPermission };
+}
+
 describe("PushPrompt", () => {
   beforeEach(() => {
     mockLocalStorage.clear();
-    // Simulate notification API in default state
-    Object.defineProperty(window, "Notification", {
-      writable: true,
-      configurable: true,
-      value: { permission: "default", requestPermission: vi.fn(async () => "granted") },
-    });
+    mockRegisterPushToken.mockClear();
+    setNotification("default");
   });
 
   it("shows prompt on first authed visit", () => {
     render(<PushPrompt uid="alice" />);
-    expect(screen.getByRole("banner")).toBeInTheDocument();
-    expect(screen.getByText(/enable/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("banner", { name: /enable push notifications/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/stay in the loop/i)).toBeInTheDocument();
   });
 
   it("prompt skip writes localStorage flag", async () => {
@@ -78,6 +92,47 @@ describe("PushPrompt", () => {
     localStorage.setItem(SNOOZE_KEY, String(future));
     render(<PushPrompt uid="alice" />);
     expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+  });
+
+  it("hides when permission already granted", () => {
+    setNotification("granted");
+    render(<PushPrompt uid="alice" />);
+    expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+  });
+
+  it("shows re-enable hint when permission denied", () => {
+    setNotification("denied");
+    render(<PushPrompt uid="alice" />);
+    const banner = screen.getByRole("banner", {
+      name: /push notifications are blocked/i,
+    });
+    expect(banner).toBeInTheDocument();
+    expect(banner).toHaveTextContent(/re-enable them in your browser settings/i);
+  });
+
+  it("clicking Enable calls requestPermission then registerPushToken", async () => {
+    const { requestPermission } = setNotification("default", "granted");
+    render(<PushPrompt uid="alice" />);
+    await userEvent.click(screen.getByRole("button", { name: /^enable$/i }));
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPushToken).toHaveBeenCalledWith("alice");
+    // requestPermission was called before registerPushToken
+    const reqOrder = requestPermission.mock.invocationCallOrder[0];
+    const regOrder = mockRegisterPushToken.mock.invocationCallOrder[0];
+    expect(reqOrder).toBeLessThan(regOrder);
+  });
+
+  it("clicking Enable then user denies — registerPushToken is not called", async () => {
+    setNotification("default", "denied");
+    render(<PushPrompt uid="alice" />);
+    await userEvent.click(screen.getByRole("button", { name: /^enable$/i }));
+    expect(mockRegisterPushToken).not.toHaveBeenCalled();
+    // Switches into the denied-state banner
+    expect(
+      await screen.findByRole("banner", {
+        name: /push notifications are blocked/i,
+      }),
+    ).toBeInTheDocument();
   });
 });
 

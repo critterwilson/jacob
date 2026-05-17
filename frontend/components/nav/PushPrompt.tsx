@@ -8,37 +8,88 @@ const SNOOZE_DAYS = 7;
 
 type Props = { uid: string };
 
+type Mode = "hidden" | "default" | "denied";
+
 export function PushPrompt({ uid }: Props) {
-  const [visible, setVisible] = useState(false);
+  const [mode, setMode] = useState<Mode>("hidden");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("Notification" in window)) return;
-    if (Notification.permission !== "default") return;
 
     const snoozeUntil = parseInt(localStorage.getItem(SNOOZE_KEY) ?? "0", 10);
-    if (Date.now() < snoozeUntil) return;
+    const snoozed = Date.now() < snoozeUntil;
 
-    setVisible(true);
+    if (Notification.permission === "granted") {
+      setMode("hidden");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      if (snoozed) return;
+      setMode("denied");
+      return;
+    }
+    // "default"
+    if (snoozed) return;
+    setMode("default");
   }, []);
 
-  if (!visible) return null;
+  if (mode === "hidden") return null;
 
-  const dismiss = () => {
+  const snooze = () => {
     const until = Date.now() + SNOOZE_DAYS * 24 * 60 * 60 * 1000;
     localStorage.setItem(SNOOZE_KEY, String(until));
-    setVisible(false);
+    setMode("hidden");
   };
 
   const enable = async () => {
-    setVisible(false);
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
+      setMode("hidden");
       await registerPushToken(uid);
+    } else if (permission === "denied") {
+      setMode("denied");
     } else {
-      dismiss();
+      // user dismissed without choosing — snooze so we don't immediately re-show
+      snooze();
     }
   };
+
+  const iosNote =
+    typeof navigator !== "undefined" && /iphone|ipad/i.test(navigator.userAgent) ? (
+      <p className="mt-1 text-xs text-cream-muted">
+        On iOS, push notifications require installing JACOB to your home screen (Safari → Share → Add to Home Screen).
+      </p>
+    ) : null;
+
+  if (mode === "denied") {
+    return (
+      <div
+        role="banner"
+        aria-label="Push notifications are blocked"
+        className="flex items-start gap-3 rounded-lg border border-line bg-ink-raised px-4 py-3 text-sm"
+      >
+        <span className="mt-0.5 shrink-0 text-gold">🔔</span>
+        <div className="flex-1">
+          <p className="font-medium text-cream">Notifications are blocked</p>
+          <p className="text-cream-muted">
+            You&apos;ve blocked notifications for JACOB. Re-enable them in your
+            browser settings (click the lock icon in the address bar →
+            Notifications → Allow) to get mentions, replies, and announcements.
+          </p>
+          {iosNote}
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            onClick={snooze}
+            className="rounded border border-line px-3 py-1.5 text-xs text-cream hover:bg-ink-overlay"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -52,13 +103,7 @@ export function PushPrompt({ uid }: Props) {
         <p className="text-cream-muted">
           Get notified about mentions, replies, and announcements in your groups.
         </p>
-        {/* iOS PWA note */}
-        {typeof navigator !== "undefined" &&
-          /iphone|ipad/i.test(navigator.userAgent) && (
-            <p className="mt-1 text-xs text-cream-muted">
-              On iOS, push notifications require installing JACOB to your home screen (Safari → Share → Add to Home Screen).
-            </p>
-          )}
+        {iosNote}
       </div>
       <div className="flex shrink-0 gap-2">
         <button
@@ -68,7 +113,7 @@ export function PushPrompt({ uid }: Props) {
           Enable
         </button>
         <button
-          onClick={dismiss}
+          onClick={snooze}
           className="rounded border border-line px-3 py-1.5 text-xs text-cream hover:bg-ink-overlay"
         >
           Not now

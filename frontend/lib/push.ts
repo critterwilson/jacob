@@ -16,7 +16,11 @@
  * Disabled gracefully when:
  *   - `Notification` API unavailable (SSR, old browser).
  *   - `NEXT_PUBLIC_FIREBASE_VAPID_KEY` is not set.
- *   - User denies permission.
+ *   - `Notification.permission !== "granted"` — never auto-prompt. The
+ *     browser permission prompt is fired explicitly by `PushPrompt` (an
+ *     in-app CTA) and the `/settings/notifications` re-enable affordance.
+ *     If we called `getToken` while permission is `"default"`, firebase/
+ *     messaging would surface the native prompt on every authed render.
  */
 
 import { ApiError, apiPost } from "@/lib/api";
@@ -49,7 +53,9 @@ export async function registerPushToken(uid: string): Promise<string | null> {
     return null;
   }
 
-  if (Notification.permission === "denied") return null;
+  // Gate strictly on `"granted"`. `"default"` would cause `getToken` to
+  // open the native permission prompt — see the file header.
+  if (Notification.permission !== "granted") return null;
 
   const { getMessaging, getToken } = await import("firebase/messaging");
   const { app } = await import("@/lib/firebase");
