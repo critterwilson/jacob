@@ -416,11 +416,19 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
         ),
         patch(
             "app.services.deletion._delete_group_memberships",
-            _wrap("group_members", 4),
+            _wrap("group_members", (4, ["g1", "g2"])),
         ),
         patch(
             "app.services.deletion._delete_org_memberships",
             _wrap("org_members", 1),
+        ),
+        patch(
+            "app.services.deletion._delete_org_admins",
+            _wrap("org_admins", 2),
+        ),
+        patch(
+            "app.services.deletion._cleanup_rtdb_for_user",
+            _wrap("rtdb", {"presence": 2, "typing": 2, "watch": 1}),
         ),
         patch("app.services.deletion._delete_ban", _wrap("ban", True)),
         patch(
@@ -445,6 +453,8 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
         "founder": 1,
         "group_members": 1,
         "org_members": 1,
+        "org_admins": 1,
+        "rtdb": 1,
         "ban": 1,
         "others": 1,
         "subcollections": 1,
@@ -457,12 +467,16 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
     assert result["reportsDeleted"] == 1
     assert result["groupMemberships"] == 4
     assert result["orgMemberships"] == 1
+    assert result["orgAdmins"] == 2
     assert result["watchSessionsEnded"] == 2
     assert result["founderTransferred"] == 1
     assert result["founderArchived"] == 1
     assert result["banDropped"] is True
     assert result["othersBlocksDeleted"] == 2
     assert result["othersMutesDeleted"] == 1
+    assert result["rtdbPresenceDeleted"] == 2
+    assert result["rtdbTypingDeleted"] == 2
+    assert result["rtdbWatchDeleted"] == 1
     # Audit payload mirrors the result fanout.
     audit_set = db._audit_col.document().set.call_args[0][0]
     assert audit_set["payload"]["boardPostsTombstoned"] == 2
@@ -470,6 +484,8 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
     assert audit_set["payload"]["watchSessionsEnded"] == 2
     assert audit_set["payload"]["banDropped"] is True
     assert audit_set["payload"]["othersBlocksDeleted"] == 2
+    assert audit_set["payload"]["orgAdmins"] == 2
+    assert audit_set["payload"]["rtdbWatchDeleted"] == 1
 
 
 # ── M-BACK-14: cascade-gap helpers ───────────────────────────────────────
@@ -631,6 +647,254 @@ def test_handle_founder_groups_skips_already_archived() -> None:
 
     assert counts == {"transferred": 0, "archived": 0}
     group_snap.reference.update.assert_not_called()
+
+
+# ── H3 / M1 / M4: deletion-cascade follow-ups ───────────────────────────────
+
+
+def test_handle_founder_groups_falls_back_to_members_when_leader_uids_empty() -> None:
+    """H3: if `leaderUids` is empty or stale, scan the members
+    subcollection for a surviving `role=="leader"` row before archiving.
+    The backfill that populates leaderUids is parked, so older groups
+    can have an empty denorm while still holding real leader rows."""
+    db = MagicMock()
+    group_snap = MagicMock()
+    group_snap.to_dict.return_value = {"leaderUids": [], "archivedAt": None}
+    group_snap.reference = MagicMock()
+
+    # `members where role==leader` yields one other leader (bob).
+    bob = MagicMock()
+    bob.id = "bob"
+    bob.to_dict.return_value = {"role": "leader"}
+    members_chain = MagicMock()
+    members_chain.where.return_value.stream.return_value = iter([bob])
+    group_snap.reference.collection.return_value = members_chain
+
+    db.collection.return_value.where.return_value.stream.return_value = iter([group_snap])
+
+    counts = deletion._handle_founder_groups(db, "alice")
+
+    assert counts == {"transferred": 1, "archived": 0}
+    update_args = group_snap.reference.update.call_args[0][0]
+    assert update_args == {"founderUid": "bob"}
+    group_snap.reference.collection.assert_called_with("members")
+    where_args = members_chain.where.call_args[0]
+    assert where_args[0] == "role"
+    assert where_args[2] == "leader"
+
+
+def test_handle_founder_groups_archives_when_fallback_also_empty() -> None:
+    """H3: if neither `leaderUids` nor the members fallback yields any
+    other leader, archive the group rather than silently leaving an
+    orphaned `founderUid` pointing at a deleted account."""
+    db = MagicMock()
+    group_snap = MagicMock()
+    group_snap.to_dict.return_value = {"leaderUids": [], "archivedAt": None}
+    group_snap.reference = MagicMock()
+
+    # Members stream returns only the deleted user — should be filtered out.
+    alice_only = MagicMock()
+    alice_only.id = "alice"
+    alice_only.to_dict.return_value = {"role": "leader"}
+    members_chain = MagicMock()
+    members_chain.where.return_value.stream.return_value = iter([alice_only])
+    group_snap.reference.collection.return_value = members_chain
+
+    db.collection.return_value.where.return_value.stream.return_value = iter([group_snap])
+
+    counts = deletion._handle_founder_groups(db, "alice")
+
+    assert counts == {"transferred": 0, "archived": 1}
+    update_args = group_snap.reference.update.call_args[0][0]
+    assert update_args["archiveReason"] == "founder_deleted"
+
+
+def test_handle_founder_groups_skips_fallback_when_leader_uids_has_other_leader() -> None:
+    """H3: the fallback CG-style scan is only paid when needed. If
+    `leaderUids` already names a non-deleted leader, skip the
+    members read entirely."""
+    db = MagicMock()
+    group_snap = MagicMock()
+    group_snap.to_dict.return_value = {"leaderUids": ["alice", "carol"]}
+    group_snap.reference = MagicMock()
+    db.collection.return_value.where.return_value.stream.return_value = iter([group_snap])
+
+    counts = deletion._handle_founder_groups(db, "alice")
+
+    assert counts == {"transferred": 1, "archived": 0}
+    # Did NOT touch the members subcollection — that read is only paid
+    # when the denorm is empty/stale.
+    group_snap.reference.collection.assert_not_called()
+
+
+def test_delete_org_admins_removes_admin_row() -> None:
+    """M1: a deleted user who was an org admin must have their
+    `orgs/{orgId}/admins/{uid}` row swept. Without this the row keeps
+    surfacing in `/api/orgs/{orgId}/admins` and inflates the
+    `last_admin` guard in `orgs_service.remove_admin`."""
+    db = MagicMock()
+    admin_snap = MagicMock()
+    admin_snap.reference = MagicMock()
+    # parent.parent.id == "orgs" so the row passes the schema-drift guard.
+    admin_snap.reference.parent.parent.parent.id = "orgs"
+    cg = MagicMock()
+    cg.where.return_value.stream.return_value = iter([admin_snap])
+    db.collection_group.return_value = cg
+
+    n = deletion._delete_org_admins(db, "alice")
+
+    assert n == 1
+    db.collection_group.assert_called_with("admins")
+    where_args = cg.where.call_args[0]
+    assert where_args[0] == "__name__"
+    assert where_args[2] == "alice"
+    admin_snap.reference.delete.assert_called_once()
+
+
+def test_delete_org_admins_skips_non_org_parents() -> None:
+    """Defensive: if another collection ever names a subcollection
+    `admins` (schema drift), only delete rows whose grand-parent
+    collection is `orgs`."""
+    db = MagicMock()
+    other_snap = MagicMock()
+    other_snap.reference = MagicMock()
+    other_snap.reference.parent.parent.parent.id = "something_else"
+    cg = MagicMock()
+    cg.where.return_value.stream.return_value = iter([other_snap])
+    db.collection_group.return_value = cg
+
+    assert deletion._delete_org_admins(db, "alice") == 0
+    other_snap.reference.delete.assert_not_called()
+
+
+def test_delete_group_memberships_returns_gids_for_rtdb_sweep() -> None:
+    """M4: `_delete_group_memberships` returns the gid list so
+    `_cleanup_rtdb_for_user` can scope its RTDB reads to the groups the
+    user was actually a member of."""
+    db = MagicMock()
+    m1 = MagicMock()
+    m1.reference = MagicMock()
+    m1.reference.parent.parent.parent.id = "groups"
+    m1.reference.parent.parent.id = "g1"
+    m2 = MagicMock()
+    m2.reference = MagicMock()
+    m2.reference.parent.parent.parent.id = "groups"
+    m2.reference.parent.parent.id = "g2"
+    org_row = MagicMock()  # filtered out — parent is orgs, not groups
+    org_row.reference = MagicMock()
+    org_row.reference.parent.parent.parent.id = "orgs"
+
+    cg = MagicMock()
+    cg.where.return_value.stream.return_value = iter([m1, org_row, m2])
+    db.collection_group.return_value = cg
+
+    count, gids = deletion._delete_group_memberships(db, "alice")
+
+    assert count == 2
+    assert sorted(gids) == ["g1", "g2"]
+    m1.reference.delete.assert_called_once()
+    m2.reference.delete.assert_called_once()
+    org_row.reference.delete.assert_not_called()
+
+
+def test_cleanup_rtdb_for_user_skips_when_no_url_configured() -> None:
+    """M4: with FIREBASE_DATABASE_URL unset (the dev default), the RTDB
+    sweep is a no-op log — every count returns 0 and no `firebase_db`
+    reference is constructed. Lets the unit tests run without RTDB."""
+    from app.config import Settings
+
+    with (
+        patch("app.services.deletion.get_settings", return_value=Settings()),
+        patch("app.services.deletion.firebase_db.reference") as ref,
+    ):
+        counts = deletion._cleanup_rtdb_for_user("alice", ["g1", "g2"])
+
+    assert counts == {"presence": 0, "typing": 0, "watch": 0}
+    ref.assert_not_called()
+
+
+def test_cleanup_rtdb_for_user_deletes_presence_typing_and_owned_watch() -> None:
+    """M4: for each gid, delete `presence/{gid}/{uid}` and
+    `typing/{gid}/{uid}`, then read `watch/{gid}` and delete sessions
+    whose `leaderUid` matches the deleted user. Other leaders'
+    sessions in the same group are left alone."""
+    from app.config import Settings
+
+    settings = Settings(firebase_database_url="https://demo-rtdb.firebaseio.com")
+
+    paths_touched: list[tuple[str, str]] = []  # (path, op)
+
+    def _ref(path: str, url: str | None = None) -> MagicMock:  # type: ignore[no-untyped-def]
+        assert url == "https://demo-rtdb.firebaseio.com"
+        mock = MagicMock()
+
+        def _delete() -> None:
+            paths_touched.append((path, "delete"))
+
+        mock.delete.side_effect = _delete
+
+        if path == "watch/g1":
+            mock.get.return_value = {
+                "sess-a": {"leaderUid": "alice"},
+                "sess-b": {"leaderUid": "bob"},
+            }
+        elif path == "watch/g2":
+            mock.get.return_value = {}
+        else:
+            mock.get.return_value = None
+        return mock
+
+    with (
+        patch("app.services.deletion.get_settings", return_value=settings),
+        patch("app.services.deletion.firebase_db.reference", side_effect=_ref),
+    ):
+        counts = deletion._cleanup_rtdb_for_user("alice", ["g1", "g2"])
+
+    assert counts == {"presence": 2, "typing": 2, "watch": 1}
+    deletes = {p for p, op in paths_touched if op == "delete"}
+    assert "presence/g1/alice" in deletes
+    assert "presence/g2/alice" in deletes
+    assert "typing/g1/alice" in deletes
+    assert "typing/g2/alice" in deletes
+    assert "watch/g1/sess-a" in deletes
+    # bob's session in g1 must NOT be deleted.
+    assert "watch/g1/sess-b" not in deletes
+
+
+def test_cleanup_rtdb_for_user_returns_zeros_when_no_gids() -> None:
+    """No gids → nothing to clean; doesn't even consult settings or
+    construct a database reference."""
+    with patch("app.services.deletion.firebase_db.reference") as ref:
+        counts = deletion._cleanup_rtdb_for_user("alice", [])
+    assert counts == {"presence": 0, "typing": 0, "watch": 0}
+    ref.assert_not_called()
+
+
+def test_cleanup_rtdb_for_user_swallows_per_gid_errors() -> None:
+    """An RTDB error on one gid should NOT abort cleanup for the
+    others; finalize-account is best-effort on signal-channel data."""
+    from app.config import Settings
+
+    settings = Settings(firebase_database_url="https://demo-rtdb.firebaseio.com")
+
+    def _ref(path: str, url: str | None = None) -> MagicMock:  # type: ignore[no-untyped-def]
+        mock = MagicMock()
+        if path == "presence/g1/alice":
+            mock.delete.side_effect = RuntimeError("rtdb 503")
+        if path.startswith("watch/"):
+            mock.get.return_value = {}
+        return mock
+
+    with (
+        patch("app.services.deletion.get_settings", return_value=settings),
+        patch("app.services.deletion.firebase_db.reference", side_effect=_ref),
+    ):
+        counts = deletion._cleanup_rtdb_for_user("alice", ["g1", "g2"])
+
+    # g1 presence failed; the other three succeeded.
+    assert counts["presence"] == 1
+    assert counts["typing"] == 2
+    assert counts["watch"] == 0
 
 
 def test_find_users_due_uses_cutoff() -> None:

@@ -102,6 +102,15 @@ class Settings(BaseSettings):
     # holds throwaway data only.
     jacob_allow_emulator_tokens: bool = False
 
+    # M4 (deletion-cascade) — Realtime Database URL used by the
+    # finalize-account job to sweep `presence/{gid}/{uid}`,
+    # `typing/{gid}/{uid}`, and `watch/{gid}/{sessionId}` (leaderUid)
+    # for a deleted user. Empty disables the RTDB sweep with a single
+    # info log line; the rest of finalize_account still runs.
+    # Format: `https://{project}-default-rtdb.{region}.firebasedatabase.app`
+    # (or the legacy `https://{project}.firebaseio.com`).
+    firebase_database_url: str = ""
+
     # T55 — custom domains. Subdomain claims live under
     # `*.{jacob_base_domain}` (the wildcard mapping itself is a one-time
     # infra step, see docs/runbooks/custom-domains.md). The reserved

@@ -91,6 +91,21 @@ jobs:
             echo 'origins=${{ secrets.CORS_ALLOWED_ORIGINS }}' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Resolve Realtime Database URL
+        id: rtdb
+        # M4 — the deletion-cascade RTDB sweep needs an explicit URL.
+        # Prefer a per-environment override (a regional RTDB lives at
+        # `*.{region}.firebasedatabase.app`, not `*.firebaseio.com`);
+        # fall back to the default-instance pattern when no override is
+        # set so the staging project (US default region) works without
+        # extra setup.
+        run: |
+          if [[ -n "${{ secrets.FIREBASE_DATABASE_URL }}" ]]; then
+            echo "url=${{ secrets.FIREBASE_DATABASE_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=https://${{ secrets.GCP_PROJECT_ID }}-default-rtdb.firebaseio.com" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve emulator-token flag
         id: emu
         # Staging-only: lets the Playwright suite hit the staging backend
@@ -119,7 +134,7 @@ jobs:
             --region us-central1 \
             --platform managed \
             --allow-unauthenticated \
-            --update-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}@JACOB_ALLOW_EMULATOR_TOKENS=${{ steps.emu.outputs.flag }}" \
+            --update-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}@JACOB_ALLOW_EMULATOR_TOKENS=${{ steps.emu.outputs.flag }}@FIREBASE_DATABASE_URL=${{ steps.rtdb.outputs.url }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}"
 
   # ── Functions + Firestore rules: firebase deploy ──────────────────────────
