@@ -14,34 +14,40 @@ freely. Tests mock `_client()` and the public functions directly.
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from app.config import Settings
 from app.errors import APIError
 
+# Env var name aliases — kept as strings so tests can ``monkeypatch.setenv``
+# via the symbolic name. The actual values flow through pydantic-settings
+# (M5 — see app/config.py).
 QUARANTINE_BUCKET_ENV = "JACOB_MEDIA_QUARANTINE_BUCKET"
 PUBLIC_BUCKET_ENV = "JACOB_MEDIA_PUBLIC_BUCKET"
 SIGNED_URL_TTL_MINUTES = 5
 
 
-def _bucket_name(env_var: str) -> str:
-    value = os.environ.get(env_var)
+def quarantine_bucket_name() -> str:
+    value = Settings().jacob_media_quarantine_bucket
     if not value:
         raise APIError(
             status_code=500,
             code="config_error",
-            message=f"Missing storage bucket env var: {env_var}",
+            message=f"Missing storage bucket env var: {QUARANTINE_BUCKET_ENV}",
         )
     return value
 
 
-def quarantine_bucket_name() -> str:
-    return _bucket_name(QUARANTINE_BUCKET_ENV)
-
-
 def public_bucket_name() -> str:
-    return _bucket_name(PUBLIC_BUCKET_ENV)
+    value = Settings().jacob_media_public_bucket
+    if not value:
+        raise APIError(
+            status_code=500,
+            code="config_error",
+            message=f"Missing storage bucket env var: {PUBLIC_BUCKET_ENV}",
+        )
+    return value
 
 
 def _client() -> Any:

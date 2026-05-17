@@ -196,6 +196,50 @@ def test_report_to_ncmec_creates_case_when_db_supplied(monkeypatch) -> None:  # 
     assert captured["kwargs"]["suspect_uid"] == "alice"
 
 
+def test_report_to_ncmec_evidence_includes_size_and_content_type(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """M6 — sizeBytes / contentType land in the evidence dict so the
+    operator queue at /admin/ncmec shows real values instead of 0 / null."""
+    monkeypatch.delenv(moderation.NCMEC_ENDPOINT_ENV, raising=False)
+
+    captured: dict[str, object] = {}
+
+    def _fake_create_case(db, **kwargs):  # type: ignore[no-untyped-def]
+        captured["kwargs"] = kwargs
+        return "case-id-xyz"
+
+    with patch("app.services.ncmec.create_case", _fake_create_case):
+        moderation.report_to_ncmec(
+            image_hash="deadbeef",
+            uploader_uid="alice",
+            object_name="uploads/alice/abc.jpg",
+            db="<sentinel-db>",
+            hash_source="PhotoDNA",
+            size_bytes=123_456,
+            content_type="image/jpeg",
+        )
+
+    evidence = captured["kwargs"]["evidence"]  # type: ignore[index]
+    assert evidence["sizeBytes"] == 123_456
+    assert evidence["contentType"] == "image/jpeg"
+    # Old fields still populated.
+    assert evidence["gcsPath"] == "uploads/alice/abc.jpg"
+    assert evidence["sha256"] == "deadbeef"
+
+
+def test_check_hash_service_accepts_size_and_content_type(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """M6 — check_hash_service accepts size_bytes/content_type kwargs so
+    callers can thread upload metadata through the moderation chain in
+    one shot. The hash check itself is unaffected."""
+    monkeypatch.setenv(moderation.HASH_PROVIDER_ENV, "disabled")
+    monkeypatch.delenv(moderation.DISABLE_MODERATION_ENV, raising=False)
+    result = moderation.check_hash_service(
+        "deadbeef",
+        size_bytes=42,
+        content_type="image/png",
+    )
+    assert result.matched is False
+
+
 def test_ncmec_autosubmit_disabled_default_true(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.delenv(moderation.NCMEC_AUTOSUBMIT_DISABLED_ENV, raising=False)
     assert moderation.ncmec_autosubmit_disabled() is True

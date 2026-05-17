@@ -36,8 +36,41 @@ class Settings(BaseSettings):
 
     # T29 — BigQuery sticker analytics
     bq_analytics_dataset: str = "jacob_analytics"
-    bq_project: str = ""  # defaults to GOOGLE_CLOUD_PROJECT at runtime
+    bq_project: str = ""  # defaults to google_cloud_project at runtime
     jacob_analytics_enabled: bool = False
+
+    # Cloud Run / GCP project id (M5 — replaces scattered
+    # ``os.environ.get("GOOGLE_CLOUD_PROJECT")`` reads in analytics.py).
+    google_cloud_project: str = ""
+
+    # T36 — moderation pipeline kill-switch + CSAM hash provider.
+    # M5 lifts these out of the ``os.environ.get`` calls that used to
+    # live in app/services/moderation.py.
+    jacob_disable_moderation: bool = False
+    # CSAM hash provider: "" (unset → fail closed in non-dev),
+    # "disabled" / "noop", or an http(s) URL. See moderation.py.
+    jacob_hash_provider: str = ""
+    # Legacy URL-only var, honoured when jacob_hash_provider is blank.
+    jacob_hash_service_url: str = ""
+
+    # T63 — NCMEC integration
+    # Future HTTPS endpoint for the CyberTipline (still stubbed in v1).
+    jacob_ncmec_endpoint: str = ""
+    # Kill-switch for the autosubmit path (default True — the HTTPS
+    # integration is not yet wired in, see docs/runbooks/csam-incident.md).
+    jacob_ncmec_submit_disabled: bool = True
+    # Operator-side submit kill-switch (different code path: the
+    # operator queue at /admin/ncmec).
+    ncmec_submit_disabled: bool = False
+
+    # T36 — moderation-pipeline GCS buckets. Empty here so a missing
+    # config in any environment fails closed with a 500 ``config_error``
+    # rather than silently defaulting.
+    jacob_media_quarantine_bucket: str = ""
+    jacob_media_public_bucket: str = ""
+
+    # T64 — appeals: single-admin self-review override (test/dev only).
+    jacob_allow_self_appeal_review: bool = False
 
     # T33 — Bible verse feed
     bible_api_base: str = "https://bible-api.com"

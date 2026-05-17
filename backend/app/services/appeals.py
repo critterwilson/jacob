@@ -20,22 +20,26 @@ team for review; in dev / single-admin deployments, set
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from firebase_admin import firestore as fb_firestore
 
+from app.config import Settings
+
 logger = logging.getLogger(__name__)
 
 
 SLA_DAYS = 7
+# Env var name alias — kept as a string so tests can ``monkeypatch.setenv``
+# via the symbolic name. The actual value flows through pydantic-settings
+# (M5 — see app/config.py).
 SELF_REVIEW_OVERRIDE_ENV = "JACOB_ALLOW_SELF_APPEAL_REVIEW"
 
 
 def _self_review_override() -> bool:
-    return os.environ.get(SELF_REVIEW_OVERRIDE_ENV, "").lower() in {"1", "true", "yes"}
+    return Settings().jacob_allow_self_appeal_review
 
 
 def _admin_count(db: Any) -> int:
