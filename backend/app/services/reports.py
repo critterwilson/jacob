@@ -28,7 +28,7 @@ from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
 
-ReportReason = Literal["harassment", "sexual", "violence", "self-harm", "spam", "other"]
+ReportReason = Literal["harassment", "sexual", "violence", "self-harm", "spam", "other", "wellbeing_concern"]
 ResourceType = Literal["message", "profile", "group"]
 
 DEDUP_WINDOW = timedelta(hours=24)
@@ -38,6 +38,7 @@ _SEVERITY_BY_REASON: dict[str, int] = {
     "self-harm": 3,
     "violence": 3,
     "harassment": 2,
+    "wellbeing_concern": 2,
     "spam": 1,
     "other": 1,
 }

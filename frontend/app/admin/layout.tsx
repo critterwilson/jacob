@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth-context";
 
-const NAV_LINKS = [
+const ADMIN_NAV_LINKS = [
   { href: "/admin/queue", label: "Moderation Queue" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/groups", label: "Groups" },
@@ -15,13 +15,19 @@ const NAV_LINKS = [
   { href: "/admin/ncmec", label: "NCMEC" },
   { href: "/admin/appeals", label: "Appeals" },
   { href: "/admin/transparency", label: "Transparency" },
+  { href: "/admin/wellbeing", label: "Wellbeing" },
 ];
+
+const MODERATOR_NAV_LINKS = [{ href: "/admin/wellbeing", label: "Wellbeing" }];
+
+type AuthState = "loading" | "allowed" | "denied";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [authState, setAuthState] = useState<AuthState>("loading");
+  const [navLinks, setNavLinks] = useState(ADMIN_NAV_LINKS);
 
   useEffect(() => {
     if (loading) return;
@@ -30,15 +36,21 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       return;
     }
     user.getIdTokenResult().then((result) => {
-      if (result.claims.admin === true) {
-        setIsAdmin(true);
+      const isAdmin = result.claims.admin === true;
+      const isModerator = result.claims.moderator === true;
+      if (isAdmin) {
+        setNavLinks(ADMIN_NAV_LINKS);
+        setAuthState("allowed");
+      } else if (isModerator) {
+        setNavLinks(MODERATOR_NAV_LINKS);
+        setAuthState("allowed");
       } else {
         router.replace("/home");
       }
     });
   }, [user, loading, router]);
 
-  if (loading || isAdmin === null) {
+  if (authState === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
@@ -53,7 +65,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           Admin
         </p>
         <ul className="space-y-1">
-          {NAV_LINKS.map(({ href, label }) => (
+          {navLinks.map(({ href, label }) => (
             <li key={href}>
               <Link
                 href={href}
