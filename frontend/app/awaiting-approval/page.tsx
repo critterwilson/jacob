@@ -44,7 +44,7 @@ export default function AwaitingApprovalPage() {
     if (applicationLoading) return;
     if (!application) return;
     if (application.status === "approved") {
-      router.replace("/groups");
+      router.replace("/home");
     }
   }, [application, applicationLoading, router]);
 

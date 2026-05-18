@@ -30,7 +30,7 @@ export default function OnboardingPage() {
       return;
     }
     if (profile) {
-      router.replace("/groups");
+      router.replace("/home");
       return;
     }
     if (application) {

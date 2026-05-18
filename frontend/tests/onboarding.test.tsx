@@ -199,7 +199,7 @@ describe("OnboardingPage redirect logic", () => {
     );
 
     await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/groups");
+      expect(mockReplace).toHaveBeenCalledWith("/home");
     });
   });
 
