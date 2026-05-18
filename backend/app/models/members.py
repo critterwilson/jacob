@@ -96,3 +96,5 @@ class GroupDetail(BaseModel):
     # T48 — leader-toggleable; absent / null is treated as "on" by the
     # frontend so existing groups don't need a backfill.
     presenceEnabled: bool | None = None
+    # Soft member cap (default 20). Leaders/admins can raise per-group.
+    memberCap: int = 20

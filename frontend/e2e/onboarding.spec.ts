@@ -7,7 +7,7 @@ import { verifyEmailViaAdmin } from "./helpers/firebaseAdmin";
 import { expect, test } from "./helpers/fixtures";
 
 /**
- * ADR 0011 — signup happy path now ends at /awaiting-approval (admin
+ * ADR 0012 — signup happy path now ends at /awaiting-approval (admin
  * approval queue) instead of /groups. The legacy assertion that this
  * test landed on /groups would fail post-ADR; the integration value
  * (CORS pre-flight, cookie mirror, middleware routing for non-approved
@@ -21,7 +21,7 @@ test.describe("onboarding", () => {
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
-    // ADR 0011 — signup now collects DOB. Use a clearly-adult date so
+    // ADR 0012 — signup now collects DOB. Use a clearly-adult date so
     // we don't trip the under-13 client-side block before the auth
     // user is created.
     await page.getByLabel(/date of birth/i).fill("1990-04-12");

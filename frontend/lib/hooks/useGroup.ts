@@ -36,6 +36,8 @@ export type GroupDetail = {
    * without a backfill.
    */
   presenceEnabled: boolean | null;
+  /** Soft member cap. Defaults to 20 on the backend; leaders/admins can raise per-group. */
+  memberCap: number | null;
 };
 
 /**

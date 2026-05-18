@@ -1,4 +1,4 @@
-"""ADR 0011 — backfill `applications/{uid}` for grandfathered users.
+"""ADR 0012 — backfill `applications/{uid}` for grandfathered users.
 
 After the admin-approval signup flow lands, every new account flows
 through `applications/{uid}` → admin approve → `users/{uid}`. Pre-

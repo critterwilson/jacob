@@ -76,6 +76,7 @@ class UpdateProfileRequest(BaseModel):
 
 class BootstrapClaims(BaseModel):
     admin: bool = False
+    ministryOwner: bool = False
 
 
 class BootstrapResponse(BaseModel):
@@ -85,7 +86,7 @@ class BootstrapResponse(BaseModel):
     redirects on absence of the corresponding cookie. `profile` is None
     iff `hasProfile` is False.
 
-    `applicationStatus` (ADR 0011) is `"pending"` / `"approved"` /
+    `applicationStatus` (ADR 0012) is `"pending"` / `"approved"` /
     `"rejected"` if an `applications/{uid}` doc exists, otherwise None.
     The frontend routes pending users to `/awaiting-approval` and
     rejected users to the same page (which surfaces the rejection).
@@ -117,6 +118,9 @@ class NotificationPrefs(BaseModel):
     replies: bool = True
     announcements: bool = True
     digest: bool = True
+    # ADR 0011 — central ministry feed. Default off (opt-in) so new
+    # users aren't surprised by a brand-new push channel.
+    ministryFeed: bool = False
     schemaVersion: int = 1
 
 

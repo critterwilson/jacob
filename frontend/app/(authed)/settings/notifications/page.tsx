@@ -27,6 +27,11 @@ const LABELS: Record<PrefKey, { title: string; description: string }> = {
     description:
       "A weekly summary of activity in your groups, sent every Sunday.",
   },
+  ministryFeed: {
+    title: "Ministry feed posts",
+    description:
+      "When the ministry team broadcasts a new sermon, devotional, or announcement.",
+  },
 };
 
 export default function NotificationsPage() {

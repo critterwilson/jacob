@@ -70,7 +70,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
   } = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) });
 
   // Pre-fill DOB from the signup stash if present. Best-effort; the
-  // user can still edit it. See ADR 0011 § 6 + `lib/pending-application.ts`.
+  // user can still edit it. See ADR 0012 § 6 + `lib/pending-application.ts`.
   useEffect(() => {
     const stashed = readPendingDob();
     if (stashed) {

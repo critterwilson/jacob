@@ -14,7 +14,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useUser(user?.uid);
-  // ADR 0011: an applicant who has already submitted the application
+  // ADR 0012: an applicant who has already submitted the application
   // form lives in `applications/{uid}`. If we land here with a pending
   // or decided application, bounce them to /awaiting-approval — re-
   // filling the form would be confusing.

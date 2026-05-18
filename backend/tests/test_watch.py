@@ -1,4 +1,9 @@
-"""Tests for the T50 Watch Together surface."""
+"""Tests for the T50 Watch Together surface.
+
+FEATURE PARKED 2026-05-17: Watch Together deferred by ministry owner.
+All tests in this module are skipped. Re-enable when T50 is revived.
+See docs/follow-ups/phase-3-parked.md § T50.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
@@ -21,6 +27,10 @@ from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.rate_limit import limiter
 from app.routers.watch import router
 from tests.test_orgs import FakeFirestore  # noqa: E402
+
+# Feature parked 2026-05-17 — skip the whole module until T50 is revived.
+_PARKED = "T50 Watch Together parked; see docs/follow-ups/phase-3-parked.md"
+pytestmark = pytest.mark.skip(reason=_PARKED)
 
 
 def _membership(

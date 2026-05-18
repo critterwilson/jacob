@@ -122,7 +122,7 @@ export async function generateVerifyLink(email: string): Promise<string> {
 /**
  * Stamp the `admin: true` custom claim on the given user.
  *
- * ADR 0011 / admin-approval flow tests need an admin actor to drive
+ * ADR 0012 / admin-approval flow tests need an admin actor to drive
  * the /admin/applications UI. We mint or look up the user, set the
  * custom claim, and revoke their refresh tokens so the next ID token
  * mint reflects the new claim. Emulator-only path uses the same Admin

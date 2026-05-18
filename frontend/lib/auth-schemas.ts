@@ -59,7 +59,7 @@ export const signUpSchema = z.object({
   password,
   // Collected at signup so under-13 is caught before we create the
   // Firebase Auth user. The authoritative copy lives on the application
-  // doc (set from the onboarding form). See ADR 0011 § 6.
+  // doc (set from the onboarding form). See ADR 0012 § 6.
   dob: dobSchema,
   acceptTerms: z.literal(true, {
     error: "You must agree to the Terms of Service and Privacy Policy",

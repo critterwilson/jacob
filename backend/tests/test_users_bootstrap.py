@@ -109,7 +109,7 @@ def test_bootstrap_returns_profile_for_existing_user() -> None:
     assert body["hasProfile"] is True
     assert body["profile"]["uid"] == "alice"
     assert body["profile"]["displayName"] == "Alice"
-    assert body["claims"] == {"admin": False}
+    assert body["claims"] == {"admin": False, "ministryOwner": False}
     # Cookie set side-effect — required so middleware redirects work.
     set_cookie = res.headers.get("set-cookie") or ""
     assert "jacob-has-profile=1" in set_cookie
@@ -145,7 +145,7 @@ def test_bootstrap_admin_claim_propagates() -> None:
         client = TestClient(_app(authed_user=user))
         res = client.get("/api/users/me/bootstrap")
     assert res.status_code == 200
-    assert res.json()["claims"] == {"admin": True}
+    assert res.json()["claims"] == {"admin": True, "ministryOwner": False}
 
 
 def test_bootstrap_passes_through_deletion_pending_state() -> None:

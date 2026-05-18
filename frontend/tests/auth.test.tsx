@@ -299,7 +299,7 @@ describe("SignUpForm", () => {
     render(<SignUpForm />);
     await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
     await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
-    // ADR 0011: DOB collected on the signup form so under-13 is caught
+    // ADR 0012: DOB collected on the signup form so under-13 is caught
     // before we create the Firebase Auth user. Use a clearly-adult DOB.
     await userEvent.type(screen.getByLabelText(/date of birth/i), "1990-04-12");
     await userEvent.click(screen.getByLabelText(/i agree/i));

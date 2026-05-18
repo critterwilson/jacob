@@ -46,7 +46,7 @@ export function SignUpForm() {
       // the user doesn't have to type it twice. The onboarding form
       // still asks for it explicitly (and pre-fills from this stash)
       // because sessionStorage is per-tab; if the user verifies email
-      // in a different tab the field remains required there. ADR 0011 § 6.
+      // in a different tab the field remains required there. ADR 0012 § 6.
       stashPendingDob(values.dob);
       // Email/password signups land on /verify-email until they click the
       // verification link. Google sign-in (below) is already verified by

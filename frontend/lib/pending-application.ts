@@ -1,7 +1,7 @@
 /**
  * sessionStorage hand-off for the DOB collected at signup time.
  *
- * ADR 0011 § 6: we collect DOB on the signup form so the under-13
+ * ADR 0012 § 6: we collect DOB on the signup form so the under-13
  * gate fires before the Firebase Auth user is created. The
  * authoritative application doc is created later, from the onboarding
  * form, so we need to plumb the value across the verify-email page

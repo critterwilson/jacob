@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 const navLinks = [
+  { href: "/feed", label: "Feed" },
   { href: "/groups", label: "Chats" },
   { href: "/boards", label: "Boards" },
   { href: "/about", label: "About" },

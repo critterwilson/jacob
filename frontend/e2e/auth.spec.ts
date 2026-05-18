@@ -20,7 +20,7 @@ test.describe("auth", () => {
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
-    // ADR 0011 — DOB required on signup.
+    // ADR 0012 — DOB required on signup.
     await page.getByLabel(/date of birth/i).fill("1990-04-12");
     await submitSignUp(page);
     // Email/password signup now lands on the verify-email interstitial.
@@ -37,7 +37,7 @@ test.describe("auth", () => {
     //    Mailinator tier).
     await verifyEmailViaAdmin(page, freshEmail.email);
 
-    // 3. Sign in with the now-verified account. ADR 0011: the new user
+    // 3. Sign in with the now-verified account. ADR 0012: the new user
     //    has no profile and no application yet → middleware bounces to
     //    /onboarding. After submitting the application they live at
     //    /awaiting-approval (no admin in the loop here to approve), so

@@ -1,4 +1,4 @@
-"""Applications router — admin-approval signup flow (ADR 0011).
+"""Applications router — admin-approval signup flow (ADR 0012).
 
 Owns the applicant side of the signup queue:
 

@@ -174,7 +174,7 @@ def bootstrap(
         profile = _user_doc_to_profile(user.uid, data)
         deletion_requested_at = _ts_to_dt(data.get("deletionRequestedAt"))
 
-    # ADR 0011 — surface the application status alongside the user doc
+    # ADR 0012 — surface the application status alongside the user doc
     # so the frontend can route pending/rejected applicants to the
     # waiting screen without an extra round-trip. Existing users
     # (pre-this-PR) have no application doc; for them this stays None.
@@ -190,7 +190,10 @@ def bootstrap(
     return BootstrapResponse(
         profile=profile,
         hasProfile=has_profile,
-        claims=BootstrapClaims(admin=user.claims.get("admin") is True),
+        claims=BootstrapClaims(
+            admin=user.claims.get("admin") is True,
+            ministryOwner=user.claims.get("ministry_owner") is True,
+        ),
         deletionRequestedAt=deletion_requested_at,
         applicationStatus=application_status,
     )
@@ -207,7 +210,7 @@ def create_profile(
     body: CreateProfileRequest,
     user: CurrentUser = Depends(require_not_banned),
 ) -> UserProfile:
-    """**Deprecated post-ADR 0011.** New signups must go through
+    """**Deprecated post-ADR 0012.** New signups must go through
     `POST /api/applications/me` and wait for admin approval. The
     `users/{uid}` document is created server-side by the admin
     approve endpoint, not by this route. We keep the endpoint
@@ -224,7 +227,7 @@ def create_profile(
             message="Profile already exists",
         )
 
-    # ADR 0011: refuse direct profile creation without an approved
+    # ADR 0012: refuse direct profile creation without an approved
     # application. The frontend now uses `/api/applications/me`; this
     # endpoint exists only so an already-approved user (theoretical
     # race: approve flips status, the user doc write fails, the user

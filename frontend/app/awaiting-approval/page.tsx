@@ -11,7 +11,7 @@ import { auth } from "@/lib/firebase";
 import { useMyApplication } from "@/lib/hooks/useMyApplication";
 
 /**
- * ADR 0011 — "your application is being reviewed" gate.
+ * ADR 0012 — "your application is being reviewed" gate.
  *
  * The page polls `GET /api/applications/me`:
  *   - status === "pending"  → show the waiting card,

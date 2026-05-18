@@ -30,7 +30,13 @@ if (!getApps().length) {
 }
 
 type NotificationDoc = {
-  kind: "announcement" | "mention" | "board_mention" | "reply" | "digest_send";
+  kind:
+    | "announcement"
+    | "mention"
+    | "board_mention"
+    | "reply"
+    | "digest_send"
+    | "ministry_post";
   groupId?: string;
   boardId?: string;
   messageRef?: string;
@@ -47,6 +53,7 @@ type PrefDoc = {
   replies: boolean;
   announcements: boolean;
   digest: boolean;
+  ministryFeed: boolean;
 };
 
 type DeviceDoc = {
@@ -61,6 +68,7 @@ const KIND_TO_PREF: Record<string, keyof PrefDoc | null> = {
   board_mention: "mentions",
   reply: "replies",
   digest_send: "digest",
+  ministry_post: "ministryFeed",
 };
 
 /** Exported for unit tests. */
@@ -92,6 +100,12 @@ export function buildPayload(
       };
     case "reply":
       return { title: "↩️ New reply to your message", body, collapseKey: `groupId:${gid}` };
+    case "ministry_post":
+      return {
+        title: "✝️ New ministry post",
+        body,
+        collapseKey: `ministry_post:${msgId}`,
+      };
     default:
       return { title: "JACOB", body, collapseKey: `notif:${recipientUid}` };
   }

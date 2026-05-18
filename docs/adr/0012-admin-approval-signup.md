@@ -1,4 +1,4 @@
-# ADR 0011 — Admin-approval signup flow + parental-consent gate
+# ADR 0012 — Admin-approval signup flow + parental-consent gate
 
 **Status:** Accepted (2026-05-17)
 **Authors:** admin-approval signup task

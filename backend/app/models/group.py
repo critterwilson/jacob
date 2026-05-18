@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+DEFAULT_MEMBER_CAP = 20
+
 
 class CreateGroupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
@@ -90,3 +92,15 @@ class UpdateGroupRequest(BaseModel):
     # "presence on" default by the frontend so existing groups keep
     # working without a backfill.
     presenceEnabled: bool | None = None
+    memberCap: int | None = Field(default=None, ge=1)
+
+
+class MemberCapRequest(BaseModel):
+    """Body for `PATCH /api/groups/{gid}/cap`."""
+
+    memberCap: int = Field(ge=1)
+
+
+class MemberCapResponse(BaseModel):
+    gid: str
+    memberCap: int

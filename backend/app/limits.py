@@ -80,7 +80,7 @@ NCMEC_SUBMIT: str = "10/hour"
 # 3/day matches the spec.
 APPEAL_SUBMIT: str = "3/day"
 
-# Admin-approval signup (ADR 0011). Submit is the load-bearing write;
+# Admin-approval signup (ADR 0012). Submit is the load-bearing write;
 # poll is what `/awaiting-approval` calls every 30s while waiting for
 # an admin decision, so the cap has to comfortably absorb that.
 APPLICATION_SUBMIT: str = "5/hour"
@@ -129,3 +129,20 @@ BOARD_REPLY_CREATE: str = "60/hour"
 BOARD_REPLY_EDIT: str = "30/hour"
 BOARD_REPLY_DELETE: str = "60/hour"
 NOTIFICATION_READ: str = "120/minute"
+
+# Central ministry feed (ADR 0012). Reads are on the page-load critical
+# path for the new top-level surface; writes are owner-only and rare.
+MINISTRY_FEED_LIST: str = "60/minute"
+MINISTRY_POST_READ: str = "60/minute"
+MINISTRY_POST_CREATE: str = "30/hour"
+MINISTRY_POST_EDIT: str = "30/hour"
+MINISTRY_POST_DELETE: str = "30/hour"
+MINISTRY_POST_PIN: str = "30/hour"
+
+# Wellbeing flag pipeline. Submission is per-user per-day (mirrors REPORT_SUBMIT);
+# moderator reads are generous since they poll the queue; moderator mutations
+# match the existing ADMIN_MUTATION budget.
+WELLBEING_SUBMIT: str = "5/day"
+WELLBEING_QUEUE_READ: str = "60/minute"
+WELLBEING_STATUS_WRITE: str = "30/minute"
+MODERATOR_GRANT_REVOKE: str = "10/minute"

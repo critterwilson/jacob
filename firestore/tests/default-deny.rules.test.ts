@@ -780,7 +780,7 @@ describe("T55 default-deny — domain_claims", () => {
   });
 });
 
-describe("ADR 0011 default-deny — applications", () => {
+describe("ADR 0012 default-deny — applications", () => {
   it("denies reading applications/{uid} even by the applicant", async () => {
     await seed(async (db) => {
       await setDoc(doc(db, "applications", "alice"), {
@@ -857,12 +857,136 @@ describe("M6 — collection-group members read", () => {
   });
 });
 
+describe("ADR 0011 — ministry_feed", () => {
+  it("denies reading ministry_feed/{postId} as any user", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "ministry_feed", "p1"), {
+        title: "Sermon",
+        body: "Body",
+        createdAt: serverTimestamp(),
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "ministry_feed", "p1")));
+  });
+
+  it("denies writing ministry_feed/{postId} as any user", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "ministry_feed", "p1"), {
+        title: "Sermon",
+        body: "Body",
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("denies writing ministry_feed/{postId} even with an admin claim", async () => {
+    // `admin` does NOT imply ministry_owner per ADR 0011 §2; the rules
+    // are default-deny regardless, but this guards a future "allow if
+    // admin" rule from being added here.
+    const adminCtx = testEnv
+      .authenticatedContext("admin-uid", { admin: true })
+      .firestore();
+    await assertFails(
+      setDoc(doc(adminCtx, "ministry_feed", "p1"), {
+        title: "Sermon",
+        body: "Body",
+      }),
+    );
+  });
+
+  it("denies reading + writing ministry_feed reactions", async () => {
+    await assertFails(
+      getDoc(
+        doc(
+          authed("alice"),
+          "ministry_feed",
+          "p1",
+          "reactions",
+          "pray",
+          "users",
+          "alice",
+        ),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(
+          authed("alice"),
+          "ministry_feed",
+          "p1",
+          "reactions",
+          "pray",
+          "users",
+          "alice",
+        ),
+        { reactedAt: serverTimestamp() },
+      ),
+    );
+  });
+});
+
 describe("M6 — default-deny on unknown paths", () => {
   it("denies reading + writing arbitrary collections", async () => {
     await assertFails(getDoc(doc(authed("alice"), "weird", "x")));
     await assertFails(
       setDoc(doc(authed("alice"), "weird", "x"), { foo: "bar" }),
     );
+  });
+});
+
+// ── Wellbeing flags — moderation_queue + status_history subcollection ──────
+
+describe("wellbeing_concern — moderation_queue and status_history are backend-only", () => {
+  it("denies reading a wellbeing flag document directly", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "moderation_queue", "flag1"), {
+        reason: "wellbeing_concern",
+        status: "open",
+        reportedBy: "alice",
+        subjectUid: "bob",
+        context: "I am worried about Bob",
+        createdAt: serverTimestamp(),
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "moderation_queue", "flag1")));
+  });
+
+  it("denies writing a wellbeing flag document directly", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "moderation_queue", "flag-new"), {
+        reason: "wellbeing_concern",
+        status: "open",
+        reportedBy: "alice",
+        subjectUid: "bob",
+        context: "I am worried about Bob",
+      }),
+    );
+  });
+
+  it("denies reading the status_history subcollection", async () => {
+    await seed(async (db) => {
+      await setDoc(
+        doc(db, "moderation_queue", "flag1", "status_history", "entry1"),
+        { status: "open", note: "(flag filed)", actorUid: "alice", createdAt: serverTimestamp() },
+      );
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "moderation_queue", "flag1", "status_history", "entry1")),
+    );
+  });
+
+  it("denies writing to the status_history subcollection", async () => {
+    await assertFails(
+      setDoc(
+        doc(authed("moderator-uid"), "moderation_queue", "flag1", "status_history", "entry2"),
+        { status: "in_progress", note: "Reaching out", actorUid: "moderator-uid" },
+      ),
+    );
+  });
+
+  it("denies moderator-claim user from reading moderation_queue directly", async () => {
+    // Even if the client somehow knows a moderator UID, rules deny direct access.
+    await assertFails(getDoc(doc(authed("moderator-uid"), "moderation_queue", "flag1")));
   });
 });
 

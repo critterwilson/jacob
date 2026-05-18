@@ -14,7 +14,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore as fb_firestore
 
 from app.deps import require_admin
@@ -42,6 +43,7 @@ from app.models.applications import (
     ApproveApplicationRequest,
     RejectApplicationRequest,
 )
+from app.models.ministry_feed import MinistryOwnerGrantResponse
 from app.models.user import CurrentUser
 from app.services.applications import application_doc_to_view
 from app.services.audit import write_audit_log
@@ -256,7 +258,7 @@ def resolve_moderation_item(
 
     logger.info("admin=%s resolved item=%s as=%s", admin.uid, item_id, new_status)
 
-    if new_status == "rejected":
+    if new_status == "rejected" and item_data.get("reason") != "wellbeing_concern":
         _notify_reported_author(db, item_data)
 
     return ResolveResponse(itemId=item_id, status=new_status)
@@ -307,7 +309,7 @@ def bulk_resolve_moderation_items(
                 "bulk": True,
             },
         )
-        if new_status == "rejected":
+        if new_status == "rejected" and data.get("reason") != "wellbeing_concern":
             _notify_reported_author(db, data)
         resolved.append(item_id)
 
@@ -492,7 +494,7 @@ def search_groups(
     return AdminGroupListResponse(groups=groups)
 
 
-# ── applications (admin-approval signup, ADR 0011) ────────────────────────────
+# ── applications (admin-approval signup, ADR 0012) ────────────────────────────
 
 
 _APPLICATION_STATUSES = {"pending", "approved", "rejected"}
@@ -707,3 +709,73 @@ def reject_application(
 
     logger.info("admin=%s rejected application uid=%s", admin.uid, uid)
     return ApplicationDecisionResponse(uid=uid, status="rejected")
+
+
+# ── ministry_owner claim ──────────────────────────────────────────────────
+
+
+def _set_ministry_owner_claim(uid: str, *, value: bool) -> None:
+    """Set or clear `ministry_owner` while preserving other claims.
+
+    Raises `APIError(404)` if the auth user does not exist. The custom-
+    claim payload is the full claim set; we read-modify-write to avoid
+    nuking sibling claims (e.g. `admin`).
+    """
+    try:
+        user = firebase_auth.get_user(uid)
+    except firebase_auth.UserNotFoundError as exc:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="user_not_found",
+            message="Firebase user not found",
+        ) from exc
+    existing: dict[str, object] = dict(user.custom_claims or {})
+    if value:
+        existing["ministry_owner"] = True
+    else:
+        existing.pop("ministry_owner", None)
+    firebase_auth.set_custom_user_claims(uid, existing)
+
+
+@router.post(
+    "/users/{uid}/ministry-owner",
+    response_model=MinistryOwnerGrantResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def grant_ministry_owner(
+    request: Request,
+    response: Response,
+    uid: str = Path(..., min_length=1),
+    admin: CurrentUser = Depends(require_admin),
+) -> MinistryOwnerGrantResponse:
+    _set_ministry_owner_claim(uid, value=True)
+    write_audit_log(
+        actor_uid=admin.uid,
+        action="grant_ministry_owner",
+        target_ref=f"users/{uid}",
+        payload={},
+    )
+    logger.info("admin=%s granted ministry_owner uid=%s", admin.uid, uid)
+    return MinistryOwnerGrantResponse(uid=uid, ministryOwner=True)
+
+
+@router.delete(
+    "/users/{uid}/ministry-owner",
+    response_model=MinistryOwnerGrantResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def revoke_ministry_owner(
+    request: Request,
+    response: Response,
+    uid: str = Path(..., min_length=1),
+    admin: CurrentUser = Depends(require_admin),
+) -> MinistryOwnerGrantResponse:
+    _set_ministry_owner_claim(uid, value=False)
+    write_audit_log(
+        actor_uid=admin.uid,
+        action="revoke_ministry_owner",
+        target_ref=f"users/{uid}",
+        payload={},
+    )
+    logger.info("admin=%s revoked ministry_owner uid=%s", admin.uid, uid)
+    return MinistryOwnerGrantResponse(uid=uid, ministryOwner=False)
