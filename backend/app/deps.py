@@ -228,6 +228,30 @@ def require_not_banned(
     return user
 
 
+def require_ministry_owner(
+    user: CurrentUser = Depends(get_current_user),
+    _ban_check: CurrentUser = Depends(require_not_banned),
+) -> CurrentUser:
+    """Gate on the dedicated `ministry_owner: true` Firebase custom claim.
+
+    See `docs/adr/0011-ministry-feed.md` §2: we deliberately do NOT grant
+    this implicitly from `admin`; it must be granted explicitly via
+    `/api/admin/users/{uid}/ministry-owner`. Strict-identity check mirrors
+    `require_admin` so `1` / `"true"` do not satisfy the gate.
+
+    Composes `require_not_banned` so a banned owner can't broadcast —
+    matches the M4 write-side guard pattern and satisfies the
+    `lint_writes_have_not_banned.py` check.
+    """
+    if user.claims.get("ministry_owner") is not True:
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="forbidden",
+            message="Ministry owner privileges required",
+        )
+    return user
+
+
 # ── M3: group-membership context ────────────────────────────────────────────
 
 

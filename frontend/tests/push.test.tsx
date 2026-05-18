@@ -137,10 +137,10 @@ describe("PushPrompt", () => {
 });
 
 describe("NotificationsPage", () => {
-  it("renders four toggles", async () => {
+  it("renders five toggles (mentions, replies, announcements, digest, ministry feed)", async () => {
     render(<NotificationsPage />);
     const switches = await screen.findAllByRole("switch");
-    expect(switches).toHaveLength(4);
+    expect(switches).toHaveLength(5);
   });
 
   it("toggles are labelled correctly", async () => {

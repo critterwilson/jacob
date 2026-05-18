@@ -38,6 +38,7 @@ _ROUTER_DB_MODULES = (
     "app.routers.account",
     "app.routers.reports",
     "app.routers.boards",
+    "app.routers.ministry_feed",
 )
 
 

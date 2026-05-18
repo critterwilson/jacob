@@ -65,6 +65,7 @@ def test_get_notification_prefs_returns_defaults_when_no_doc() -> None:
         "replies": True,
         "announcements": True,
         "digest": True,
+        "ministryFeed": False,
         "schemaVersion": 1,
     }
 
@@ -111,6 +112,7 @@ def test_put_notification_prefs_overwrites_doc() -> None:
             "replies": False,
             "announcements": False,
             "digest": False,
+            "ministryFeed": False,
             "schemaVersion": 1,
         }
     )
