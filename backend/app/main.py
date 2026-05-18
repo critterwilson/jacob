@@ -28,6 +28,7 @@ from app.routers import (
     incidents,
     invites,
     messages,
+    ministry_feed,
     ncmec,
     orgs,
     reports,
@@ -143,6 +144,7 @@ app.include_router(appeals.admin_router)
 app.include_router(transparency.public_router)
 app.include_router(transparency.admin_router)
 app.include_router(transparency.org_router)
+app.include_router(ministry_feed.router)
 
 if settings.debug:
     from app.routers import debug

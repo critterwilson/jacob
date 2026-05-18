@@ -6,12 +6,14 @@ import { ApiError, apiGet, apiPut } from "@/lib/api";
 
 // Mirrors `backend/app/models/users.py:NotificationPrefs`. Defaults
 // match the prior Firestore-rules-side defaults so an unset doc still
-// renders the toggles as "on".
+// renders the toggles as "on" — except `ministryFeed` (ADR 0011)
+// which defaults to OFF (opt-in for the brand-new broadcast channel).
 export type NotificationPrefs = {
   mentions: boolean;
   replies: boolean;
   announcements: boolean;
   digest: boolean;
+  ministryFeed: boolean;
   schemaVersion: number;
 };
 
@@ -20,6 +22,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   replies: true,
   announcements: true,
   digest: true,
+  ministryFeed: false,
   schemaVersion: 1,
 };
 

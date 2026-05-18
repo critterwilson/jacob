@@ -166,6 +166,25 @@ def require_admin(
     return user
 
 
+def require_ministry_owner(
+    user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Gate on the dedicated `ministry_owner: true` Firebase custom claim.
+
+    See `docs/adr/0011-ministry-feed.md` §2: we deliberately do NOT grant
+    this implicitly from `admin`; it must be granted explicitly via
+    `/api/admin/users/{uid}/ministry-owner`. Strict-identity check mirrors
+    `require_admin` so `1` / `"true"` do not satisfy the gate.
+    """
+    if user.claims.get("ministry_owner") is not True:
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="forbidden",
+            message="Ministry owner privileges required",
+        )
+    return user
+
+
 def _ban_expires_at(snap_data: dict[str, Any] | None) -> datetime | None:
     if not snap_data:
         return None

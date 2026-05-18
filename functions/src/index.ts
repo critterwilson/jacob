@@ -8,5 +8,7 @@ export { onBoardPostWrite } from "./onBoardPostWrite";
 export { onBoardReplyWrite } from "./onBoardReplyWrite";
 export { onBoardReactionWrite } from "./onBoardReactionWrite";
 export { onNotificationCreate } from "./onNotificationCreate";
+export { onMinistryPostCreate } from "./onMinistryPostCreate";
+export { onMinistryReactionWrite } from "./onMinistryReactionWrite";
 export { onPhotoUploadFinalize } from "./onPhotoUploadFinalize";
 export { sendFcmTask } from "./sendFcmTask";

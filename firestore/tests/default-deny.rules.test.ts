@@ -804,6 +804,74 @@ describe("M6 — collection-group members read", () => {
   });
 });
 
+describe("ADR 0011 — ministry_feed", () => {
+  it("denies reading ministry_feed/{postId} as any user", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "ministry_feed", "p1"), {
+        title: "Sermon",
+        body: "Body",
+        createdAt: serverTimestamp(),
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "ministry_feed", "p1")));
+  });
+
+  it("denies writing ministry_feed/{postId} as any user", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "ministry_feed", "p1"), {
+        title: "Sermon",
+        body: "Body",
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("denies writing ministry_feed/{postId} even with an admin claim", async () => {
+    // `admin` does NOT imply ministry_owner per ADR 0011 §2; the rules
+    // are default-deny regardless, but this guards a future "allow if
+    // admin" rule from being added here.
+    const adminCtx = testEnv
+      .authenticatedContext("admin-uid", { admin: true })
+      .firestore();
+    await assertFails(
+      setDoc(doc(adminCtx, "ministry_feed", "p1"), {
+        title: "Sermon",
+        body: "Body",
+      }),
+    );
+  });
+
+  it("denies reading + writing ministry_feed reactions", async () => {
+    await assertFails(
+      getDoc(
+        doc(
+          authed("alice"),
+          "ministry_feed",
+          "p1",
+          "reactions",
+          "pray",
+          "users",
+          "alice",
+        ),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(
+          authed("alice"),
+          "ministry_feed",
+          "p1",
+          "reactions",
+          "pray",
+          "users",
+          "alice",
+        ),
+        { reactedAt: serverTimestamp() },
+      ),
+    );
+  });
+});
+
 describe("M6 — default-deny on unknown paths", () => {
   it("denies reading + writing arbitrary collections", async () => {
     await assertFails(getDoc(doc(authed("alice"), "weird", "x")));

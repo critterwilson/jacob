@@ -50,6 +50,10 @@ boards/{boardId}/posts/{postId}                 # T32
 boards/{boardId}/posts/{postId}/replies/{rid}   # T32
 boards/{boardId}/posts/{postId}/reactions/{slug}/users/{uid}  # T32
 
+# Central ministry feed (broadcast surface, ADR 0011)
+ministry_feed/{postId}                          # owner-only writes, all-members read
+ministry_feed/{postId}/reactions/{slug}/users/{uid}
+
 # Moderation / trust-and-safety (backend only)
 moderation_queue/{itemId}
 bans/{uid}
@@ -83,6 +87,8 @@ groups/{gid}/_member_events/{eid}
 boards/{boardId}/_post_events/{eid}
 boards/{boardId}/posts/{postId}/_reply_events/{eid}
 boards/{boardId}/posts/{postId}/_events/{eid}   # board-post-create idempotency
+ministry_feed/{postId}/_events/{eid}            # ADR 0011 — fan-out idempotency
+ministry_feed/{postId}/_reaction_events/{eid}   # ADR 0011 — reaction count idempotency
 orgs/{orgId}/_member_events/{eid}
 users/{uid}/notifications/{nid}/_events/{eid}
 ```
@@ -384,6 +390,47 @@ parent post is maintained by `onBoardReactionWrite` (which reuses the
 shared `reactionDelta` / `runReactionTxn` helpers from
 `onReactionWrite.ts`). Idempotent via `_reaction_events/{eventId}` under
 the parent post.
+
+---
+
+## `ministry_feed/{postId}` (ADR 0011)
+
+Top-level broadcast surface — readable by every signed-in member,
+writable by users holding the `ministry_owner` Firebase custom claim.
+All access flows through `/api/ministry-feed/*`; rules are default-deny.
+
+```json
+{
+  "title": "Sunday devotional",
+  "body": "Markdown body...",
+  "sermonUrl": "https://...",
+  "coverImageRef": "https://storage.googleapis.com/jacob-media-public-...",
+  "authorUid": "owner-uid",
+  "createdAt": "Timestamp",
+  "editedAt": null,
+  "deletedAt": null,
+  "pinnedAt": null,
+  "pinnedBy": null,
+  "reactionCounts": { "pray": 12 }
+}
+```
+
+Soft-delete only (`deletedAt` timestamp). Pinning is multi-allowed —
+the list endpoint orders `pinnedAt DESC, createdAt DESC`.
+
+### `ministry_feed/{postId}/reactions/{slug}/users/{uid}`
+
+Same primitive as boards / group messages. `reactionCounts` denormed
+by `onMinistryReactionWrite` via the shared `runReactionTxn` helper.
+
+### Notifications fan-out
+
+`onMinistryPostCreate` collection-group-queries `notificationPrefs`
+where `ministryFeed == true` and writes one
+`users/{uid}/notifications/{nid}` per opted-in user (excluding the
+author and users who blocked them). The opt-in default is `false`
+(see ADR 0011 §5). The standard `onNotificationCreate` trigger
+dispatches FCM for each row.
 
 ---
 

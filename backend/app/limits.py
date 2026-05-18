@@ -123,3 +123,12 @@ BOARD_REPLY_CREATE: str = "60/hour"
 BOARD_REPLY_EDIT: str = "30/hour"
 BOARD_REPLY_DELETE: str = "60/hour"
 NOTIFICATION_READ: str = "120/minute"
+
+# Central ministry feed (ADR 0011). Reads are on the page-load critical
+# path for the new top-level surface; writes are owner-only and rare.
+MINISTRY_FEED_LIST: str = "60/minute"
+MINISTRY_POST_READ: str = "60/minute"
+MINISTRY_POST_CREATE: str = "30/hour"
+MINISTRY_POST_EDIT: str = "30/hour"
+MINISTRY_POST_DELETE: str = "30/hour"
+MINISTRY_POST_PIN: str = "30/hour"

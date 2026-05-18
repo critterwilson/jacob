@@ -212,6 +212,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- ADR 0011 central ministry feed --------------------------------
+    // Broadcast surface: writers are gated on the `ministry_owner` Firebase
+    // custom claim, readers are every signed-in member. Both flow through
+    // `/api/ministry-feed/*`; clients never touch these documents directly.
+    match /ministry_feed/{postId} {
+      allow read, write: if false;
+
+      match /reactions/{stickerSlug}/users/{uid} {
+        allow read, write: if false;
+      }
+    }
+
     // --- T51 devotionals + reading plans -------------------------------
     // Read via `/api/devotionals*` and `/api/reading-plans*`; per-user
     // progress mutated via `/api/reading-plans/{slug}/progress/mark`.

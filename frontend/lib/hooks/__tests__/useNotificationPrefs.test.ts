@@ -33,6 +33,7 @@ const STORED = {
   replies: true,
   announcements: true,
   digest: false,
+  ministryFeed: false,
   schemaVersion: 1,
 };
 

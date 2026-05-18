@@ -76,6 +76,7 @@ class UpdateProfileRequest(BaseModel):
 
 class BootstrapClaims(BaseModel):
     admin: bool = False
+    ministryOwner: bool = False
 
 
 class BootstrapResponse(BaseModel):
@@ -109,6 +110,9 @@ class NotificationPrefs(BaseModel):
     replies: bool = True
     announcements: bool = True
     digest: bool = True
+    # ADR 0011 — central ministry feed. Default off (opt-in) so new
+    # users aren't surprised by a brand-new push channel.
+    ministryFeed: bool = False
     schemaVersion: int = 1
 
 

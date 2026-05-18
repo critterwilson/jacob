@@ -179,7 +179,10 @@ def bootstrap(
     return BootstrapResponse(
         profile=profile,
         hasProfile=has_profile,
-        claims=BootstrapClaims(admin=user.claims.get("admin") is True),
+        claims=BootstrapClaims(
+            admin=user.claims.get("admin") is True,
+            ministryOwner=user.claims.get("ministry_owner") is True,
+        ),
         deletionRequestedAt=deletion_requested_at,
     )
 
