@@ -14,6 +14,7 @@ const navLinks = [
   { href: "/boards", label: "Boards" },
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
+  { href: "/settings", label: "Settings" },
 ];
 
 function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {

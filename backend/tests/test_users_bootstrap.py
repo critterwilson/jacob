@@ -579,3 +579,52 @@ def test_update_profile_does_not_write_email_when_unchanged() -> None:
     assert res.status_code == 200
     payload = user_ref.update.call_args[0][0]
     assert "email" not in payload
+
+
+def test_update_profile_persists_phone_location_faith_background() -> None:
+    """Regression: PATCH /api/users/me must persist phone, location, and
+    faithBackground — these fields were previously accepted by CreateProfileRequest
+    but omitted from UpdateProfileRequest, making them silently non-updatable."""
+    user_ref = MagicMock()
+    user_ref.get.side_effect = [
+        _user_snap(exists=True, data={"displayName": "Alice"}),
+        _user_snap(
+            exists=True,
+            data={
+                "displayName": "Alice",
+                "phone": "+1-555-0199",
+                "location": "Chicago",
+                "faithBackground": "Lutheran",
+                "schemaVersion": 1,
+                "isMinor": False,
+            },
+        ),
+    ]
+    users_col = MagicMock()
+    users_col.document.return_value = user_ref
+    db = MagicMock()
+    db.collection.return_value = users_col
+
+    user = CurrentUser(uid="alice", claims={})
+    with (
+        patch("app.routers.users.get_firestore", return_value=db),
+        patch("app.routers.users.write_audit_log") as audit,
+    ):
+        client = TestClient(_app(authed_user=user))
+        res = client.patch(
+            "/api/users/me",
+            json={
+                "phone": "+1-555-0199",
+                "location": "Chicago",
+                "faithBackground": "Lutheran",
+            },
+        )
+
+    assert res.status_code == 200
+    payload = user_ref.update.call_args[0][0]
+    assert payload["phone"] == "+1-555-0199"
+    assert payload["location"] == "Chicago"
+    assert payload["faithBackground"] == "Lutheran"
+    assert audit.call_args.kwargs["payload"] == {
+        "changedKeys": ["faithBackground", "location", "phone"]
+    }
