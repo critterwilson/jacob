@@ -19,6 +19,7 @@ from app.routers import (
     admin,
     analytics,
     appeals,
+    applications,
     boards,
     devotionals,
     discover,
@@ -143,6 +144,7 @@ app.include_router(appeals.admin_router)
 app.include_router(transparency.public_router)
 app.include_router(transparency.admin_router)
 app.include_router(transparency.org_router)
+app.include_router(applications.router)
 
 if settings.debug:
     from app.routers import debug

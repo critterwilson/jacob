@@ -80,6 +80,12 @@ NCMEC_SUBMIT: str = "10/hour"
 # 3/day matches the spec.
 APPEAL_SUBMIT: str = "3/day"
 
+# Admin-approval signup (ADR 0011). Submit is the load-bearing write;
+# poll is what `/awaiting-approval` calls every 30s while waiting for
+# an admin decision, so the cap has to comfortably absorb that.
+APPLICATION_SUBMIT: str = "5/hour"
+APPLICATION_POLL: str = "60/minute"
+
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately
 # tighter to discourage scripted spam.

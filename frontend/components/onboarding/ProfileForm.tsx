@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { deleteUser } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -16,27 +16,27 @@ import {
   Textarea,
 } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
+import { MIN_AGE, computeAge, dobSchema } from "@/lib/auth-schemas";
 import { auth } from "@/lib/firebase";
-import { setHasProfileCookie, type UserProfile } from "@/lib/hooks/useUser";
+import { clearPendingDob, readPendingDob } from "@/lib/pending-application";
 
-type CreateProfileRequest = {
+type SubmitApplicationRequest = {
   displayName: string;
-  photoURL: string | null;
-  isMinor: boolean;
+  dob: string;
+  photoURL: HttpUrlString | null;
   phone?: string;
   location?: string;
   faithBackground?: string;
 };
 
-const AGE_GROUPS = ["18+", "13-17", "under-13"] as const;
-type AgeGroup = (typeof AGE_GROUPS)[number];
+type HttpUrlString = string;
 
 export const profileSchema = z.object({
   displayName: z
     .string()
     .min(1, "Display name is required")
     .max(50, "Display name must be 50 characters or less"),
-  ageGroup: z.enum(AGE_GROUPS, { error: "Please select your age group" }),
+  dob: dobSchema,
   communityGuidelines: z.literal(true, {
     error: "You must agree to the community guidelines",
   }),
@@ -53,9 +53,6 @@ type ProfileFormProps = {
 };
 
 export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
-  // The backend resolves the email server-side from the verified ID
-  // token, so the prop is no longer threaded into the request body.
-  // `uid` is still passed through to the photo-upload helper.
   void _email;
   const router = useRouter();
   const [photoURL, setPhotoURL] = useState<string | null>(null);
@@ -67,20 +64,37 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
   const {
     register,
     handleSubmit,
+    setValue,
     watch,
     formState: { errors },
   } = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) });
 
-  const ageGroup = watch("ageGroup") as AgeGroup | undefined;
+  // Pre-fill DOB from the signup stash if present. Best-effort; the
+  // user can still edit it. See ADR 0011 § 6 + `lib/pending-application.ts`.
+  useEffect(() => {
+    const stashed = readPendingDob();
+    if (stashed) {
+      setValue("dob", stashed, { shouldValidate: false });
+    }
+  }, [setValue]);
 
-  const handleAgeGroupChange = (value: AgeGroup) => {
-    if (value === "under-13") {
+  const dobValue = watch("dob");
+
+  // The under-13 path used to be a radio-button choice; with DOB it
+  // becomes a derived check. We surface the banner the moment the
+  // computed age falls under 13, before submit.
+  useEffect(() => {
+    if (!dobValue || !/^\d{4}-\d{2}-\d{2}$/.test(dobValue)) return;
+    const dob = new Date(`${dobValue}T00:00:00Z`);
+    if (Number.isNaN(dob.getTime())) return;
+    if (computeAge(dob) < MIN_AGE) {
       setUnder13Blocked(true);
     }
-  };
+  }, [dobValue]);
 
   const onSubmit = async (values: ProfileValues) => {
-    if (values.ageGroup === "under-13") {
+    const dob = new Date(`${values.dob}T00:00:00Z`);
+    if (!Number.isNaN(dob.getTime()) && computeAge(dob) < MIN_AGE) {
       await handleUnder13Deletion();
       return;
     }
@@ -88,28 +102,35 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
     setSubmitError(null);
     setSubmitting(true);
     try {
-      const body: CreateProfileRequest = {
+      const body: SubmitApplicationRequest = {
         displayName: values.displayName,
+        dob: values.dob,
         photoURL: photoURL ?? null,
-        isMinor: values.ageGroup === "13-17",
         ...(values.phone ? { phone: values.phone } : {}),
         ...(values.location ? { location: values.location } : {}),
         ...(values.faithBackground
           ? { faithBackground: values.faithBackground }
           : {}),
       };
-      await apiPost<UserProfile, CreateProfileRequest>("/api/users/me", body);
-      // Mirror the cookie on this origin so the Next.js middleware lets the
-      // /groups navigation through. Backend also Set-Cookies but in
-      // cross-origin staging the browser saves it under the API host. (H3)
-      setHasProfileCookie(true);
-      router.push("/groups");
+      await apiPost("/api/applications/me", body);
+      clearPendingDob();
+      router.push("/awaiting-approval");
     } catch (err) {
-      if (err instanceof ApiError && err.code === "profile_exists") {
-        // User already has a profile — treat like a successful onboard
-        // and continue. Avoids a stuck banner if the form is double-submitted.
-        setHasProfileCookie(true);
+      if (err instanceof ApiError && err.code === "already_approved") {
+        // Race: an admin approved while the user was filling the form,
+        // or this caller already has a user doc. Skip straight to the app.
         router.push("/groups");
+        return;
+      }
+      if (err instanceof ApiError && err.code === "application_decided") {
+        // The application is already in a decided state — the
+        // /awaiting-approval screen will show the rejection or push to
+        // /groups. Route there and let it figure out the rest.
+        router.push("/awaiting-approval");
+        return;
+      }
+      if (err instanceof ApiError && err.code === "under_minimum_age") {
+        await handleUnder13Deletion();
         return;
       }
       setSubmitError("Something went wrong. Please try again.");
@@ -124,11 +145,12 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         await deleteUser(auth.currentUser);
       }
     } finally {
+      clearPendingDob();
       router.push("/sign-in?reason=age");
     }
   };
 
-  if (under13Blocked || ageGroup === "under-13") {
+  if (under13Blocked) {
     return (
       <Banner tone="error" title="JACOB requires you to be at least 13.">
         <p>Your account has been removed. No data has been saved.</p>
@@ -178,42 +200,15 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         error={errors.displayName?.message}
       />
 
-      <fieldset className="space-y-2">
-        <legend className="font-sans text-label text-cream">
-          Age group
-          <span aria-hidden="true" className="ml-1 text-terracotta">
-            *
-          </span>
-        </legend>
-        <div className="space-y-2">
-          {(["18+", "13-17", "under-13"] as const).map((val) => (
-            <label
-              key={val}
-              className="flex cursor-pointer items-center gap-2 text-body text-cream"
-            >
-              <input
-                type="radio"
-                value={val}
-                className="h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
-                {...register("ageGroup", {
-                  onChange: (e) =>
-                    handleAgeGroupChange(e.target.value as AgeGroup),
-                })}
-              />
-              {val === "18+"
-                ? "18 or older"
-                : val === "13-17"
-                  ? "13–17"
-                  : "Under 13"}
-            </label>
-          ))}
-        </div>
-        {errors.ageGroup && (
-          <p role="alert" className="text-body-sm text-terracotta">
-            {errors.ageGroup.message}
-          </p>
-        )}
-      </fieldset>
+      <Input
+        label="Date of birth"
+        type="date"
+        autoComplete="bday"
+        required
+        {...register("dob")}
+        helperText="JACOB requires you to be at least 13. Applicants under 18 need parental consent — an admin will confirm this before your account is approved."
+        error={errors.dob?.message}
+      />
 
       <Input
         label="Phone (optional)"
@@ -273,7 +268,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         fullWidth
         loading={submitting}
       >
-        {submitting ? "Saving…" : "Complete profile"}
+        {submitting ? "Submitting application…" : "Submit application"}
       </Button>
     </form>
   );

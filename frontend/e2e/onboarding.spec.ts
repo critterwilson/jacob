@@ -7,38 +7,34 @@ import { verifyEmailViaAdmin } from "./helpers/firebaseAdmin";
 import { expect, test } from "./helpers/fixtures";
 
 /**
- * Onboarding is exactly the place today's CORS regression hit:
- *   POST https://jacob-backend.../api/users/me
- *
- * If the staging backend's CORS allowlist drops the frontend origin, this
- * test fails on the profile-submission step with a `cors_blocked` error
- * before the redirect fires. Verifying redirect → /groups proves the
- * preflight succeeded AND the cookie was mirrored AND middleware let the
- * follow-up navigation through. That's the integration test we needed.
+ * ADR 0011 — signup happy path now ends at /awaiting-approval (admin
+ * approval queue) instead of /groups. The legacy assertion that this
+ * test landed on /groups would fail post-ADR; the integration value
+ * (CORS pre-flight, cookie mirror, middleware routing for non-approved
+ * users) is preserved by re-pointing the redirect target.
  */
 test.describe("onboarding", () => {
-  test("fresh signup → admin verify → onboarding → /groups", async ({
+  test("fresh signup → admin verify → onboarding → /awaiting-approval", async ({
     page,
     freshEmail,
   }) => {
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
+    // ADR 0011 — signup now collects DOB. Use a clearly-adult date so
+    // we don't trip the under-13 client-side block before the auth
+    // user is created.
+    await page.getByLabel(/date of birth/i).fill("1990-04-12");
     await submitSignUp(page);
-    // Email/password signup lands on /verify-email; the admin call below
-    // mints+navigates that link, then page.goto("/onboarding") replaces
-    // the polling redirect. /onboarding is also accepted during the
-    // rollout window where staging may still be on the older build.
     await expect(page).toHaveURL(/\/(verify-email|onboarding)/, {
       timeout: 20_000,
     });
 
-    // Verify the email so the onboarding endpoint accepts the request.
+    // Verify the email so the application-submit endpoint accepts the
+    // request (`email_verified` claim on the ID token).
     await verifyEmailViaAdmin(page, freshEmail.email);
 
     // Reload onboarding so the auth-context picks up the verified status.
-    // Wait for hydration explicitly — App Router pages render server-side
-    // first and we cannot click Submit before the React handler attaches.
     await page.goto("/onboarding", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load");
     await page.waitForLoadState("networkidle").catch(() => undefined);
@@ -46,20 +42,22 @@ test.describe("onboarding", () => {
       page.getByRole("form", { name: /complete your profile/i }),
     ).toBeVisible({ timeout: 15_000 });
 
-    // Fill the profile form.
     const displayName = `Playwright ${freshEmail.localPart.slice(-6)}`;
     await page.getByLabel(/display name/i).fill(displayName);
-    await page.getByRole("radio", { name: /18 or older/i }).check();
-    // Community guidelines checkbox — RHF registers it by name="communityGuidelines".
+    // DOB on the onboarding form is authoritative — type it again here
+    // (the signup-time stash will pre-fill but type-clear-type forces
+    // the form-state-validated value).
+    await page.getByLabel(/date of birth/i).fill("1990-04-12");
     await page.locator("#communityGuidelines").check();
 
-    // Submit.
     await Promise.all([
-      page.waitForURL(/\/groups/, { timeout: 30_000 }),
-      page.getByRole("button", { name: /complete profile/i }).click(),
+      page.waitForURL(/\/awaiting-approval/, { timeout: 30_000 }),
+      page.getByRole("button", { name: /submit application/i }).click(),
     ]);
 
-    // Sanity: middleware accepted us into the post-onboarding section.
-    await expect(page).toHaveURL(/\/groups/);
+    // Wait screen renders with the "Application submitted" heading.
+    await expect(
+      page.getByRole("heading", { name: /waiting for approval/i }),
+    ).toBeVisible({ timeout: 10_000 });
   });
 });

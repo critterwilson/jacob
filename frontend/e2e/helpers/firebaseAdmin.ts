@@ -119,6 +119,23 @@ export async function generateVerifyLink(email: string): Promise<string> {
   return getAuth(getApp()).generateEmailVerificationLink(email);
 }
 
+/**
+ * Stamp the `admin: true` custom claim on the given user.
+ *
+ * ADR 0011 / admin-approval flow tests need an admin actor to drive
+ * the /admin/applications UI. We mint or look up the user, set the
+ * custom claim, and revoke their refresh tokens so the next ID token
+ * mint reflects the new claim. Emulator-only path uses the same Admin
+ * SDK calls — the emulator honours custom claims for token-verification.
+ */
+export async function grantAdminClaim(email: string): Promise<{ uid: string }> {
+  const auth = getAuth(getApp());
+  const user = await auth.getUserByEmail(email);
+  await auth.setCustomUserClaims(user.uid, { admin: true });
+  await auth.revokeRefreshTokens(user.uid);
+  return { uid: user.uid };
+}
+
 export async function generateResetLink(email: string): Promise<string> {
   return getAuth(getApp()).generatePasswordResetLink(email);
 }

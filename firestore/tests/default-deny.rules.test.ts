@@ -780,6 +780,59 @@ describe("T55 default-deny — domain_claims", () => {
   });
 });
 
+describe("ADR 0011 default-deny — applications", () => {
+  it("denies reading applications/{uid} even by the applicant", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "applications", "alice"), {
+        email: "alice@example.com",
+        displayName: "Alice",
+        status: "pending",
+        isMinor: false,
+        createdAt: Timestamp.now(),
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "applications", "alice")));
+  });
+
+  it("denies writing applications/{uid} from the client", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "applications", "alice"), {
+        email: "alice@example.com",
+        displayName: "Alice",
+        status: "pending",
+        isMinor: false,
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("denies updating applications/{uid} from the client", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "applications", "alice"), {
+        email: "alice@example.com",
+        status: "pending",
+        isMinor: false,
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "applications", "alice"), {
+        status: "approved",
+      }),
+    );
+  });
+
+  it("denies reading another applicant's application doc", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "applications", "bob"), {
+        email: "bob@example.com",
+        status: "pending",
+        isMinor: true,
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "applications", "bob")));
+  });
+});
+
 describe("M6 — collection-group members read", () => {
   // The previous CG-members exception was removed in M6: Firestore
   // rules can't separate doc-level reads from CG queries at the rule

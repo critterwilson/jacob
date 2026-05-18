@@ -212,6 +212,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- ADR 0011 admin-approval signup ---------------------------------
+    // Pending-application queue between signup-verify-email and full
+    // member access. Applicant writes via `POST /api/applications/me`;
+    // admin reads / approves / rejects via `/api/admin/applications*`.
+    // Default-deny: clients never read these docs directly.
+    match /applications/{uid} {
+      allow read, write: if false;
+    }
+
     // --- T51 devotionals + reading plans -------------------------------
     // Read via `/api/devotionals*` and `/api/reading-plans*`; per-user
     // progress mutated via `/api/reading-plans/{slug}/progress/mark`.

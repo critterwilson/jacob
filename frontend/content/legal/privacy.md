@@ -1,4 +1,4 @@
-*[REVISED 2026-05-06]*
+*[REVISED 2026-05-17]*
 
 ## In plain words
 
@@ -18,10 +18,16 @@ When you create an account, we collect:
 
 - **Account information** — your email address and a password (or your Google
   account, if you sign in with Google).
-- **Profile information** — the display name you choose, an age group (so we
-  know whether you are under 18), and an optional profile photo.
+- **Profile information** — the display name you choose, your date of birth
+  (used to confirm you are at least 13 and to flag under-18 applicants for
+  parental-consent review), and an optional profile photo.
 - **Optional profile fields** — phone number, city, and a short faith
   background, only if you fill them in. You can leave them blank.
+
+New accounts go through an admin-approval queue: after you verify your
+email and submit your application, a ministry admin reviews it and
+either approves or declines your account. We don't share what you
+submitted with anyone outside the admin team.
 
 While you use the service, we collect:
 
@@ -172,11 +178,15 @@ personal information from children under 13. If we learn we have collected
 information from a child under 13, we will delete it.
 
 Users aged 13–17 may use JACOB only with the consent of a parent or legal
-guardian. We document this requirement here as a matter of policy; the
-in-app gate that enforces it is part of our launch checklist. If you are a
-parent or guardian and believe your child has signed up without your
-consent, contact us using the address below and we will remove the
-account.
+guardian. The in-app gate that enforces this works as follows: when a 13–17
+year old signs up, the application enters the admin-approval queue (the
+same queue every new account goes through). Before approving an under-18
+applicant, a ministry admin confirms that parental or legal-guardian
+consent has been obtained and records that confirmation as part of the
+admin's audit trail. We do not approve under-18 accounts without that
+confirmation. If you are a parent or guardian and believe your child has
+signed up without your consent, contact us using the address below and we
+will remove the account.
 
 ## Security
 

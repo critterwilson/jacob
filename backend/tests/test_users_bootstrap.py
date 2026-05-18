@@ -42,14 +42,37 @@ def _user_snap(*, exists: bool, data: dict | None = None) -> MagicMock:
     return snap
 
 
-def _user_db(snap: MagicMock) -> MagicMock:
+def _user_db(snap: MagicMock, *, app_snap: MagicMock | None = None) -> MagicMock:
+    """Mock Firestore client with separate collections for users / applications.
+
+    `app_snap` defaults to an approved application — that's the state
+    that lets the deprecated `POST /api/users/me` endpoint write the
+    user doc (ADR 0011: post-deploy, only an approved application
+    permits direct profile creation). Tests for the bootstrap or
+    update paths can pass `app_snap=_user_snap(exists=False)` if the
+    application doc shouldn't exist.
+    """
     db = MagicMock()
     user_ref = MagicMock()
     user_ref.get.return_value = snap
     users_col = MagicMock()
     users_col.document.return_value = user_ref
-    db.collection.return_value = users_col
+
+    if app_snap is None:
+        app_snap = _user_snap(exists=True, data={"status": "approved"})
+    app_ref = MagicMock()
+    app_ref.get.return_value = app_snap
+    apps_col = MagicMock()
+    apps_col.document.return_value = app_ref
+
+    def _collection(name: str) -> MagicMock:
+        if name == "applications":
+            return apps_col
+        return users_col
+
+    db.collection.side_effect = _collection
     db._user_ref = user_ref  # type: ignore[attr-defined]
+    db._app_ref = app_ref  # type: ignore[attr-defined]
     return db
 
 
@@ -154,8 +177,37 @@ def test_bootstrap_requires_auth() -> None:
 # ── create profile ────────────────────────────────────────────────────────
 
 
-def test_create_profile_persists_required_fields() -> None:
+def _create_profile_db(*, fresh_snap: MagicMock, app_status: str = "approved") -> MagicMock:
+    """Two-collection mock for `POST /api/users/me` happy-path tests.
+
+    `users` ref returns absent-then-fresh; `applications` ref returns the
+    requested status (default: approved, so the new guard lets the write
+    through — ADR 0011). Pass `app_status="pending"` or similar to
+    exercise the refusal paths.
+    """
     user_ref = MagicMock()
+    user_ref.get.side_effect = [_user_snap(exists=False), fresh_snap]
+    users_col = MagicMock()
+    users_col.document.return_value = user_ref
+
+    app_ref = MagicMock()
+    app_ref.get.return_value = _user_snap(exists=True, data={"status": app_status})
+    apps_col = MagicMock()
+    apps_col.document.return_value = app_ref
+
+    db = MagicMock()
+
+    def _col(name: str) -> MagicMock:
+        if name == "applications":
+            return apps_col
+        return users_col
+
+    db.collection.side_effect = _col
+    db._user_ref = user_ref  # type: ignore[attr-defined]
+    return db
+
+
+def test_create_profile_persists_required_fields() -> None:
     # First .get() returns no doc; after .set() the next .get() returns one.
     fresh_snap = _user_snap(
         exists=True,
@@ -167,11 +219,8 @@ def test_create_profile_persists_required_fields() -> None:
             "schemaVersion": 1,
         },
     )
-    user_ref.get.side_effect = [_user_snap(exists=False), fresh_snap]
-    users_col = MagicMock()
-    users_col.document.return_value = user_ref
-    db = MagicMock()
-    db.collection.return_value = users_col
+    db = _create_profile_db(fresh_snap=fresh_snap)
+    user_ref = db._user_ref  # type: ignore[attr-defined]
 
     user = CurrentUser(uid="alice", email="alice@example.com", claims={})
     with (
@@ -220,8 +269,12 @@ def test_create_profile_409_on_duplicate() -> None:
     user_ref.get.return_value = _user_snap(exists=True, data={"displayName": "Alice"})
     users_col = MagicMock()
     users_col.document.return_value = user_ref
+    apps_col = MagicMock()
+    apps_col.document.return_value = MagicMock(
+        get=MagicMock(return_value=_user_snap(exists=True, data={"status": "approved"}))
+    )
     db = MagicMock()
-    db.collection.return_value = users_col
+    db.collection.side_effect = lambda name: apps_col if name == "applications" else users_col
 
     user = CurrentUser(uid="alice", email="alice@example.com", claims={})
     with patch("app.routers.users.get_firestore", return_value=db):
@@ -278,25 +331,19 @@ def test_create_profile_rejects_invalid_photo_url() -> None:
 
 
 def test_create_profile_persists_optional_fields_when_supplied() -> None:
-    user_ref = MagicMock()
-    user_ref.get.side_effect = [
-        _user_snap(exists=False),
-        _user_snap(
-            exists=True,
-            data={
-                "displayName": "Alice",
-                "phone": "+1-555-0100",
-                "location": "Brooklyn",
-                "faithBackground": "Methodist",
-                "isMinor": False,
-                "schemaVersion": 1,
-            },
-        ),
-    ]
-    users_col = MagicMock()
-    users_col.document.return_value = user_ref
-    db = MagicMock()
-    db.collection.return_value = users_col
+    fresh_snap = _user_snap(
+        exists=True,
+        data={
+            "displayName": "Alice",
+            "phone": "+1-555-0100",
+            "location": "Brooklyn",
+            "faithBackground": "Methodist",
+            "isMinor": False,
+            "schemaVersion": 1,
+        },
+    )
+    db = _create_profile_db(fresh_snap=fresh_snap)
+    user_ref = db._user_ref  # type: ignore[attr-defined]
 
     user = CurrentUser(uid="alice", claims={})
     with (

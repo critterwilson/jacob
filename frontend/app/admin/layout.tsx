@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 
 const NAV_LINKS = [
   { href: "/admin/queue", label: "Moderation Queue" },
+  { href: "/admin/applications", label: "Applications" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/groups", label: "Groups" },
   { href: "/admin/flags", label: "Feature Flags" },

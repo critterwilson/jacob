@@ -282,6 +282,45 @@ Items pending human moderator review. Written by the moderation pipeline
 
 ---
 
+## `applications/{uid}` (backend only, ADR 0011)
+
+Signup applications between email verification and admin approval. The
+applicant writes via `POST /api/applications/me`; the admin reads, approves,
+or rejects via `/api/admin/applications*`. The `users/{uid}` doc is only
+created on admin approval — application doc presence is **not** a member-
+access signal. Default-deny in `firestore.rules`.
+
+```json
+{
+  "email": "alice@example.com",
+  "displayName": "Alice",
+  "photoURL": null,
+  "dob": "2007-04-12",
+  "isMinor": true,
+  "phone": null,
+  "location": null,
+  "faithBackground": null,
+  "status": "pending",
+  "createdAt": "<serverTimestamp>",
+  "submittedAt": "<serverTimestamp>",
+  "decidedAt": null,
+  "decidedBy": null,
+  "parentalConsentObtained": null,
+  "parentalConsentNotes": "",
+  "rejectionReason": "",
+  "grandfathered": false
+}
+```
+
+For under-18 applicants (`isMinor: true`) the admin approve endpoint
+refuses to write `status: "approved"` unless the request body sets
+`parentalConsentObtained: true`. Pre-existing users that pre-date this
+collection are stamped with `grandfathered: true`,
+`decidedBy: "system_grandfather"`, and `parentalConsentObtained: null`
+by `infra/scripts/backfill_applications.py`.
+
+---
+
 ## `bans/{uid}` (backend only)
 
 Active bans. The presence of `bans/{request.auth.uid}` with

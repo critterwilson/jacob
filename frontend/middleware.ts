@@ -130,6 +130,10 @@ const PUBLIC_PREFIXES = [
   "/forgot-password",
   "/verify-email",
   "/onboarding",
+  // ADR 0011 — pending/rejected applicants live here until an admin
+  // decides. They don't have a profile cookie yet, so this path must
+  // bypass the `jacob-has-profile` middleware gate.
+  "/awaiting-approval",
   "/privacy",
   "/terms",
   "/guidelines",

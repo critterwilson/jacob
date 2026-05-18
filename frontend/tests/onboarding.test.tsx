@@ -42,9 +42,6 @@ vi.mock("firebase/storage", () => ({
 }));
 
 // --- T10 photo upload hook -------------------------------------------------
-// PhotoUpload now goes through useUploadPhoto, which calls useAuth(). Tests
-// that render ProfileForm bare (no AuthProvider) would otherwise crash, so
-// stub the hook with a no-op upload.
 vi.mock("@/lib/hooks/useUploadPhoto", () => ({
   ALLOWED_PHOTO_MIME_TYPES: ["image/jpeg", "image/png", "image/webp"],
   MAX_PHOTO_BYTES: 8 * 1024 * 1024,
@@ -69,9 +66,7 @@ import { AuthProvider } from "@/lib/auth-context";
 import OnboardingPage from "@/app/onboarding/page";
 
 // ---------------------------------------------------------------------------
-// Fetch mock — covers the bootstrap GET that `useUser` now performs and
-// the POST /api/users/me that `ProfileForm` submits. Per-test handlers
-// override the default via `pushHandler`.
+// Fetch mock
 // ---------------------------------------------------------------------------
 type Reply = {
   ok: boolean;
@@ -84,9 +79,17 @@ type BootstrapBody = {
   profile: Record<string, unknown> | null;
   claims?: { admin?: boolean };
   deletionRequestedAt?: string | null;
+  applicationStatus?: string | null;
 };
 
 let nextBootstrap: BootstrapBody = { hasProfile: false, profile: null };
+let nextApplication: Reply = {
+  ok: false,
+  status: 404,
+  json: async () => ({
+    error: { code: "application_not_found", message: "no app" },
+  }),
+};
 const fetchMock: Mock = vi.fn();
 const handlers: Array<{
   match: (url: string, method: string) => boolean;
@@ -127,9 +130,19 @@ beforeEach(() => {
         json: async () => nextBootstrap,
       };
     }
+    if (url.includes("/api/applications/me") && method === "GET") {
+      return nextApplication;
+    }
     throw new Error(`unexpected fetch in test: ${method} ${url}`);
   });
   nextBootstrap = { hasProfile: false, profile: null };
+  nextApplication = {
+    ok: false,
+    status: 404,
+    json: async () => ({
+      error: { code: "application_not_found", message: "no app" },
+    }),
+  };
   mockReplace.mockClear();
   mockPush.mockClear();
   vi.mocked(fbAuth.onAuthStateChanged).mockReset();
@@ -140,6 +153,9 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
+
+const ADULT_DOB = "1990-04-12";
+const UNDER_13_DOB = `${new Date().getFullYear() - 10}-04-12`;
 
 // ---------------------------------------------------------------------------
 // Redirect logic
@@ -187,7 +203,47 @@ describe("OnboardingPage redirect logic", () => {
     });
   });
 
-  it("renders the profile form when user has no profile", async () => {
+  it("redirects to /awaiting-approval when application is already pending", async () => {
+    mockAuthState({ uid: "uid-1", email: "user@example.com" });
+    nextBootstrap = { hasProfile: false, profile: null };
+    nextApplication = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        uid: "uid-1",
+        email: "user@example.com",
+        displayName: "Alice",
+        photoURL: null,
+        dob: ADULT_DOB,
+        age: 35,
+        isMinor: false,
+        phone: null,
+        location: null,
+        faithBackground: null,
+        status: "pending",
+        createdAt: null,
+        submittedAt: null,
+        decidedAt: null,
+        decidedBy: null,
+        parentalConsentObtained: null,
+        parentalConsentNotes: "",
+        rejectionReason: "",
+        grandfathered: false,
+      }),
+    };
+
+    render(
+      <AuthProvider>
+        <OnboardingPage />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/awaiting-approval");
+    });
+  });
+
+  it("renders the profile form when user has no profile and no application", async () => {
     mockAuthState({ uid: "uid-1", email: "user@example.com" });
     nextBootstrap = { hasProfile: false, profile: null };
 
@@ -198,7 +254,9 @@ describe("OnboardingPage redirect logic", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("form", { name: /complete your profile/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("form", { name: /complete your profile/i }),
+      ).toBeInTheDocument();
     });
   });
 });
@@ -215,28 +273,30 @@ describe("ProfileForm validation", () => {
     const user = userEvent.setup();
     renderForm();
 
-    // Select age and check guidelines so only displayName fails
-    await user.click(screen.getByRole("radio", { name: /18 or older/i }));
-    await user.click(screen.getByRole("checkbox", { name: /community guidelines/i }));
-    await user.click(screen.getByRole("button", { name: /complete profile/i }));
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("alert", { name: "" })).toBeInTheDocument();
-    });
-    expect(screen.getByText(/display name is required/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/display name is required/i),
+    ).toBeInTheDocument();
   });
 
-  it("shows error when age group is not selected on submit", async () => {
+  it("shows error when dob is empty on submit", async () => {
     const user = userEvent.setup();
     renderForm();
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.click(screen.getByRole("checkbox", { name: /community guidelines/i }));
-    await user.click(screen.getByRole("button", { name: /complete profile/i }));
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/please select your age group/i)).toBeInTheDocument();
-    });
+    expect(
+      await screen.findByText(/date of birth is required/i),
+    ).toBeInTheDocument();
   });
 
   it("links the community-guidelines label to /guidelines", () => {
@@ -250,29 +310,29 @@ describe("ProfileForm validation", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.click(screen.getByRole("radio", { name: /18 or older/i }));
-    await user.click(screen.getByRole("button", { name: /complete profile/i }));
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/must agree to the community guidelines/i)).toBeInTheDocument();
-    });
+    expect(
+      await screen.findByText(/must agree to the community guidelines/i),
+    ).toBeInTheDocument();
   });
 
-  it("posts to /api/users/me and navigates to /groups on valid submission", async () => {
+  it("posts to /api/applications/me and navigates to /awaiting-approval on valid submission", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/users/me") && method === "POST",
+      (url, method) => url.includes("/api/applications/me") && method === "POST",
       () => ({
         ok: true,
         status: 201,
         json: async () => ({
           uid: "uid-1",
-          displayName: "Alice",
           email: "user@example.com",
+          displayName: "Alice",
           photoURL: null,
-          role: "member",
-          schemaVersion: 1,
+          dob: ADULT_DOB,
+          age: 35,
           isMinor: false,
-          createdAt: null,
+          status: "pending",
         }),
       }),
     );
@@ -281,26 +341,28 @@ describe("ProfileForm validation", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.click(screen.getByRole("radio", { name: /18 or older/i }));
-    await user.click(screen.getByRole("checkbox", { name: /community guidelines/i }));
-    await user.click(screen.getByRole("button", { name: /complete profile/i }));
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
 
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
         (c) =>
-          String(c[0]).includes("/api/users/me") &&
+          String(c[0]).includes("/api/applications/me") &&
           (c[1] as RequestInit | undefined)?.method === "POST",
       );
       expect(calls.length).toBeGreaterThan(0);
       const body = JSON.parse((calls[0][1] as RequestInit).body as string);
-      expect(body).toMatchObject({ displayName: "Alice", isMinor: false });
+      expect(body).toMatchObject({ displayName: "Alice", dob: ADULT_DOB });
     });
-    expect(mockPush).toHaveBeenCalledWith("/groups");
+    expect(mockPush).toHaveBeenCalledWith("/awaiting-approval");
   });
 
-  it("shows error message when the create-profile request fails", async () => {
+  it("shows error message when the submit-application request fails", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/users/me") && method === "POST",
+      (url, method) => url.includes("/api/applications/me") && method === "POST",
       () => ({
         ok: false,
         status: 500,
@@ -313,9 +375,11 @@ describe("ProfileForm validation", () => {
     renderForm();
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.click(screen.getByRole("radio", { name: /18 or older/i }));
-    await user.click(screen.getByRole("checkbox", { name: /community guidelines/i }));
-    await user.click(screen.getByRole("button", { name: /complete profile/i }));
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
@@ -327,26 +391,30 @@ describe("ProfileForm validation", () => {
 // Under-13 path
 // ---------------------------------------------------------------------------
 describe("Under-13 path", () => {
-  it("shows blocking message when under-13 is selected", async () => {
+  it("flips to the under-13 blocking banner once a sub-13 DOB is entered", async () => {
     const user = userEvent.setup();
     render(<ProfileForm uid="uid-1" email="user@example.com" />);
 
-    await user.click(screen.getByRole("radio", { name: /under 13/i }));
+    await user.type(screen.getByLabelText(/date of birth/i), UNDER_13_DOB);
 
+    // The form replaces itself with a blocking banner the moment the
+    // computed age falls below 13.
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
-      expect(screen.getByText(/JACOB requires you to be at least 13/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/JACOB requires you to be at least 13/i),
+      ).toBeInTheDocument();
     });
   });
 
-  it("calls deleteUser and redirects to /sign-in when under-13 confirm is clicked", async () => {
+  it("calls deleteUser and redirects to /sign-in when Continue is clicked", async () => {
     vi.mocked(fbAuth.deleteUser).mockResolvedValue(undefined);
-
     const user = userEvent.setup();
     render(<ProfileForm uid="uid-1" email="user@example.com" />);
 
-    await user.click(screen.getByRole("radio", { name: /under 13/i }));
-    await waitFor(() => screen.getByRole("alert"));
+    await user.type(screen.getByLabelText(/date of birth/i), UNDER_13_DOB);
+    await waitFor(() =>
+      screen.getByText(/JACOB requires you to be at least 13/i),
+    );
 
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
@@ -358,12 +426,6 @@ describe("Under-13 path", () => {
 
 // ---------------------------------------------------------------------------
 // useUser bootstrap (M2 of the data-layer migration)
-//
-// The cookie that gates `frontend/middleware.ts` is now set server-side
-// from `GET /api/users/me/bootstrap` and from `POST /api/users/me`, so
-// this hook no longer manages it. The tests below assert the new
-// contract: hook returns the profile from the bootstrap response and
-// does not import `firebase/firestore`.
 // ---------------------------------------------------------------------------
 describe("useUser", () => {
   it("returns the profile from the bootstrap response", async () => {
@@ -445,7 +507,6 @@ describe("useUser", () => {
   it("preserves the prior profile on a transport error (does not zero it)", async () => {
     const { useUser } = await import("@/lib/hooks/useUser");
 
-    // First call returns a real profile.
     nextBootstrap = {
       hasProfile: true,
       profile: {
@@ -468,10 +529,6 @@ describe("useUser", () => {
     render(<Probe />);
     await waitFor(() => expect(hook?.profile?.displayName).toBe("Alice"));
 
-    // Now make the next bootstrap call throw a transport-style error
-    // (TypeError mimics a fetch network failure — `lib/api.ts` surfaces
-    // that as `ApiError(0, "network_error", …)`). The hook must keep
-    // the prior profile.
     pushHandler(
       (url, method) =>
         url.includes("/api/users/me/bootstrap") && method === "GET",
@@ -510,7 +567,6 @@ describe("useUser", () => {
     render(<Probe />);
     await waitFor(() => expect(hook?.profile?.displayName).toBe("Alice"));
 
-    // A definitive 200 with hasProfile=false should clear the profile.
     nextBootstrap = { hasProfile: false, profile: null };
     await hook!.refresh();
     await waitFor(() => expect(hook?.profile).toBeNull());
