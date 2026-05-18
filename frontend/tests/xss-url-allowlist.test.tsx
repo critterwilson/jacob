@@ -53,9 +53,9 @@ vi.mock("@/lib/auth-context", () => ({
   useAuth: vi.fn(),
 }));
 
-import SermonDetailPage from "@/app/groups/[gid]/sermons/[sermonId]/page";
-import SermonsListPage from "@/app/groups/[gid]/sermons/page";
-import WatchSessionPage from "@/app/groups/[gid]/watch/[sessionId]/page";
+import SermonDetailPage from "@/app/(authed)/groups/[gid]/sermons/[sermonId]/page";
+import SermonsListPage from "@/app/(authed)/groups/[gid]/sermons/page";
+import WatchSessionPage from "@/app/(authed)/groups/[gid]/watch/[sessionId]/page";
 
 const mockedUseGroupSermons = useGroupSermons as unknown as ReturnType<
   typeof vi.fn

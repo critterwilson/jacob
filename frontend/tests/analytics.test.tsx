@@ -76,7 +76,7 @@ vi.mock("@/lib/hooks/useAnalytics", () => ({
   useAnalytics: () => mockAnalyticsState,
 }));
 
-import AnalyticsPage from "@/app/groups/[gid]/analytics/page";
+import AnalyticsPage from "@/app/(authed)/groups/[gid]/analytics/page";
 
 beforeEach(() => {
   mockReplace.mockClear();
