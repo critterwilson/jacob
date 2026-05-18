@@ -92,6 +92,8 @@ service cloud.firestore {
         }
       }
       // T50 — Watch Together session metadata (live state in RTDB).
+      // FEATURE PARKED 2026-05-17: video features deferred by ministry owner.
+      // See docs/follow-ups/phase-3-parked.md § T50. Default-deny kept as-is.
       match /watch_sessions/{sessionId} {
         allow read, write: if false;
       }

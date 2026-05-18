@@ -164,7 +164,9 @@ describe("Sermon list page XSS allowlist (H-FRONT-2)", () => {
   });
 });
 
-describe("Watch session page XSS allowlist (H-FRONT-2)", () => {
+// FEATURE PARKED 2026-05-17: WatchSessionPage is now a stub with no iframe.
+// Re-enable when T50 is revived. See docs/follow-ups/phase-3-parked.md § T50.
+describe.skip("Watch session page XSS allowlist (H-FRONT-2)", () => {
   it("drops the YouTube link and encodeURIComponent's the videoId for the iframe", () => {
     mockedUseAuth.mockReturnValue({ user: { uid: "alice" } });
     mockedUseWatchSession.mockReturnValue({
