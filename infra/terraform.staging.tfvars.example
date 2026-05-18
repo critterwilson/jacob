@@ -24,6 +24,8 @@ api_service_account_email        = "jacob-api@YOUR_PROJECT.iam.gserviceaccount.c
 backup_service_account_email     = "jacob-backup@YOUR_PROJECT.iam.gserviceaccount.com"
 moderation_service_account_email = "jacob-moderation@YOUR_PROJECT.iam.gserviceaccount.com"
 alert_email                      = "YOUR_ALERT_EMAIL@example.com"
+budget_email                     = "YOUR_ALERT_EMAIL@example.com"  # should match alert_email; used for billing budget alerts
+billing_budget_usd               = 50                              # early-warning monthly budget; alerts at 50/90/100/120%
 
 # Typesense image — pin both the tag (human-readable) and the digest (trust
 # anchor). See docs/runbooks/typesense-image-pin.md for how to look up the
