@@ -11,10 +11,7 @@ import { ApiError, apiPatch } from "@/lib/api";
 const DEFAULT_CAP = 20;
 
 const capSchema = z.object({
-  memberCap: z
-    .number({ invalid_type_error: "Enter a whole number" })
-    .int("Must be a whole number")
-    .min(1, "Cap must be at least 1"),
+  memberCap: z.number().int("Must be a whole number").min(1, "Cap must be at least 1"),
 });
 
 type FormValues = z.infer<typeof capSchema>;
