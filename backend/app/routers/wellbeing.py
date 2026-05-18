@@ -70,7 +70,7 @@ def _ts_to_str(ts: Any) -> str | None:
     if ts is None:
         return None
     try:
-        return ts.isoformat()
+        return str(ts.isoformat())
     except AttributeError:
         return str(ts)
 
