@@ -85,12 +85,20 @@ class BootstrapResponse(BaseModel):
     `hasProfile` is the load-bearing field — `frontend/middleware.ts`
     redirects on absence of the corresponding cookie. `profile` is None
     iff `hasProfile` is False.
+
+    `applicationStatus` (ADR 0012) is `"pending"` / `"approved"` /
+    `"rejected"` if an `applications/{uid}` doc exists, otherwise None.
+    The frontend routes pending users to `/awaiting-approval` and
+    rejected users to the same page (which surfaces the rejection).
+    Approved users are exactly the set with `hasProfile === true` —
+    `applicationStatus === "approved"` is the matching audit signal.
     """
 
     profile: UserProfile | None
     hasProfile: bool
     claims: BootstrapClaims = Field(default_factory=BootstrapClaims)
     deletionRequestedAt: datetime | None = None
+    applicationStatus: str | None = None
 
 
 # ── notification preferences ────────────────────────────────────────────────

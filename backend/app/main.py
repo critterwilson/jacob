@@ -19,6 +19,7 @@ from app.routers import (
     admin,
     analytics,
     appeals,
+    applications,
     boards,
     devotionals,
     discover,
@@ -145,6 +146,7 @@ app.include_router(appeals.admin_router)
 app.include_router(transparency.public_router)
 app.include_router(transparency.admin_router)
 app.include_router(transparency.org_router)
+app.include_router(applications.router)
 app.include_router(ministry_feed.router)
 app.include_router(wellbeing.router)
 app.include_router(wellbeing.admin_router)

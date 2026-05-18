@@ -174,6 +174,17 @@ def bootstrap(
         profile = _user_doc_to_profile(user.uid, data)
         deletion_requested_at = _ts_to_dt(data.get("deletionRequestedAt"))
 
+    # ADR 0012 — surface the application status alongside the user doc
+    # so the frontend can route pending/rejected applicants to the
+    # waiting screen without an extra round-trip. Existing users
+    # (pre-this-PR) have no application doc; for them this stays None.
+    application_status: str | None = None
+    app_snap = db.collection("applications").document(user.uid).get()
+    if getattr(app_snap, "exists", False):
+        app_status_raw = (app_snap.to_dict() or {}).get("status")
+        if app_status_raw in ("pending", "approved", "rejected"):
+            application_status = app_status_raw
+
     _set_profile_cookie(response, request, has_profile=has_profile)
 
     return BootstrapResponse(
@@ -184,6 +195,7 @@ def bootstrap(
             ministryOwner=user.claims.get("ministry_owner") is True,
         ),
         deletionRequestedAt=deletion_requested_at,
+        applicationStatus=application_status,
     )
 
 
@@ -198,6 +210,13 @@ def create_profile(
     body: CreateProfileRequest,
     user: CurrentUser = Depends(require_not_banned),
 ) -> UserProfile:
+    """**Deprecated post-ADR 0012.** New signups must go through
+    `POST /api/applications/me` and wait for admin approval. The
+    `users/{uid}` document is created server-side by the admin
+    approve endpoint, not by this route. We keep the endpoint
+    available but refuse calls that don't have a corresponding
+    approved application — that is the new ingress contract.
+    """
     db = get_firestore()
     user_ref = db.collection("users").document(user.uid)
     snap = user_ref.get()
@@ -206,6 +225,28 @@ def create_profile(
             status_code=status.HTTP_409_CONFLICT,
             code="profile_exists",
             message="Profile already exists",
+        )
+
+    # ADR 0012: refuse direct profile creation without an approved
+    # application. The frontend now uses `/api/applications/me`; this
+    # endpoint exists only so an already-approved user (theoretical
+    # race: approve flips status, the user doc write fails, the user
+    # retries) can finish provisioning. In every other case the user
+    # must apply first.
+    app_snap = db.collection("applications").document(user.uid).get()
+    if not getattr(app_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="application_required",
+            message="Submit an application via POST /api/applications/me first",
+        )
+    app_status = str((app_snap.to_dict() or {}).get("status") or "")
+    if app_status != "approved":
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="application_not_approved",
+            message="Your application has not been approved yet",
+            details={"status": app_status},
         )
 
     photo_url = str(body.photoURL) if body.photoURL is not None else None

@@ -7,25 +7,46 @@ import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
 import { Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useMyApplication } from "@/lib/hooks/useMyApplication";
 import { useUser } from "@/lib/hooks/useUser";
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useUser(user?.uid);
+  // ADR 0012: an applicant who has already submitted the application
+  // form lives in `applications/{uid}`. If we land here with a pending
+  // or decided application, bounce them to /awaiting-approval — re-
+  // filling the form would be confusing.
+  const { application, loading: applicationLoading } = useMyApplication({
+    uid: user?.uid,
+    pollMs: 60_000,
+  });
 
   useEffect(() => {
-    if (authLoading || profileLoading) return;
+    if (authLoading || profileLoading || applicationLoading) return;
     if (!user) {
       router.replace("/sign-in");
       return;
     }
     if (profile) {
       router.replace("/groups");
+      return;
     }
-  }, [user, profile, authLoading, profileLoading, router]);
+    if (application) {
+      router.replace("/awaiting-approval");
+    }
+  }, [
+    user,
+    profile,
+    application,
+    authLoading,
+    profileLoading,
+    applicationLoading,
+    router,
+  ]);
 
-  if (authLoading || profileLoading) {
+  if (authLoading || profileLoading || applicationLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted">Loading…</span>
@@ -35,6 +56,7 @@ export default function OnboardingPage() {
 
   if (!user) return null;
   if (profile) return null;
+  if (application) return null;
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-ink px-4 py-12">
@@ -50,10 +72,11 @@ export default function OnboardingPage() {
           <header className="space-y-2">
             <Eyebrow>One last step</Eyebrow>
             <Heading level={2} size="sm">
-              Complete your profile
+              Apply to join
             </Heading>
             <p className="text-body-sm text-cream-muted">
-              Tell your group a little about yourself.
+              Tell us a little about yourself. An admin will review your
+              application before your account is approved.
             </p>
           </header>
           <ProfileForm uid={user.uid} email={user.email} />

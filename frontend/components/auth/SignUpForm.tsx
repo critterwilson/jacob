@@ -15,6 +15,7 @@ import { humanizeAuthError } from "@/components/auth/error-messages";
 import { Banner, Button, Input, Link } from "@/components/ui";
 import { type SignUpValues, signUpSchema } from "@/lib/auth-schemas";
 import { auth } from "@/lib/firebase";
+import { stashPendingDob } from "@/lib/pending-application";
 
 export function SignUpForm() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export function SignUpForm() {
     formState: { errors },
   } = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema) });
   const acceptTerms = watch("acceptTerms");
+  const dobField = watch("dob");
 
   const onSubmit = async (values: SignUpValues) => {
     setSubmitError(null);
@@ -40,6 +42,12 @@ export function SignUpForm() {
         values.password,
       );
       await sendEmailVerification(cred.user);
+      // Hand the DOB off to the onboarding form via sessionStorage so
+      // the user doesn't have to type it twice. The onboarding form
+      // still asks for it explicitly (and pre-fills from this stash)
+      // because sessionStorage is per-tab; if the user verifies email
+      // in a different tab the field remains required there. ADR 0012 § 6.
+      stashPendingDob(values.dob);
       // Email/password signups land on /verify-email until they click the
       // verification link. Google sign-in (below) is already verified by
       // the provider, so it skips this gate.
@@ -62,6 +70,13 @@ export function SignUpForm() {
         message: "You must agree to the Terms of Service and Privacy Policy",
       });
       return;
+    }
+    // Google sign-in skips the DOB field at signup time (Google already
+    // verified the email, and we don't have a UI flow to mid-popup
+    // collect the date). The onboarding form is still authoritative —
+    // the user types DOB there and the application is created from it.
+    if (dobField) {
+      stashPendingDob(dobField);
     }
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
@@ -93,6 +108,15 @@ export function SignUpForm() {
         {...register("password")}
         helperText="At least 10 characters, one number, one symbol."
         error={errors.password?.message}
+      />
+
+      <Input
+        label="Date of birth"
+        type="date"
+        autoComplete="bday"
+        {...register("dob")}
+        helperText="JACOB requires you to be at least 13."
+        error={errors.dob?.message}
       />
 
       <div className="space-y-2">

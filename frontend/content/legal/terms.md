@@ -1,3 +1,5 @@
+*[REVISED 2026-05-17]*
+
 ## In plain words
 
 These are the rules of the road for using JACOB. By creating an account
@@ -14,6 +16,12 @@ specifics.
 You may use JACOB if you are at least 13 years old. If you are 13 to 17,
 you may use JACOB only with the consent of a parent or legal guardian. If
 you are under 13, you may not use JACOB.
+
+New accounts go through an admin-approval queue. After you verify your
+email and submit your application, a ministry admin reviews it and
+either approves or declines your account. For applicants aged 13 to 17,
+the admin will additionally confirm that parental or legal-guardian
+consent has been obtained before approving the account.
 
 You agree to provide accurate information when you sign up and to keep
 your account information up to date.

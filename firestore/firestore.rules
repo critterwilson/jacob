@@ -221,7 +221,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // --- ADR 0011 central ministry feed --------------------------------
+    // --- admin-approval signup ------------------------------------------
+    // Pending-application queue between signup-verify-email and full
+    // member access. Applicant writes via `POST /api/applications/me`;
+    // admin reads / approves / rejects via `/api/admin/applications*`.
+    // Default-deny: clients never read these docs directly.
+    match /applications/{uid} {
+      allow read, write: if false;
+    }
+
+    // --- central ministry feed ------------------------------------------
     // Broadcast surface: writers are gated on the `ministry_owner` Firebase
     // custom claim, readers are every signed-in member. Both flow through
     // `/api/ministry-feed/*`; clients never touch these documents directly.

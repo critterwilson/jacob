@@ -26,6 +26,10 @@ export type BootstrapResponse = {
   hasProfile: boolean;
   claims: { admin: boolean };
   deletionRequestedAt: string | null;
+  // ADR 0012 — `null` when no application doc exists (legacy /
+  // grandfathered users); otherwise one of "pending" / "approved" /
+  // "rejected".
+  applicationStatus: "pending" | "approved" | "rejected" | null;
 };
 
 export type UseUserResult =

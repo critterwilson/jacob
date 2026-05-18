@@ -37,8 +37,15 @@ from app.models.admin import (
     ResolveResponse,
     UnbanResponse,
 )
+from app.models.applications import (
+    ApplicationDecisionResponse,
+    ApplicationListResponse,
+    ApproveApplicationRequest,
+    RejectApplicationRequest,
+)
 from app.models.ministry_feed import MinistryOwnerGrantResponse
 from app.models.user import CurrentUser
+from app.services.applications import application_doc_to_view
 from app.services.audit import write_audit_log
 from app.services.email import send_moderation_notice
 from app.services.firebase import init_firebase_admin
@@ -487,7 +494,224 @@ def search_groups(
     return AdminGroupListResponse(groups=groups)
 
 
-# ── ministry_owner claim (ADR 0011) ───────────────────────────────────────
+# ── applications (admin-approval signup, ADR 0012) ────────────────────────────
+
+
+_APPLICATION_STATUSES = {"pending", "approved", "rejected"}
+
+
+@router.get("/applications", response_model=ApplicationListResponse)
+@limiter.limit(ADMIN_LIST)
+def list_applications(
+    request: Request,
+    response: Response,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    status_filter: str = Query(default="pending", alias="status"),
+    admin: CurrentUser = Depends(require_admin),
+) -> ApplicationListResponse:
+    """List signup applications filtered by status (default: pending)."""
+    if status_filter not in _APPLICATION_STATUSES:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_status",
+            message=f"status must be one of {sorted(_APPLICATION_STATUSES)}",
+        )
+
+    db = _db()
+    query = (
+        db.collection("applications")
+        .where("status", "==", status_filter)
+        .order_by("createdAt")
+        .limit(limit + 1)
+    )
+    if cursor:
+        cursor_snap = db.collection("applications").document(cursor).get()
+        if cursor_snap.exists:
+            query = query.start_after(cursor_snap)
+
+    docs = list(query.stream())
+    has_more = len(docs) > limit
+    page = docs[:limit]
+
+    items = [application_doc_to_view(snap.id, snap.to_dict() or {}) for snap in page]
+    next_cursor = page[-1].id if has_more and page else None
+    return ApplicationListResponse(items=items, nextCursor=next_cursor)
+
+
+@router.post(
+    "/applications/{uid}/approve",
+    response_model=ApplicationDecisionResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def approve_application(
+    uid: str,
+    request: Request,
+    response: Response,
+    body: ApproveApplicationRequest,
+    admin: CurrentUser = Depends(require_admin),
+) -> ApplicationDecisionResponse:
+    """Approve a pending application and create the `users/{uid}` doc.
+
+    For applicants with `isMinor: true` the admin MUST pass
+    `parentalConsentObtained: true` (refused with 422
+    `parental_consent_required` otherwise). The admin's notes are
+    persisted on the application doc and surfaced via the audit log.
+
+    Idempotent on the failure side: if the application is missing or
+    already decided, returns 404 / 409 without touching state.
+    """
+    db = _db()
+    app_ref = db.collection("applications").document(uid)
+    app_snap = app_ref.get()
+    if not app_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="application_not_found",
+            message="No application on file for this user",
+        )
+
+    app_data = app_snap.to_dict() or {}
+    current_status = str(app_data.get("status") or "")
+    if current_status != "pending":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="application_already_decided",
+            message="Application has already been decided",
+            details={"status": current_status},
+        )
+
+    minor = bool(app_data.get("isMinor", False))
+    if minor and body.parentalConsentObtained is not True:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="parental_consent_required",
+            message="Parental consent must be confirmed for under-18 applicants",
+        )
+
+    # Create the `users/{uid}` doc — this is the load-bearing "approved
+    # member" artefact that gates every downstream access predicate.
+    user_ref = db.collection("users").document(uid)
+    existing_user = user_ref.get()
+    if not existing_user.exists:
+        user_payload: dict[str, Any] = {
+            "displayName": app_data.get("displayName") or "",
+            "email": app_data.get("email"),
+            "photoURL": app_data.get("photoURL"),
+            "role": "member",
+            "schemaVersion": 1,
+            "isMinor": minor,
+            "createdAt": fb_firestore.SERVER_TIMESTAMP,
+        }
+        # Echo the optional onboarding fields back onto the user doc
+        # so the existing UserProfile shape stays populated.
+        for field in ("phone", "location", "faithBackground"):
+            value = app_data.get(field)
+            if value:
+                user_payload[field] = value
+        user_ref.set(user_payload)
+
+    app_ref.update(
+        {
+            "status": "approved",
+            "decidedAt": fb_firestore.SERVER_TIMESTAMP,
+            "decidedBy": admin.uid,
+            "parentalConsentObtained": (
+                bool(body.parentalConsentObtained)
+                if body.parentalConsentObtained is not None
+                else None
+            ),
+            "parentalConsentNotes": body.parentalConsentNotes,
+            "rejectionReason": "",
+        }
+    )
+
+    write_audit_log(
+        actor_uid=admin.uid,
+        action="application.approve",
+        target_ref=f"applications/{uid}",
+        payload={
+            "isMinor": minor,
+            "parentalConsentObtained": (
+                bool(body.parentalConsentObtained)
+                if body.parentalConsentObtained is not None
+                else None
+            ),
+            "parentalConsentNotesLength": len(body.parentalConsentNotes or ""),
+        },
+    )
+
+    logger.info(
+        "admin=%s approved application uid=%s isMinor=%s",
+        admin.uid,
+        uid,
+        minor,
+    )
+    return ApplicationDecisionResponse(uid=uid, status="approved")
+
+
+@router.post(
+    "/applications/{uid}/reject",
+    response_model=ApplicationDecisionResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def reject_application(
+    uid: str,
+    request: Request,
+    response: Response,
+    body: RejectApplicationRequest,
+    admin: CurrentUser = Depends(require_admin),
+) -> ApplicationDecisionResponse:
+    """Reject a pending application.
+
+    The applicant's Firebase Auth user stays in place; on next sign-in
+    they see the rejection screen via `GET /api/applications/me`. The
+    rejection reason is admin-supplied free text — the audit log
+    captures who rejected, when, and the length of the supplied
+    reason (so reviewers can spot empty placeholders without leaking
+    the contents into logging surfaces).
+    """
+    db = _db()
+    app_ref = db.collection("applications").document(uid)
+    app_snap = app_ref.get()
+    if not app_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="application_not_found",
+            message="No application on file for this user",
+        )
+
+    app_data = app_snap.to_dict() or {}
+    current_status = str(app_data.get("status") or "")
+    if current_status != "pending":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="application_already_decided",
+            message="Application has already been decided",
+            details={"status": current_status},
+        )
+
+    app_ref.update(
+        {
+            "status": "rejected",
+            "decidedAt": fb_firestore.SERVER_TIMESTAMP,
+            "decidedBy": admin.uid,
+            "rejectionReason": body.reason,
+        }
+    )
+
+    write_audit_log(
+        actor_uid=admin.uid,
+        action="application.reject",
+        target_ref=f"applications/{uid}",
+        payload={"reasonLength": len(body.reason)},
+    )
+
+    logger.info("admin=%s rejected application uid=%s", admin.uid, uid)
+    return ApplicationDecisionResponse(uid=uid, status="rejected")
+
+
+# ── ministry_owner claim ──────────────────────────────────────────────────
 
 
 def _set_ministry_owner_claim(uid: str, *, value: bool) -> None:
