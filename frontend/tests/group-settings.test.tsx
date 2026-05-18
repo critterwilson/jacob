@@ -38,8 +38,9 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-import { apiPatch as apiPatchExport } from "@/lib/api";
+import { apiPatch as apiPatchExport, apiPost as apiPostExport } from "@/lib/api";
 const apiPatchMock = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
+const apiPostMock = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 
 const mockUseAuth = vi.fn();
 vi.mock("@/lib/auth-context", () => ({
@@ -78,6 +79,7 @@ const fakeGroup: Group = {
   inviteCode: "TESTCODE",
   moderationPolicy: null,
   presenceEnabled: null,
+  memberCap: 20,
 };
 
 // ── ArchivedBanner ─────────────────────────────────────────────────────────────
@@ -156,6 +158,122 @@ describe("GroupSettingsForm", () => {
     expect(body).toMatchObject({ name: "Updated Name" });
     expect(Object.keys(body)).toEqual(
       expect.arrayContaining(["name", "description", "isPrivate"]),
+    );
+  });
+});
+
+// ── GroupMemberCapForm ────────────────────────────────────────────────────────
+
+import { GroupMemberCapForm } from "@/components/groups/GroupMemberCapForm";
+
+describe("GroupMemberCapForm", () => {
+  beforeEach(() => {
+    apiPatchMock.mockReset();
+    apiPatchMock.mockResolvedValue({ gid: "g1", memberCap: 30 });
+  });
+
+  it("renders the current cap as default value", () => {
+    render(<GroupMemberCapForm gid="g1" currentCap={25} memberCount={10} />);
+    const input = screen.getByRole("spinbutton");
+    expect(input).toHaveValue(25);
+  });
+
+  it("falls back to 20 when currentCap is null", () => {
+    render(<GroupMemberCapForm gid="g1" currentCap={null} memberCount={5} />);
+    const input = screen.getByRole("spinbutton");
+    expect(input).toHaveValue(20);
+  });
+
+  it("calls PATCH /api/groups/{gid}/cap on submit", async () => {
+    const user = userEvent.setup();
+    render(<GroupMemberCapForm gid="g1" currentCap={20} memberCount={5} />);
+
+    const input = screen.getByRole("spinbutton");
+    await user.clear(input);
+    await user.type(input, "30");
+
+    await user.click(screen.getByRole("button", { name: /save cap/i }));
+
+    await waitFor(() => expect(apiPatchMock).toHaveBeenCalled());
+    const [path, body] = apiPatchMock.mock.calls[0];
+    expect(path).toBe("/api/groups/g1/cap");
+    expect((body as Record<string, unknown>).memberCap).toBe(30);
+  });
+
+  it("shows success banner after save", async () => {
+    const user = userEvent.setup();
+    render(<GroupMemberCapForm gid="g1" currentCap={20} memberCount={5} />);
+
+    const input = screen.getByRole("spinbutton");
+    await user.clear(input);
+    await user.type(input, "30");
+    await user.click(screen.getByRole("button", { name: /save cap/i }));
+
+    await waitFor(() => expect(screen.getByText(/member cap updated/i)).toBeInTheDocument());
+  });
+
+  it("shows server error when PATCH fails", async () => {
+    const { ApiError: ApiErrorClass } = await import("@/lib/api");
+    apiPatchMock.mockRejectedValue(
+      new ApiErrorClass(422, "cap_below_count", "Member cap cannot be lower than the current member count (10)."),
+    );
+
+    const user = userEvent.setup();
+    render(<GroupMemberCapForm gid="g1" currentCap={20} memberCount={10} />);
+
+    const input = screen.getByRole("spinbutton");
+    await user.clear(input);
+    await user.type(input, "30");
+    await user.click(screen.getByRole("button", { name: /save cap/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/member cap cannot be lower/i)).toBeInTheDocument(),
+    );
+  });
+});
+
+// ── JoinRequestButton group_at_cap ────────────────────────────────────────────
+
+import { JoinRequestButton } from "@/components/discover/JoinRequestButton";
+
+describe("JoinRequestButton — group_at_cap", () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({
+      user: { uid: "alice", getIdToken: vi.fn().mockResolvedValue("tok") },
+      loading: false,
+    });
+    apiPostMock.mockReset();
+  });
+
+  it("shows at-cap message when API returns group_at_cap", async () => {
+    const { ApiError: ApiErrorClass } = await import("@/lib/api");
+    apiPostMock.mockRejectedValue(
+      new ApiErrorClass(409, "group_at_cap", "This group is at its member limit."),
+    );
+
+    const user = userEvent.setup();
+    render(<JoinRequestButton gid="g1" joinMode="open" />);
+
+    await user.click(screen.getByRole("button", { name: /join/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/member limit/i),
+    );
+  });
+
+  it("shows generic error for other API errors", async () => {
+    const { ApiError: ApiErrorClass } = await import("@/lib/api");
+    apiPostMock.mockRejectedValue(
+      new ApiErrorClass(500, "internal_error", "Server error"),
+    );
+
+    const user = userEvent.setup();
+    render(<JoinRequestButton gid="g1" joinMode="open" />);
+
+    await user.click(screen.getByRole("button", { name: /join/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/server error/i),
     );
   });
 });

@@ -1,5 +1,12 @@
 """Watch Together router (T50).
 
+FEATURE PARKED 2026-05-17: The ministry owner has deferred all video
+features. Every endpoint returns 503 feature_paused when the
+`watch_sessions` feature flag is disabled (which it is by default after
+parking). To re-enable: set feature_flags/watch_sessions.enabled = true
+in Firestore and restore the frontend nav / route. See
+docs/follow-ups/phase-3-parked.md § T50.
+
 Endpoints:
 
 * `GET    /api/groups/{gid}/watch`                 — list active sessions
@@ -48,6 +55,26 @@ from app.services.firebase import init_firebase_admin
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/groups/{gid}/watch", tags=["watch"])
 
+_FEATURE_FLAG_KEY = "watch_sessions"
+
+
+def _guard_feature_flag() -> None:
+    """Raise 503 feature_paused when the watch_sessions flag is disabled.
+
+    The flag document may be absent (treated as disabled while parked) or
+    present with enabled=True once the feature is revived.
+    """
+    init_firebase_admin()
+    db = fb_firestore.client()
+    snap = db.collection("feature_flags").document(_FEATURE_FLAG_KEY).get()
+    enabled: bool = bool((snap.to_dict() or {}).get("enabled", False)) if snap.exists else False
+    if not enabled:
+        raise APIError(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="feature_paused",
+            message="Watch Together is not available right now.",
+        )
+
 
 def _db() -> Any:
     init_firebase_admin()
@@ -89,6 +116,7 @@ def list_sessions(
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_member),
 ) -> WatchSessionListResponse:
+    _guard_feature_flag()
     db = _db()
     rows = watch_service.list_watch_sessions(db, gid=gid, only_active=True)
     sessions: list[WatchSession] = []
@@ -113,6 +141,7 @@ def get_session(
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_member),
 ) -> WatchSession:
+    _guard_feature_flag()
     db = _db()
     snap = (
         db.collection("groups")
@@ -139,6 +168,7 @@ def start_session(
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_member_not_banned),
 ) -> WatchStartResponse:
+    _guard_feature_flag()
     db = _db()
     if (membership.group or {}).get("archivedAt"):
         raise APIError(
@@ -189,6 +219,7 @@ def join_session(
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_member_not_banned),
 ) -> WatchJoinResponse:
+    _guard_feature_flag()
     db = _db()
     ok, reason, attendees = watch_service.join_watch_session(
         db, gid=gid, session_id=session_id, uid=membership.uid
@@ -218,6 +249,7 @@ def end_session(
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_member_not_banned),
 ) -> WatchEndResponse:
+    _guard_feature_flag()
     db = _db()
     ok, reason, ended_at, duration = watch_service.end_watch_session(
         db, gid=gid, session_id=session_id, actor_uid=membership.uid
@@ -261,6 +293,7 @@ def transfer_leader(
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_member_not_banned),
 ) -> WatchTransferResponse:
+    _guard_feature_flag()
     db = _db()
     ok, reason = watch_service.transfer_leader(
         db,

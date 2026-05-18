@@ -881,6 +881,62 @@ describe("M6 — default-deny on unknown paths", () => {
   });
 });
 
+// ── Wellbeing flags — moderation_queue + status_history subcollection ──────
+
+describe("wellbeing_concern — moderation_queue and status_history are backend-only", () => {
+  it("denies reading a wellbeing flag document directly", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "moderation_queue", "flag1"), {
+        reason: "wellbeing_concern",
+        status: "open",
+        reportedBy: "alice",
+        subjectUid: "bob",
+        context: "I am worried about Bob",
+        createdAt: serverTimestamp(),
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "moderation_queue", "flag1")));
+  });
+
+  it("denies writing a wellbeing flag document directly", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "moderation_queue", "flag-new"), {
+        reason: "wellbeing_concern",
+        status: "open",
+        reportedBy: "alice",
+        subjectUid: "bob",
+        context: "I am worried about Bob",
+      }),
+    );
+  });
+
+  it("denies reading the status_history subcollection", async () => {
+    await seed(async (db) => {
+      await setDoc(
+        doc(db, "moderation_queue", "flag1", "status_history", "entry1"),
+        { status: "open", note: "(flag filed)", actorUid: "alice", createdAt: serverTimestamp() },
+      );
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "moderation_queue", "flag1", "status_history", "entry1")),
+    );
+  });
+
+  it("denies writing to the status_history subcollection", async () => {
+    await assertFails(
+      setDoc(
+        doc(authed("moderator-uid"), "moderation_queue", "flag1", "status_history", "entry2"),
+        { status: "in_progress", note: "Reaching out", actorUid: "moderator-uid" },
+      ),
+    );
+  });
+
+  it("denies moderator-claim user from reading moderation_queue directly", async () => {
+    // Even if the client somehow knows a moderator UID, rules deny direct access.
+    await assertFails(getDoc(doc(authed("moderator-uid"), "moderation_queue", "flag1")));
+  });
+});
+
 // Reference deleteDoc so the import isn't pruned by linters; the function
 // is exercised indirectly via assertFails-on-write tests above.
 void deleteDoc;

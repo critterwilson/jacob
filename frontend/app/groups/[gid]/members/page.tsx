@@ -8,6 +8,7 @@ import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useMembers } from "@/lib/hooks/useMembers";
+import { WellbeingFlagButton } from "@/components/moderation/WellbeingFlagButton";
 
 type Props = { params: { gid: string } };
 
@@ -127,40 +128,50 @@ export default function MembersPage({ params }: Props) {
                   )}
                 </div>
               </div>
-              {isLeader && (
-                <div className="flex flex-wrap gap-2">
-                  {m.role === "member" && (
-                    <button
-                      type="button"
-                      onClick={() => promote(m.uid)}
-                      disabled={pending !== null}
-                      className="rounded border border-line px-3 py-1 text-xs text-gold hover:bg-gold/15 disabled:opacity-50"
-                    >
-                      Promote
-                    </button>
-                  )}
-                  {m.role === "leader" && !isFounderRow && (
-                    <button
-                      type="button"
-                      onClick={() => demote(m.uid)}
-                      disabled={pending !== null}
-                      className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
-                    >
-                      Demote
-                    </button>
-                  )}
-                  {m.role === "leader" && !isFounderRow && isFounder && (
-                    <button
-                      type="button"
-                      onClick={() => transferFounder(m.uid)}
-                      disabled={pending !== null}
-                      className="rounded border border-parchment-amber/50 px-3 py-1 text-xs text-parchment-amber hover:bg-parchment-amber/15 disabled:opacity-50"
-                    >
-                      Make founder
-                    </button>
-                  )}
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {!isSelf && (
+                  <WellbeingFlagButton
+                    subjectUid={m.uid}
+                    subjectName={m.displayName}
+                    groupId={gid}
+                    className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised"
+                  />
+                )}
+                {isLeader && (
+                  <>
+                    {m.role === "member" && (
+                      <button
+                        type="button"
+                        onClick={() => promote(m.uid)}
+                        disabled={pending !== null}
+                        className="rounded border border-line px-3 py-1 text-xs text-gold hover:bg-gold/15 disabled:opacity-50"
+                      >
+                        Promote
+                      </button>
+                    )}
+                    {m.role === "leader" && !isFounderRow && (
+                      <button
+                        type="button"
+                        onClick={() => demote(m.uid)}
+                        disabled={pending !== null}
+                        className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
+                      >
+                        Demote
+                      </button>
+                    )}
+                    {m.role === "leader" && !isFounderRow && isFounder && (
+                      <button
+                        type="button"
+                        onClick={() => transferFounder(m.uid)}
+                        disabled={pending !== null}
+                        className="rounded border border-parchment-amber/50 px-3 py-1 text-xs text-parchment-amber hover:bg-parchment-amber/15 disabled:opacity-50"
+                      >
+                        Make founder
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </li>
           );
         })}

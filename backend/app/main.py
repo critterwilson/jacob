@@ -41,6 +41,7 @@ from app.routers import (
     users,
     verse,
     watch,
+    wellbeing,
 )
 from app.services.sentry import init_sentry
 
@@ -145,6 +146,8 @@ app.include_router(transparency.public_router)
 app.include_router(transparency.admin_router)
 app.include_router(transparency.org_router)
 app.include_router(ministry_feed.router)
+app.include_router(wellbeing.router)
+app.include_router(wellbeing.admin_router)
 
 if settings.debug:
     from app.routers import debug

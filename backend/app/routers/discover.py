@@ -23,6 +23,7 @@ from app.models.discover import (
     PendingRequestsResponse,
     ReviewResponse,
 )
+from app.models.group import DEFAULT_MEMBER_CAP
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
@@ -171,15 +172,37 @@ def create_join_request(
     join_mode = group.get("joinMode") or "open"
 
     if join_mode == "open":
-        # Transparent join — add member directly.
-        db.collection("groups").document(gid).collection("members").document(user.uid).set(
-            {
-                "role": "member",
-                "joinedAt": gcf.SERVER_TIMESTAMP,
-                "uid": user.uid,
-            }
-        )
-        db.collection("groups").document(gid).update({"memberCount": gcf.Increment(1)})
+        # Transparent join inside a transaction so the cap check and
+        # memberCount increment are atomic.
+        group_ref = db.collection("groups").document(gid)
+        member_ref = group_ref.collection("members").document(user.uid)
+
+        @gcf.transactional
+        def _open_join_txn(transaction: Any) -> None:
+            g_snap = group_ref.get(transaction=transaction)
+            g_data = g_snap.to_dict() or {}
+            cap = int(g_data.get("memberCap") or DEFAULT_MEMBER_CAP)
+            count = int(g_data.get("memberCount") or 0)
+            if count >= cap:
+                raise APIError(
+                    status_code=status.HTTP_409_CONFLICT,
+                    code="group_at_cap",
+                    message="This group is at its member limit.",
+                )
+            txn_member = member_ref.get(transaction=transaction)
+            if txn_member.exists:
+                raise APIError(
+                    status_code=status.HTTP_409_CONFLICT,
+                    code="already_member",
+                    message="You are already a member of this group",
+                )
+            transaction.set(
+                member_ref,
+                {"role": "member", "joinedAt": gcf.SERVER_TIMESTAMP, "uid": user.uid},
+            )
+            transaction.update(group_ref, {"memberCount": gcf.Increment(1)})
+
+        _open_join_txn(db.transaction())
         write_audit_log(
             actor_uid=user.uid,
             action="join_group",
@@ -286,6 +309,8 @@ def approve_join_request(
 
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(target_uid)
 
+    group_ref = db.collection("groups").document(gid)
+
     @gcf.transactional
     def _txn(transaction: Any) -> None:
         jr_snap = jr_ref.get(transaction=transaction)
@@ -294,6 +319,17 @@ def approve_join_request(
                 status_code=status.HTTP_404_NOT_FOUND,
                 code="not_found",
                 message="Pending join request not found",
+            )
+        # Enforce soft member cap inside the transaction.
+        g_snap = group_ref.get(transaction=transaction)
+        g_data = g_snap.to_dict() or {}
+        cap = int(g_data.get("memberCap") or DEFAULT_MEMBER_CAP)
+        count = int(g_data.get("memberCount") or 0)
+        if count >= cap:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="group_at_cap",
+                message="This group is at its member limit.",
             )
         transaction.update(
             jr_ref,
@@ -314,7 +350,6 @@ def approve_join_request(
                 "uid": target_uid,
             },
         )
-        group_ref = db.collection("groups").document(gid)
         transaction.update(group_ref, {"memberCount": gcf.Increment(1)})
 
     _txn(db.transaction())

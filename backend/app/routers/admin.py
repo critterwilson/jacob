@@ -251,7 +251,7 @@ def resolve_moderation_item(
 
     logger.info("admin=%s resolved item=%s as=%s", admin.uid, item_id, new_status)
 
-    if new_status == "rejected":
+    if new_status == "rejected" and item_data.get("reason") != "wellbeing_concern":
         _notify_reported_author(db, item_data)
 
     return ResolveResponse(itemId=item_id, status=new_status)
@@ -302,7 +302,7 @@ def bulk_resolve_moderation_items(
                 "bulk": True,
             },
         )
-        if new_status == "rejected":
+        if new_status == "rejected" and data.get("reason") != "wellbeing_concern":
             _notify_reported_author(db, data)
         resolved.append(item_id)
 
