@@ -251,7 +251,7 @@ Leader starts; up to 25 participants; 60-min hard cap; **no
 recording** in v1. Notifications via T34/T41 (so partly blocked on
 T41 for native parity, but web-only rollout is possible).
 See `docs/phase-3-dev-plan.md:646-681` and `phase-3-impl-spec.md
-§6.1` (ADR 0008 ratifies LiveKit Cloud Build/free tier).
+§6.1` (ADR 0008 was planned to ratify the LiveKit vendor decision but was never written since T57 was parked).
 
 **Why parked:**
 - Pure product call. The Phase 3 sprint shipped every other live /

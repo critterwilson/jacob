@@ -38,7 +38,7 @@ bodies are stripped from all events.
 
 DSN configuration:
 - **Backend** — `SENTRY_DSN` environment variable (Secret Manager → Cloud Run)
-- **Frontend** — `NEXT_PUBLIC_SENTRY_DSN` (set in Firebase Hosting config or `.env.local`)
+- **Frontend** — `NEXT_PUBLIC_SENTRY_DSN` (set in App Hosting environment config or `.env.local`)
 
 Sentry environment:
 - **Backend** — `SENTRY_ENVIRONMENT` (e.g. `staging`, `production`)

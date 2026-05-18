@@ -4,7 +4,7 @@
 
 **Author:** Claude (planning pass)
 **Date:** 2026-05-03
-**Status:** Draft, not yet implemented. Squash-merged to `main` so subsequent phase PRs can reference stable section anchors.
+**Status:** Implemented (M1–M6, PRs #115–#135). Squash-merged to `main` so subsequent phase PRs can reference stable section anchors. This document is the historical record of the migration design; see `CLAUDE.md` for the current conventions.
 **Branch this plan was authored on:** `claude/data-layer-migration-plan` off `main` @ `9cdd800`.
 
 ---

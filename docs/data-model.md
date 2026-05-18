@@ -16,32 +16,75 @@ Conventions:
 ## Collection map
 
 ```
+# User-scoped
 users/{uid}
 users/{uid}/private/{docId}
-users/{uid}/mutes/{otherUid}    # T21 — owner-only
-users/{uid}/blocks/{otherUid}   # T21 — owner-only
+users/{uid}/mutes/{otherUid}                    # T21 — owner-only
+users/{uid}/blocks/{otherUid}                   # T21 — owner-only
+users/{uid}/devices/{deviceId}                  # T34 — FCM device tokens
+users/{uid}/notifications/{nid}                 # T34 — notification inbox
+users/{uid}/notificationPrefs/main              # T34 — push/email toggle prefs
+users/{uid}/exports/{jobId}                     # T38 — self-serve data export jobs
+users/{uid}/plan_progress/{planId}              # T51 — reading-plan progress
+
+# Group-scoped
 groups/{gid}
 groups/{gid}/members/{uid}
 groups/{gid}/messages/{mid}
+groups/{gid}/messages/{mid}/reactions/{slug}/users/{uid}  # T26
+groups/{gid}/invites/{inviteId}                 # T25 — advanced invite links
+groups/{gid}/events/{eid}                       # T49 — scheduled events
+groups/{gid}/events/{eid}/rsvps/{uid}           # T49
+groups/{gid}/joinRequests/{uid}                 # T30 — group-discovery join requests
+groups/{gid}/sermons/{sermonId}                 # T52 — sermon archive
+
+# Platform content
 stickers/{stickerId}
+daily_verse/{date}                              # T33 — daily Bible verse
+devotionals/{slug}                              # T51
+reading_plans/{slug}                            # T51
+
+# Cross-group boards
 boards/{boardId}                                # T32 — top-level forums
 boards/{boardId}/posts/{postId}                 # T32
 boards/{boardId}/posts/{postId}/replies/{rid}   # T32
 boards/{boardId}/posts/{postId}/reactions/{slug}/users/{uid}  # T32
-moderation_queue/{itemId}       # backend only
-bans/{uid}                      # backend only
-audit_log/{eventId}             # backend only
+
+# Moderation / trust-and-safety (backend only)
+moderation_queue/{itemId}
+bans/{uid}
+appeals/{appealId}                              # T64 — ban appeals
+ncmec_cases/{caseId}                            # T63 — NCMEC CyberTipline
+transparency_reports/{reportId}                 # T65
+audit_log/{eventId}
+
+# Platform ops (backend only)
+uploads/{uploadId}                              # in-flight upload tracking
+active_incidents/{incidentId}                   # T59 — incident banners
+watch_sessions/{sessionId}                      # T50 — Watch Together
 
 # T54 — multi-tenant org tier
 orgs/{orgId}
 orgs/{orgId}/admins/{uid}
-orgs/{orgId}/members/{uid}      # denormalized via onMemberWrite
-orgs/{orgId}/invites/{inviteId} # schema reserved; UI Phase 3.5
-org_slugs/{slug}                # backend only — slug uniqueness
-org_consent_tokens/{token}      # backend only — attach consent flow
+orgs/{orgId}/members/{uid}                      # denormalized via onMemberWrite
+orgs/{orgId}/invites/{inviteId}                 # schema reserved; UI Phase 3.5
+org_slugs/{slug}                                # backend only — slug uniqueness
+org_consent_tokens/{token}                      # backend only — attach consent flow
+domain_claims/{domain}                          # T55 — custom domain claims
 
 # T58 — feature flags
-feature_flags/{flagKey}         # read via GET /api/flags
+feature_flags/{flagKey}                         # read via GET /api/flags
+
+# Idempotency markers (subcollections, Cloud Functions only)
+groups/{gid}/messages/{mid}/_events/{eid}
+groups/{gid}/messages/{mid}/_reaction_events/{eid}
+groups/{gid}/messages/{mid}/_index_events/{eid}
+groups/{gid}/_member_events/{eid}
+boards/{boardId}/_post_events/{eid}
+boards/{boardId}/posts/{postId}/_reply_events/{eid}
+boards/{boardId}/posts/{postId}/_events/{eid}   # board-post-create idempotency
+orgs/{orgId}/_member_events/{eid}
+users/{uid}/notifications/{nid}/_events/{eid}
 ```
 
 ---

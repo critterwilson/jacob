@@ -350,10 +350,10 @@ A reasonable solo cadence: 1 task per 4–6 days. Phase 2 should land in 14–18
 
 **Goal:** Members can search messages across their groups with sub-second latency. Search index lives in a Typesense sidecar; a Cloud Function fans Firestore writes.
 
-**Decide before starting:** Typesense Cloud vs. self-hosted Typesense on Cloud Run vs. Algolia. The plan-doc placeholder in `docs/JACOB_APP_PLAN.md` lists all three. **Use Opus.** Write a one-page ADR `docs/adr/0002-search-sidecar.md` before implementing.
+**Decide before starting:** Typesense Cloud vs. self-hosted Typesense on Cloud Run vs. Algolia. The plan-doc placeholder in `docs/JACOB_APP_PLAN.md` lists all three. **Use Opus.** Write a one-page ADR before implementing. *[SHIPPED: ADR was written as `docs/adr/0005-search-sidecar.md` (self-hosted Typesense on Cloud Run).]*
 
 **Files:**
-- `docs/adr/0002-search-sidecar.md`
+- `docs/adr/0005-search-sidecar.md` *(shipped as 0005, not 0002)*
 - `functions/src/onMessageIndex.ts` — Firestore trigger on `groups/{gid}/messages/{mid}` create/update/delete; upserts/deletes from Typesense
 - `backend/app/routers/search.py` — `GET /api/search?q=...` — proxies to Typesense, scopes the query by the caller's group memberships
 - `backend/app/services/search.py` — Typesense client wrapper, with circuit breaker + rate limit

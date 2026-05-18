@@ -212,7 +212,7 @@ Rationale: Firestore gives real-time sync, offline support, mobile-friendly SDKs
 
 - **Search.** Native Firestore query is limited. Full-text search uses a sidecar — a Cloud Function fans message writes to Algolia or Typesense Cloud.
 - **Reporting / analytics.** Beyond per-document queries, use the native Firestore → BigQuery scheduled export. Aggregations and leader analytics live there.
-- **Cost.** Firestore prices per read/write/document. Use tightly-scoped onSnapshot listeners (single group, recent messages only) and paginate aggressively. Revisit if a single group exceeds ~10K messages/day.
+- **Cost.** Firestore prices per read/write/document. Use tightly-scoped onSnapshot listeners (single group, recent messages only) and paginate aggressively. Revisit if a single group exceeds ~10K messages/day. *[Historical — implemented as HTTP polling post-M6; no onSnapshot in the browser.]*
 - **Vendor lock-in.** Firestore is a Google-only product. Migration to Postgres later is non-trivial. Acceptable for a v1 commitment given the speed-to-market win.
 
 #### Stack
@@ -225,20 +225,20 @@ Rationale: Firestore gives real-time sync, offline support, mobile-friendly SDKs
 | File storage           | Google Cloud Storage                                  | Photos via signed URLs; SafeSearch + hash check before write commits to bucket                  |
 | Text moderation        | Cloud Natural Language API                            | Auto-flag toxicity / hate speech                                                                |
 | Image moderation       | Cloud Vision SafeSearch + CSAM hash service           | Mandatory pre-publish gate on every uploaded image                                              |
-| Search                 | Algolia or Typesense Cloud (sidecar)                  | Native Firestore query is limited; Cloud Function fans writes to the search sidecar             |
-| Email                  | SendGrid or Postmark                                  | Transactional: verification, password reset, weekly digest                                      |
+| Search                 | Typesense (self-hosted on Cloud Run)                  | Native Firestore query is limited; Cloud Function fans writes to the Typesense sidecar (ADR 0005) |
+| Email                  | SendGrid                                              | Transactional: verification, password reset, weekly digest                                      |
 | Analytics (Phase 2)    | BigQuery (Firestore export)                           | Sticker engagement breakdowns, group-health metrics                                             |
 | Push (Phase 3)         | Firebase Cloud Messaging                              | Cross-platform, free tier sufficient for early growth                                           |
 | Mobile (Phase 3)       | React Native + Expo, EAS builds                       | Single codebase for iOS/Android; OTA updates; cloud builds (no Mac required)                    |
-| Hosting (web frontend) | Firebase Hosting                                      | Static SPA with edge caching; aligns with Firebase Auth + Firestore                             |
+| Hosting (web frontend) | Firebase App Hosting                                  | SSR via managed Cloud Run; deploys from GitHub; aligns with Firebase Auth + Firestore           |
 
 #### Deployment
 
 - Docker container for the FastAPI service; pushed to Google Artifact Registry
 - Cloud Run for the API; scales to zero in v1. Raise min-instances if cold starts hurt UX
 - Firestore handles real-time without server management
-- Firebase Hosting for the web frontend
-- CI/CD: GitHub Actions → Cloud Build → Cloud Run + Firebase deploy
+- Firebase App Hosting for the web frontend (SSR, deploys automatically from GitHub)
+- CI/CD: GitHub Actions → Cloud Run + Firebase App Hosting + Firebase Functions + Firestore (no Cloud Build step — image built directly in the Actions runner)
 - Secrets in Google Secret Manager. Never check secrets into GitHub
 
 ### Observability & Reliability
@@ -374,7 +374,7 @@ Resolved items from the prior plan, plus new resolutions from this revision.
 - **Image moderation:** Cloud Vision SafeSearch + CSAM hash matching ship with photo upload, not after.
 - **Account deletion:** tombstone authored content; 14-day grace; profile and PII hard-deleted after grace.
 - **Age policy:** 13+ minimum (COPPA); restricted defaults under 18.
-- **Search:** Algolia or Typesense Cloud as a sidecar; Cloud Function fans Firestore writes.
+- **Search:** Typesense self-hosted on Cloud Run as a sidecar; Cloud Function fans Firestore writes. Vendor decided in ADR 0005.
 - **Backups:** daily Firestore export, 30-day retention; weekly held 90 days; media bucket versioning.
 - **Observability:** Cloud Logging + Sentry from day one.
 - **Email:** SendGrid or Postmark for transactional mail.
@@ -382,14 +382,14 @@ Resolved items from the prior plan, plus new resolutions from this revision.
 ### Open decisions
 
 - Sub-tagging in threads (whether replies can carry their own sticker for finer-grained filtering). Default for v1: no, replies inherit parent sticker.
-- Search vendor: Algolia vs Typesense Cloud vs self-hosted Typesense on Cloud Run. Decide before building the Cloud Function trigger.
+- ~~Search vendor~~ — **decided**: self-hosted Typesense on Cloud Run (ADR 0005).
 - Phase 3 sticker set for BJJ gyms: design with at least one pilot gym.
 - When (and whether) to add native iOS/Android in-app purchase. Re-evaluate Apple/Google policy state at the time of Phase 3.
 
 ## Open Risks & Things to Watch
 
 - **Firestore cost at scale.** Per-doc pricing scales with active reads; revisit at 50+ groups or if read costs cross $50/month.
-- **Search infra cost.** Largest unknown line item. Validate early; can swap for Cloud Run + Postgres FTS sidecar if Firestore + Algolia gets too expensive.
+- **Search infra cost.** Typesense on Cloud Run (ADR 0005). Validate at scale; Cloud Run min-instances cost is the main lever.
 - **CSAM compliance.** Reporting obligations under 18 U.S.C. § 2258A are not optional. Get the moderation pipeline reviewed by a lawyer familiar with NCMEC reporting before opening uploads.
 - **Apple/Google IAP rules (Phase 3).** Anti-steering rules are still moving. Don't bake the business model around web-only checkout assumptions; revisit when monetization ships.
 - **Brand-audience tension.** Christian-coded sticker categories will not translate to BJJ. Phase 3 onboarding for gyms must include a separate sticker set and brand-voice variant.

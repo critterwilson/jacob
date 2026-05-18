@@ -30,7 +30,7 @@ Consumption is transactional: the `useCount` increment and `members/{uid}` write
 
 ## Consequences
 
-- The legacy `inviteCode` field is kept as null after migration (not removed) to avoid breaking older clients that still write it on group create. It will be removed in Phase 3 once all clients have been updated.
+- The `inviteCode` field on the group doc was not fully migrated to null-and-remove: as of Phase 3, `backend/app/routers/groups.py` still generates, rotates, and queries the `inviteCode` field as the primary simple-join mechanism. The invite subcollection (T25) ships as an additional advanced-invite feature alongside it. The full migration to subcollection-only join was deferred.
 - The migration script `backend/scripts/migrate_invite_codes.py` is idempotent and must be run once against production before deploying T25.
 - Collection-group reads inside a Firestore transaction are an unusual pattern. The Admin SDK supports this; the client SDK does not. This is intentional — the security rule sets `write: if false` so clients can never consume or modify invites directly.
 - A single group can now have multiple active invites simultaneously (useful for single-use onboarding links alongside a permanent team link).
