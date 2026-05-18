@@ -1,10 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * Regression test: profile edit form on /settings must pre-fill current
- * profile values, call PATCH /api/users/me with the edited fields, and show
- * a success banner on save.  Previously there was no settings page, so any
- * attempt to update profile data resulted in a 404.
+ * Tests for /settings/profile — the dedicated profile editor page.
+ * Covers: pre-fill, validation, PATCH /api/users/me call + refresh, success
+ * and error states.
  */
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-  usePathname: () => "/settings",
+  usePathname: () => "/settings/profile",
 }));
 
 vi.mock("@/lib/firebase", () => ({
@@ -71,9 +70,9 @@ vi.mock("@/lib/api", () => ({
 import { apiPatch as apiPatchExport } from "@/lib/api";
 const apiPatchMock = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
 
-import SettingsPage from "@/app/(authed)/settings/page";
+import ProfilePage from "@/app/(authed)/settings/profile/page";
 
-describe("SettingsPage — profile edit", () => {
+describe("ProfilePage — /settings/profile", () => {
   beforeEach(() => {
     apiPatchMock.mockReset();
     apiPatchMock.mockResolvedValue(mockProfile);
@@ -81,23 +80,20 @@ describe("SettingsPage — profile edit", () => {
   });
 
   it("pre-fills form with current profile values", () => {
-    render(<SettingsPage />);
+    render(<ProfilePage />);
     expect(
       (
-        screen.getByRole("textbox", {
-          name: /display name/i,
-        }) as HTMLInputElement
+        screen.getByRole("textbox", { name: /display name/i }) as HTMLInputElement
       ).value,
     ).toBe("Alice");
     expect(
-      (screen.getByRole("textbox", { name: /city/i }) as HTMLInputElement)
-        .value,
+      (screen.getByRole("textbox", { name: /city/i }) as HTMLInputElement).value,
     ).toBe("Brooklyn");
   });
 
   it("calls PATCH /api/users/me with edited displayName and calls refresh on success", async () => {
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    render(<ProfilePage />);
 
     const nameInput = screen.getByRole("textbox", { name: /display name/i });
     await user.clear(nameInput);
@@ -112,7 +108,7 @@ describe("SettingsPage — profile edit", () => {
       );
     });
     await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
-    expect(screen.getByText(/profile saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/profile updated/i)).toBeInTheDocument();
   });
 
   it("shows error banner when PATCH fails", async () => {
@@ -122,7 +118,7 @@ describe("SettingsPage — profile edit", () => {
     );
 
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    render(<ProfilePage />);
 
     const nameInput = screen.getByRole("textbox", { name: /display name/i });
     await user.clear(nameInput);
@@ -135,8 +131,49 @@ describe("SettingsPage — profile edit", () => {
     );
   });
 
-  it("renders account sub-page links", () => {
+  it("shows validation error when display name is too short (< 2 chars)", async () => {
+    const user = userEvent.setup();
+    render(<ProfilePage />);
+
+    const nameInput = screen.getByRole("textbox", { name: /display name/i });
+    await user.clear(nameInput);
+    await user.type(nameInput, "A");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/at least 2 characters/i),
+      ).toBeInTheDocument(),
+    );
+    expect(apiPatchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows validation error when display name exceeds max length", async () => {
+    const user = userEvent.setup();
+    render(<ProfilePage />);
+
+    const nameInput = screen.getByRole("textbox", { name: /display name/i });
+    await user.clear(nameInput);
+    await user.type(nameInput, "A".repeat(51));
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/max 50 characters/i)).toBeInTheDocument(),
+    );
+    expect(apiPatchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("SettingsPage — /settings index", () => {
+  it("renders links to all settings sub-pages", async () => {
+    const { default: SettingsPage } = await import(
+      "@/app/(authed)/settings/page"
+    );
     render(<SettingsPage />);
+    expect(screen.getByRole("link", { name: /edit profile/i })).toHaveAttribute(
+      "href",
+      "/settings/profile",
+    );
     expect(
       screen.getByRole("link", { name: /notification settings/i }),
     ).toBeInTheDocument();
