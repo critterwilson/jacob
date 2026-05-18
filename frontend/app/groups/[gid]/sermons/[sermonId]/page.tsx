@@ -122,16 +122,17 @@ export default function SermonDetailPage() {
             Open source ↗
           </a>
         )}
-        {/* T50 will replace this with an inline Watch Together flow.
-            Until then, the link above is the path. */}
+        {/* T50 (Watch Together) is parked as of 2026-05-17 — video features
+            deferred by ministry owner. Button stays disabled. Re-enable when
+            T50 is revived (see docs/follow-ups/phase-3-parked.md § T50). */}
         <Button
           type="button"
           variant="secondary"
           size="md"
           disabled
-          title="Watch Together — coming with T50"
+          title="Watch Together — not available right now"
         >
-          Watch with the group (coming soon)
+          Watch with the group (not available)
         </Button>
         <Button
           type="button"

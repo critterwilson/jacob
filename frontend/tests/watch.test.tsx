@@ -36,7 +36,9 @@ import {
 const apiGet = apiGetExport as unknown as ReturnType<typeof vi.fn>;
 const apiPost = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 
-describe("Watch Together hooks (T50)", () => {
+// FEATURE PARKED 2026-05-17: Watch Together deferred by ministry owner.
+// Re-enable this suite when T50 is revived. See docs/follow-ups/phase-3-parked.md § T50.
+describe.skip("Watch Together hooks (T50)", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();

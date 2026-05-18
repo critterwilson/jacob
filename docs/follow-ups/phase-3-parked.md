@@ -13,6 +13,53 @@ would need to happen to revive.
 
 ---
 
+## T50 — Watch Together (synchronized YouTube playback) — PARKED 2026-05-17
+
+**Scope:** Group members watch a YouTube video together in sync.
+Leader starts a session; followers join and playback stays coordinated
+via Firebase RTDB. Session metadata (attendees, duration) written to
+`groups/{gid}/watch_sessions/{sessionId}` in Firestore.
+See `docs/phase-3-dev-plan.md § T50` and `docs/phase-3-impl-spec.md § T50`.
+
+**Why parked:** Ministry owner explicitly deferred all video features.
+No timeline given; revisit when the product direction on video is settled.
+
+**What's built:**
+- `backend/app/routers/watch.py` — 6 REST endpoints (list, get, start, join,
+  end, transfer)
+- `backend/app/services/watch.py` — business logic
+- `backend/app/models/watch.py` — pydantic models
+- `frontend/app/groups/[gid]/watch/[sessionId]/page.tsx` — session page
+  (currently shows a "not available" message; full component in git history)
+- `frontend/lib/hooks/useWatchSession.ts` — React hooks
+- `infra/firebase-rtdb-rules.json` — RTDB playback-state rules (still enforced)
+- Firestore collection `groups/{gid}/watch_sessions` (default-deny, stays as-is)
+
+**Current state (parked):**
+- All backend endpoints return `503 feature_paused` because the
+  `feature_flags/watch_sessions` Firestore document does not exist (absent ⇒
+  disabled). The routes and code are fully in place.
+- The `/groups/[gid]/watch/[sessionId]` frontend route renders a
+  "not available" message instead of the session UI.
+- The "Watch with the group" button on the sermon page is disabled with a
+  "not available" label.
+- Backend tests: `backend/tests/test_watch.py` — all skipped via `pytestmark`.
+- Frontend tests: `frontend/tests/watch.test.tsx` — skipped via `describe.skip`.
+
+**To re-enable:**
+1. Product sign-off that video features are back on the roadmap.
+2. Create `feature_flags/watch_sessions` in Firestore with `enabled: true`
+   (the endpoint gate checks this document on every request).
+3. Restore the full frontend session page from git history (the pre-parking
+   commit on `chore/park-watch-sessions`).
+4. Remove `describe.skip` from `frontend/tests/watch.test.tsx`.
+5. Remove `pytestmark` skip from `backend/tests/test_watch.py`.
+6. Update the sermon-page button back to "Watch with the group (coming soon)"
+   and wire up the start-session flow.
+7. Restore nav entries if any are desired.
+
+---
+
 ## T40 — React Native (Expo) shell
 
 **Scope:** RN/Expo shell with auth, chat, threads parity to web

@@ -1,137 +1,38 @@
+/**
+ * Watch Together session page (T50) — FEATURE PARKED 2026-05-17.
+ *
+ * The ministry owner has deferred all video features. This page now
+ * shows a "not available" message so any bookmarked or shared /watch/*
+ * URLs land gracefully rather than crashing.
+ *
+ * The component, hook, and service code remain in the tree so the
+ * feature can be revived without a rebuild from scratch. To re-enable:
+ *   1. Set feature_flags/watch_sessions.enabled = true in Firestore.
+ *   2. Restore this file from git (the pre-parking version is in git
+ *      history as of the chore/park-watch-sessions commit).
+ *   3. Restore the nav entries and re-enable the skipped tests.
+ * See docs/follow-ups/phase-3-parked.md § T50 for full instructions.
+ */
 "use client";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
-
-import { useAuth } from "@/lib/auth-context";
-import { useWatchSession } from "@/lib/hooks/useWatchSession";
-import { safeHttpUrl } from "@/lib/safeUrl";
 
 export default function WatchSessionPage() {
   const params = useParams();
   const gid = String(
     Array.isArray(params?.gid) ? params.gid[0] : (params?.gid ?? ""),
   );
-  const sessionId = String(
-    Array.isArray(params?.sessionId)
-      ? params.sessionId[0]
-      : (params?.sessionId ?? ""),
-  );
-  const { user } = useAuth();
-  const { session, loading, join, end } = useWatchSession(gid, sessionId);
-  const [joined, setJoined] = useState(false);
-
-  // Auto-join on mount if the user isn't already an attendee.
-  useEffect(() => {
-    if (!session || !user) return;
-    if (session.endedAt) return;
-    if (session.attendees.includes(user.uid)) {
-      setJoined(true);
-      return;
-    }
-    void join().then((ok) => setJoined(ok));
-  }, [session, user, join]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-cream-muted">
-        Loading…
-      </div>
-    );
-  }
-  if (!session) {
-    return (
-      <div className="mx-auto max-w-3xl p-6">
-        <Link href={`/groups/${gid}/chat`} className="text-xs text-cream-muted">
-          ← Group
-        </Link>
-        <p className="mt-4 text-sm text-cream-muted">Watch session not found.</p>
-      </div>
-    );
-  }
-
-  const isLeader = session.leaderUid === user?.uid;
-  const ended = Boolean(session.endedAt);
-
-  // Embed via the standard YouTube embed URL (no JS API needed for the
-  // initial render). The leader / follower sync uses the IFrame API
-  // when wired in a follow-up; v1 ships a "Watch in sync via the
-  // YouTube embed; tap pause/play together" pattern with an explicit
-  // re-sync button. videoId is encodeURIComponent'd so a malicious
-  // sermon-add payload can't break out of the path segment.
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.videoId)}?rel=0&modestbranding=1`;
-  const safeSourceUrl = safeHttpUrl(session.sourceUrl);
 
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <header>
-        <Link href={`/groups/${gid}/chat`} className="text-xs text-cream-muted">
-          ← Group
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold">
-          {session.title ?? "Watch Together"}
-        </h1>
-        <p className="text-xs text-cream-muted">
-          Hosted by{" "}
-          <span className="font-mono">{session.leaderUid}</span> ·{" "}
-          {session.attendees.length} attendee
-          {session.attendees.length === 1 ? "" : "s"}
-        </p>
-      </header>
-
-      <div className="aspect-video w-full overflow-hidden rounded border border-line bg-black">
-        {ended ? (
-          <div className="flex h-full items-center justify-center text-white">
-            Session ended.
-          </div>
-        ) : (
-          // eslint-disable-next-line jsx-a11y/iframe-has-title
-          <iframe
-            src={embedUrl}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            sandbox="allow-scripts allow-same-origin allow-presentation"
-            allowFullScreen
-            className="h-full w-full"
-          />
-        )}
-      </div>
-
-      <section className="rounded border border-line bg-ink-raised p-4 text-sm text-cream-muted">
-        {ended ? (
-          <p>Session ended {new Date(session.endedAt!).toLocaleString()}.</p>
-        ) : isLeader ? (
-          <p>You&apos;re hosting. The other attendees see what you play.</p>
-        ) : joined ? (
-          <p>You&apos;re watching with {session.attendees.length - 1} others.</p>
-        ) : (
-          <p>Joining…</p>
-        )}
-      </section>
-
-      {!ended && (
-        <div className="flex gap-2">
-          {isLeader && (
-            <button
-              type="button"
-              onClick={end}
-              className="rounded border border-terracotta/40 px-3 py-1 text-sm text-terracotta hover:bg-terracotta/10"
-            >
-              End session
-            </button>
-          )}
-          {safeSourceUrl && (
-            <a
-              href={safeSourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
-            >
-              Open on YouTube ↗
-            </a>
-          )}
-        </div>
-      )}
+    <main className="mx-auto max-w-3xl space-y-4 p-6">
+      <Link href={`/groups/${gid}/chat`} className="text-xs text-cream-muted">
+        ← Group
+      </Link>
+      <h1 className="mt-2 text-2xl font-semibold">Watch Together</h1>
+      <p className="text-sm text-cream-muted">
+        Watch Together is not available right now. Check back later.
+      </p>
     </main>
   );
 }
