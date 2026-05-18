@@ -123,3 +123,11 @@ BOARD_REPLY_CREATE: str = "60/hour"
 BOARD_REPLY_EDIT: str = "30/hour"
 BOARD_REPLY_DELETE: str = "60/hour"
 NOTIFICATION_READ: str = "120/minute"
+
+# Wellbeing flag pipeline. Submission is per-user per-day (mirrors REPORT_SUBMIT);
+# moderator reads are generous since they poll the queue; moderator mutations
+# match the existing ADMIN_MUTATION budget.
+WELLBEING_SUBMIT: str = "5/day"
+WELLBEING_QUEUE_READ: str = "60/minute"
+WELLBEING_STATUS_WRITE: str = "30/minute"
+MODERATOR_GRANT_REVOKE: str = "10/minute"

@@ -125,8 +125,15 @@ service cloud.firestore {
     }
 
     // --- backend-only collections (unchanged from pre-migration) -------
+    // moderation_queue stores both standard reports and wellbeing_concern flags.
+    // The status_history subcollection records wellbeing status transitions
+    // (open → in_progress → resolved). All access via Admin SDK through /api/*.
     match /moderation_queue/{itemId} {
       allow read, write: if false;
+
+      match /status_history/{entryId} {
+        allow read, write: if false;
+      }
     }
     match /bans/{uid} {
       allow read, write: if false;

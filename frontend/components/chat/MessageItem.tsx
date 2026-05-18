@@ -9,6 +9,7 @@ import { PhotoView } from "@/components/chat/PhotoView";
 import { ReactionBar } from "@/components/chat/ReactionBar";
 import { ReactionPicker } from "@/components/chat/ReactionPicker";
 import { ReportButton } from "@/components/moderation/ReportButton";
+import { WellbeingFlagButton } from "@/components/moderation/WellbeingFlagButton";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
 import { Avatar, Button, Textarea, cn } from "@/components/ui";
 import { useStickers } from "@/lib/hooks/useStickers";
@@ -385,6 +386,15 @@ export function MessageItem({
               resourceId={message.id}
               groupId={gid}
               className={cn(actionChip, "flex items-center text-cream-muted")}
+            />
+          )}
+          {!isAuthor && (
+            <WellbeingFlagButton
+              subjectUid={message.authorUid}
+              subjectName={author.displayName}
+              messageId={message.id}
+              groupId={gid}
+              className={cn(actionChip, "text-cream-muted")}
             />
           )}
         </div>
