@@ -225,10 +225,7 @@ def test_get_post_returns_404_when_missing() -> None:
 def test_create_post_happy_path() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, _ = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.post(
             "/api/ministry-feed/posts",
@@ -243,10 +240,7 @@ def test_create_post_happy_path() -> None:
 def test_create_post_rejects_unknown_field() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, _ = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.post(
             "/api/ministry-feed/posts",
@@ -258,10 +252,7 @@ def test_create_post_rejects_unknown_field() -> None:
 def test_create_post_rejects_invalid_cover_image_ref() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, _ = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.post(
             "/api/ministry-feed/posts",
@@ -278,10 +269,7 @@ def test_create_post_rejects_invalid_cover_image_ref() -> None:
 def test_update_post_only_changes_supplied_fields() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, existing_post_ref = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.patch(
             "/api/ministry-feed/posts/p1",
@@ -297,10 +285,7 @@ def test_update_post_only_changes_supplied_fields() -> None:
 def test_delete_post_is_idempotent() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, existing_post_ref = _build_db(post_deleted=True)
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.delete("/api/ministry-feed/posts/p1")
     assert res.status_code == 200
@@ -311,10 +296,7 @@ def test_delete_post_is_idempotent() -> None:
 def test_pin_post_writes_pinnedAt() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, existing_post_ref = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.post("/api/ministry-feed/posts/p1/pin")
     assert res.status_code == 200
@@ -326,10 +308,7 @@ def test_pin_post_writes_pinnedAt() -> None:
 def test_unpin_post_clears_pinnedAt() -> None:
     user = CurrentUser(uid="owner", email=None, claims={"ministry_owner": True})
     db, existing_post_ref = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.delete("/api/ministry-feed/posts/p1/pin")
     assert res.status_code == 200
@@ -343,10 +322,7 @@ def test_unpin_post_clears_pinnedAt() -> None:
 def test_react_to_post_happy_path() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db, _ = _build_db()
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.post("/api/ministry-feed/posts/p1/reactions/pray")
     assert res.status_code == 201, res.text
@@ -358,10 +334,7 @@ def test_react_to_post_happy_path() -> None:
 def test_react_to_post_404_unknown_sticker() -> None:
     user = CurrentUser(uid="alice", email=None, claims={})
     db, _ = _build_db(sticker_exists=False)
-    with (
-        patch("app.deps.get_firestore", return_value=db),
-        patch("app.routers.ministry_feed._db", return_value=db),
-    ):
+    with (patch("app.routers.ministry_feed._db", return_value=db),):
         client = TestClient(_app(user))
         res = client.post("/api/ministry-feed/posts/p1/reactions/unknown")
     assert res.status_code == 404
