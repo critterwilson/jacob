@@ -10,13 +10,15 @@ Covers:
 
 from __future__ import annotations
 
+import functools
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from app.deps import get_current_user
-from app.errors import http_exception_handler
+from app.deps import get_current_user, require_leader
+from app.errors import APIError, http_exception_handler
 from app.models.user import CurrentUser
 from app.routers.discover import router as discover_router
 from app.routers.groups import router as groups_router
@@ -60,15 +62,21 @@ def _group_snap(
     return snap
 
 
+def _fake_transactional(fn):  # type: ignore[no-untyped-def]
+    """Decorator replacement that executes `fn` immediately with a MagicMock txn."""
+
+    @functools.wraps(fn)
+    def wrapper(txn_arg: MagicMock) -> None:
+        fn(txn_arg)
+
+    return wrapper
+
+
 # ── consume_invite cap enforcement ───────────────────────────────────────────
 
 
 def test_consume_invite_group_at_cap_returns_409() -> None:
     """Joining via invite code when group is at cap returns group_at_cap."""
-    from app.services.invites import consume_invite
-
-    db = MagicMock()
-
     invite_data = {
         "code": "ABCD1234",
         "expiresAt": None,
@@ -76,136 +84,53 @@ def test_consume_invite_group_at_cap_returns_409() -> None:
         "useCount": 0,
         "revokedAt": None,
     }
-    invite_snap = MagicMock()
-    invite_snap.reference.path = "groups/g1/invites/inv1"
-    invite_snap.id = "inv1"
-    invite_snap.to_dict.return_value = invite_data
 
-    db.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value = iter(
-        [invite_snap]
-    )
+    db = MagicMock()
 
-    # Group is at cap (20/20).
+    inv_snap = MagicMock()
+    inv_snap.reference.path = "groups/g1/invites/inv1"
+    inv_snap.id = "inv1"
+    inv_snap.to_dict.return_value = invite_data
+    (
+        db.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value
+    ) = iter([inv_snap])
+
     group_snap = _group_snap(member_count=20, member_cap=20)
     group_ref = MagicMock()
-    group_ref.get.return_value = group_snap
+    group_ref.get = lambda transaction=None: group_snap
     group_ref.path = "groups/g1"
 
-    member_snap = MagicMock()
-    member_snap.exists = False
+    mem_snap = MagicMock()
+    mem_snap.exists = False
+    mem_col = MagicMock()
+    mem_col.document.return_value.get = lambda transaction=None: mem_snap
+    group_ref.collection.return_value = mem_col
 
-    members_col = MagicMock()
-    members_col.document.return_value.get.return_value = member_snap
-    group_ref.collection.return_value = members_col
+    grp_col = MagicMock()
+    grp_col.document.return_value = group_ref
+    db.collection.return_value = grp_col
+    db.transaction.return_value = MagicMock()
 
-    groups_col = MagicMock()
-    groups_col.document.return_value = group_ref
-    db.collection.return_value = groups_col
+    inv_snap.reference.get = lambda transaction=None: MagicMock(to_dict=lambda: invite_data)
 
-    # Transaction: re-read invite + group + member atomically.
-    txn = MagicMock()
-    db.transaction.return_value = txn
+    called_errors: list[str] = []
 
-    # Simulate transactional reads: invite → same data; group → at-cap; member → not exists.
-    txn_invite_snap = MagicMock()
-    txn_invite_snap.to_dict.return_value = invite_data
-    txn_group_snap = MagicMock()
-    txn_group_snap.to_dict.return_value = group_snap.to_dict()
-    txn_member_snap = MagicMock()
-    txn_member_snap.exists = False
-
-    call_order: list[MagicMock] = [txn_invite_snap, txn_member_snap, txn_group_snap]
-
-    def _txn_get(ref: MagicMock, transaction: MagicMock = None) -> MagicMock:
-        return call_order.pop(0)
-
-    invite_snap.reference.get = _txn_get
-    members_col.document.return_value.get = _txn_get
-    group_ref.get = lambda transaction=None: txn_group_snap
-
-    # Patch the transactional decorator to execute the inner function directly.
-    from google.cloud import firestore as gcf
-    import functools
-
-    def _run_immediately(fn):  # type: ignore[no-untyped-def]
+    def _capturing_transactional(fn):  # type: ignore[no-untyped-def]
         @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
-            return fn(txn, *args[1:], **kwargs)
-
-        return wrapper
-
-    with patch.object(gcf, "transactional", side_effect=_run_immediately):
-        import importlib
-        import app.services.invites as invites_mod
-
-        importlib.reload(invites_mod)
-
-    # The real test: call the service with a mocked db that simulates at-cap.
-    from fastapi import HTTPException as FHE
-    import pytest
-
-    # Directly test that the error is raised — use a fresh mock that has the
-    # transaction execute the _run body and hit the cap check.
-    from app.errors import APIError
-
-    # Simpler approach: build a db mock that forces the transactional function
-    # to see memberCount >= memberCap.
-    db2 = MagicMock()
-
-    inv_snap2 = MagicMock()
-    inv_snap2.reference.path = "groups/g1/invites/inv1"
-    inv_snap2.id = "inv1"
-    inv_snap2.to_dict.return_value = invite_data
-
-    db2.collection_group.return_value.where.return_value.where.return_value.limit.return_value.stream.return_value = iter(
-        [inv_snap2]
-    )
-
-    g_snap2 = _group_snap(member_count=20, member_cap=20)
-    g_ref2 = MagicMock()
-    g_ref2.get.return_value = g_snap2
-    g_ref2.path = "groups/g1"
-
-    mem_snap2 = MagicMock()
-    mem_snap2.exists = False
-    mem_col2 = MagicMock()
-    mem_col2.document.return_value.get.return_value = mem_snap2
-    g_ref2.collection.return_value = mem_col2
-
-    grp_col2 = MagicMock()
-    grp_col2.document.return_value = g_ref2
-    db2.collection.return_value = grp_col2
-
-    txn2 = MagicMock()
-    db2.transaction.return_value = txn2
-
-    # Patch @gcf.transactional to be a pass-through that calls with the transaction.
-    inv_txn_snap = MagicMock()
-    inv_txn_snap.to_dict.return_value = invite_data
-    inv_snap2.reference.get = lambda transaction=None: inv_txn_snap
-    mem_snap2_txn = MagicMock()
-    mem_snap2_txn.exists = False
-    mem_col2.document.return_value.get = lambda transaction=None: mem_snap2_txn
-    g_ref2.get = lambda transaction=None: g_snap2
-
-    called_with: list[dict] = []
-
-    def fake_transactional(fn):  # type: ignore[no-untyped-def]
-        @functools.wraps(fn)
-        def wrapper(txn_arg):
+        def wrapper(txn_arg: MagicMock) -> None:
             try:
                 fn(txn_arg)
             except APIError as e:
-                called_with.append({"code": e.detail["error"]["code"]})
+                called_errors.append(e.detail["error"]["code"])
                 raise
 
         return wrapper
 
-    with patch("app.services.invites.gcf.transactional", side_effect=fake_transactional):
-        from app.services.invites import consume_invite as _ci
+    with patch("app.services.invites.gcf.transactional", side_effect=_capturing_transactional):
+        from app.services.invites import consume_invite
 
         with pytest.raises(APIError) as exc_info:
-            _ci(db2, "ABCD1234", "bob")
+            consume_invite(db, "ABCD1234", "bob")
 
     assert exc_info.value.detail["error"]["code"] == "group_at_cap"
     assert exc_info.value.status_code == 409
@@ -230,23 +155,14 @@ def test_open_join_at_cap_returns_409() -> None:
         return col
 
     group_ref.collection.side_effect = _subcol
-
     groups_col = MagicMock()
     groups_col.document.return_value = group_ref
     db.collection.return_value = groups_col
+    db.transaction.return_value = MagicMock()
 
-    # Transaction: _open_join_txn sees group at cap.
-    txn = MagicMock()
-    db.transaction.return_value = txn
-
-    # Patch transactional so it executes immediately with our txn.
-    import functools
-    from app.errors import APIError
-
-    def fake_transactional(fn):  # type: ignore[no-untyped-def]
+    def _patched_transactional(fn):  # type: ignore[no-untyped-def]
         @functools.wraps(fn)
-        def wrapper(txn_arg):
-            # Simulate reads inside the txn.
+        def wrapper(txn_arg: MagicMock) -> None:
             group_ref.get = lambda transaction=None: group_snap
             fn(txn_arg)
 
@@ -254,7 +170,7 @@ def test_open_join_at_cap_returns_409() -> None:
 
     with (
         patch("app.routers.discover._db", return_value=db),
-        patch("app.routers.discover.gcf.transactional", side_effect=fake_transactional),
+        patch("app.routers.discover.gcf.transactional", side_effect=_patched_transactional),
         patch("app.routers.discover.write_audit_log"),
     ):
         client = TestClient(_make_app())
@@ -287,31 +203,22 @@ def test_open_join_under_cap_succeeds() -> None:
     groups_col = MagicMock()
     groups_col.document.return_value = group_ref
     db.collection.return_value = groups_col
+    db.transaction.return_value = MagicMock()
 
-    txn = MagicMock()
-    db.transaction.return_value = txn
-
-    import functools
-
-    def fake_transactional(fn):  # type: ignore[no-untyped-def]
+    def _patched_transactional(fn):  # type: ignore[no-untyped-def]
         @functools.wraps(fn)
-        def wrapper(txn_arg):
+        def wrapper(txn_arg: MagicMock) -> None:
             group_ref.get = lambda transaction=None: group_snap
-            member_snap_txn = MagicMock()
-            member_snap_txn.exists = False
-
-            # Patch the member_ref.get inside the txn.
-            def _txn_member_get(transaction=None):  # type: ignore[no-untyped-def]
-                return member_snap_txn
-
-            group_ref.collection.return_value.document.return_value.get = _txn_member_get
+            col = MagicMock()
+            col.document.return_value.get = lambda transaction=None: member_snap
+            group_ref.collection.return_value = col
             fn(txn_arg)
 
         return wrapper
 
     with (
         patch("app.routers.discover._db", return_value=db),
-        patch("app.routers.discover.gcf.transactional", side_effect=fake_transactional),
+        patch("app.routers.discover.gcf.transactional", side_effect=_patched_transactional),
         patch("app.routers.discover.write_audit_log"),
     ):
         client = TestClient(_make_app())
@@ -341,14 +248,11 @@ def _leader_membership_dep(gid: str, uid: str) -> MagicMock:
 
 def test_approve_join_request_at_cap_returns_409() -> None:
     """Approving a join request when group is at cap returns group_at_cap."""
-    from app.deps import MembershipContext, require_leader
-
     db = MagicMock()
 
     jr_snap = MagicMock()
     jr_snap.exists = True
     jr_snap.to_dict.return_value = {"status": "pending"}
-
     jr_ref = MagicMock()
     jr_ref.get = lambda transaction=None: jr_snap
 
@@ -356,44 +260,26 @@ def test_approve_join_request_at_cap_returns_409() -> None:
     group_ref = MagicMock()
     group_ref.get = lambda transaction=None: group_snap
 
-    groups_col = MagicMock()
-
     def _doc(gid: str) -> MagicMock:
         ref = MagicMock()
         ref.get.return_value = group_snap
+        ref.get = lambda transaction=None: group_snap
 
         jr_col = MagicMock()
         jr_col.document.return_value = jr_ref
-
         members_col = MagicMock()
         members_col.document.return_value.get.return_value = MagicMock(exists=False)
 
         def _subcol(name: str) -> MagicMock:
-            if name == "joinRequests":
-                return jr_col
-            return members_col
+            return jr_col if name == "joinRequests" else members_col
 
         ref.collection.side_effect = _subcol
         return ref
 
+    groups_col = MagicMock()
     groups_col.document.side_effect = _doc
     db.collection.return_value = groups_col
-
-    txn = MagicMock()
-    db.transaction.return_value = txn
-
-    import functools
-    from app.errors import APIError
-
-    def fake_transactional(fn):  # type: ignore[no-untyped-def]
-        @functools.wraps(fn)
-        def wrapper(txn_arg):
-            fn(txn_arg)
-
-        return wrapper
-
-    def _leader_dep() -> MagicMock:
-        return _leader_membership_dep("g1", "alice")
+    db.transaction.return_value = MagicMock()
 
     app = FastAPI()
     app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
@@ -401,11 +287,11 @@ def test_approve_join_request_at_cap_returns_409() -> None:
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         uid="alice", email="alice@example.com", claims={}
     )
-    app.dependency_overrides[require_leader] = _leader_dep
+    app.dependency_overrides[require_leader] = lambda: _leader_membership_dep("g1", "alice")
 
     with (
         patch("app.routers.discover._db", return_value=db),
-        patch("app.routers.discover.gcf.transactional", side_effect=fake_transactional),
+        patch("app.routers.discover.gcf.transactional", side_effect=_fake_transactional),
         patch("app.routers.discover.write_audit_log"),
     ):
         client = TestClient(app)
@@ -455,7 +341,6 @@ def _make_groups_cap_db(
     groups_col = MagicMock()
     groups_col.document.return_value = group_ref
     db.collection.return_value = groups_col
-
     return db
 
 
