@@ -177,8 +177,6 @@ def list_wellbeing_queue(
     status_filter: str = Query(default="open", alias="status"),
     moderator: CurrentUser = Depends(require_moderator_or_admin),
 ) -> WellbeingQueueResponse:
-    db = _db()
-
     if status_filter not in _WELLBEING_STATUSES:
         raise APIError(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -186,6 +184,7 @@ def list_wellbeing_queue(
             message=f"status must be one of {sorted(_WELLBEING_STATUSES)}",
         )
 
+    db = _db()
     query = (
         db.collection("moderation_queue")
         .where("reason", "==", "wellbeing_concern")

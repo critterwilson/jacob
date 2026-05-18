@@ -188,7 +188,7 @@ function ItemCard({
             <p className="text-xs text-cream-muted italic">{RESOLUTION_PROMPT}</p>
           )}
           <label className="block text-xs font-medium text-cream">
-            Note for "{STATUS_LABELS[nextStatus]}" transition
+            Note for &quot;{STATUS_LABELS[nextStatus]}&quot; transition
             <textarea
               rows={3}
               value={transitionNote}
