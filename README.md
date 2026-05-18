@@ -2,6 +2,8 @@
 
 Small-group messaging for Christian communities — Phase 1 monorepo.
 
+*Joint Asynchronous Congregation of Believers.*
+
 ```
 frontend/    Next.js 14 (App Router, TypeScript, Tailwind) → Firebase App Hosting
 backend/     FastAPI (Python 3.12)                         → Cloud Run

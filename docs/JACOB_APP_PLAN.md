@@ -23,6 +23,8 @@ In Hebrew, Jacob means "one who grabs at the heel" — a grappler. He is the fir
 
 The name resonates in two worlds: Christian small groups (where the biblical reference is immediate) and BJJ gyms (where grappling is central to identity). Phase 1 leads with the Christian audience because the pilot groups are already lined up and the sticker taxonomy maps cleanly to small-group dynamics. BJJ expansion is planned for Phase 3, after the core mechanic is validated, and will require its own sticker set and brand-voice tuning.
 
+**As an acronym:** JACOB stands for **Joint Asynchronous Congregation of Believers** — "asynchronous" being the literal technical mode of small-group messaging (people don't have to be present at the same time), and "congregation of believers" capturing the spiritual identity of the platform.
+
 ### Core Philosophy
 
 - **Forced authentic engagement:** the sticker system ensures messages are tagged by intent (prayer, help, praise, etc.), driving real interaction rather than passive scrolling.
