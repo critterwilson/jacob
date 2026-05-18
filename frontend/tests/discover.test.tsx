@@ -58,7 +58,7 @@ vi.mock("@/lib/hooks/useDiscoverGroups", () => ({
   }),
 }));
 
-import DiscoverPage from "@/app/discover/page";
+import DiscoverPage from "@/app/(authed)/discover/page";
 
 beforeEach(() => {
   mockLoad.mockClear();

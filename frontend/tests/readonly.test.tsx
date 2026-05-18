@@ -99,7 +99,7 @@ vi.mock("@/components/moderation/ReportButton", () => ({
   ReportButton: () => <button type="button">Report</button>,
 }));
 
-import ReadOnlyGroupPage from "@/app/discover/[gid]/page";
+import ReadOnlyGroupPage from "@/app/(authed)/discover/[gid]/page";
 
 describe("T31 — read-only group browsing", () => {
   beforeEach(() => {

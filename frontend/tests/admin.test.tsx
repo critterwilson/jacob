@@ -4,10 +4,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import AdminLayout from "@/app/admin/layout";
-import AdminGroupsPage from "@/app/admin/groups/page";
-import AdminUsersPage from "@/app/admin/users/page";
-import ModerationQueuePage from "@/app/admin/queue/page";
+import AdminLayout from "@/app/(authed)/admin/layout";
+import AdminGroupsPage from "@/app/(authed)/admin/groups/page";
+import AdminUsersPage from "@/app/(authed)/admin/users/page";
+import ModerationQueuePage from "@/app/(authed)/admin/queue/page";
 
 // Stable user object — the same reference is returned on every render so
 // components that depend on `user` identity (useCallback, useEffect deps) don't

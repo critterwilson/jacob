@@ -65,7 +65,7 @@ vi.mock("@/lib/hooks/useMinistryPostReactions", () => ({
 import { apiPost as apiPostExport } from "@/lib/api";
 const apiPostMock = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 
-import MinistryFeedPage from "@/app/feed/page";
+import MinistryFeedPage from "@/app/(authed)/feed/page";
 import { NewMinistryPostForm } from "@/components/ministry/NewMinistryPostForm";
 import type { MinistryPost } from "@/lib/hooks/useMinistryFeed";
 
