@@ -38,7 +38,9 @@ def _make_app(uid: str = "alice", is_admin: bool = False) -> FastAPI:
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _group_snap(*, member_count: int = 20, member_cap: int = 20, archived: bool = False) -> MagicMock:
+def _group_snap(
+    *, member_count: int = 20, member_cap: int = 20, archived: bool = False
+) -> MagicMock:
     snap = MagicMock()
     snap.exists = True
     snap.to_dict.return_value = {
@@ -129,11 +131,13 @@ def test_consume_invite_group_at_cap_returns_409() -> None:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             return fn(txn, *args[1:], **kwargs)
+
         return wrapper
 
     with patch.object(gcf, "transactional", side_effect=_run_immediately):
         import importlib
         import app.services.invites as invites_mod
+
         importlib.reload(invites_mod)
 
     # The real test: call the service with a mocked db that simulates at-cap.
@@ -194,10 +198,12 @@ def test_consume_invite_group_at_cap_returns_409() -> None:
             except APIError as e:
                 called_with.append({"code": e.detail["error"]["code"]})
                 raise
+
         return wrapper
 
     with patch("app.services.invites.gcf.transactional", side_effect=fake_transactional):
         from app.services.invites import consume_invite as _ci
+
         with pytest.raises(APIError) as exc_info:
             _ci(db2, "ABCD1234", "bob")
 
@@ -243,6 +249,7 @@ def test_open_join_at_cap_returns_409() -> None:
             # Simulate reads inside the txn.
             group_ref.get = lambda transaction=None: group_snap
             fn(txn_arg)
+
         return wrapper
 
     with (
@@ -292,11 +299,14 @@ def test_open_join_under_cap_succeeds() -> None:
             group_ref.get = lambda transaction=None: group_snap
             member_snap_txn = MagicMock()
             member_snap_txn.exists = False
+
             # Patch the member_ref.get inside the txn.
             def _txn_member_get(transaction=None):  # type: ignore[no-untyped-def]
                 return member_snap_txn
+
             group_ref.collection.return_value.document.return_value.get = _txn_member_get
             fn(txn_arg)
+
         return wrapper
 
     with (
@@ -320,6 +330,7 @@ def test_open_join_under_cap_succeeds() -> None:
 
 def _leader_membership_dep(gid: str, uid: str) -> MagicMock:
     from app.deps import MembershipContext
+
     ctx = MagicMock(spec=MembershipContext)
     ctx.uid = uid
     ctx.gid = gid
@@ -378,6 +389,7 @@ def test_approve_join_request_at_cap_returns_409() -> None:
         @functools.wraps(fn)
         def wrapper(txn_arg):
             fn(txn_arg)
+
         return wrapper
 
     def _leader_dep() -> MagicMock:
@@ -409,7 +421,9 @@ def test_approve_join_request_at_cap_returns_409() -> None:
 # ── PATCH /{gid}/cap endpoint ─────────────────────────────────────────────────
 
 
-def _make_groups_cap_db(*, member_count: int = 5, member_cap: int = 20, uid_is_leader: bool = True) -> MagicMock:
+def _make_groups_cap_db(
+    *, member_count: int = 5, member_cap: int = 20, uid_is_leader: bool = True
+) -> MagicMock:
     db = MagicMock()
 
     group_snap = MagicMock()

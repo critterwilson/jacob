@@ -954,7 +954,10 @@ def update_group(
             raise APIError(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 code="cap_below_count",
-                message=f"Member cap cannot be lower than the current member count ({current_count}).",
+                message=(
+                    f"Member cap cannot be lower than the current"
+                    f" member count ({current_count})."
+                ),
             )
         update["memberCap"] = new_cap
 

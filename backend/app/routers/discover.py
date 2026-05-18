@@ -13,7 +13,6 @@ from google.cloud import firestore as gcf
 from app.deps import MembershipContext, get_current_user, require_leader, require_not_banned
 from app.errors import APIError
 from app.limits import ADMIN_MUTATION, DISCOVER_LIST, GROUP_JOIN
-from app.models.group import DEFAULT_MEMBER_CAP
 from app.middleware.rate_limit import limiter
 from app.models.discover import (
     DiscoverGroup,
@@ -24,6 +23,7 @@ from app.models.discover import (
     PendingRequestsResponse,
     ReviewResponse,
 )
+from app.models.group import DEFAULT_MEMBER_CAP
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
