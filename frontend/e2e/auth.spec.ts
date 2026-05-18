@@ -4,7 +4,6 @@ import {
   gotoSignIn,
   gotoSignUp,
   sharedAccountCredentials,
-  signOut,
   submitSignIn,
   submitSignUp,
 } from "./helpers/auth";
@@ -21,6 +20,8 @@ test.describe("auth", () => {
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
+    // ADR 0011 — DOB required on signup.
+    await page.getByLabel(/date of birth/i).fill("1990-04-12");
     await submitSignUp(page);
     // Email/password signup now lands on the verify-email interstitial.
     // We accept /onboarding too during the rollout window where staging
@@ -36,50 +37,44 @@ test.describe("auth", () => {
     //    Mailinator tier).
     await verifyEmailViaAdmin(page, freshEmail.email);
 
-    // 3. Sign in with the now-verified account.
+    // 3. Sign in with the now-verified account. ADR 0011: the new user
+    //    has no profile and no application yet → middleware bounces to
+    //    /onboarding. After submitting the application they live at
+    //    /awaiting-approval (no admin in the loop here to approve), so
+    //    the sign-out flow at the end exercises the wait-screen sign-out
+    //    button instead of the sidebar one.
     await gotoSignIn(page);
     await fillSignInForm(page, freshEmail.email, STRONG_PASSWORD);
     await submitSignIn(page);
-    // After verify the new user has no profile yet, so middleware bounces to
-    // /onboarding. Either /onboarding or /home is acceptable depending on
-    // whether prior runs raced ahead.
-    await expect(page).toHaveURL(/\/(onboarding|home|groups)/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/(onboarding|awaiting-approval|home|groups)/, {
+      timeout: 20_000,
+    });
 
-    // /onboarding has no sidebar, so the UI sign-out flow can't be exercised
-    // until the user is past it. Complete onboarding so step 4 has a real
-    // page (with the sidebar) to sign out from. We accept this also widens
-    // the test's coverage to include onboarding — that's a feature, not a
-    // bug, given how often /onboarding is on the path.
     if (/\/onboarding/.test(page.url())) {
       await page
         .getByLabel(/display name/i)
         .fill(`Playwright ${freshEmail.localPart.slice(-6)}`);
-      await page.getByRole("radio", { name: /18 or older/i }).check();
+      await page.getByLabel(/date of birth/i).fill("1990-04-12");
       await page.locator("#communityGuidelines").check();
       await Promise.all([
-        page.waitForURL(/\/groups/, { timeout: 30_000 }),
-        page.getByRole("button", { name: /complete profile/i }).click(),
+        page.waitForURL(/\/awaiting-approval/, { timeout: 30_000 }),
+        page.getByRole("button", { name: /submit application/i }).click(),
       ]);
     }
 
-    // /groups lives outside the (authed) route group and so does NOT render
-    // the AppShell sidebar — the UI sign-out button only exists on /home and
-    // its siblings. Navigate there explicitly before exercising signOut.
-    await page.goto("/home", { waitUntil: "domcontentloaded" });
-    await expect(
-      page.getByRole("navigation", { name: /main navigation/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    // 4. Sign out — the /awaiting-approval screen has its own sign-out
+    //    button (the AppShell sidebar isn't reachable until approval).
+    await expect(page).toHaveURL(/\/awaiting-approval/);
+    await page.getByRole("button", { name: /^sign out$/i }).click();
+    await expect(page).toHaveURL(/\/sign-in/, { timeout: 15_000 });
 
-    // 4. Sign out.
-    await signOut(page);
-    await expect(page).toHaveURL(/\/sign-in/);
-
-    // 5. Sign back in to prove the sign-out actually cleared the session
-    //    (vs. just routing away from a still-authed page). The user is
-    //    onboarded now so they should land somewhere with the sidebar.
+    // 5. Sign back in to prove the sign-out actually cleared the session.
+    //    They're still pending so they land back at /awaiting-approval.
     await fillSignInForm(page, freshEmail.email, STRONG_PASSWORD);
     await submitSignIn(page);
-    await expect(page).toHaveURL(/\/(home|groups)/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/(awaiting-approval|onboarding)/, {
+      timeout: 20_000,
+    });
   });
 
   test("wrong password shows an error and stays on /sign-in", async ({ page }) => {
@@ -103,6 +98,7 @@ test.describe("auth", () => {
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
+    await page.getByLabel(/date of birth/i).fill("1990-04-12");
     await submitSignUp(page);
     // Accept either /verify-email (post-this-PR) or /onboarding (pre-deploy
     // staging build). Tighten in a follow-up after the redirect target

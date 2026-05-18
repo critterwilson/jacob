@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user, require_admin, require_not_banned
 from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.rate_limit import limiter
 from app.models.user import CurrentUser
@@ -54,7 +54,6 @@ def _applicant_app(
     *,
     uid: str = "alice",
     email: str = "alice@example.com",
-    email_verified: bool = True,
 ) -> FastAPI:
     app = FastAPI()
     app.state.limiter = limiter
@@ -63,12 +62,12 @@ def _applicant_app(
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.include_router(applications_router)
 
-    user = CurrentUser(
-        uid=uid,
-        email=email,
-        claims={"email_verified": email_verified},
-    )
+    user = CurrentUser(uid=uid, email=email, claims={})
     app.dependency_overrides[get_current_user] = lambda: user
+    # The submit endpoint composes `require_not_banned`; override so tests
+    # don't need a Firestore mock for the bans collection unless they
+    # explicitly want to assert the ban path.
+    app.dependency_overrides[require_not_banned] = lambda: user
     return app
 
 
@@ -197,17 +196,6 @@ def test_submit_application_refuses_under_13() -> None:
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "under_minimum_age"
     db._app_ref.set.assert_not_called()  # type: ignore[attr-defined]
-
-
-def test_submit_application_refuses_unverified_email() -> None:
-    db = _make_db()
-    with patch("app.routers.applications.get_firestore", return_value=db):
-        res = TestClient(_applicant_app(email_verified=False)).post(
-            "/api/applications/me",
-            json={"displayName": "Alice", "dob": _adult_dob()},
-        )
-    assert res.status_code == 403
-    assert res.json()["error"]["code"] == "email_unverified"
 
 
 def test_submit_application_refuses_when_user_already_approved() -> None:

@@ -23,6 +23,7 @@ test.describe("forgot password", () => {
     await gotoSignUp(page);
     await page.getByLabel(/^email$/i).fill(freshEmail.email);
     await page.getByLabel(/^password$/i).fill(STRONG_PASSWORD);
+    await page.getByLabel(/date of birth/i).fill("1990-04-12");
     await submitSignUp(page);
     // Accept either /verify-email or /onboarding during the rollout
     // window — staging may still be on the pre-this-PR build.

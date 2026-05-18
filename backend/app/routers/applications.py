@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user
+from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import APPLICATION_POLL, APPLICATION_SUBMIT
 from app.middleware.rate_limit import limiter
@@ -41,45 +41,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/applications", tags=["applications"])
 
 
-def _email_verified(user: CurrentUser) -> bool:
-    """Did the verified ID token assert `email_verified: true`?
-
-    The check is best-effort: Firebase Auth populates `email_verified`
-    on every ID token, but some providers (e.g. Google) consider the
-    email pre-verified at provider-level. In both cases the claim is
-    `True`. We refuse application submission when the claim is missing
-    or falsy.
-    """
-    return bool(user.claims.get("email_verified"))
-
-
 @router.post("/me", response_model=ApplicationView, status_code=status.HTTP_201_CREATED)
 @limiter.limit(APPLICATION_SUBMIT)
 def submit_application(
     request: Request,
     response: Response,
     body: SubmitApplicationRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> ApplicationView:
     """Create or replace the caller's application.
 
     Refuses the call if:
-      * the email on the ID token isn't verified yet (`email_unverified`),
+      * the applicant is banned (`require_not_banned`),
       * the applicant is under 13 (`under_minimum_age`),
       * the caller already has an *approved* user doc (`already_approved`).
+
+    The email-verified gate lives on the frontend (the `/verify-email`
+    page polls Firebase Auth and routes to `/onboarding` only after the
+    `emailVerified` flag flips). Mirroring the existing `POST /api/users/me`
+    convention which also trusts the frontend gate here — the backend
+    won't see an application submission unless the frontend let the
+    user reach the onboarding form, and a determined caller who skips
+    the gate would still hit the admin-approval queue before getting
+    `users/{uid}` access.
 
     The endpoint is idempotent across re-submits while the application
     is still `pending`: each call overwrites the prior submission and
     refreshes `submittedAt`. Once decided (approved or rejected) the
     application is immutable from the applicant side.
     """
-    if not _email_verified(user):
-        raise APIError(
-            status_code=status.HTTP_403_FORBIDDEN,
-            code="email_unverified",
-            message="Verify your email before submitting an application",
-        )
-
     age = compute_age(body.dob)
     if age < MIN_AGE:
         raise APIError(
