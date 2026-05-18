@@ -173,22 +173,17 @@ opportunistic touch-ups.
 
 ---
 
-## ADR sweep for pre-M6 staleness
+## ADR sweep for pre-M6 staleness — CLOSED in docs/full-cleanup-sweep
 
 **Where:** `docs/adr/0001-rate-limit-strategy.md` and possibly
 0003/0004 reference client-side Firestore rule paths or direct
 client writes that no longer apply post-M6.
 
-**Status:** This PR adds a Superseded-by note to ADR 0001. ADRs
-0003 (collection-group memberships) and 0004 (invite collection)
-should be audited too — both predate M6 and may carry rule-side
-assumptions that no longer match the default-deny posture.
-
-**Complexity:** Low — read each ADR; if it references client-write
-paths or rule-side enforcement, add a "Superseded-by" or
-"Implementation diverged" note pointing at
-`docs/data-layer-migration-plan.md` and the relevant
-`backend/app/routers/` file.
+**Status:** ADR 0001 received a Superseded-by note in PR #216.
+ADR 0003 received an "Implementation note" block (client-side CG
+query moved server-side with M6) and ADR 0004 received a note that
+the `inviteCode` field migration was never fully completed. Both
+audited in the `docs/full-cleanup-sweep` PR.
 
 ---
 

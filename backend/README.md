@@ -1,8 +1,9 @@
 # JACOB Backend
 
-FastAPI service deployed on Cloud Run. Handles server-trusted operations: auth
-verification, image moderation, admin actions, and account lifecycle. Real-time
-chat data goes directly through Firestore — this service is not in that path.
+FastAPI service deployed on Cloud Run. Handles **all end-user data access** through
+`/api/*`: auth verification, group chat, image moderation, admin actions, and account
+lifecycle. The Firestore client SDK is not used by the frontend — all reads and writes
+route through this service.
 
 ## Prerequisites
 

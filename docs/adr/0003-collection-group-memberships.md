@@ -4,6 +4,14 @@
 **Date:** 2026-05-02  
 **Resolves:** Phase 1 deferred item M11
 
+> **Implementation note (2026-05-06, post-M6).** The client-side
+> `collectionGroup(firestore, "members").where("uid", "==", currentUid)`
+> query described below moved server-side with the M1–M6 data-layer
+> migration. The frontend now calls `GET /api/groups` (implemented in
+> `backend/app/routers/groups.py`), which runs the same collection-group
+> query via the Admin SDK. The data model decision (the `uid` field on
+> every member doc, the CG index) is unchanged; only the call site moved.
+
 ---
 
 ## Context

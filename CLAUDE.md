@@ -69,7 +69,7 @@ JACOB is a small-group messaging web app for Christian small groups. The fronten
 └── docs/
     ├── data-model.md           # canonical Firestore schema — see "Collection layout" below
     ├── data-layer-migration-plan.md
-    ├── adr/                    # ADRs (0001–0010 currently)
+    ├── adr/                    # ADRs: 0001, 0003, 0004, 0005, 0007, 0009, 0010 (0002/0006/0008 were planned but those tasks were parked)
     ├── runbooks/               # operational runbooks
     ├── follow-ups/             # phase-1-deferred.md, phase-2-deferred.md, phase-3-deferred.md, phase-3-parked.md
     └── legal/                  # internal legal-team source docs

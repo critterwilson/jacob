@@ -233,9 +233,8 @@ Without this, any contributor with `write` access can trigger a production deplo
 
 ## Architecture notes
 
-- Real-time chat and all end-user reads/writes go **directly through the Firestore client SDK** — there is no API gateway in front of Firestore.
-- The FastAPI backend handles only server-trusted work: auth token verification, image moderation, admin actions, account lifecycle.
-- Cloud Functions handle Firestore-triggered fan-out (e.g. `threadReplyCount` increments in T09+).
+- All end-user reads and writes go through the **FastAPI backend** at `/api/*`. The Firestore client SDK is not used by the frontend for data access; direct Firestore calls are blocked by default-deny security rules. See `docs/data-layer-migration-plan.md` for the M1–M6 migration history.
+- Cloud Functions handle **Firestore-triggered fan-out**: denormalization, search-sidecar indexing, FCM notification delivery.
 - **Storage note**: user uploads use **Cloud Storage** directly via backend-issued signed URLs (see `infra/buckets.tf`). There is no `firebase.json` `storage` block and no `storage.rules` file — those would control Firebase Storage, which is a different product and is not used here. Do not add a `storage.rules` file expecting it to protect the upload buckets.
 - See `CLAUDE.md` for full conventions and `DEV_PLAN.md` for the Phase 1 task list.
 
