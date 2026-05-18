@@ -40,10 +40,6 @@ export default function FaqPage() {
           </div>
         ))}
       </dl>
-
-      <p className="text-caption text-cream-muted">
-        Additional content will be added by Christopher before launch.
-      </p>
     </main>
   );
 }

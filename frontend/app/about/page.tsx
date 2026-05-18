@@ -22,9 +22,6 @@ export default function AboutPage() {
           and photo sharing. Future phases will add additional features based
           on community feedback.
         </p>
-        <p className="text-caption text-cream-muted">
-          Content will be updated by Christopher before launch.
-        </p>
       </div>
     </main>
   );
