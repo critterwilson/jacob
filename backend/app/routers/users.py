@@ -316,6 +316,12 @@ def update_profile(
         update["isMinor"] = bool(supplied["isMinor"])
     if "locale" in supplied:
         update["locale"] = supplied["locale"]
+    if "phone" in supplied:
+        update["phone"] = supplied["phone"]
+    if "location" in supplied:
+        update["location"] = supplied["location"]
+    if "faithBackground" in supplied:
+        update["faithBackground"] = supplied["faithBackground"]
 
     # PR13 / L3: Firebase Auth lets users change their email. The Firestore
     # mirror set at create-time then diverges — leaders see stale emails on

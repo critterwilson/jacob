@@ -72,6 +72,9 @@ class UpdateProfileRequest(BaseModel):
     # with a region (e.g. `es`, `en-US`). Validation kept narrow at
     # the model boundary; the i18n resolver normalises further.
     locale: str | None = Field(default=None, pattern=r"^[a-z]{2}(?:-[A-Z]{2})?$")
+    phone: str | None = Field(default=None, max_length=20)
+    location: str | None = Field(default=None, max_length=100)
+    faithBackground: str | None = Field(default=None, max_length=500)
 
 
 class BootstrapClaims(BaseModel):
