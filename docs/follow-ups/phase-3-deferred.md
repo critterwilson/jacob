@@ -265,6 +265,21 @@ longer urgent.
 
 ---
 
+## data-model.md — expand document-shape sections for Phase 2/3 collections
+
+PR #241 added ~30 missing entries to the collection map but did not add the
+corresponding document-shape sections (field list + example JSON) for the new
+entries. The existing sections cover Phase 1 collections well; Phase 2/3
+collections (devices, notifications, notificationPrefs, exports, plan_progress,
+invites, events, rsvps, joinRequests, sermons, daily_verse, devotionals,
+reading_plans, active_incidents, appeals, ncmec_cases, transparency_reports,
+uploads, watch_sessions, domain_claims) still lack documented shapes.
+
+**Complexity:** Low-medium — read each router for the field names, copy example
+payloads from the existing section style.
+
+---
+
 ## M4 — `announce_message` fan-out blocks the request thread
 
 **Where:** `backend/app/routers/groups.py` — `announce_message`

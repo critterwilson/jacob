@@ -212,7 +212,7 @@ Rationale: Firestore gives real-time sync, offline support, mobile-friendly SDKs
 
 - **Search.** Native Firestore query is limited. Full-text search uses a sidecar — a Cloud Function fans message writes to Algolia or Typesense Cloud.
 - **Reporting / analytics.** Beyond per-document queries, use the native Firestore → BigQuery scheduled export. Aggregations and leader analytics live there.
-- **Cost.** Firestore prices per read/write/document. Use tightly-scoped onSnapshot listeners (single group, recent messages only) and paginate aggressively. Revisit if a single group exceeds ~10K messages/day.
+- **Cost.** Firestore prices per read/write/document. Use tightly-scoped onSnapshot listeners (single group, recent messages only) and paginate aggressively. Revisit if a single group exceeds ~10K messages/day. *[Historical — implemented as HTTP polling post-M6; no onSnapshot in the browser.]*
 - **Vendor lock-in.** Firestore is a Google-only product. Migration to Postgres later is non-trivial. Acceptable for a v1 commitment given the speed-to-market win.
 
 #### Stack
