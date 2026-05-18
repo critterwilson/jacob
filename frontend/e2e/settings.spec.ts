@@ -1,6 +1,42 @@
 import { expect, test } from "./helpers/fixtures";
 
 test.describe("settings", () => {
+  test("settings index links to profile page", async ({
+    sharedAccountPage: page,
+  }) => {
+    await page.goto("/settings", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("link", { name: /edit profile/i }),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("profile edit — change display name → save → success banner", async ({
+    sharedAccountPage: page,
+  }) => {
+    await page.goto("/settings/profile", { waitUntil: "domcontentloaded" });
+
+    const nameInput = page.getByRole("textbox", { name: /display name/i });
+    await expect(nameInput).toBeVisible({ timeout: 15_000 });
+
+    const originalName = (await nameInput.inputValue()) || "Test User";
+    const newName = `${originalName} ✏`;
+
+    await nameInput.fill(newName);
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    await expect(page.getByText(/profile updated/i)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Restore original display name so subsequent runs start from stable state.
+    await nameInput.fill(originalName);
+    await page.getByRole("button", { name: /save changes/i }).click();
+    await expect(page.getByText(/profile updated/i)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+
   test("notification preference toggles persist across reloads", async ({
     sharedAccountPage: page,
   }) => {
