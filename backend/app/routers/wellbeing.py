@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user, require_admin, require_moderator_or_admin
+from app.deps import require_admin, require_moderator_or_admin, require_not_banned
 from app.errors import APIError
 from app.limits import (
     MODERATOR_GRANT_REVOKE,
@@ -88,7 +88,7 @@ def submit_wellbeing_flag(
     request: Request,
     response: Response,
     body: SubmitWellbeingFlagRequest,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(require_not_banned),
 ) -> SubmitWellbeingFlagResponse:
     """File a wellbeing concern about another member.
 
