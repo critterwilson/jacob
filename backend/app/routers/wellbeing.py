@@ -142,9 +142,9 @@ def submit_wellbeing_flag(
         }
     )
     # Seed the initial status_history entry
-    db.collection("moderation_queue").document(flag_id).collection(
-        "status_history"
-    ).document(str(uuid.uuid4())).set(
+    db.collection("moderation_queue").document(flag_id).collection("status_history").document(
+        str(uuid.uuid4())
+    ).set(
         {
             "status": "open",
             "note": "(flag filed)",
@@ -419,7 +419,5 @@ def set_moderator_claim(
         payload={"grant": body.grant},
     )
 
-    logger.info(
-        "admin=%s set_moderator uid=%s grant=%s", admin.uid, uid, body.grant
-    )
+    logger.info("admin=%s set_moderator uid=%s grant=%s", admin.uid, uid, body.grant)
     return GrantModeratorResponse(uid=uid, moderator=body.grant)
