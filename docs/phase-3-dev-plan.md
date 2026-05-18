@@ -73,7 +73,7 @@ The remaining tasks follow patterns Phase 1/2 already established and are approp
 | T47 | Prayer-request clustering and "praying for" matching       | AI                             | T06, T08, T35, T45    | **Use Opus**           |
 | T48 | Presence + typing indicators (per-group, leader-toggleable) | Live & realtime               | T07, T08              |                        |
 | T49 | Scheduled events — prayer times, attendance, RSVPs         | Live & realtime                | T07, T22, T34, T41    |                        |
-| T50 | Watch Together — synchronized YouTube playback             | Live & realtime                | T07, T48              |                        |
+| T50 | Watch Together — synchronized YouTube playback (**PARKED 2026-05-17**) | Live & realtime | T07, T48 | See docs/follow-ups/phase-3-parked.md § T50 |
 | T51 | Devotionals + reading plans                                | Christian content              | T33                   |                        |
 | T52 | Sermon archives — leader-curated playlist                  | Christian content              | T07, T22, T50         |                        |
 | T53 | Markdown messages + link unfurls                           | Christian content              | T08, T20, T28         |                        |
@@ -422,7 +422,11 @@ The remaining tasks follow patterns Phase 1/2 already established and are approp
 
 ---
 
-## T50 — Watch Together — synchronized YouTube playback
+## T50 — Watch Together — synchronized YouTube playback — **PARKED 2026-05-17**
+
+> **Status:** Parked. Ministry owner has deferred all video features. Code is in the
+> tree but all endpoints return `503 feature_paused` and the UI shows a "not available"
+> message. See `docs/follow-ups/phase-3-parked.md § T50` for the full re-enable checklist.
 
 **Goal:** A group member starts a "Watch Together" session for a YouTube video; other members join and the playback stays synchronized. Used for Sunday-sermon catch-up, devotional videos, etc. Built on YouTube IFrame Player API + Realtime Database for sync state.
 
