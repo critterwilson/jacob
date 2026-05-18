@@ -28,7 +28,6 @@ from app.models.user import CurrentUser
 from app.models.wellbeing import valid_next_statuses
 from app.routers.wellbeing import admin_router, router
 
-
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 

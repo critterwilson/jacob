@@ -4,7 +4,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-ReportReason = Literal["harassment", "sexual", "violence", "self-harm", "spam", "other", "wellbeing_concern"]
+ReportReason = Literal[
+    "harassment", "sexual", "violence", "self-harm", "spam", "other", "wellbeing_concern"
+]
 ResourceType = Literal["message", "profile", "group"]
 
 
