@@ -41,6 +41,7 @@ from app.limits import (
 from app.middleware.rate_limit import limiter
 from app.models.admin import ModerationPolicyRequest, ModerationPolicyResponse
 from app.models.group import (
+    DEFAULT_MEMBER_CAP,
     AnnounceResponse,
     ArchiveGroupRequest,
     ArchiveResponse,
@@ -51,6 +52,8 @@ from app.models.group import (
     JoinGroupRequest,
     JoinGroupResponse,
     LeaderActionResponse,
+    MemberCapRequest,
+    MemberCapResponse,
     RotateInviteResponse,
     UnarchiveResponse,
     UpdateGroupRequest,
@@ -142,6 +145,7 @@ def create_group(
             "leaderUids": [user.uid],
             "leaderCount": 1,
             "schemaVersion": 1,
+            "memberCap": DEFAULT_MEMBER_CAP,
         },
     )
     batch.set(
@@ -705,6 +709,7 @@ def _group_to_detail(gid: str, data: dict[str, Any], *, include_invite_code: boo
         inviteCode=(data.get("inviteCode") if include_invite_code else None),
         moderationPolicy=data.get("moderationPolicy"),
         presenceEnabled=data.get("presenceEnabled"),
+        memberCap=int(data.get("memberCap") or DEFAULT_MEMBER_CAP),
     )
 
 
@@ -942,6 +947,19 @@ def update_group(
         update["pinnedMessageIds"] = ids
     if "presenceEnabled" in supplied:
         update["presenceEnabled"] = bool(supplied["presenceEnabled"])
+    if "memberCap" in supplied:
+        new_cap = int(supplied["memberCap"])
+        current_count = int((membership.group or {}).get("memberCount") or 0)
+        if new_cap < current_count:
+            raise APIError(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code="cap_below_count",
+                message=(
+                    f"Member cap cannot be lower than the current"
+                    f" member count ({current_count})."
+                ),
+            )
+        update["memberCap"] = new_cap
 
     db.collection("groups").document(gid).update(update)
     write_audit_log(
@@ -952,3 +970,57 @@ def update_group(
     )
     fresh = db.collection("groups").document(gid).get()
     return _group_to_detail(gid, fresh.to_dict() or {}, include_invite_code=True)
+
+
+# ── member cap ───────────────────────────────────────────────────────────────
+
+
+@router.patch("/{gid}/cap", response_model=MemberCapResponse)
+@limiter.limit(GROUP_UPDATE)
+def update_member_cap(
+    gid: str,
+    request: Request,
+    response: Response,
+    body: MemberCapRequest,
+    user: CurrentUser = Depends(require_not_banned),
+) -> MemberCapResponse:
+    """Update the member cap. Group leaders and platform admins only."""
+    db = _db()
+
+    is_platform_admin = user.claims.get("admin") is True
+    if not is_platform_admin:
+        member_snap = _members_collection(db, gid).document(user.uid).get()
+        if not member_snap.exists or (member_snap.to_dict() or {}).get("role") != "leader":
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="forbidden",
+                message="Only group leaders or platform admins may update the member cap",
+            )
+
+    group_ref = db.collection("groups").document(gid)
+    group_snap = group_ref.get()
+    if not group_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="group_not_found",
+            message="Group not found",
+        )
+    group_data = group_snap.to_dict() or {}
+    current_count = int(group_data.get("memberCount") or 0)
+
+    if body.memberCap < current_count:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="cap_below_count",
+            message=f"Member cap cannot be lower than the current member count ({current_count}).",
+        )
+
+    group_ref.update({"memberCap": body.memberCap})
+    write_audit_log(
+        actor_uid=user.uid,
+        action="update_member_cap",
+        target_ref=f"groups/{gid}",
+        payload={"memberCap": body.memberCap},
+    )
+    logger.info("update_member_cap gid=%s uid=%s cap=%d", gid, user.uid, body.memberCap)
+    return MemberCapResponse(gid=gid, memberCap=body.memberCap)

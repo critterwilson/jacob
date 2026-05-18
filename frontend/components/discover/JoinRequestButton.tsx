@@ -13,9 +13,12 @@ type Props = {
 
 type JoinResponse = { joined?: boolean; pending?: boolean };
 
+const GROUP_AT_CAP_MSG =
+  "This group has reached its member limit. The group leader can raise the cap to add more members.";
+
 export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
   const { user } = useAuth();
-  const [state, setState] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const [state, setState] = useState<"idle" | "pending" | "done" | "error" | "at_cap">("idle");
   const [message, setMessage] = useState("");
   const [showMessage, setShowMessage] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -36,12 +39,24 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
         setState("done");
       }
     } catch (e) {
+      if (e instanceof ApiError && e.code === "group_at_cap") {
+        setState("at_cap");
+        return;
+      }
       setErrorMsg(
         e instanceof ApiError ? e.message || "Failed to join." : "Network error.",
       );
       setState("error");
     }
   };
+
+  if (state === "at_cap") {
+    return (
+      <p role="alert" className="text-sm text-cream-muted">
+        {GROUP_AT_CAP_MSG}
+      </p>
+    );
+  }
 
   if (state === "done") {
     return (
@@ -83,7 +98,7 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
           </button>
         )}
       </div>
-      {(state === "error") && errorMsg && (
+      {state === "error" && errorMsg && (
         <p role="alert" className="text-sm text-terracotta">{errorMsg}</p>
       )}
     </div>

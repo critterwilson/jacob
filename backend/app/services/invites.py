@@ -25,6 +25,7 @@ from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 
 from app.errors import APIError
+from app.models.group import DEFAULT_MEMBER_CAP
 from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
@@ -195,6 +196,18 @@ def consume_invite(db: Any, code: str, uid: str) -> tuple[str, str]:
                 status_code=status.HTTP_409_CONFLICT,
                 code="already_member",
                 message="You are already a member of this group",
+            )
+
+        # Enforce soft member cap inside the transaction to prevent races.
+        txn_group = group_ref.get(transaction=transaction)
+        txn_group_data = txn_group.to_dict() or {}
+        member_cap = int(txn_group_data.get("memberCap") or DEFAULT_MEMBER_CAP)
+        current_count = int(txn_group_data.get("memberCount") or 0)
+        if current_count >= member_cap:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="group_at_cap",
+                message="This group is at its member limit.",
             )
 
         transaction.update(
