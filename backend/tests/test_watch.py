@@ -29,7 +29,8 @@ from app.routers.watch import router
 from tests.test_orgs import FakeFirestore  # noqa: E402
 
 # Feature parked 2026-05-17 — skip the whole module until T50 is revived.
-pytestmark = pytest.mark.skip(reason="T50 Watch Together parked; see docs/follow-ups/phase-3-parked.md § T50")
+_PARKED = "T50 Watch Together parked; see docs/follow-ups/phase-3-parked.md"
+pytestmark = pytest.mark.skip(reason=_PARKED)
 
 
 def _membership(
