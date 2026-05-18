@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { GroupArchiveDialog } from "@/components/groups/GroupArchiveDialog";
 import { GroupAvatarUpload } from "@/components/groups/GroupAvatarUpload";
+import { GroupMemberCapForm } from "@/components/groups/GroupMemberCapForm";
 import { GroupSettingsForm } from "@/components/groups/GroupSettingsForm";
 import { Heading, Link, Section } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -76,6 +77,17 @@ export default function GroupSettingsPage({ params }: Props) {
 
       <Section title="Metadata" description="Name, description, and visibility for the group.">
         <GroupSettingsForm gid={gid} group={group} />
+      </Section>
+
+      <Section
+        title="Member cap"
+        description="The maximum number of members allowed in this group. The default is 20. Raise this if your group needs to grow beyond that."
+      >
+        <GroupMemberCapForm
+          gid={gid}
+          currentCap={group.memberCap ?? null}
+          memberCount={group.memberCount}
+        />
       </Section>
 
       <Section

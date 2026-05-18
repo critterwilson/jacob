@@ -62,7 +62,11 @@ function JoinForm() {
       router.push(`/groups/${groupId}`);
     } catch (e) {
       if (e instanceof ApiError) {
-        if (e.status === 409) {
+        if (e.code === "group_at_cap") {
+          setSubmitError(
+            "This group has reached its member limit. The group leader can raise the cap to add more members.",
+          );
+        } else if (e.status === 409) {
           setSubmitError("You are already a member of this group.");
         } else if (e.status === 404) {
           setSubmitError("Invite code not found. Double-check and try again.");
