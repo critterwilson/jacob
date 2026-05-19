@@ -117,9 +117,9 @@ describe("useUploadPhoto", () => {
 
     expect(url).toBe("https://cdn/public/u1.jpg");
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[0][0]).toContain("/api/uploads/photos");
+    expect(fetchMock.mock.calls[0][0]).toContain("/api/v1/uploads/photos");
     expect(fetchMock.mock.calls[1][0]).toBe("https://signed/PUT");
-    expect(fetchMock.mock.calls[2][0]).toContain("/api/uploads/u1/finalize");
+    expect(fetchMock.mock.calls[2][0]).toContain("/api/v1/uploads/u1/finalize");
   });
 
   it("rejects oversize files before contacting the backend", async () => {

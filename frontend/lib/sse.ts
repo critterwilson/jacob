@@ -22,6 +22,9 @@ import { auth } from "@/lib/firebase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// Must stay in sync with the API_VERSION constant in api.ts.
+const API_VERSION = "v1";
+
 export type StreamEvent = { event: string; data: string };
 
 export type StreamHandle = {
@@ -40,8 +43,9 @@ export type OpenStreamOpts = {
 
 function resolveUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path;
-  if (!API_BASE) return path;
-  return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  const versionedPath = path.replace(/^\/api\//, `/api/${API_VERSION}/`);
+  if (!API_BASE) return versionedPath;
+  return `${API_BASE}${versionedPath.startsWith("/") ? "" : "/"}${versionedPath}`;
 }
 
 async function authHeader(): Promise<Record<string, string>> {

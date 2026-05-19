@@ -203,7 +203,7 @@ describe("InviteList", () => {
     const btn = screen.getByRole("button", { name: /revoke/i });
     await user.click(btn);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/groups/g1/invites/inv1"),
+      expect.stringContaining("/api/v1/groups/g1/invites/inv1"),
       expect.objectContaining({ method: "DELETE" }),
     ));
   });

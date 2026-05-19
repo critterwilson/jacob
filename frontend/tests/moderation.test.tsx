@@ -117,7 +117,7 @@ describe("ReportDialog", () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toContain("/api/reports");
+    expect(url).toContain("/api/v1/reports");
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body).toMatchObject({
       resourceType: "message",

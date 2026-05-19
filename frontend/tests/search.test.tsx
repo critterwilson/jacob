@@ -154,7 +154,7 @@ describe("useSearch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const calledUrl = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0][0] as string;
-    expect(calledUrl).toContain("/api/search");
+    expect(calledUrl).toContain("/api/v1/search");
     expect(calledUrl).toContain("q=hi");
   });
 });

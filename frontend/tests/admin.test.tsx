@@ -177,7 +177,7 @@ describe("ModerationQueuePage", () => {
     render(<ModerationQueuePage />);
     await waitFor(() => {
       const call = fetchMock.mock.calls.find((c) =>
-        String(c[0]).includes("/api/admin/moderation"),
+        String(c[0]).includes("/api/v1/admin/moderation"),
       );
       expect(call).toBeDefined();
       expect(String(call![0])).toContain("status=pending");

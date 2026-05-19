@@ -98,7 +98,7 @@ describe("DiscoverPage", () => {
     await user.click(joinBtns[0]);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/api/groups/g1/join-requests"),
+      expect.stringContaining("/api/v1/groups/g1/join-requests"),
       expect.objectContaining({ method: "POST" }),
     );
   });

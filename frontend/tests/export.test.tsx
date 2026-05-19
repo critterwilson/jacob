@@ -96,7 +96,7 @@ beforeEach(() => {
     for (const { match, reply } of handlers) {
       if (match(url, method)) return reply();
     }
-    if (url.includes("/api/account/export/status") && method === "GET") {
+    if (url.includes("/api/v1/account/export/status") && method === "GET") {
       return {
         ok: true,
         status: 200,
@@ -136,7 +136,7 @@ describe("ExportPage", () => {
   it("posts /api/account/export when the user clicks Request", async () => {
     pushHandler(
       (url, method) =>
-        url.includes("/api/account/export") &&
+        url.includes("/api/v1/account/export") &&
         !url.includes("/status") &&
         method === "POST",
       () => ({ ok: true, status: 200, json: async () => ({}) }),
@@ -146,7 +146,7 @@ describe("ExportPage", () => {
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
         (c) =>
-          String(c[0]).includes("/api/account/export") &&
+          String(c[0]).includes("/api/v1/account/export") &&
           !String(c[0]).includes("/status") &&
           (c[1] as RequestInit | undefined)?.method === "POST",
       );
@@ -157,7 +157,7 @@ describe("ExportPage", () => {
   it("shows export_in_flight error message on 409", async () => {
     pushHandler(
       (url, method) =>
-        url.includes("/api/account/export") &&
+        url.includes("/api/v1/account/export") &&
         !url.includes("/status") &&
         method === "POST",
       () => ({
