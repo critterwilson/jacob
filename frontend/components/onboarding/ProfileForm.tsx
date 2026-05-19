@@ -133,7 +133,11 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         await handleUnder13Deletion();
         return;
       }
-      setSubmitError("Something went wrong. Please try again.");
+      if (err instanceof ApiError) {
+        setSubmitError(`${err.code} — ${err.message}`);
+      } else {
+        setSubmitError("Something went wrong. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
