@@ -360,7 +360,7 @@ describe("ProfileForm validation", () => {
     expect(mockPush).toHaveBeenCalledWith("/awaiting-approval");
   });
 
-  it("shows error message when the submit-application request fails", async () => {
+  it("shows error code and message when an ApiError is returned", async () => {
     pushHandler(
       (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
       () => ({
@@ -382,7 +382,30 @@ describe("ProfileForm validation", () => {
     await user.click(screen.getByRole("button", { name: /submit application/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
+      expect(screen.getByText(/internal_error — boom/i)).toBeInTheDocument();
+    });
+  });
+
+  it("surfaces network_error code in the toast when fetch throws", async () => {
+    pushHandler(
+      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
+      () => {
+        throw new TypeError("Failed to fetch");
+      },
+    );
+
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.type(screen.getByLabelText(/display name/i), "Alice");
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/network_error/i)).toBeInTheDocument();
     });
   });
 });
