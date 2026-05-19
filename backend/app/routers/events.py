@@ -39,7 +39,6 @@ from app.models.events import (
     CheckInResponse,
     Event,
     EventCreateRequest,
-    EventDeleteResponse,
     EventListResponse,
     EventUpdateRequest,
     ManualAttendanceRequest,

@@ -33,7 +33,6 @@ from app.middleware.rate_limit import limiter
 from app.models.sermons import (
     Sermon,
     SermonCreateRequest,
-    SermonDeleteResponse,
     SermonListResponse,
     SermonUpdateRequest,
 )

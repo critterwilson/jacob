@@ -14,7 +14,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 from starlette.responses import Response as StarletteResponse
