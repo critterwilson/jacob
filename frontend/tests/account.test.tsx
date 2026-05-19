@@ -108,7 +108,7 @@ beforeEach(() => {
     for (const { match, reply } of handlers) {
       if (match(url, method)) return reply(init);
     }
-    if (url.includes("/api/account/delete/status") && method === "GET") {
+    if (url.includes("/api/v1/account/delete/status") && method === "GET") {
       return {
         ok: true,
         status: 200,
@@ -139,7 +139,7 @@ describe("DeleteAccountPage — confirm flow", () => {
   });
 
   it("submits POST /api/account/delete with keepBody=true and signs out", async () => {
-    pushHandler(matchesUrl("/api/account/delete", "POST"), () => ({
+    pushHandler(matchesUrl("/api/v1/account/delete", "POST"), () => ({
       ok: true,
       status: 200,
       json: async () => ({
@@ -155,12 +155,12 @@ describe("DeleteAccountPage — confirm flow", () => {
 
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
-        (c) => String(c[0]).includes("/api/account/delete") && !String(c[0]).includes("/status"),
+        (c) => String(c[0]).includes("/api/v1/account/delete") && !String(c[0]).includes("/status"),
       );
       expect(calls.length).toBeGreaterThan(0);
     });
     const postCall = fetchMock.mock.calls.find(
-      (c) => String(c[0]).includes("/api/account/delete") && !String(c[0]).includes("/status"),
+      (c) => String(c[0]).includes("/api/v1/account/delete") && !String(c[0]).includes("/status"),
     )!;
     expect(JSON.parse((postCall[1] as RequestInit).body as string)).toEqual({
       keepBody: true,
@@ -193,7 +193,7 @@ describe("DeleteAccountPage — pending state", () => {
 
   it("calls cancel API and routes home on success", async () => {
     nextStatus = pendingStatus;
-    pushHandler(matchesUrl("/api/account/delete/cancel", "POST"), () => ({
+    pushHandler(matchesUrl("/api/v1/account/delete/cancel", "POST"), () => ({
       ok: true,
       status: 200,
       json: async () => ({ cancelled: true }),
@@ -206,7 +206,7 @@ describe("DeleteAccountPage — pending state", () => {
 
     await waitFor(() => {
       const cancelCalls = fetchMock.mock.calls.filter((c) =>
-        String(c[0]).includes("/api/account/delete/cancel"),
+        String(c[0]).includes("/api/v1/account/delete/cancel"),
       );
       expect(cancelCalls.length).toBeGreaterThan(0);
     });

@@ -71,7 +71,7 @@ describe("CreateGroupForm", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/groups/new-group-id"));
     expect(fetch).toHaveBeenCalledOnce();
     const [url, init] = vi.mocked(fetch).mock.calls[0];
-    expect(url).toMatch(/\/api\/groups$/);
+    expect(url).toMatch(/\/api\/v1\/groups$/);
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
       name: "Sunday Study",
     });

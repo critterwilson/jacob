@@ -122,7 +122,7 @@ beforeEach(() => {
     for (const { match, reply } of handlers) {
       if (match(url, method)) return reply();
     }
-    if (url.includes("/api/users/me/bootstrap") && method === "GET") {
+    if (url.includes("/api/v1/users/me/bootstrap") && method === "GET") {
       return {
         ok: true,
         status: 200,
@@ -130,7 +130,7 @@ beforeEach(() => {
         json: async () => nextBootstrap,
       };
     }
-    if (url.includes("/api/applications/me") && method === "GET") {
+    if (url.includes("/api/v1/applications/me") && method === "GET") {
       return nextApplication;
     }
     throw new Error(`unexpected fetch in test: ${method} ${url}`);
@@ -320,7 +320,7 @@ describe("ProfileForm validation", () => {
 
   it("posts to /api/applications/me and navigates to /awaiting-approval on valid submission", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/applications/me") && method === "POST",
+      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
       () => ({
         ok: true,
         status: 201,
@@ -350,7 +350,7 @@ describe("ProfileForm validation", () => {
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
         (c) =>
-          String(c[0]).includes("/api/applications/me") &&
+          String(c[0]).includes("/api/v1/applications/me") &&
           (c[1] as RequestInit | undefined)?.method === "POST",
       );
       expect(calls.length).toBeGreaterThan(0);
@@ -362,7 +362,7 @@ describe("ProfileForm validation", () => {
 
   it("shows error message when the submit-application request fails", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/applications/me") && method === "POST",
+      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
       () => ({
         ok: false,
         status: 500,
@@ -495,11 +495,11 @@ describe("useUser", () => {
     await waitFor(() => expect(hook?.loading).toBe(false));
 
     const before = fetchMock.mock.calls.filter((c) =>
-      String(c[0]).includes("/api/users/me/bootstrap"),
+      String(c[0]).includes("/api/v1/users/me/bootstrap"),
     ).length;
     await hook!.refresh();
     const after = fetchMock.mock.calls.filter((c) =>
-      String(c[0]).includes("/api/users/me/bootstrap"),
+      String(c[0]).includes("/api/v1/users/me/bootstrap"),
     ).length;
     expect(after).toBeGreaterThan(before);
   });
@@ -531,7 +531,7 @@ describe("useUser", () => {
 
     pushHandler(
       (url, method) =>
-        url.includes("/api/users/me/bootstrap") && method === "GET",
+        url.includes("/api/v1/users/me/bootstrap") && method === "GET",
       () => {
         throw new TypeError("Failed to fetch");
       },
