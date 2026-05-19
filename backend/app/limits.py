@@ -112,6 +112,12 @@ PINNED_MESSAGES_READ: str = "60/minute"
 MESSAGES_LIST: str = "60/minute"
 MESSAGE_READ: str = "60/minute"
 RECENT_MESSAGES_READ: str = "30/minute"
+# M5 — chat stream connection open. Each open counts once; the stream
+# itself holds the slot. The cap exists to absorb reconnect storms
+# (e.g. a flapping network looping the EventSource open/error cycle)
+# without burning the listener attach/detach budget. Steady-state usage
+# is ~1 open per group-session per user.
+MESSAGES_STREAM_OPEN: str = "60/hour"
 BOARD_POSTS_LIST: str = "60/minute"
 BOARD_POST_READ: str = "60/minute"
 BOARD_REPLIES_LIST: str = "60/minute"

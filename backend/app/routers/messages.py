@@ -17,9 +17,11 @@ handlers — see §5.7 of the data-layer migration plan.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -27,7 +29,9 @@ from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, 
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 from starlette.responses import Response as StarletteResponse
+from starlette.responses import StreamingResponse
 
+from app.config import get_settings
 from app.deps import (
     MembershipContext,
     PublicReadContext,
@@ -43,6 +47,7 @@ from app.limits import (
     MESSAGE_EDIT,
     MESSAGE_READ,
     MESSAGES_LIST,
+    MESSAGES_STREAM_OPEN,
     REACTION_TOGGLE,
 )
 from app.middleware.rate_limit import limiter
@@ -58,6 +63,7 @@ from app.models.messages import (
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import get_firestore
+from app.services.stream_hub import get_stream_hub
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/groups", tags=["messages"])
@@ -371,6 +377,125 @@ def list_messages(
 
     response.headers["ETag"] = etag
     return payload
+
+
+# ── M5: SSE stream ───────────────────────────────────────────────────────
+#
+# Declared BEFORE the `/{gid}/messages/{mid}` single-message read because
+# FastAPI matches routes in registration order. `/g1/messages/stream`
+# would otherwise be claimed by the `{mid}` route with `mid="stream"`.
+
+
+# Heartbeat cadence. Cloud Run + intermediate proxies close connections
+# that have been silent for too long; 15s is well below the typical
+# 30-60s idle-timeout edge cases reported by upstream proxies.
+_STREAM_HEARTBEAT_SECONDS = 15.0
+
+
+async def _stream_event_generator(
+    request: Request,
+    *,
+    gid: str,
+    ctx: MembershipContext | PublicReadContext,
+) -> AsyncIterator[bytes]:
+    """Drain the per-connection queue, emitting SSE frames.
+
+    Yields:
+      - `: connected\n\n`         once on connection open
+      - `event: message\ndata: <Message JSON>\n\n` on each new/updated msg
+      - `: ping\n\n`              every `_STREAM_HEARTBEAT_SECONDS` of idle
+
+    Exits when the client disconnects or the connection times out at the
+    Cloud Run boundary (configured to 3600s in `infra/cloud-run.tf`).
+    """
+    hub = get_stream_hub()
+    queue = await hub.subscribe(gid)
+    try:
+        # An immediate connection-open frame doubles as a "stream is live"
+        # signal to the EventSource consumer. The frame is an SSE comment
+        # (lines starting with `:`); browsers swallow it silently but it
+        # forces the response chunk to flush, so the client's `onopen`
+        # fires without waiting for the first message.
+        yield b": connected\n\n"
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                ev = await asyncio.wait_for(queue.get(), timeout=_STREAM_HEARTBEAT_SECONDS)
+            except TimeoutError:
+                yield b": ping\n\n"
+                continue
+            try:
+                msg = _doc_to_message(ev.get("id", ""), ev.get("data") or {})
+            except Exception:  # noqa: BLE001
+                logger.exception("stream_event_decode_failed gid=%s", gid)
+                continue
+            filtered = _filter_for_visibility(msg, ctx=ctx, caller_uid=ctx.uid)
+            if filtered is None:
+                continue
+            payload = filtered.model_dump_json()
+            # SSE payloads MUST NOT contain bare newlines. Pydantic's
+            # model_dump_json emits a single-line JSON string already, but
+            # belt-and-braces: replace embedded `\n` so a future
+            # multi-line field doesn't silently corrupt the wire format.
+            payload = payload.replace("\n", "\\n")
+            frame = f"event: message\ndata: {payload}\n\n".encode()
+            yield frame
+    except asyncio.CancelledError:
+        # Client disconnected mid-await — propagate cleanly so the
+        # finally-block (and the parent task) tears down.
+        raise
+    finally:
+        await hub.unsubscribe(gid, queue)
+
+
+@router.get("/{gid}/messages/stream")
+@limiter.limit(MESSAGES_STREAM_OPEN)
+async def stream_messages(
+    request: Request,
+    gid: str = Path(..., min_length=1),
+    ctx: MembershipContext | PublicReadContext = Depends(require_member_or_public_top_level),
+) -> StreamingResponse:
+    """Server-Sent Events stream of new/updated messages for `gid`.
+
+    Auth + visibility rules mirror the polling endpoint
+    (`require_member_or_public_top_level`). The same `_filter_for_visibility`
+    helper applies per-event before the frame is written to the wire, so
+    a public-read non-member sees the same subset of events they'd see
+    via the poll loop.
+
+    `event: message` frames carry the same shape as the polling
+    response's message entries. The client merges by `id`. See ADR 0013
+    for the trade-offs (notably: edits to messages older than the
+    connection's attach time are not pushed — the polling fallback picks
+    those up after the stream closes).
+    """
+    settings = get_settings()
+    if settings.jacob_messages_stream_disabled:
+        # Kill-switch path: clients drop back to polling on a 503.
+        raise APIError(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            code="stream_disabled",
+            message="Message streaming is disabled; client should fall back to polling",
+        )
+
+    generator = _stream_event_generator(request, gid=gid, ctx=ctx)
+    headers = {
+        # Prevent the browser, any intermediary, and the FastAPI default
+        # buffering middleware from stitching the chunks together.
+        "Cache-Control": "no-cache, no-transform",
+        # Nginx + a few Google front-ends honour this to disable
+        # response buffering; harmless elsewhere.
+        "X-Accel-Buffering": "no",
+        # `Connection: keep-alive` is the HTTP/1.1 default but stating
+        # it explicitly is one less surprise during debugging.
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers=headers,
+    )
 
 
 # ── single-message read ────────────────────────────────────────────────

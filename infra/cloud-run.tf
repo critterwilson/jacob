@@ -27,7 +27,7 @@
 # ── variables ────────────────────────────────────────────────────────────────
 
 variable "cloudrun_min_instances" {
-  description = "Cloud Run min-instances. 0 = scale to zero (free tier). Set to 1 to keep the cold-start tax off the user-facing path; review (H3) priced this at ~$15/mo."
+  description = "Cloud Run min-instances. 0 = scale to zero (free tier). Set to 1 to keep the cold-start tax off the user-facing path; review (H3) priced this at ~$15/mo. M5/ADR 0013 note: SSE connections keep an instance warm for free as long as at least one user has chat open, so we stay at 0 and accept the cold-start on the first connect of a quiet period (the polling fallback covers it)."
   type        = number
   default     = 0
 }
@@ -45,9 +45,9 @@ variable "cloudrun_concurrency" {
 }
 
 variable "cloudrun_request_timeout" {
-  description = "Per-request timeout. Cap at 5 minutes; longer should be a Cloud Run Job, not a request."
+  description = "Per-request timeout. SSE chat stream connections hold the request open for up to this long, so we set it to the Cloud Run maximum (3600s / 60min). The client reconnects when the server closes the stream at the timeout boundary. See ADR 0013 for the trade-off discussion."
   type        = string
-  default     = "300s"
+  default     = "3600s"
 }
 
 variable "cloudrun_cpu" {

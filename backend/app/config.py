@@ -103,6 +103,13 @@ class Settings(BaseSettings):
     # Enables the /debug/* endpoints — never set in production
     debug: bool = False
 
+    # M5 — SSE chat stream kill-switch. When True, the
+    # `GET /api/groups/{gid}/messages/stream` endpoint returns 503 and
+    # every client drops back to the 10s polling fallback. The lever to
+    # pull if the stream surface misbehaves in production; see ADR 0013
+    # and `docs/runbooks/realtime-messages.md`.
+    jacob_messages_stream_disabled: bool = False
+
     # CORS — origins allowed to call the API cross-origin. Frontend is
     # served from a different host than Cloud Run, so without an explicit
     # allowlist the browser preflight blocks every /api/* call.
