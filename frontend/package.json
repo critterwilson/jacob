@@ -22,7 +22,7 @@
     "@sentry/nextjs": "^10.51.0",
     "@types/dompurify": "^3.0.5",
     "dompurify": "^3.4.2",
-    "firebase": "^11.10.0",
+    "firebase": "^12.13.0",
     "marked": "^18.0.3",
     "next": "^14.2.0",
     "react": "^18",
