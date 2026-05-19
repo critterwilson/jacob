@@ -312,14 +312,14 @@ def update_ministry_post(
     return _doc_to_post(fresh.id, fresh.to_dict() or {})
 
 
-@router.delete("/posts/{post_id}", response_model=MinistryPost)
+@router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(MINISTRY_POST_DELETE)
 def delete_ministry_post(
     request: Request,
     response: Response,
     post_id: str = Path(..., min_length=1),
     user: CurrentUser = Depends(require_ministry_owner),
-) -> MinistryPost:
+) -> Response:
     """Soft-delete a post. Idempotent."""
     db = _db()
     ref = db.collection("ministry_feed").document(post_id)
@@ -330,8 +330,7 @@ def delete_ministry_post(
             code="post_not_found",
             message="Post not found",
         )
-    data = snap.to_dict() or {}
-    if data.get("deletedAt") is None:
+    if (snap.to_dict() or {}).get("deletedAt") is None:
         ref.update({"deletedAt": fb_firestore.SERVER_TIMESTAMP})
         write_audit_log(
             actor_uid=user.uid,
@@ -340,8 +339,7 @@ def delete_ministry_post(
             payload={},
         )
         logger.info("ministry post deleted post_id=%s actor=%s", post_id, user.uid)
-    fresh = ref.get()
-    return _doc_to_post(fresh.id, fresh.to_dict() or {}).model_copy(update={"body": ""})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── pin / unpin ──────────────────────────────────────────────────────────

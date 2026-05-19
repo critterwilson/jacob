@@ -44,4 +44,4 @@ def test_429_handler_returns_project_error_shape() -> None:
     err = body["error"]
     assert err["code"] == "rate_limited"
     assert isinstance(err["message"], str) and err["message"]
-    assert err["details"] == {}
+    assert isinstance(err["details"].get("retryAfter"), int)

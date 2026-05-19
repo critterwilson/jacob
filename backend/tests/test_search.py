@@ -132,7 +132,7 @@ def test_normalise_builds_message_refs_and_iso_dates() -> None:
     out = normalise(raw, page=1, per_page=10)
     assert out.total == 2
     assert out.page == 1
-    assert out.perPage == 10
+    assert out.limit == 10
     assert out.hits[0].messageRef == "groups/g1/messages/m1"
     assert out.hits[0].body == "<mark>hello</mark> world"
     assert out.hits[0].createdAt.startswith("2023-")
@@ -266,7 +266,7 @@ def test_search_returns_empty_when_caller_has_no_memberships() -> None:
     with patch("app.routers.search._db", return_value=db):
         res = TestClient(_make_app()).get("/api/search?q=hi")
     assert res.status_code == 200
-    assert res.json() == {"hits": [], "total": 0, "page": 1, "perPage": 20}
+    assert res.json() == {"hits": [], "total": 0, "page": 1, "limit": 20}
 
 
 def test_search_typesense_unavailable_returns_503() -> None:
@@ -325,3 +325,40 @@ def test_search_too_long_query_returns_422() -> None:
     with patch("app.routers.search._db", return_value=db):
         res = TestClient(_make_app()).get(f"/api/search?q={'a' * 201}")
     assert res.status_code == 422
+
+
+def test_search_limit_param_forwarded_to_typesense() -> None:
+    """The renamed `limit` query param is forwarded as `per_page` to Typesense."""
+    _enable_search()
+    db = _membership_db(["g1"])
+    captured: dict[str, Any] = {}
+
+    class _CapturingClient:
+        def search(self, **kwargs: Any) -> dict[str, Any]:
+            captured.update(kwargs)
+            return {"found": 0, "hits": []}
+
+    with (
+        patch("app.routers.search._db", return_value=db),
+        patch("app.routers.search.get_client", return_value=_CapturingClient()),
+    ):
+        res = TestClient(_make_app()).get("/api/search?q=hello&limit=5")
+
+    assert res.status_code == 200
+    assert captured.get("per_page") == 5
+    body = res.json()
+    assert body["limit"] == 5
+    assert "perPage" not in body
+
+
+def test_search_response_uses_limit_field_not_per_page() -> None:
+    """Response body uses `limit` (not `perPage`) and echoes the requested value."""
+    _enable_search()
+    db = _membership_db([])
+    with patch("app.routers.search._db", return_value=db):
+        res = TestClient(_make_app()).get("/api/search?q=x&limit=7")
+    assert res.status_code == 200
+    body = res.json()
+    assert "limit" in body
+    assert "perPage" not in body
+    assert body["limit"] == 7

@@ -303,7 +303,7 @@ def test_delete_post_is_idempotent() -> None:
     ):
         client = TestClient(_app(user))
         res = client.delete("/api/ministry-feed/posts/p1")
-    assert res.status_code == 200
+    assert res.status_code == 204
     # Already-deleted: no second update call.
     existing_post_ref.update.assert_not_called()
 

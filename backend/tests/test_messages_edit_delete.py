@@ -158,6 +158,9 @@ def test_edit_message_409_window_expired() -> None:
         res = client.patch("/api/groups/g1/messages/m1", json={"body": "x"})
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "edit_window_expired"
+    details = res.json()["error"]["details"]
+    assert details["windowSeconds"] == 900
+    assert details["messageAge"] >= 1200
 
 
 def test_edit_message_409_deleted() -> None:
@@ -210,8 +213,7 @@ def test_delete_message_author_happy_path() -> None:
     ):
         client = TestClient(_app(user))
         res = client.delete("/api/groups/g1/messages/m1")
-    assert res.status_code == 200
-    assert res.json()["body"] == ""  # redacted
+    assert res.status_code == 204
     audit.assert_called_once()
 
 
@@ -229,7 +231,7 @@ def test_delete_message_leader_can_delete_others() -> None:
     ):
         client = TestClient(_app(user))
         res = client.delete("/api/groups/g1/messages/m1")
-    assert res.status_code == 200
+    assert res.status_code == 204
 
 
 def test_delete_message_403_for_non_author_non_leader() -> None:
@@ -263,7 +265,7 @@ def test_delete_message_idempotent_on_already_deleted() -> None:
     ):
         client = TestClient(_app(user))
         res = client.delete("/api/groups/g1/messages/m1")
-    assert res.status_code == 200
+    assert res.status_code == 204
     audit.assert_not_called()  # no audit on no-op
 
 

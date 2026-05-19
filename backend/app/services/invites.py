@@ -208,6 +208,7 @@ def consume_invite(db: Any, code: str, uid: str) -> tuple[str, str]:
                 status_code=status.HTTP_409_CONFLICT,
                 code="group_at_cap",
                 message="This group is at its member limit.",
+                details={"cap": member_cap, "currentCount": current_count},
             )
 
         transaction.update(

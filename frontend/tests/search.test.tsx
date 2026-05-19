@@ -124,7 +124,7 @@ function makeFetchOk(body: unknown) {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.stubGlobal("fetch", makeFetchOk({ hits: [], total: 0, page: 1, perPage: 8 }));
+  vi.stubGlobal("fetch", makeFetchOk({ hits: [], total: 0, page: 1, limit: 8 }));
 });
 
 afterEach(() => {
@@ -135,7 +135,7 @@ afterEach(() => {
 
 describe("useSearch", () => {
   it("does not fetch for an empty query", async () => {
-    const fetchMock = makeFetchOk({ hits: [], total: 0, page: 1, perPage: 8 });
+    const fetchMock = makeFetchOk({ hits: [], total: 0, page: 1, limit: 8 });
     vi.stubGlobal("fetch", fetchMock);
     renderHook(() => useSearch(""));
     await vi.advanceTimersByTimeAsync(500);
@@ -143,7 +143,7 @@ describe("useSearch", () => {
   });
 
   it("debounces fetches by 300ms after the query changes", async () => {
-    const fetchMock = makeFetchOk({ hits: [], total: 0, page: 1, perPage: 8 });
+    const fetchMock = makeFetchOk({ hits: [], total: 0, page: 1, limit: 8 });
     vi.stubGlobal("fetch", fetchMock);
     renderHook(() => useSearch("hi"));
 

@@ -21,4 +21,4 @@ class SearchResponse(BaseModel):
     hits: list[SearchResult] = Field(default_factory=list)
     total: int
     page: int
-    perPage: int
+    limit: int

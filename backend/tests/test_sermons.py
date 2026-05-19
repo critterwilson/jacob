@@ -314,8 +314,6 @@ def test_delete_sets_deleted_at_and_idempotent() -> None:
     ):
         first = TestClient(_app(leader_membership=leader)).delete("/api/groups/g1/sermons/s1")
         second = TestClient(_app(leader_membership=leader)).delete("/api/groups/g1/sermons/s1")
-    assert first.status_code == 200
-    assert first.json()["deleted"] is True
-    assert second.status_code == 200
-    assert second.json()["deleted"] is False
+    assert first.status_code == 204
+    assert second.status_code == 204
     assert fs._doc_get("groups/g1/sermons/s1")["deletedAt"] is not None

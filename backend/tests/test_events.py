@@ -334,7 +334,7 @@ def test_delete_cascades_to_children() -> None:
         patch("app.services.audit._db", return_value=fs),
     ):
         res = TestClient(_app(leader_membership=leader)).delete("/api/groups/g1/events/root")
-    assert res.status_code == 200
+    assert res.status_code == 204
     assert fs._doc_get("groups/g1/events/root")["deletedAt"] is not None
     assert fs._doc_get("groups/g1/events/child1")["deletedAt"] is not None
 

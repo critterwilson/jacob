@@ -374,7 +374,9 @@ def get_notification_prefs(
     return merged
 
 
-@router.put("/notification-prefs", response_model=NotificationPrefs)
+@router.put(
+    "/notification-prefs", response_model=NotificationPrefs
+)  # PUT is correct: caller sends the complete prefs doc and ref.set() replaces it wholesale
 @limiter.limit(USER_NOTIFICATION_PREFS_WRITE)
 def put_notification_prefs(
     request: Request,

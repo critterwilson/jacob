@@ -193,7 +193,7 @@ def normalise(response: dict[str, Any], *, page: int, per_page: int) -> SearchRe
     except (TypeError, ValueError):
         total = 0
 
-    return SearchResponse(hits=hits, total=total, page=page, perPage=per_page)
+    return SearchResponse(hits=hits, total=total, page=page, limit=per_page)
 
 
 def get_client() -> SearchClient:

@@ -1,6 +1,6 @@
 """T28 — full-text message search proxy.
 
-`GET /api/search?q=...&page=...&perPage=...`
+`GET /api/search?q=...&page=...&limit=...`
 
 Authorization model (see ADR 0005):
   1. Caller is signed in.
@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 _MAX_QUERY_LEN = 200
-_MIN_PER_PAGE = 1
-_MAX_PER_PAGE = 50
-_DEFAULT_PER_PAGE = 20
+_MIN_LIMIT = 1
+_MAX_LIMIT = 50
+_DEFAULT_LIMIT = 20
 
 
 def _db() -> Any:
@@ -58,7 +58,7 @@ def search_messages(
     response: Response,
     q: str = Query(default="", max_length=_MAX_QUERY_LEN),
     page: int = Query(default=1, ge=1, le=200),
-    perPage: int = Query(default=_DEFAULT_PER_PAGE, ge=_MIN_PER_PAGE, le=_MAX_PER_PAGE),
+    limit: int = Query(default=_DEFAULT_LIMIT, ge=_MIN_LIMIT, le=_MAX_LIMIT),
     user: CurrentUser = Depends(get_current_user),
 ) -> SearchResponse:
     settings = get_settings()
@@ -81,11 +81,11 @@ def search_messages(
     gids = enumerate_memberships(db, user.uid, cap=settings.typesense_membership_cap)
 
     if not gids:
-        return SearchResponse(hits=[], total=0, page=page, perPage=perPage)
+        return SearchResponse(hits=[], total=0, page=page, limit=limit)
 
     client = get_client()
     try:
-        raw = client.search(q=trimmed, gids=gids, page=page, per_page=perPage)
+        raw = client.search(q=trimmed, gids=gids, page=page, per_page=limit)
     except SearchUnavailableError as err:
         logger.warning("search_unavailable uid=%s err=%s", user.uid, err)
         raise APIError(
@@ -94,4 +94,4 @@ def search_messages(
             message="Search is temporarily unavailable.",
         ) from err
 
-    return normalise(raw, page=page, per_page=perPage)
+    return normalise(raw, page=page, per_page=limit)
