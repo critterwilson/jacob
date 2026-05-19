@@ -8,9 +8,9 @@
 // API errors, the previous list (or empty) is preserved — we never
 // want a Sentry/network blip to block the rest of the UI.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGetConditional } from "@/lib/api";
 
 export type ActiveIncident = {
   incidentId: string;
@@ -31,6 +31,7 @@ export function useActiveIncidents(): {
 } {
   const [incidents, setIncidents] = useState<ActiveIncident[]>([]);
   const [loading, setLoading] = useState(true);
+  const etagRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,11 +39,15 @@ export function useActiveIncidents(): {
 
     const load = async () => {
       try {
-        const res = await apiGet<{ incidents: ActiveIncident[] }>(
+        const result = await apiGetConditional<{ incidents: ActiveIncident[] }>(
           "/api/incidents",
+          etagRef.current,
         );
         if (cancelled) return;
-        setIncidents(res.incidents ?? []);
+        if (result.etag) etagRef.current = result.etag;
+        if (result.status === 200 && result.data !== null) {
+          setIncidents(result.data.incidents ?? []);
+        }
         setLoading(false);
       } catch (err) {
         if (cancelled) return;

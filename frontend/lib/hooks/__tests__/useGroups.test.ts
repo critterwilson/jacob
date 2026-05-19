@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/firebase", () => ({ auth: { currentUser: null } }));
 
 vi.mock("@/lib/api", () => ({
-  apiGet: vi.fn(),
+  apiGetConditional: vi.fn(),
   ApiError: class ApiError extends Error {
     constructor(public status: number, public code: string, message: string) {
       super(message);
@@ -15,31 +15,35 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGetConditional } from "@/lib/api";
 import { useGroups } from "@/lib/hooks/useGroups";
 
-const mockApiGet = apiGet as unknown as ReturnType<typeof vi.fn>;
+const mockApiGetConditional = apiGetConditional as unknown as ReturnType<typeof vi.fn>;
 
-beforeEach(() => mockApiGet.mockReset());
+beforeEach(() => mockApiGetConditional.mockReset());
 afterEach(() => vi.restoreAllMocks());
 
 describe("useGroups", () => {
   it("returns the groups list from /api/users/me/groups", async () => {
-    mockApiGet.mockResolvedValueOnce({
-      groups: [
-        {
-          gid: "g1",
-          name: "Alpha",
-          description: "",
-          avatarUrl: null,
-          isPrivate: false,
-          archivedAt: null,
-          role: "member",
-          joinedAt: null,
-          memberCount: 3,
-          lastMessageAt: null,
-        },
-      ],
+    mockApiGetConditional.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        groups: [
+          {
+            gid: "g1",
+            name: "Alpha",
+            description: "",
+            avatarUrl: null,
+            isPrivate: false,
+            archivedAt: null,
+            role: "member",
+            joinedAt: null,
+            memberCount: 3,
+            lastMessageAt: null,
+          },
+        ],
+      },
+      etag: 'W/"abc"',
     });
     const { result } = renderHook(() => useGroups("alice"));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -52,11 +56,13 @@ describe("useGroups", () => {
     const { result } = renderHook(() => useGroups(undefined));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.groups).toEqual([]);
-    expect(mockApiGet).not.toHaveBeenCalled();
+    expect(mockApiGetConditional).not.toHaveBeenCalled();
   });
 
   it("returns empty list when api returns ApiError", async () => {
-    mockApiGet.mockRejectedValueOnce(new ApiError(401, "unauthenticated", "no token"));
+    mockApiGetConditional.mockRejectedValueOnce(
+      new ApiError(401, "unauthenticated", "no token"),
+    );
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { result } = renderHook(() => useGroups("alice"));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -65,11 +71,11 @@ describe("useGroups", () => {
   });
 
   it("refresh() re-fetches", async () => {
-    mockApiGet.mockResolvedValue({ groups: [] });
+    mockApiGetConditional.mockResolvedValue({ status: 200, data: { groups: [] }, etag: null });
     const { result } = renderHook(() => useGroups("alice"));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(mockApiGet).toHaveBeenCalledTimes(1);
+    expect(mockApiGetConditional).toHaveBeenCalledTimes(1);
     await result.current.refresh();
-    expect(mockApiGet).toHaveBeenCalledTimes(2);
+    expect(mockApiGetConditional).toHaveBeenCalledTimes(2);
   });
 });

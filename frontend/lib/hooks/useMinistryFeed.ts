@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGetConditional } from "@/lib/api";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -36,15 +36,19 @@ export function useMinistryFeed() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const seqRef = useRef(0);
+  const etagRef = useRef<string | null>(null);
 
   const fetchOnce = useCallback(async (signal: AbortSignal) => {
     const mySeq = ++seqRef.current;
-    const res = await apiGet<MinistryPostsResponse>(
+    const result = await apiGetConditional<MinistryPostsResponse>(
       "/api/ministry-feed/posts?limit=20",
+      etagRef.current,
       { signal },
     );
     if (signal.aborted || mySeq !== seqRef.current) return;
-    setPosts(res.posts);
+    if (result.etag) etagRef.current = result.etag;
+    if (result.status === 304 || result.data === null) return;
+    setPosts(result.data.posts);
     setError(null);
   }, []);
 

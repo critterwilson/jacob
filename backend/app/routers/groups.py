@@ -6,6 +6,7 @@ server-side and collision-checked before being stored.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 import string
@@ -13,9 +14,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
+from starlette.responses import Response as StarletteResponse
 
 from app.deps import (
     MembershipContext,
@@ -789,8 +791,9 @@ def list_members(
     request: Request,
     response: Response,
     gid: str,
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     membership: MembershipContext = Depends(require_member),
-) -> MembersListResponse:
+) -> Any:
     """Members of a group, joined with `users/{uid}` profile fields.
 
     M3 ships without pagination because group sizes are small in v1
@@ -826,7 +829,13 @@ def list_members(
             )
         )
 
-    return MembersListResponse(members=members)
+    payload = MembersListResponse(members=members)
+    body_bytes = payload.model_dump_json().encode("utf-8")
+    etag = f'W/"{hashlib.md5(body_bytes).hexdigest()}"'
+    if if_none_match is not None and if_none_match == etag:
+        return StarletteResponse(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    return payload
 
 
 @router.get("/{gid}/pinned-messages", response_model=PinnedMessagesResponse)

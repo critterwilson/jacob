@@ -190,3 +190,49 @@ def test_my_groups_logs_warning_for_orphan_memberships(caplog) -> None:
         "my_groups_orphan_memberships" in rec.message and "g-orphan" in rec.message
         for rec in caplog.records
     )
+
+
+# ── ETag / 304 ──────────────────────────────────────────────────────────
+
+
+def _etag_db() -> MagicMock:
+    """Minimal DB mock for ETag tests."""
+    joined = datetime(2026, 5, 1, tzinfo=UTC)
+    db = MagicMock()
+    db.collection_group.return_value.where.return_value.stream.return_value = iter(
+        [_member_snap(gid="g1", uid="alice", role="member", joined_at=joined)]
+    )
+    db.get_all.return_value = [_group_doc("g1", name="Alpha")]
+    return db
+
+
+def test_my_groups_etag_header_emitted() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.routers.users.get_firestore", return_value=_etag_db()):
+        res = TestClient(_app(user)).get("/api/users/me/groups")
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')
+
+
+def test_my_groups_if_none_match_returns_304() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    client = TestClient(_app(user))
+    with patch("app.routers.users.get_firestore", return_value=_etag_db()):
+        first = client.get("/api/users/me/groups")
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    with patch("app.routers.users.get_firestore", return_value=_etag_db()):
+        second = client.get("/api/users/me/groups", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.headers["etag"] == etag
+
+
+def test_my_groups_stale_etag_returns_200() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.routers.users.get_firestore", return_value=_etag_db()):
+        res = TestClient(_app(user)).get(
+            "/api/users/me/groups",
+            headers={"If-None-Match": 'W/"stale-etag"'},
+        )
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')

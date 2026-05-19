@@ -421,3 +421,62 @@ def test_revoke_ministry_owner_clears_claim_only() -> None:
 
     assert res.status_code == 200
     assert set_calls == [("bob", {"admin": True})]
+
+
+# ── ETag / 304 ──────────────────────────────────────────────────────────
+
+
+def _ministry_list_db() -> MagicMock:
+    """Minimal DB mock for ETag tests on GET /api/ministry-feed/posts."""
+    db = MagicMock()
+    snap = MagicMock()
+    snap.id = "p1"
+    snap.to_dict.return_value = {
+        "title": "Sermon",
+        "body": "Body",
+        "authorUid": "owner",
+        "createdAt": datetime(2026, 5, 1, tzinfo=UTC),
+        "pinnedAt": None,
+        "deletedAt": None,
+    }
+    query = MagicMock()
+    query.where = MagicMock(return_value=query)
+    query.order_by = MagicMock(return_value=query)
+    query.limit = MagicMock(return_value=query)
+    query.stream.return_value = iter([snap])
+    col = MagicMock()
+    col.where = MagicMock(return_value=query)
+    db.collection.return_value = col
+    return db
+
+
+def test_list_ministry_posts_etag_header_emitted() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.routers.ministry_feed._db", return_value=_ministry_list_db()):
+        res = TestClient(_app(user)).get("/api/ministry-feed/posts")
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')
+
+
+def test_list_ministry_posts_if_none_match_returns_304() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    client = TestClient(_app(user))
+    with patch("app.routers.ministry_feed._db", return_value=_ministry_list_db()):
+        first = client.get("/api/ministry-feed/posts")
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    with patch("app.routers.ministry_feed._db", return_value=_ministry_list_db()):
+        second = client.get("/api/ministry-feed/posts", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.headers["etag"] == etag
+
+
+def test_list_ministry_posts_stale_etag_returns_200() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.routers.ministry_feed._db", return_value=_ministry_list_db()):
+        res = TestClient(_app(user)).get(
+            "/api/ministry-feed/posts",
+            headers={"If-None-Match": 'W/"stale-etag"'},
+        )
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')

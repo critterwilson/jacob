@@ -318,3 +318,66 @@ def test_pinned_messages_returns_empty_when_none_pinned() -> None:
         res = client.get("/api/groups/g1/pinned-messages")
     assert res.status_code == 200
     assert res.json() == {"messages": []}
+
+
+# ── ETag / 304 ──────────────────────────────────────────────────────────
+
+
+def test_list_members_etag_header_emitted() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = _setup_member_db(
+        members=[("alice", "member")],
+        profiles={"alice": {"displayName": "Alice", "photoURL": None}},
+    )
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
+    ):
+        res = TestClient(_app(user)).get("/api/groups/g1/members")
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')
+
+
+def test_list_members_if_none_match_returns_304() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = _setup_member_db(
+        members=[("alice", "member")],
+        profiles={"alice": {"displayName": "Alice", "photoURL": None}},
+    )
+    client = TestClient(_app(user))
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
+    ):
+        first = client.get("/api/groups/g1/members")
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    db2 = _setup_member_db(
+        members=[("alice", "member")],
+        profiles={"alice": {"displayName": "Alice", "photoURL": None}},
+    )
+    with (
+        patch("app.deps.get_firestore", return_value=db2),
+        patch("app.routers.groups.get_firestore", return_value=db2),
+    ):
+        second = client.get("/api/groups/g1/members", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.headers["etag"] == etag
+
+
+def test_list_members_stale_etag_returns_200() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = _setup_member_db(
+        members=[("alice", "member")],
+        profiles={"alice": {"displayName": "Alice", "photoURL": None}},
+    )
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.groups.get_firestore", return_value=db),
+    ):
+        res = TestClient(_app(user)).get(
+            "/api/groups/g1/members",
+            headers={"If-None-Match": 'W/"stale-etag"'},
+        )
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')

@@ -9,13 +9,15 @@ here.
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
+from starlette.responses import Response as StarletteResponse
 
 from app.deps import get_current_user, require_admin, require_not_banned
 from app.errors import APIError
@@ -390,8 +392,9 @@ def list_board_posts(
     board_id: str = Path(..., min_length=1),
     cursor: str | None = Query(default=None),
     limit: int = Query(default=_POSTS_PAGE_DEFAULT, ge=1, le=_POSTS_PAGE_MAX),
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
-) -> BoardPostsResponse:
+) -> Any:
     """List a board's posts.
 
     The previous client query ordered pinned-first then by createdAt
@@ -454,7 +457,13 @@ def list_board_posts(
         if last_ts is not None:
             next_cursor = _encode_cursor(last_ts, snaps[-1].id, last_pinned)
 
-    return BoardPostsResponse(posts=posts, nextCursor=next_cursor)
+    payload = BoardPostsResponse(posts=posts, nextCursor=next_cursor)
+    body_bytes = payload.model_dump_json().encode("utf-8")
+    etag = f'W/"{hashlib.md5(body_bytes).hexdigest()}"'
+    if if_none_match is not None and if_none_match == etag:
+        return StarletteResponse(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    return payload
 
 
 @router.get("/api/boards/{board_id}/posts/{post_id}", response_model=BoardPost)
