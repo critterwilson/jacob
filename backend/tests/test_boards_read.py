@@ -346,3 +346,47 @@ def test_list_board_replies_cursor_passes_doc_id_for_tie_break() -> None:
     assert "createdAt" in arg
     assert "__name__" in arg
     assert arg["__name__"] == "r-cursor"
+
+
+# ── ETag / 304 ──────────────────────────────────────────────────────────
+
+
+def _board_posts_db() -> MagicMock:
+    """Minimal DB mock for ETag tests on GET /api/boards/{board_id}/posts."""
+    db = MagicMock()
+    posts_col = db.collection.return_value.document.return_value.collection.return_value
+    chain = posts_col.where.return_value.order_by.return_value.order_by.return_value
+    chain.limit.return_value.stream.return_value = iter([_post_snap(pid="p1", body="hello")])
+    return db
+
+
+def test_list_board_posts_etag_header_emitted() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.routers.boards._db", return_value=_board_posts_db()):
+        res = TestClient(_app(user)).get("/api/boards/b1/posts")
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')
+
+
+def test_list_board_posts_if_none_match_returns_304() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    client = TestClient(_app(user))
+    with patch("app.routers.boards._db", return_value=_board_posts_db()):
+        first = client.get("/api/boards/b1/posts")
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    with patch("app.routers.boards._db", return_value=_board_posts_db()):
+        second = client.get("/api/boards/b1/posts", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.headers["etag"] == etag
+
+
+def test_list_board_posts_stale_etag_returns_200() -> None:
+    user = CurrentUser(uid="alice", email=None, claims={})
+    with patch("app.routers.boards._db", return_value=_board_posts_db()):
+        res = TestClient(_app(user)).get(
+            "/api/boards/b1/posts",
+            headers={"If-None-Match": 'W/"stale-etag"'},
+        )
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')

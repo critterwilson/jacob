@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGetConditional } from "@/lib/api";
 
 export type Member = {
   uid: string;
@@ -29,6 +29,7 @@ export function useMembers(gid: string) {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
+  const etagRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!gid) {
@@ -41,11 +42,15 @@ export function useMembers(gid: string) {
     abortRef.current = ctl;
     setLoading(true);
     try {
-      const res = await apiGet<MembersListResponse>(`/api/groups/${gid}/members`, {
-        signal: ctl.signal,
-      });
+      const result = await apiGetConditional<MembersListResponse>(
+        `/api/groups/${gid}/members`,
+        etagRef.current,
+        { signal: ctl.signal },
+      );
       if (ctl.signal.aborted) return;
-      setMembers(res.members);
+      if (result.etag) etagRef.current = result.etag;
+      if (result.status === 304 || result.data === null) return;
+      setMembers(result.data.members);
     } catch (err) {
       if (ctl.signal.aborted) return;
       if (err instanceof ApiError && err.code !== "aborted") {

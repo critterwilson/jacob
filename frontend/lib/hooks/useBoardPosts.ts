@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGetConditional } from "@/lib/api";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -39,16 +39,20 @@ type BoardPostsResponse = {
 export function useBoardPosts(boardId: string) {
   const [posts, setPosts] = useState<BoardPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const etagRef = useRef<string | null>(null);
 
   const fetchOnce = useCallback(
     async (signal: AbortSignal) => {
       if (!boardId) return;
-      const res = await apiGet<BoardPostsResponse>(
+      const result = await apiGetConditional<BoardPostsResponse>(
         `/api/boards/${boardId}/posts?limit=50`,
+        etagRef.current,
         { signal },
       );
       if (signal.aborted) return;
-      setPosts(res.posts);
+      if (result.etag) etagRef.current = result.etag;
+      if (result.status === 304 || result.data === null) return;
+      setPosts(result.data.posts);
     },
     [boardId],
   );

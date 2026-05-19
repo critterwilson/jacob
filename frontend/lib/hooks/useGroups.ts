@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiGetConditional } from "@/lib/api";
 
 /**
  * Group summary as returned by `GET /api/users/me/groups`.
@@ -46,6 +46,7 @@ export function useGroups(uid: string | undefined) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
+  const etagRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!uid) {
@@ -58,11 +59,15 @@ export function useGroups(uid: string | undefined) {
     abortRef.current = ctl;
     setLoading(true);
     try {
-      const res = await apiGet<MyGroupsResponse>("/api/users/me/groups", {
-        signal: ctl.signal,
-      });
+      const result = await apiGetConditional<MyGroupsResponse>(
+        "/api/users/me/groups",
+        etagRef.current,
+        { signal: ctl.signal },
+      );
       if (ctl.signal.aborted) return;
-      setGroups(res.groups.map((g) => ({ ...g, id: g.gid })));
+      if (result.etag) etagRef.current = result.etag;
+      if (result.status === 304 || result.data === null) return;
+      setGroups(result.data.groups.map((g) => ({ ...g, id: g.gid })));
     } catch (err) {
       if (ctl.signal.aborted) return;
       if (err instanceof ApiError && err.code !== "aborted") {

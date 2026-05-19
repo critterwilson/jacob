@@ -221,3 +221,44 @@ def test_admin_list_includes_expired() -> None:
     assert res.status_code == 200
     ids = sorted(i["incidentId"] for i in res.json()["incidents"])
     assert ids == ["active", "expired"]
+
+
+# ── ETag / 304 ──────────────────────────────────────────────────────────
+
+
+def test_list_incidents_etag_header_emitted() -> None:
+    user = _user("u1")
+    fs = FakeFirestore()
+    _seed_incident(fs, incident_id="i1", display_until=datetime.now(UTC) + timedelta(hours=1))
+    with patch("app.routers.incidents._db", return_value=fs):
+        res = TestClient(_app(user=user, is_admin=False)).get("/api/incidents")
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')
+
+
+def test_list_incidents_if_none_match_returns_304() -> None:
+    user = _user("u1")
+    fs = FakeFirestore()
+    _seed_incident(fs, incident_id="i1", display_until=datetime.now(UTC) + timedelta(hours=1))
+    client = TestClient(_app(user=user, is_admin=False))
+    with patch("app.routers.incidents._db", return_value=fs):
+        first = client.get("/api/incidents")
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    with patch("app.routers.incidents._db", return_value=fs):
+        second = client.get("/api/incidents", headers={"If-None-Match": etag})
+    assert second.status_code == 304
+    assert second.headers["etag"] == etag
+
+
+def test_list_incidents_stale_etag_returns_200() -> None:
+    user = _user("u1")
+    fs = FakeFirestore()
+    _seed_incident(fs, incident_id="i1", display_until=datetime.now(UTC) + timedelta(hours=1))
+    with patch("app.routers.incidents._db", return_value=fs):
+        res = TestClient(_app(user=user, is_admin=False)).get(
+            "/api/incidents",
+            headers={"If-None-Match": 'W/"stale-etag"'},
+        )
+    assert res.status_code == 200
+    assert res.headers.get("etag", "").startswith('W/"')

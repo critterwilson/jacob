@@ -21,7 +21,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from starlette.responses import Response as StarletteResponse
 from firebase_admin import firestore as fb_firestore
 
 from app.deps import get_current_user, require_not_banned
@@ -678,6 +679,7 @@ def my_groups(
     request: Request,
     response: Response,
     archived: str = Query(default="exclude", pattern="^(include|exclude)$"),
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
 ) -> MyGroupsResponse:
     """Replaces the frontend collection-group `members` query.
@@ -747,7 +749,13 @@ def my_groups(
                 lastMessageAt=_ts_to_dt(group_data.get("lastMessageAt")),
             )
         )
-    return MyGroupsResponse(groups=summaries)
+    payload = MyGroupsResponse(groups=summaries)
+    body_bytes = payload.model_dump_json().encode("utf-8")
+    etag = f'W/"{hashlib.md5(body_bytes).hexdigest()}"'
+    if if_none_match is not None and if_none_match == etag:
+        return StarletteResponse(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    return payload
 
 
 @router.get("/recent-messages", response_model=RecentMessagesResponse)

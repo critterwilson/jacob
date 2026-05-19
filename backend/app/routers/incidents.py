@@ -15,13 +15,15 @@ default-denies client access; this is the only path in.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Request, Response, status
 from firebase_admin import firestore as fb_firestore
+from starlette.responses import Response as StarletteResponse
 
 from app.deps import get_current_user, require_admin
 from app.errors import APIError
@@ -80,6 +82,7 @@ def _doc_to_incident(snap: Any) -> ActiveIncident:
 def list_active_incidents(
     request: Request,
     response: Response,
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
 ) -> ActiveIncidentsResponse:
     db = _db()
@@ -95,7 +98,13 @@ def list_active_incidents(
             continue
         incidents.append(_doc_to_incident(snap))
     incidents.sort(key=lambda i: i.displayUntil, reverse=True)
-    return ActiveIncidentsResponse(incidents=incidents)
+    payload = ActiveIncidentsResponse(incidents=incidents)
+    body_bytes = payload.model_dump_json().encode("utf-8")
+    etag = f'W/"{hashlib.md5(body_bytes).hexdigest()}"'
+    if if_none_match is not None and if_none_match == etag:
+        return StarletteResponse(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    return payload
 
 
 # ── admin: declare + clear ─────────────────────────────────────────────────
