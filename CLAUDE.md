@@ -2,7 +2,7 @@
 
 This file is loaded automatically by Claude Code on every task. It pins cross-cutting decisions so individual task specs in `DEV_PLAN.md` can stay tight. Read it before starting any task.
 
-*Last revised: 2026-05-06 (post-M6 + Phase 3).*
+*Last revised: 2026-05-19 (post-M6 + Phase 3 + API versioning).*
 
 ## Project in one paragraph
 
@@ -129,6 +129,10 @@ See `frontend/lib/hooks/useGroupMessages.ts` for the chat reference implementati
 `firestore/firestore.rules` is default-deny on every previously-client-accessible path. The catch-all at the bottom (`match /{document=**} { allow read, write: if false; }`) is intentional. Rules still ship with **emulator tests** in `firestore/tests/` — every rule change needs a test that proves both the allowed and denied cases. Server-side Admin SDK access bypasses rules; that's the only path for end-user data writes post-M6.
 
 ## Backend (FastAPI) conventions
+
+### API versioning
+
+The canonical surface is `/api/v1/*`. A `_V1PathRewriteMiddleware` in `backend/app/main.py` rewrites `/api/v1/<rest>` → `/api/<rest>` before route matching, so both prefixes serve identical responses. The unversioned `/api/*` routes are a **deprecated alias** — they will be removed once the frontend cutover is confirmed stable in production for a few weeks. Do not add new router prefixes without the `/api/v1/` form in mind; the middleware handles the rewrite transparently so no router-level changes are needed. The OpenAPI docs at `/docs` show only the unversioned paths (this is a known limitation of the middleware approach).
 
 ### Auth
 

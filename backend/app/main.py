@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.config import get_settings
 from app.errors import (
@@ -94,6 +95,24 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.exception("stream_hub_shutdown_failed")
 
 
+class _V1PathRewriteMiddleware:
+    """Rewrite /api/v1/* → /api/* so the versioned and unversioned surfaces
+    route identically.  The unversioned routes remain as a deprecated alias
+    — remove them after frontend cutover is confirmed stable in production.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("type") == "http":
+            path: str = scope.get("path", "")
+            if path.startswith("/api/v1/"):
+                scope["path"] = "/api/" + path[8:]
+                scope["raw_path"] = scope["path"].encode("latin-1")
+        await self._app(scope, receive, send)
+
+
 app: FastAPI = FastAPI(title="JACOB API", version="0.1.0", lifespan=_lifespan)
 
 app.state.limiter = limiter
@@ -127,6 +146,7 @@ app.add_middleware(
     max_age=600,
 )
 app.add_middleware(StructuredLoggingMiddleware)
+app.add_middleware(_V1PathRewriteMiddleware)
 
 # Starlette stubs widen the handler exception type to `Exception`; FastAPI
 # dispatches by class at runtime, so the narrower signatures are safe.

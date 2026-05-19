@@ -32,6 +32,11 @@ import { auth } from "@/lib/firebase";
 // matches the convention already used by other hooks (useSearch, etc.).
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// Canonical API version injected into every /api/* path.  The unversioned
+// /api/* routes on the backend remain active as a deprecated alias until
+// frontend cutover is confirmed stable in production.
+const API_VERSION = "v1";
+
 export type ApiBackendError = {
   code?: string;
   message?: string;
@@ -72,8 +77,9 @@ async function authHeader(): Promise<Record<string, string>> {
 
 function resolveUrl(path: string): string {
   if (/^https?:\/\//.test(path)) return path;
-  if (!API_BASE) return path;
-  return `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  const versionedPath = path.replace(/^\/api\//, `/api/${API_VERSION}/`);
+  if (!API_BASE) return versionedPath;
+  return `${API_BASE}${versionedPath.startsWith("/") ? "" : "/"}${versionedPath}`;
 }
 
 async function parseError(r: Response): Promise<ApiError> {
