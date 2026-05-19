@@ -1,5 +1,7 @@
 import logging
 import logging.config
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -45,6 +47,7 @@ from app.routers import (
     wellbeing,
 )
 from app.services.sentry import init_sentry
+from app.services.stream_hub import get_stream_hub
 
 # Emit JSON-formatted logs so Cloud Logging auto-parses them on Cloud Run.
 logging.config.dictConfig(
@@ -74,7 +77,24 @@ init_sentry()
 
 settings = get_settings()
 
-app: FastAPI = FastAPI(title="JACOB API", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Cleanup hook for SSE listeners on revision rotation (M5).
+
+    Cloud Run sends SIGTERM with a 10s grace period before SIGKILL on
+    revision rotation. Detaching the Firestore listeners explicitly lets
+    in-flight SSE generators exit cleanly via `request.is_disconnected`
+    instead of dying mid-stream when the gRPC listener thread is yanked.
+    """
+    yield
+    try:
+        await get_stream_hub().shutdown()
+    except Exception:  # noqa: BLE001
+        logger.exception("stream_hub_shutdown_failed")
+
+
+app: FastAPI = FastAPI(title="JACOB API", version="0.1.0", lifespan=_lifespan)
 
 app.state.limiter = limiter
 # CORS must be the outermost middleware so its response headers reach the

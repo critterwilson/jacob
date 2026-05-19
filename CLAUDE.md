@@ -97,16 +97,26 @@ The canonical schema lives in **[docs/data-model.md](docs/data-model.md)**. Read
 - **No collection-group queries from the client.** They're forbidden by default-deny rules anyway. Server-side collection-group reads (Admin SDK) need a CG index in `firestore/firestore.indexes.json` and an explicit comment justifying the cross-group scope.
 - **Compound queries** (where + orderBy) need a composite index. Add it to `firestore.indexes.json`, not via the console.
 
-### Polling and event hygiene
+### Realtime and polling hygiene
 
-There is no `onSnapshot`. Realtime fan-out was deferred with M6; the frontend uses an HTTP polling pattern instead:
+There is no client-side `onSnapshot`. Chat (`useGroupMessages`) gets sub-second updates via Server-Sent Events from the FastAPI backend (M5 / ADR 0013); every other surface still polls. Polling is also the always-on fallback for chat when SSE fails. Direct Firestore listeners from the browser remain off the table (adblock issue that triggered the M1–M6 rewrite). See `docs/adr/0013-sse-realtime-chat.md` and `docs/runbooks/realtime-messages.md` for the design and operational playbook.
+
+**Polling pattern (every surface)**
 
 - Initial fetch of the latest page (`apiGet(...)`).
 - Subsequent polls send `since=<latestCreatedAt>` (or equivalent cursor) and use `apiGetConditional` so the backend can short-circuit unchanged responses with `304 Not Modified` via `If-None-Match` / ETag.
 - Polling is paused while `document.hidden` is true; visibility-change events resume it. Hooks tear down their interval on unmount.
 - Default poll interval is ~10s for chat. Tune per resource — most non-chat surfaces poll every 30–60s or refetch only on focus.
 
-See `frontend/lib/hooks/useGroupMessages.ts` and `useThreadMessages.ts` for the canonical implementation.
+**SSE transport (chat only, M5)**
+
+- Client opens `GET /api/groups/{gid}/messages/stream` via `frontend/lib/sse.ts` — a `fetch`-based reader rather than native `EventSource` because we need the `Authorization` header for the Firebase ID token.
+- Backend holds the connection open and emits `event: message` frames as Firestore reports new/updated messages. Implementation: `backend/app/services/stream_hub.py` runs one Admin SDK listener per active group per Cloud Run instance, fanning changes onto per-connection `asyncio.Queue`s.
+- Polling pauses once the stream opens; resumes immediately if the stream errors. After 5 failed reconnect attempts the hook gives up on SSE for the rest of the session and stays on polling — no flapping.
+- Stream closes when `document.hidden` becomes true and reopens on visibility-change. Closed on unmount.
+- Kill-switch: set `JACOB_MESSAGES_STREAM_DISABLED=1` on the Cloud Run service to force every client back to polling.
+
+See `frontend/lib/hooks/useGroupMessages.ts` for the chat reference implementation; `useThreadMessages.ts` still polls only (thread realtime is a tracked follow-up — same pattern, different endpoint).
 
 ### Writes
 
