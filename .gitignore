@@ -397,3 +397,4 @@ frontend/next-env.d.ts
 .claire/
 infra/plan.out
 firestore/package-lock.json
+frontend/package-lock.json
