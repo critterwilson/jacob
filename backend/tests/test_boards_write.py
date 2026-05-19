@@ -220,7 +220,7 @@ def test_delete_board_post_idempotent() -> None:
     ):
         client = TestClient(_app(user))
         res = client.delete("/api/boards/b1/posts/p1")
-    assert res.status_code == 200
+    assert res.status_code == 204
     audit.assert_not_called()
 
 
@@ -238,8 +238,7 @@ def test_delete_board_post_writes_audit_log() -> None:
     ):
         client = TestClient(_app(user))
         res = client.delete("/api/boards/b1/posts/p1")
-    assert res.status_code == 200
-    assert res.json()["body"] == ""  # redacted
+    assert res.status_code == 204
     audit.assert_called_once()
 
 

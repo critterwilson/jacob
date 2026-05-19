@@ -78,13 +78,18 @@ async def rate_limit_exceeded_handler(_: Request, exc: Exception) -> JSONRespons
     """
     detail = getattr(exc, "detail", None) or "Rate limit exceeded"
     headers = getattr(exc, "headers", None) or {}
+    retry_after_raw = headers.get("Retry-After") or headers.get("retry-after")
+    try:
+        retry_after = int(float(retry_after_raw)) if retry_after_raw else 60
+    except (TypeError, ValueError):
+        retry_after = 60
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={
             "error": {
                 "code": "rate_limited",
                 "message": str(detail),
-                "details": {},
+                "details": {"retryAfter": retry_after},
             }
         },
         headers=headers,

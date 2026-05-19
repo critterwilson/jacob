@@ -665,6 +665,10 @@ def edit_message(
                 status_code=status.HTTP_409_CONFLICT,
                 code="edit_window_expired",
                 message="Edit window has expired (15 minutes)",
+                details={
+                    "windowSeconds": int(_EDIT_WINDOW.total_seconds()),
+                    "messageAge": int((datetime.now(UTC) - created).total_seconds()),
+                },
             )
         txn.update(
             ref,
@@ -679,7 +683,7 @@ def edit_message(
 
 @router.delete(
     "/{gid}/messages/{mid}",
-    response_model=Message,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 @limiter.limit(MESSAGE_DELETE)
 def delete_message(
@@ -689,10 +693,8 @@ def delete_message(
     mid: str = Path(..., min_length=1),
     membership: MembershipContext = Depends(require_member),
     user: CurrentUser = Depends(require_not_banned),
-) -> Message:
-    """Soft-delete a message. Author or leader. Idempotent — calling
-    delete twice returns 200 with the existing soft-deleted doc.
-    """
+) -> Response:
+    """Soft-delete a message. Author or leader. Idempotent."""
     require_not_archived(membership)
     db = get_firestore()
     ref = db.collection("groups").document(gid).collection("messages").document(mid)
@@ -700,7 +702,7 @@ def delete_message(
     deleter_role: str | None = None
 
     @gcf.transactional
-    def _txn(txn: Any) -> dict[str, Any]:
+    def _txn(txn: Any) -> None:
         nonlocal deleter_role
         snap = ref.get(transaction=txn)
         if not getattr(snap, "exists", False):
@@ -711,9 +713,8 @@ def delete_message(
             )
         data = snap.to_dict() or {}
         if data.get("deletedAt") is not None:
-            # Idempotent: return the existing soft-deleted doc.
             deleter_role = "noop"
-            return data
+            return
         is_author = data.get("authorUid") == user.uid
         is_leader = membership.role == "leader"
         if not (is_author or is_leader):
@@ -724,7 +725,6 @@ def delete_message(
             )
         deleter_role = "leader" if is_leader and not is_author else "author"
         txn.update(ref, {"deletedAt": fb_firestore.SERVER_TIMESTAMP})
-        return data
 
     _txn(db.transaction())
     if deleter_role and deleter_role != "noop":
@@ -734,10 +734,7 @@ def delete_message(
             target_ref=f"groups/{gid}/messages/{mid}",
             payload={"gid": gid, "mid": mid, "deleter_role": deleter_role},
         )
-    fresh = ref.get()
-    msg = _doc_to_message(fresh.id, fresh.to_dict() or {})
-    # Body redacted in the response per §4.13.3.
-    return msg.model_copy(update={"body": ""})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── reactions ────────────────────────────────────────────────────────────

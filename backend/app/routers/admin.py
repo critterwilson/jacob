@@ -11,7 +11,7 @@ Admin SDK bypasses those rules by design.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
@@ -45,7 +45,7 @@ from app.models.applications import (
 )
 from app.models.ministry_feed import MinistryOwnerGrantResponse
 from app.models.user import CurrentUser
-from app.services.applications import application_doc_to_view
+from app.services.applications import application_doc_to_view, compute_age
 from app.services.audit import write_audit_log
 from app.services.email import send_moderation_notice
 from app.services.firebase import init_firebase_admin
@@ -583,10 +583,18 @@ def approve_application(
 
     minor = bool(app_data.get("isMinor", False))
     if minor and body.parentalConsentObtained is not True:
+        dob_raw = app_data.get("dob")
+        applicant_age: int | None = None
+        if dob_raw:
+            try:
+                applicant_age = compute_age(date.fromisoformat(str(dob_raw)))
+            except (ValueError, TypeError):
+                pass
         raise APIError(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             code="parental_consent_required",
             message="Parental consent must be confirmed for under-18 applicants",
+            details={"applicantAge": applicant_age},
         )
 
     # Create the `users/{uid}` doc — this is the load-bearing "approved

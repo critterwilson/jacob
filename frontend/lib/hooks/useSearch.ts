@@ -19,7 +19,7 @@ export type SearchResponse = {
   hits: SearchHit[];
   total: number;
   page: number;
-  perPage: number;
+  limit: number;
 };
 
 type SearchState = {
@@ -38,7 +38,7 @@ const DEBOUNCE_MS = 300;
  *   (prevents stale results clobbering newer ones).
  * - Errors are surfaced as a string so the caller can render them.
  */
-export function useSearch(q: string, page: number = 1, perPage: number = 8) {
+export function useSearch(q: string, page: number = 1, limit: number = 8) {
   const { user } = useAuth();
   const [state, setState] = useState<SearchState>({
     data: null,
@@ -66,7 +66,7 @@ export function useSearch(q: string, page: number = 1, perPage: number = 8) {
       const params = new URLSearchParams({
         q: trimmed,
         page: String(page),
-        perPage: String(perPage),
+        limit: String(limit),
       });
       try {
         const data = await apiGet<SearchResponse>(
@@ -94,7 +94,7 @@ export function useSearch(q: string, page: number = 1, perPage: number = 8) {
       if (timer.current) clearTimeout(timer.current);
       if (controller.current) controller.current.abort();
     };
-  }, [q, page, perPage, user]);
+  }, [q, page, limit, user]);
 
   return state;
 }

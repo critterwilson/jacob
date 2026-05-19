@@ -188,6 +188,7 @@ def create_join_request(
                     status_code=status.HTTP_409_CONFLICT,
                     code="group_at_cap",
                     message="This group is at its member limit.",
+                    details={"cap": cap, "currentCount": count},
                 )
             txn_member = member_ref.get(transaction=transaction)
             if txn_member.exists:
@@ -330,6 +331,7 @@ def approve_join_request(
                 status_code=status.HTTP_409_CONFLICT,
                 code="group_at_cap",
                 message="This group is at its member limit.",
+                details={"cap": cap, "currentCount": count},
             )
         transaction.update(
             jr_ref,

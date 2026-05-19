@@ -14,7 +14,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 from starlette.responses import Response as StarletteResponse
@@ -55,6 +55,7 @@ from app.models.board import (
     PinPostRequest,
     PinPostResponse,
 )
+from app.models.pagination import PaginationParams
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
@@ -276,12 +277,6 @@ def pin_board_post(
 # ── M3: post + reply reads ───────────────────────────────────────────────
 
 
-_POSTS_PAGE_DEFAULT = 50
-_POSTS_PAGE_MAX = 100
-_REPLIES_PAGE_DEFAULT = 50
-_REPLIES_PAGE_MAX = 100
-
-
 def _ts_to_dt(value: Any) -> Any:
     if value is None:
         return None
@@ -390,8 +385,7 @@ def list_board_posts(
     request: Request,
     response: Response,
     board_id: str = Path(..., min_length=1),
-    cursor: str | None = Query(default=None),
-    limit: int = Query(default=_POSTS_PAGE_DEFAULT, ge=1, le=_POSTS_PAGE_MAX),
+    pagination: PaginationParams = Depends(),
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
 ) -> Any:
@@ -405,6 +399,8 @@ def list_board_posts(
     createdAt only. Pinned items are bounded so this is consistent for
     paged scrollback.
     """
+    limit = pagination.limit
+    cursor = pagination.cursor
     db = _db()
     posts_col = db.collection("boards").document(board_id).collection("posts")
 
@@ -503,10 +499,11 @@ def list_board_replies(
     response: Response,
     board_id: str = Path(..., min_length=1),
     post_id: str = Path(..., min_length=1),
-    cursor: str | None = Query(default=None),
-    limit: int = Query(default=_REPLIES_PAGE_DEFAULT, ge=1, le=_REPLIES_PAGE_MAX),
+    pagination: PaginationParams = Depends(),
     user: CurrentUser = Depends(get_current_user),
 ) -> BoardRepliesResponse:
+    limit = pagination.limit
+    cursor = pagination.cursor
     db = _db()
     col = (
         db.collection("boards")
@@ -684,11 +681,16 @@ def edit_board_post(
             created = _ts_to_dt(data.get("createdAt"))
             if created is not None:
                 created_aware = created if created.tzinfo else created.replace(tzinfo=UTC)
-                if (datetime.now(UTC) - created_aware).total_seconds() > _BOARD_EDIT_WINDOW_SECONDS:
+                age_s = (datetime.now(UTC) - created_aware).total_seconds()
+                if age_s > _BOARD_EDIT_WINDOW_SECONDS:
                     raise APIError(
                         status_code=status.HTTP_409_CONFLICT,
                         code="edit_window_expired",
                         message="Edit window has expired (15 minutes)",
+                        details={
+                            "windowSeconds": _BOARD_EDIT_WINDOW_SECONDS,
+                            "messageAge": int(age_s),
+                        },
                     )
         txn.update(ref, {"body": body.body, "editedAt": fb_firestore.SERVER_TIMESTAMP})
 
@@ -699,7 +701,7 @@ def edit_board_post(
 
 @router.delete(
     "/api/boards/{board_id}/posts/{post_id}",
-    response_model=BoardPost,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 @limiter.limit(BOARD_POST_DELETE)
 def delete_board_post(
@@ -708,7 +710,7 @@ def delete_board_post(
     board_id: str = Path(..., min_length=1),
     post_id: str = Path(..., min_length=1),
     user: CurrentUser = Depends(require_not_banned),
-) -> BoardPost:
+) -> Response:
     """Soft-delete a post. Author or admin. Idempotent."""
     db = _db()
     ref = db.collection("boards").document(board_id).collection("posts").document(post_id)
@@ -746,9 +748,7 @@ def delete_board_post(
             target_ref=f"boards/{board_id}/posts/{post_id}",
             payload={"boardId": board_id, "postId": post_id, "deleter_role": deleter_role},
         )
-    fresh = ref.get()
-    post = _doc_to_post(fresh.id, fresh.to_dict() or {})
-    return post.model_copy(update={"body": ""})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── post pin / unpin (M4: split from the legacy admin POST /pin endpoint) ──
@@ -929,11 +929,16 @@ def edit_board_reply(
             created = _ts_to_dt(data.get("createdAt"))
             if created is not None:
                 created_aware = created if created.tzinfo else created.replace(tzinfo=UTC)
-                if (datetime.now(UTC) - created_aware).total_seconds() > _BOARD_EDIT_WINDOW_SECONDS:
+                age_s = (datetime.now(UTC) - created_aware).total_seconds()
+                if age_s > _BOARD_EDIT_WINDOW_SECONDS:
                     raise APIError(
                         status_code=status.HTTP_409_CONFLICT,
                         code="edit_window_expired",
                         message="Edit window has expired (15 minutes)",
+                        details={
+                            "windowSeconds": _BOARD_EDIT_WINDOW_SECONDS,
+                            "messageAge": int(age_s),
+                        },
                     )
         txn.update(ref, {"body": body.body, "editedAt": fb_firestore.SERVER_TIMESTAMP})
 
@@ -944,7 +949,7 @@ def edit_board_reply(
 
 @router.delete(
     "/api/boards/{board_id}/posts/{post_id}/replies/{reply_id}",
-    response_model=BoardReply,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 @limiter.limit(BOARD_REPLY_DELETE)
 def delete_board_reply(
@@ -954,7 +959,7 @@ def delete_board_reply(
     post_id: str = Path(..., min_length=1),
     reply_id: str = Path(..., min_length=1),
     user: CurrentUser = Depends(require_not_banned),
-) -> BoardReply:
+) -> Response:
     db = _db()
     ref = (
         db.collection("boards")
@@ -1003,9 +1008,7 @@ def delete_board_reply(
                 "deleter_role": deleter_role,
             },
         )
-    fresh = ref.get()
-    reply = _doc_to_reply(fresh.id, fresh.to_dict() or {})
-    return reply.model_copy(update={"body": ""})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── board post reactions ─────────────────────────────────────────────────

@@ -39,7 +39,6 @@ from app.models.events import (
     CheckInResponse,
     Event,
     EventCreateRequest,
-    EventDeleteResponse,
     EventListResponse,
     EventUpdateRequest,
     ManualAttendanceRequest,
@@ -324,7 +323,7 @@ def update_event(
     return _doc_to_event(snap.reference.get())
 
 
-@router.delete("/{event_id}", response_model=EventDeleteResponse)
+@router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(EVENT_CREATE)
 def delete_event(
     event_id: str,
@@ -332,7 +331,7 @@ def delete_event(
     request: Request = None,  # type: ignore[assignment]
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_leader),
-) -> EventDeleteResponse:
+) -> Response:
     db = _db()
     deleted = events_service.soft_delete_event(db, gid=gid, event_id=event_id)
     if deleted == 0:
@@ -347,7 +346,7 @@ def delete_event(
         target_ref=f"groups/{gid}/events/{event_id}",
         payload={"cascadeCount": deleted},
     )
-    return EventDeleteResponse(eventId=event_id, deleted=True, soft=True)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── RSVP / check-in / manual-attendance ──────────────────────────────────────

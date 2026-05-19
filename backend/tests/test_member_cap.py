@@ -134,6 +134,7 @@ def test_consume_invite_group_at_cap_returns_409() -> None:
 
     assert exc_info.value.detail["error"]["code"] == "group_at_cap"
     assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["error"]["details"] == {"cap": 20, "currentCount": 20}
 
 
 # ── open-mode join cap enforcement ───────────────────────────────────────────
@@ -182,6 +183,7 @@ def test_open_join_at_cap_returns_409() -> None:
 
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "group_at_cap"
+    assert res.json()["error"]["details"] == {"cap": 20, "currentCount": 20}
 
 
 def test_open_join_under_cap_succeeds() -> None:
@@ -302,6 +304,7 @@ def test_approve_join_request_at_cap_returns_409() -> None:
 
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "group_at_cap"
+    assert res.json()["error"]["details"] == {"cap": 20, "currentCount": 20}
 
 
 # ── PATCH /{gid}/cap endpoint ─────────────────────────────────────────────────

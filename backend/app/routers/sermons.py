@@ -33,7 +33,6 @@ from app.middleware.rate_limit import limiter
 from app.models.sermons import (
     Sermon,
     SermonCreateRequest,
-    SermonDeleteResponse,
     SermonListResponse,
     SermonUpdateRequest,
 )
@@ -250,7 +249,7 @@ def update_sermon(
     return _doc_to_sermon(sermon_ref.get())
 
 
-@router.delete("/{sermon_id}", response_model=SermonDeleteResponse)
+@router.delete("/{sermon_id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit(SERMON_MUTATION)
 def delete_sermon(
     sermon_id: str,
@@ -258,7 +257,7 @@ def delete_sermon(
     request: Request = None,  # type: ignore[assignment]
     response: Response = None,  # type: ignore[assignment]
     membership: MembershipContext = Depends(require_leader),
-) -> SermonDeleteResponse:
+) -> Response:
     db = _db()
     sermon_ref = db.collection("groups").document(gid).collection("sermons").document(sermon_id)
     snap = sermon_ref.get()
@@ -268,13 +267,12 @@ def delete_sermon(
             code="sermon_not_found",
             message="Sermon not found",
         )
-    if (snap.to_dict() or {}).get("deletedAt") is not None:
-        return SermonDeleteResponse(sermonId=sermon_id, deleted=False)
-    sermon_ref.update({"deletedAt": fb_firestore.SERVER_TIMESTAMP})
-    write_audit_log(
-        actor_uid=membership.uid,
-        action="sermon_delete",
-        target_ref=f"groups/{gid}/sermons/{sermon_id}",
-        payload={},
-    )
-    return SermonDeleteResponse(sermonId=sermon_id, deleted=True)
+    if (snap.to_dict() or {}).get("deletedAt") is None:
+        sermon_ref.update({"deletedAt": fb_firestore.SERVER_TIMESTAMP})
+        write_audit_log(
+            actor_uid=membership.uid,
+            action="sermon_delete",
+            target_ref=f"groups/{gid}/sermons/{sermon_id}",
+            payload={},
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
