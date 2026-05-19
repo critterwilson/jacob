@@ -10,7 +10,7 @@ vi.mock("@/lib/firebase", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  apiGet: vi.fn(),
+  apiGetConditional: vi.fn(),
   ApiError: class ApiError extends Error {
     constructor(
       public status: number,
@@ -22,50 +22,56 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
-import { apiGet as apiGetExport } from "@/lib/api";
+import { apiGetConditional as apiGetConditionalExport } from "@/lib/api";
 import { IncidentBanner } from "@/components/IncidentBanner";
 
-const apiGet = apiGetExport as unknown as ReturnType<typeof vi.fn>;
+const apiGetConditional = apiGetConditionalExport as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 describe("IncidentBanner (T59)", () => {
   beforeEach(() => {
-    apiGet.mockReset();
+    apiGetConditional.mockReset();
   });
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("renders nothing when no incidents are active", async () => {
-    apiGet.mockResolvedValue({ incidents: [] });
+    apiGetConditional.mockResolvedValue({ status: 200, data: { incidents: [] }, etag: null });
     const { container } = render(<IncidentBanner />);
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+    await waitFor(() => expect(apiGetConditional).toHaveBeenCalled());
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it("renders the highest severity when multiple are active", async () => {
-    apiGet.mockResolvedValue({
-      incidents: [
-        {
-          incidentId: "low",
-          severity: "SEV3",
-          title: "Background job slow",
-          body: "Investigating",
-          createdBy: null,
-          createdAt: null,
-          displayUntil: new Date(Date.now() + 60_000).toISOString(),
-          acknowledged: false,
-        },
-        {
-          incidentId: "high",
-          severity: "SEV1",
-          title: "Sign-in down",
-          body: "Investigating",
-          createdBy: null,
-          createdAt: null,
-          displayUntil: new Date(Date.now() + 60_000).toISOString(),
-          acknowledged: false,
-        },
-      ],
+    apiGetConditional.mockResolvedValue({
+      status: 200,
+      data: {
+        incidents: [
+          {
+            incidentId: "low",
+            severity: "SEV3",
+            title: "Background job slow",
+            body: "Investigating",
+            createdBy: null,
+            createdAt: null,
+            displayUntil: new Date(Date.now() + 60_000).toISOString(),
+            acknowledged: false,
+          },
+          {
+            incidentId: "high",
+            severity: "SEV1",
+            title: "Sign-in down",
+            body: "Investigating",
+            createdBy: null,
+            createdAt: null,
+            displayUntil: new Date(Date.now() + 60_000).toISOString(),
+            acknowledged: false,
+          },
+        ],
+      },
+      etag: null,
     });
     render(<IncidentBanner />);
     await waitFor(() =>
@@ -77,7 +83,7 @@ describe("IncidentBanner (T59)", () => {
   });
 
   it("hides itself when the API returns 401", async () => {
-    apiGet.mockRejectedValue(
+    apiGetConditional.mockRejectedValue(
       Object.assign(new Error("unauth"), {
         status: 401,
         code: "unauthenticated",
@@ -85,7 +91,7 @@ describe("IncidentBanner (T59)", () => {
     );
     const { container } = render(<IncidentBanner />);
     // Wait a tick for the rejection to settle
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
+    await waitFor(() => expect(apiGetConditional).toHaveBeenCalled());
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 });

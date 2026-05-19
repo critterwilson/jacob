@@ -139,7 +139,7 @@ def list_ministry_posts(
     limit: int = Query(default=_PAGE_DEFAULT, ge=1, le=_PAGE_MAX),
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
-) -> MinistryPostsResponse:
+) -> Any:
     """List ministry-feed posts in pinned-first, newest-first order.
 
     Excludes soft-deleted posts. Cursor mirrors the boards pattern so

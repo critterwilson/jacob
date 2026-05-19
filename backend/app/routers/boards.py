@@ -394,7 +394,7 @@ def list_board_posts(
     limit: int = Query(default=_POSTS_PAGE_DEFAULT, ge=1, le=_POSTS_PAGE_MAX),
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
-) -> BoardPostsResponse:
+) -> Any:
     """List a board's posts.
 
     The previous client query ordered pinned-first then by createdAt

@@ -793,7 +793,7 @@ def list_members(
     gid: str,
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     membership: MembershipContext = Depends(require_member),
-) -> MembersListResponse:
+) -> Any:
     """Members of a group, joined with `users/{uid}` profile fields.
 
     M3 ships without pagination because group sizes are small in v1

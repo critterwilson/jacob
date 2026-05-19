@@ -84,7 +84,7 @@ def list_active_incidents(
     response: Response,
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
-) -> ActiveIncidentsResponse:
+) -> Any:
     db = _db()
     now = datetime.now(UTC)
     incidents: list[ActiveIncident] = []

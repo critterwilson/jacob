@@ -681,7 +681,7 @@ def my_groups(
     archived: str = Query(default="exclude", pattern="^(include|exclude)$"),
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     user: CurrentUser = Depends(get_current_user),
-) -> MyGroupsResponse:
+) -> Any:
     """Replaces the frontend collection-group `members` query.
 
     For each membership doc the caller owns, joins against the parent
