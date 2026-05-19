@@ -6,6 +6,7 @@ server-side and collision-checked before being stored.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 import string
@@ -13,12 +14,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-import hashlib
-
 from fastapi import APIRouter, Depends, Header, Request, Response, status
-from starlette.responses import Response as StarletteResponse
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
+from starlette.responses import Response as StarletteResponse
 
 from app.deps import (
     MembershipContext,

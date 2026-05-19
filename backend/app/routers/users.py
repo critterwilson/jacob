@@ -22,8 +22,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
-from starlette.responses import Response as StarletteResponse
 from firebase_admin import firestore as fb_firestore
+from starlette.responses import Response as StarletteResponse
 
 from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
