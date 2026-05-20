@@ -18,15 +18,22 @@
  * (where .next/standalone/.next/ already exists as a real dir) is a no-op.
  */
 
-import { existsSync, renameSync } from "fs";
+import { existsSync, readdirSync, renameSync } from "fs";
 import { join } from "path";
 
 const standalone = join(".next", "standalone");
 const expected = join(standalone, ".next");
 const actual = join(standalone, "frontend", ".next");
 
+// Debug: log what's in standalone right now
+console.log("[fix-standalone] standalone contents:", existsSync(standalone) ? readdirSync(standalone) : "MISSING");
+console.log("[fix-standalone] server.js exists:", existsSync(join(standalone, "server.js")));
+console.log("[fix-standalone] .next exists:", existsSync(expected));
+console.log("[fix-standalone] frontend/.next exists:", existsSync(actual));
+
 if (!existsSync(expected) && existsSync(actual)) {
   // renameSync is atomic on the same filesystem — no copy overhead.
   renameSync(actual, expected);
   console.log("[fix-standalone] moved frontend/.next → .next in standalone");
+  console.log("[fix-standalone] standalone contents after:", readdirSync(standalone));
 }
