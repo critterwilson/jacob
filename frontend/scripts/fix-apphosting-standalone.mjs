@@ -42,7 +42,7 @@
  * in the standalone's node_modules.
  */
 
-import { existsSync, renameSync } from "fs";
+import { existsSync, readdirSync, renameSync, symlinkSync } from "fs";
 import { join } from "path";
 
 const standalone = join(".next", "standalone");
@@ -63,4 +63,24 @@ const dotNextSrc = join(standalone, "frontend", ".next");
 if (!existsSync(dotNextDest) && existsSync(dotNextSrc)) {
   renameSync(dotNextSrc, dotNextDest);
   console.log("[fix-standalone] moved frontend/.next → .next");
+}
+
+// --- 3. Symlink node_modules/next so server.js can resolve require('next') ---
+// With outputFileTracingRoot=/workspace/, pnpm only symlinks 'next' under
+// standalone/frontend/node_modules/ (traced from frontend/node_modules/).
+// After moving server.js to the standalone root, Node.js looks for 'next' in
+// standalone/node_modules/ where no symlink exists. Create one pointing into
+// the .pnpm store that was already traced.
+const nextLink = join(standalone, "node_modules", "next");
+const pnpmDir = join(standalone, "node_modules", ".pnpm");
+
+if (!existsSync(nextLink) && existsSync(pnpmDir)) {
+  const nextEntry = readdirSync(pnpmDir).find((e) => e.startsWith("next@"));
+  if (nextEntry) {
+    const target = join(".pnpm", nextEntry, "node_modules", "next");
+    symlinkSync(target, nextLink, "dir");
+    console.log(`[fix-standalone] created node_modules/next → ${target}`);
+  } else {
+    console.warn("[fix-standalone] WARNING: could not find next@ entry under .pnpm");
+  }
 }
