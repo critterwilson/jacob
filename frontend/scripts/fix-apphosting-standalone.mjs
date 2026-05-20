@@ -18,49 +18,49 @@
  * (where .next/standalone/.next/ already exists as a real dir) is a no-op.
  */
 
-import { execSync } from "child_process";
-import { existsSync, readdirSync, renameSync, writeFileSync } from "fs";
+/**
+ * With experimental.outputFileTracingRoot=/workspace/, Next.js 14 places
+ * build artefacts relative to the workspace root inside the standalone:
+ *
+ *   .next/standalone/
+ *     frontend/
+ *       server.js       ← the real standalone entry (traced, deps included)
+ *       .next/          ← app build artefacts
+ *     node_modules/     ← traced deps including next (workspace-level)
+ *     package.json      ← workspace package.json
+ *
+ * The @apphosting/adapter-nextjs expects:
+ *   .next/standalone/server.js
+ *   .next/standalone/.next/routes-manifest.json
+ *
+ * Fix: move both files/dirs to the expected locations so the adapter's
+ * loadRouteManifest step and the container's startCommand both work.
+ *
+ * Using renameSync (atomic, no copy) for the .next dir.
+ * For server.js we must MOVE the real generated file — not create our own —
+ * because only the traced server.js has all its require() targets included
+ * in the standalone's node_modules.
+ */
+
+import { existsSync, renameSync } from "fs";
 import { join } from "path";
 
 const standalone = join(".next", "standalone");
-const expected = join(standalone, ".next");
-const actual = join(standalone, "frontend", ".next");
 
-// Comprehensive debug: find ALL server.js files under .next/
-console.log("[fix-standalone] searching for server.js under .next/...");
-try {
-  const found = execSync("find .next/standalone -name 'server.js' 2>/dev/null || true", { encoding: "utf8" });
-  console.log("[fix-standalone] server.js locations:", found.trim() || "(none)");
-} catch {}
+// --- 1. Move server.js from frontend/ to standalone root ---
+const serverJsDest = join(standalone, "server.js");
+const serverJsSrc = join(standalone, "frontend", "server.js");
 
-console.log("[fix-standalone] standalone contents:", existsSync(standalone) ? readdirSync(standalone) : "MISSING");
-if (existsSync(actual)) {
-  console.log("[fix-standalone] frontend/.next contents:", readdirSync(actual));
+if (!existsSync(serverJsDest) && existsSync(serverJsSrc)) {
+  renameSync(serverJsSrc, serverJsDest);
+  console.log("[fix-standalone] moved frontend/server.js → server.js");
 }
 
-if (!existsSync(expected) && existsSync(actual)) {
-  renameSync(actual, expected);
-  console.log("[fix-standalone] moved frontend/.next → .next in standalone");
-}
+// --- 2. Move .next/ artefacts from frontend/.next to standalone root ---
+const dotNextDest = join(standalone, ".next");
+const dotNextSrc = join(standalone, "frontend", ".next");
 
-// If server.js was never generated (known Next.js 14 issue with
-// outputFileTracingRoot pointing to a parent directory), write it.
-const serverJs = join(standalone, "server.js");
-if (!existsSync(serverJs)) {
-  writeFileSync(
-    serverJs,
-    `process.env.NODE_ENV = "production";
-process.chdir(__dirname);
-const { startServer } = require("./node_modules/next/dist/server/lib/start-server");
-startServer({
-  dir: __dirname,
-  isDev: false,
-  hostname: process.env.HOSTNAME || "0.0.0.0",
-  port: parseInt(process.env.PORT, 10) || 3000,
-  allowRetry: false,
-  keepAliveTimeout: parseInt(process.env.KEEP_ALIVE_TIMEOUT, 10) || undefined,
-});
-`
-  );
-  console.log("[fix-standalone] generated missing server.js");
+if (!existsSync(dotNextDest) && existsSync(dotNextSrc)) {
+  renameSync(dotNextSrc, dotNextDest);
+  console.log("[fix-standalone] moved frontend/.next → .next");
 }
