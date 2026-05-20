@@ -18,22 +18,49 @@
  * (where .next/standalone/.next/ already exists as a real dir) is a no-op.
  */
 
-import { existsSync, readdirSync, renameSync } from "fs";
+import { execSync } from "child_process";
+import { existsSync, readdirSync, renameSync, writeFileSync } from "fs";
 import { join } from "path";
 
 const standalone = join(".next", "standalone");
 const expected = join(standalone, ".next");
 const actual = join(standalone, "frontend", ".next");
 
-// Debug: log what's in standalone right now
+// Comprehensive debug: find ALL server.js files under .next/
+console.log("[fix-standalone] searching for server.js under .next/...");
+try {
+  const found = execSync("find .next/standalone -name 'server.js' 2>/dev/null || true", { encoding: "utf8" });
+  console.log("[fix-standalone] server.js locations:", found.trim() || "(none)");
+} catch {}
+
 console.log("[fix-standalone] standalone contents:", existsSync(standalone) ? readdirSync(standalone) : "MISSING");
-console.log("[fix-standalone] server.js exists:", existsSync(join(standalone, "server.js")));
-console.log("[fix-standalone] .next exists:", existsSync(expected));
-console.log("[fix-standalone] frontend/.next exists:", existsSync(actual));
+if (existsSync(actual)) {
+  console.log("[fix-standalone] frontend/.next contents:", readdirSync(actual));
+}
 
 if (!existsSync(expected) && existsSync(actual)) {
-  // renameSync is atomic on the same filesystem — no copy overhead.
   renameSync(actual, expected);
   console.log("[fix-standalone] moved frontend/.next → .next in standalone");
-  console.log("[fix-standalone] standalone contents after:", readdirSync(standalone));
+}
+
+// If server.js was never generated (known Next.js 14 issue with
+// outputFileTracingRoot pointing to a parent directory), write it.
+const serverJs = join(standalone, "server.js");
+if (!existsSync(serverJs)) {
+  writeFileSync(
+    serverJs,
+    `process.env.NODE_ENV = "production";
+process.chdir(__dirname);
+const { startServer } = require("./node_modules/next/dist/server/lib/start-server");
+startServer({
+  dir: __dirname,
+  isDev: false,
+  hostname: process.env.HOSTNAME || "0.0.0.0",
+  port: parseInt(process.env.PORT, 10) || 3000,
+  allowRetry: false,
+  keepAliveTimeout: parseInt(process.env.KEEP_ALIVE_TIMEOUT, 10) || undefined,
+});
+`
+  );
+  console.log("[fix-standalone] generated missing server.js");
 }
