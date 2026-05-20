@@ -243,6 +243,59 @@ describe("OnboardingPage redirect logic", () => {
     });
   });
 
+  it("does NOT redirect to /awaiting-approval when application is approved (redirect loop regression)", async () => {
+    // Regression: before this fix, an approved user without the
+    // jacob-has-profile cookie (e.g. fresh session or cross-origin staging)
+    // would land on /onboarding via middleware, which then unconditionally
+    // sent them back to /awaiting-approval, which sent them to /home, which
+    // sent them back to /onboarding — an infinite loop.
+    //
+    // Fix: only redirect to /awaiting-approval for pending/rejected; approved
+    // users hold on the loading screen until bootstrap sets the cookie.
+    mockAuthState({ uid: "uid-1", email: "user@example.com" });
+    nextBootstrap = { hasProfile: false, profile: null };
+    nextApplication = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        uid: "uid-1",
+        email: "user@example.com",
+        displayName: "Alice",
+        photoURL: null,
+        dob: ADULT_DOB,
+        age: 35,
+        isMinor: false,
+        phone: null,
+        location: null,
+        faithBackground: null,
+        status: "approved",
+        createdAt: null,
+        submittedAt: null,
+        decidedAt: null,
+        decidedBy: null,
+        parentalConsentObtained: null,
+        parentalConsentNotes: "",
+        rejectionReason: "",
+        grandfathered: false,
+      }),
+    };
+
+    render(
+      <AuthProvider>
+        <OnboardingPage />
+      </AuthProvider>,
+    );
+
+    // Give the effects time to settle.
+    await waitFor(() => {
+      expect(mockReplace).not.toHaveBeenCalledWith("/awaiting-approval");
+    });
+    // Should show a loading screen, not the "Apply to join" form.
+    expect(
+      screen.queryByRole("form", { name: /complete your profile/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the profile form when user has no profile and no application", async () => {
     mockAuthState({ uid: "uid-1", email: "user@example.com" });
     nextBootstrap = { hasProfile: false, profile: null };

@@ -33,7 +33,13 @@ export default function OnboardingPage() {
       router.replace("/home");
       return;
     }
-    if (application) {
+    // Only redirect to /awaiting-approval for pending or rejected applications.
+    // Approved users without a cookie are sent here by middleware after
+    // /awaiting-approval redirects them to /home. Sending them back to
+    // /awaiting-approval creates an infinite loop. Instead, hold here while
+    // useUser bootstraps the profile and sets the cookie, then the `profile`
+    // branch above will redirect them to /home.
+    if (application && application.status !== "approved") {
       router.replace("/awaiting-approval");
     }
   }, [
@@ -56,7 +62,17 @@ export default function OnboardingPage() {
 
   if (!user) return null;
   if (profile) return null;
-  if (application) return null;
+  // Pending/rejected: redirect is in flight via the effect above.
+  if (application && application.status !== "approved") return null;
+  // Approved but cookie not yet set — hold on loading while bootstrap
+  // completes rather than showing the "Apply to join" form.
+  if (application?.status === "approved") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-ink">
+        <span className="text-body-sm text-cream-muted">Loading…</span>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center bg-ink px-4 py-12">
