@@ -65,7 +65,6 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) });
 
@@ -78,24 +77,10 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
     }
   }, [setValue]);
 
-  const dobValue = watch("dob");
-
-  // The under-13 path used to be a radio-button choice; with DOB it
-  // becomes a derived check. We surface the banner the moment the
-  // computed age falls under 13, before submit.
-  useEffect(() => {
-    if (!dobValue || !/^\d{4}-\d{2}-\d{2}$/.test(dobValue)) return;
-    const dob = new Date(`${dobValue}T00:00:00Z`);
-    if (Number.isNaN(dob.getTime())) return;
-    if (computeAge(dob) < MIN_AGE) {
-      setUnder13Blocked(true);
-    }
-  }, [dobValue]);
-
   const onSubmit = async (values: ProfileValues) => {
     const dob = new Date(`${values.dob}T00:00:00Z`);
     if (!Number.isNaN(dob.getTime()) && computeAge(dob) < MIN_AGE) {
-      await handleUnder13Deletion();
+      setUnder13Blocked(true);
       return;
     }
 
@@ -130,7 +115,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         return;
       }
       if (err instanceof ApiError && err.code === "under_minimum_age") {
-        await handleUnder13Deletion();
+        setUnder13Blocked(true);
         return;
       }
       if (err instanceof ApiError) {
@@ -157,7 +142,10 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
   if (under13Blocked) {
     return (
       <Banner tone="error" title="JACOB requires you to be at least 13.">
-        <p>Your account has been removed. No data has been saved.</p>
+        <p>
+          We&rsquo;re unable to create an account for users under 13. Clicking
+          Continue will permanently delete your account — this cannot be undone.
+        </p>
         <div className="mt-4">
           <Button
             type="button"

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   type Mock,
@@ -414,36 +414,107 @@ describe("ProfileForm validation", () => {
 // Under-13 path
 // ---------------------------------------------------------------------------
 describe("Under-13 path", () => {
-  it("flips to the under-13 blocking banner once a sub-13 DOB is entered", async () => {
+  it("does NOT flip to the blocking banner when an under-13 date is entered mid-edit", async () => {
+    // Regression: the old eager useEffect fired on every change event,
+    // including intermediate browser-native date-picker values (e.g. the
+    // year field still defaulting to the current year while the user fills
+    // month+day). This triggered account deletion before the form was
+    // submitted. The block banner must only appear after a deliberate submit.
+    render(<ProfileForm uid="uid-1" email="user@example.com" />);
+
+    const dobInput = screen.getByLabelText(/date of birth/i);
+    fireEvent.change(dobInput, { target: { value: UNDER_13_DOB } });
+
+    // The blocking banner's "Continue" button must NOT be present — the form
+    // should still show the normal submit button. (The helper text on the DOB
+    // field always contains "at least 13", so we key on the Continue button
+    // which is unique to the banner.)
+    expect(
+      screen.queryByRole("button", { name: /continue/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /submit application/i }),
+    ).toBeInTheDocument();
+    expect(fbAuth.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("shows the blocking banner (without deleting) when the server rejects as under_minimum_age", async () => {
+    // The server is the authoritative age gate. When it returns under_minimum_age,
+    // the form must show the confirmation banner — NOT silently call deleteUser.
+    pushHandler(
+      (url, method) =>
+        url.includes("/api/v1/applications/me") && method === "POST",
+      () => ({
+        ok: false,
+        status: 422,
+        statusText: "Unprocessable Entity",
+        json: async () => ({
+          error: { code: "under_minimum_age", message: "User is under 13" },
+        }),
+      }),
+    );
+
+    vi.mocked(fbAuth.deleteUser).mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<ProfileForm uid="uid-1" email="user@example.com" />);
 
-    await user.type(screen.getByLabelText(/date of birth/i), UNDER_13_DOB);
+    await user.type(screen.getByLabelText(/display name/i), "Alice");
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
 
-    // The form replaces itself with a blocking banner the moment the
-    // computed age falls below 13.
     await waitFor(() => {
       expect(
         screen.getByText(/JACOB requires you to be at least 13/i),
       ).toBeInTheDocument();
     });
+    // deleteUser must NOT have been called yet — user must confirm first.
+    expect(fbAuth.deleteUser).not.toHaveBeenCalled();
   });
 
-  it("calls deleteUser and redirects to /sign-in when Continue is clicked", async () => {
+  it("calls deleteUser and redirects to /sign-in only after user clicks Continue", async () => {
+    pushHandler(
+      (url, method) =>
+        url.includes("/api/v1/applications/me") && method === "POST",
+      () => ({
+        ok: false,
+        status: 422,
+        statusText: "Unprocessable Entity",
+        json: async () => ({
+          error: { code: "under_minimum_age", message: "User is under 13" },
+        }),
+      }),
+    );
+
+    // Provide a non-null currentUser so handleUnder13Deletion actually calls deleteUser.
+    const { auth } = await import("@/lib/firebase");
+    (auth as unknown as { currentUser: { uid: string } }).currentUser = {
+      uid: "uid-1",
+    };
     vi.mocked(fbAuth.deleteUser).mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<ProfileForm uid="uid-1" email="user@example.com" />);
 
-    await user.type(screen.getByLabelText(/date of birth/i), UNDER_13_DOB);
+    await user.type(screen.getByLabelText(/display name/i), "Alice");
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
+
     await waitFor(() =>
       screen.getByText(/JACOB requires you to be at least 13/i),
     );
 
+    // Deletion only happens on explicit Continue.
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/sign-in?reason=age");
     });
+    expect(fbAuth.deleteUser).toHaveBeenCalledTimes(1);
   });
 });
 
