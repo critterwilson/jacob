@@ -9,6 +9,7 @@ import { Banner, Button, Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { auth } from "@/lib/firebase";
 import { useMyApplication } from "@/lib/hooks/useMyApplication";
+import { useUser } from "@/lib/hooks/useUser";
 
 /**
  * ADR 0012 — "your application is being reviewed" gate.
@@ -32,6 +33,10 @@ export default function AwaitingApprovalPage() {
     error,
     refresh,
   } = useMyApplication({ uid: user?.uid, pollMs: 30_000 });
+  // Bootstrap the profile so the jacob-has-profile cookie is set before we
+  // redirect an approved user to /home. Without this, middleware gates /home
+  // and bounces them to /onboarding, which then redirects back here, looping.
+  const { loading: profileLoading } = useUser(user?.uid);
 
   useEffect(() => {
     if (authLoading) return;
@@ -41,12 +46,12 @@ export default function AwaitingApprovalPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (applicationLoading) return;
+    if (applicationLoading || profileLoading) return;
     if (!application) return;
     if (application.status === "approved") {
       router.replace("/home");
     }
-  }, [application, applicationLoading, router]);
+  }, [application, applicationLoading, profileLoading, router]);
 
   useEffect(() => {
     if (applicationLoading || !user) return;
@@ -62,7 +67,12 @@ export default function AwaitingApprovalPage() {
     router.replace("/sign-in");
   };
 
-  if (authLoading || applicationLoading) {
+  // For approved users, also wait for bootstrap so the cookie is ready
+  // before the redirect fires. Pending/rejected users skip this wait.
+  const waitingForBootstrap =
+    !!application && application.status === "approved" && profileLoading;
+
+  if (authLoading || applicationLoading || waitingForBootstrap) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted" role="status">
