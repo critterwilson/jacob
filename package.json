@@ -2,7 +2,6 @@
   "name": "jacob",
   "private": true,
   "scripts": {
-    "start": "pnpm --filter jacob-frontend start",
     "seed:stickers": "pnpm -F jacob-firestore seed:stickers",
     "seed:stickers:emulator": "pnpm -F jacob-firestore seed:stickers:emulator",
     "prepare": "husky"
