@@ -40,10 +40,10 @@ export default function MinistryFeedPage() {
         <div className="space-y-2">
           <Eyebrow>Broadcast</Eyebrow>
           <Heading id="ministry-feed-heading" level={1} size="md">
-            Ministry feed
+            Organization feed
           </Heading>
           <p className="text-body-sm text-cream-muted">
-            Sermons, devotionals, and announcements from the ministry team.
+            Sermons, devotionals, and announcements from your organization.
             Pinned posts stay at the top.{" "}
             <Link href="/settings/notifications" variant="muted" className="underline">
               Manage notifications

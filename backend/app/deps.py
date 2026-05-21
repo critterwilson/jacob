@@ -247,7 +247,7 @@ def require_ministry_owner(
         raise APIError(
             status_code=status.HTTP_403_FORBIDDEN,
             code="forbidden",
-            message="Ministry owner privileges required",
+            message="Organization owner privileges required",
         )
     return user
 

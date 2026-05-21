@@ -591,7 +591,7 @@ describe("MinistryHighlights", () => {
   it("renders the empty state with a feed link when no posts", () => {
     render(<MinistryHighlights posts={[]} loading={false} />);
     expect(screen.getByText(/Nothing posted yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open ministry feed/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /Open organization feed/i })).toHaveAttribute(
       "href",
       "/feed",
     );

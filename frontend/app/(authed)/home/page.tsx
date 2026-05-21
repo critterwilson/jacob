@@ -100,7 +100,7 @@ export default function HomePage() {
       <section className="space-y-3" aria-labelledby="home-ministry-heading">
         <div className="flex items-baseline justify-between">
           <Heading level={2} size="sm" id="home-ministry-heading">
-            From your ministry
+            From your organization
           </Heading>
           <UILink href="/feed" variant="muted" className="text-body-sm">
             See all
