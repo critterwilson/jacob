@@ -8,18 +8,24 @@ import { cn } from "@/components/ui";
 const tabs = [
   { href: "/home", label: "Home", icon: HomeIcon },
   { href: "/groups", label: "Chats", icon: ChatIcon },
-  { href: "/boards", label: "Boards", icon: BoardsIcon },
   { href: "/feed", label: "Feed", icon: FeedIcon },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/boards", label: "Boards", icon: BoardsIcon },
+  { href: "/settings", label: "You", icon: PersonIcon },
 ] as const;
 
 /**
  * Mobile-only bottom tab bar — the primary nav on phones.
  *
- * Five tabs covering the most-used destinations. About / FAQ / Sign out
- * remain in the hamburger drawer for the long tail. The bar is a flex
- * sibling of `<main>` inside AppShell's inner column, so it occupies
- * its natural height and content scrolls above it.
+ * Five tabs covering the most-used destinations. "You" replaces what
+ * used to be "Settings" — the route is still /settings but the page is
+ * now a personal hub (profile, account, orgs, admin, info, sign out),
+ * matching the avatar-tab convention used in most native social apps.
+ * Library content (devotionals/reading-plans/discover) lives in the
+ * drawer "Grow" section and on Home; the long-tail About/FAQ live in
+ * the drawer "You" section.
+ *
+ * The bar is a flex sibling of `<main>` inside AppShell's inner column,
+ * so it occupies its natural height and content scrolls above it.
  *
  * Hidden on `fullHeight` routes (chat) — those surfaces want every
  * pixel for the message log and composer.
@@ -132,7 +138,7 @@ function FeedIcon(_: IconProps) {
   );
 }
 
-function SettingsIcon(_: IconProps) {
+function PersonIcon(_: IconProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -143,11 +149,11 @@ function SettingsIcon(_: IconProps) {
       strokeWidth={1.75}
       aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+        d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8"
       />
     </svg>
   );
