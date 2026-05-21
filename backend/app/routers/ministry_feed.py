@@ -146,6 +146,8 @@ def list_ministry_posts(
     pinned-bucket boundaries don't drop posts between pages.
     """
     db = _db()
+    # Internal collection name kept as "ministry_feed"; user-facing term is "Organization"
+    # (rebrand PR #302). Renaming would require a data migration of Firestore documents.
     col = db.collection("ministry_feed")
     query = (
         col.where("deletedAt", "==", None)
