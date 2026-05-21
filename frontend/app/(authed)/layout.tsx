@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/nav/AppShell";
 import { InstallPrompt } from "@/components/nav/InstallPrompt";
@@ -8,9 +8,22 @@ import { PushPrompt } from "@/components/nav/PushPrompt";
 import { SearchBar } from "@/components/search/SearchBar";
 import { useAuth } from "@/lib/auth-context";
 
+// Surfaces that need to fill the AppShell main area exactly (chat-style
+// layouts). For these we skip the in-page Install/Push banners so the
+// composer is never pushed below the visible viewport.
+function isFullHeightSurface(pathname: string | null): boolean {
+  if (!pathname) return false;
+  return (
+    /^\/groups\/[^/]+\/chat\/?$/.test(pathname) ||
+    /^\/discover\/[^/]+\/?$/.test(pathname)
+  );
+}
+
 export default function AuthedLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const fullHeight = isFullHeightSurface(pathname);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -20,7 +33,7 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted" role="status">
           Loading…
         </span>
@@ -31,9 +44,9 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
   if (!user) return null;
 
   return (
-    <AppShell>
-      <SearchBar />
-      {user && (
+    <AppShell fullHeight={fullHeight}>
+      {!fullHeight && <SearchBar />}
+      {!fullHeight && user && (
         <div className="mx-auto max-w-2xl px-4 pt-4 flex flex-col gap-2">
           <PushPrompt uid={user.uid} />
           <InstallPrompt />

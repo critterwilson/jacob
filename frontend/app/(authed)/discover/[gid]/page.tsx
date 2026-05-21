@@ -36,9 +36,9 @@ export default function ReadOnlyGroupPage({ params }: Props) {
 
   if (authLoading || groupLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
-      </main>
+      </div>
     );
   }
 
@@ -46,17 +46,17 @@ export default function ReadOnlyGroupPage({ params }: Props) {
 
   if (!group) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mx-auto max-w-2xl px-4 py-10">
         <p className="text-cream-muted">Group not found or private.</p>
         <Link href="/discover" className="mt-4 inline-block text-sm text-gold hover:underline">
           ← Back to discover
         </Link>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex h-screen flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Header */}
       <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
         <div>
@@ -83,7 +83,7 @@ export default function ReadOnlyGroupPage({ params }: Props) {
       </div>
 
       {/* Feed — readonly so no input, picker, reply, edit, delete */}
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <MessageList
           gid={gid}
           messages={messages}
@@ -96,6 +96,6 @@ export default function ReadOnlyGroupPage({ params }: Props) {
           readonly
         />
       </div>
-    </main>
+    </div>
   );
 }

@@ -47,7 +47,7 @@ export function PhotoAttachButton({ gid, onAttach, onError, disabled }: Props) {
         disabled={disabled || uploading}
         aria-label="Attach photo"
         className={
-          "rounded border border-line bg-ink px-3 py-1 text-caption text-cream-muted " +
+          "inline-flex h-9 items-center rounded border border-line bg-ink px-3 text-body-sm text-cream-muted " +
           "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
           "focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
         }

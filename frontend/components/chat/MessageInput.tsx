@@ -105,7 +105,7 @@ export function MessageInput({ gid, archived = false, onTyping }: Props) {
 
   if (archived) {
     return (
-      <div className="border-t border-line bg-ink px-4 py-3 text-center text-body-sm text-cream-muted">
+      <div className="border-t border-line bg-ink px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] text-center text-body-sm text-cream-muted">
         This group is archived. New messages are disabled.
       </div>
     );
@@ -121,7 +121,7 @@ export function MessageInput({ gid, archived = false, onTyping }: Props) {
     <form
       onSubmit={handleSubmit(onSubmit)}
       aria-label="Send a message"
-      className="border-t border-line bg-ink px-4 py-3"
+      className="shrink-0 border-t border-line bg-ink px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
     >
       <StickerPicker value={stickers} onChange={setStickers} />
 

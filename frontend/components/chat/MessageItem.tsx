@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type MouseEvent, useState } from "react";
 
 import { ApiError, apiDelete, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -166,13 +166,37 @@ export function MessageItem({
   };
 
   const actionChip =
-    "rounded border border-line bg-ink px-2 py-0.5 text-caption text-cream-muted " +
+    // 36 px chip, inside a chip-cluster that's only revealed on demand.
+    "inline-flex h-9 items-center rounded border border-line bg-ink px-3 text-body-sm text-cream-muted " +
     "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
     "focus:outline-none focus-visible:shadow-glow-gold";
+
+  // Touch devices have no hover state — the action row would be unreachable
+  // if we only revealed it on `:hover`. Tapping the message toggles a local
+  // "actions visible" flag so the row works on phones; on desktop, hover
+  // still works as before.
+  const [actionsActive, setActionsActive] = useState(false);
+  const handleSurfaceClick = (e: MouseEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement;
+    // Don't toggle when the user is interacting with the actions row,
+    // inline links, the edit textarea, photos, reaction chips, or stickers.
+    if (
+      target.closest("[data-message-actions]") ||
+      target.closest("a") ||
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest("textarea") ||
+      target.closest("img")
+    ) {
+      return;
+    }
+    setActionsActive((v) => !v);
+  };
 
   return (
     <article
       data-message-id={message.id}
+      onClick={handleSurfaceClick}
       className="group relative flex gap-3 px-4 py-2 transition-colors duration-fast hover:bg-ink-raised"
     >
       <Avatar
@@ -326,7 +350,18 @@ export function MessageItem({
       </div>
 
       {!isDeleted && !editing && !readonly && (
-        <div className="absolute right-4 top-2 hidden gap-1 group-hover:flex">
+        <div
+          data-message-actions
+          className={cn(
+            "absolute right-2 top-2 flex flex-wrap justify-end gap-1 transition-opacity duration-fast",
+            // Always rendered so action chips don't pop into existence; toggled
+            // via opacity + pointer-events. Hover works on desktop; tapping the
+            // message reveals on touch (no hover state).
+            actionsActive
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
+          )}
+        >
           {onReply && message.parentMessageId === null && (
             <button
               type="button"

@@ -73,9 +73,9 @@ export default function ChatPage({ params }: Props) {
 
   if (authLoading || membershipLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink">
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted">Loading…</span>
-      </main>
+      </div>
     );
   }
 
@@ -85,7 +85,7 @@ export default function ChatPage({ params }: Props) {
   const archivedAt = group?.archivedAt ?? null;
 
   return (
-    <main className="flex h-screen flex-col bg-ink text-cream">
+    <div className="flex min-h-0 flex-1 flex-col bg-ink text-cream">
       <header className="flex shrink-0 items-center gap-3 border-b border-line bg-ink px-4 py-3">
         <Link href={`/groups/${gid}`} variant="muted" className="text-body-sm">
           ← {groupName ?? "Group"}
@@ -96,8 +96,8 @@ export default function ChatPage({ params }: Props) {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {archivedAt && <ArchivedBanner />}
           <PinnedBar gid={gid} isLeader={isLeader} />
           <MessageList
@@ -138,6 +138,6 @@ export default function ChatPage({ params }: Props) {
           />
         )}
       </div>
-    </main>
+    </div>
   );
 }
