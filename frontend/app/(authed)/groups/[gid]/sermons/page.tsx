@@ -7,12 +7,10 @@ import { useMemo, useState } from "react";
 import { OpenBook } from "@/components/motifs/OpenBook";
 import {
   Banner,
-  Button,
   Card,
   Eyebrow,
   Heading,
   Link,
-  Section,
   Select,
 } from "@/components/ui";
 import {
@@ -21,67 +19,23 @@ import {
 } from "@/lib/hooks/useGroupSermons";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
-import { safeHttpUrl, safeImageSrc } from "@/lib/safeUrl";
-
-const inputClass =
-  "w-full rounded border border-line bg-ink-overlay px-3 py-2 " +
-  "font-sans text-body-sm text-cream placeholder:text-cream-muted " +
-  "transition-colors duration-fast " +
-  "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
+import { safeImageSrc } from "@/lib/safeUrl";
 
 export default function SermonsListPage() {
   const params = useParams();
   const gid = String(
     Array.isArray(params?.gid) ? params.gid[0] : (params?.gid ?? ""),
   );
-  const { sermons, preachers, loading, error, addSermon } =
-    useGroupSermons(gid);
+  const { sermons, preachers, loading, error } = useGroupSermons(gid);
   const { user } = useAuth();
-  // The backend rejects non-leader POSTs with 403; hide the affordance
-  // so members aren't tempted to click a button that always fails.
   const { isLeader } = useGroupMembership(user?.uid, gid);
 
   const [preacherFilter, setPreacherFilter] = useState<string>("");
-  const [showAdd, setShowAdd] = useState(false);
-  const [newUrl, setNewUrl] = useState("");
-  const [newTitle, setNewTitle] = useState("");
-  const [newPreacher, setNewPreacher] = useState("");
-  const [newScripture, setNewScripture] = useState("");
-  const [newDate, setNewDate] = useState("");
-  const [pending, setPending] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!preacherFilter) return sermons;
     return sermons.filter((s) => s.preacher === preacherFilter);
   }, [sermons, preacherFilter]);
-
-  const urlValid = Boolean(safeHttpUrl(newUrl));
-
-  const submit = async () => {
-    if (!urlValid) return;
-    setPending(true);
-    setAddError(null);
-    const res = await addSermon({
-      sourceUrl: newUrl,
-      title: newTitle || undefined,
-      preacher: newPreacher || undefined,
-      scripture: newScripture || undefined,
-      sermonDate: newDate || undefined,
-    });
-    if (!res) {
-      setAddError("Failed to add — check the URL is well-formed.");
-      setPending(false);
-      return;
-    }
-    setNewUrl("");
-    setNewTitle("");
-    setNewPreacher("");
-    setNewScripture("");
-    setNewDate("");
-    setShowAdd(false);
-    setPending(false);
-  };
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6">
@@ -104,76 +58,14 @@ export default function SermonsListPage() {
           </div>
         </div>
         {isLeader && (
-          <Button
-            type="button"
-            variant={showAdd ? "secondary" : "primary"}
-            size="md"
-            onClick={() => setShowAdd((s) => !s)}
+          <NextLink
+            href={`/groups/${gid}/sermons/new`}
+            className="inline-flex h-11 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
           >
-            {showAdd ? "Cancel" : "Add sermon"}
-          </Button>
+            Add sermon
+          </NextLink>
         )}
       </header>
-
-      {isLeader && showAdd && (
-        <Section title="Add a sermon" description="Paste a YouTube URL or podcast link. Title is auto-filled when possible.">
-          <div className="space-y-2">
-            <input
-              value={newUrl}
-              onChange={(e) => setNewUrl(e.target.value)}
-              placeholder="YouTube URL or podcast link"
-              aria-label="Source URL"
-              className={inputClass}
-            />
-            {newUrl && !urlValid && (
-              <p role="alert" className="text-caption text-terracotta">
-                Must be a valid http:// or https:// URL.
-              </p>
-            )}
-            <input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Title (auto-filled for YouTube)"
-              className={inputClass}
-            />
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <input
-                value={newPreacher}
-                onChange={(e) => setNewPreacher(e.target.value)}
-                placeholder="Preacher"
-                className={inputClass}
-              />
-              <input
-                value={newScripture}
-                onChange={(e) => setNewScripture(e.target.value)}
-                placeholder="Scripture (e.g. John 3:16)"
-                className={inputClass}
-              />
-              <input
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                placeholder="YYYY-MM-DD"
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          {addError && <Banner tone="error">{addError}</Banner>}
-
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={submit}
-              loading={pending}
-              disabled={!urlValid || pending}
-            >
-              {pending ? "Adding…" : "Add"}
-            </Button>
-          </div>
-        </Section>
-      )}
 
       <div className="flex items-center gap-3">
         <Select
