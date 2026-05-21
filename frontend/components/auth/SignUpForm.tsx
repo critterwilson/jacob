@@ -120,11 +120,11 @@ export function SignUpForm() {
       />
 
       <div className="space-y-2">
-        <label className="flex cursor-pointer items-start gap-2 text-body-sm text-cream">
+        <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-body-sm text-cream">
           <input
             id="acceptTerms"
             type="checkbox"
-            className="mt-1 h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
+            className="mt-0.5 h-5 w-5 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
             {...register("acceptTerms")}
           />
           <span>

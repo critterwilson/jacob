@@ -54,7 +54,7 @@ export default function OnboardingPage() {
 
   if (authLoading || profileLoading || applicationLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink">
+      <main className="flex min-h-svh items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
@@ -68,7 +68,7 @@ export default function OnboardingPage() {
   // completes rather than showing the "Apply to join" form.
   if (application?.status === "approved") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink">
+      <main className="flex min-h-svh items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );

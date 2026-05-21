@@ -43,7 +43,7 @@ export function ReactionPicker({
         <div
           role="dialog"
           aria-label="Reaction picker"
-          className="absolute bottom-full left-0 z-10 mb-1 flex flex-wrap gap-1 rounded-lg border border-line bg-ink-overlay p-2 shadow-pop"
+          className="absolute bottom-full right-0 z-10 mb-1 flex max-w-[calc(100vw-2rem)] flex-wrap gap-1 rounded-lg border border-line bg-ink-overlay p-2 shadow-pop"
         >
           {stickers.slice(0, 6).map((s) => {
             const mine = isMyReaction(mid, s.slug);

@@ -166,7 +166,7 @@ export function MessageBody({
 
   return (
     <div className="space-y-2">
-      <div className="break-words leading-relaxed text-body text-cream [&_a]:text-gold-soft [&_a]:underline hover:[&_a]:text-gold [&_blockquote]:border-l-2 [&_blockquote]:border-line [&_blockquote]:pl-2 [&_blockquote]:italic [&_blockquote]:text-cream-muted [&_code]:rounded [&_code]:bg-ink-overlay [&_code]:px-1 [&_code]:text-caption [&_code]:text-cream [&_p]:whitespace-pre-wrap [&_p+p]:mt-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-cream">
+      <div className="break-words leading-relaxed text-body text-cream [&_a]:break-all [&_a]:text-gold-soft [&_a]:underline hover:[&_a]:text-gold [&_blockquote]:border-l-2 [&_blockquote]:border-line [&_blockquote]:pl-2 [&_blockquote]:italic [&_blockquote]:text-cream-muted [&_code]:rounded [&_code]:bg-ink-overlay [&_code]:px-1 [&_code]:text-caption [&_code]:text-cream [&_p]:whitespace-pre-wrap [&_p+p]:mt-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_strong]:text-cream">
         {segments.map((seg, i) => {
           if (seg.kind === "html") {
             return (

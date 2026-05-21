@@ -131,7 +131,7 @@ export function MentionInput({
           id="mention-listbox"
           role="listbox"
           aria-label="mention suggestions"
-          className="absolute bottom-full left-0 z-10 mb-1 max-h-40 w-52 overflow-y-auto rounded-lg border border-line bg-ink-overlay shadow-pop"
+          className="absolute bottom-full left-0 z-10 mb-1 max-h-40 w-52 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-line bg-ink-overlay shadow-pop"
         >
           {filtered.map((member, i) => (
             <li key={member.uid} role="option" aria-selected={i === selectedIdx}>

@@ -32,7 +32,7 @@ export default function GroupSettingsPage({ params }: Props) {
 
   if (authLoading || groupLoading || membershipLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink">
+      <main className="flex min-h-svh items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted">Loading…</span>
       </main>
     );
