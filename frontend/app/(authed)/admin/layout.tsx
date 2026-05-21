@@ -53,14 +53,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (authState === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-svh">
       <nav className="w-48 shrink-0 border-r border-line bg-ink-raised p-4">
         <p className="mb-4 text-eyebrow uppercase tracking-wider text-cream-muted">
           Admin

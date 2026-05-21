@@ -15,7 +15,7 @@ export default function OrgDashboardPage() {
 
   if (orgLoading || dashboardLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
       </div>
     );

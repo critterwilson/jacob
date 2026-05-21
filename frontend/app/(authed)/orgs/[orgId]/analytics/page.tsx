@@ -16,7 +16,7 @@ export default function OrgAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-cream-muted">
+      <div className="flex min-h-svh items-center justify-center text-sm text-cream-muted">
         Loading…
       </div>
     );

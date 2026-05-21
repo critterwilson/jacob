@@ -83,7 +83,7 @@ function JoinForm() {
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <main className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
@@ -146,7 +146,7 @@ export default function JoinPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center">
+        <main className="flex min-h-svh items-center justify-center">
           <span className="text-sm text-cream-muted">Loading…</span>
         </main>
       }

@@ -16,7 +16,7 @@ export default function ReadingPlanDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-ink text-body-sm text-cream-muted">
+      <div className="flex min-h-svh items-center justify-center bg-ink text-body-sm text-cream-muted">
         Loading…
       </div>
     );

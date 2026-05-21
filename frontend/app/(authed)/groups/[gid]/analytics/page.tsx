@@ -41,7 +41,7 @@ export default function AnalyticsPage({ params }: Props) {
 
   if (authLoading || membershipLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <main className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );

@@ -87,7 +87,7 @@ export default function VerifyEmailPage() {
 
   if (loading || !user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink">
+      <main className="flex min-h-svh items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted" role="status">
           Loading…
         </span>
@@ -96,7 +96,7 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-ink px-4 py-12">
+    <main className="flex min-h-svh flex-col items-center justify-center bg-ink px-4 py-12">
       <div className="flex w-full max-w-md flex-col items-center gap-6">
         <div className="flex flex-col items-center gap-3 text-gold-soft">
           <LightFromClouds className="h-20 w-auto opacity-90" />

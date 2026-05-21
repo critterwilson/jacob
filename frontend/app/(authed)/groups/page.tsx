@@ -20,7 +20,7 @@ export default function GroupsPage() {
 
   if (authLoading || groupsLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
+      <main className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
       </main>
     );
@@ -30,18 +30,18 @@ export default function GroupsPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3">
         <h1 className="text-2xl font-semibold">Your groups</h1>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
           <Link
             href="/join"
-            className="rounded border border-line px-3 py-2 text-sm hover:bg-ink-raised"
+            className="inline-flex h-11 items-center rounded border border-line px-4 text-body-sm transition-colors duration-fast hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
           >
             Join with code
           </Link>
           <Link
             href="/groups/new"
-            className="rounded bg-gold px-3 py-2 text-sm font-medium text-ink"
+            className="inline-flex h-11 items-center rounded bg-gold px-4 text-body-sm font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
           >
             New group
           </Link>
@@ -51,16 +51,16 @@ export default function GroupsPage() {
       {groups.length === 0 ? (
         <div className="rounded border border-dashed border-line p-8 text-center text-cream-muted">
           <p className="mb-4">You have not joined any groups yet.</p>
-          <div className="flex justify-center gap-3">
+          <div className="flex flex-wrap justify-center gap-2">
             <Link
               href="/groups/new"
-              className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink"
+              className="inline-flex h-11 items-center rounded bg-gold px-4 text-body-sm font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
             >
               Create a group
             </Link>
             <Link
               href="/join"
-              className="rounded border border-line px-4 py-2 text-sm"
+              className="inline-flex h-11 items-center rounded border border-line px-4 text-body-sm transition-colors duration-fast hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
             >
               Join with code
             </Link>

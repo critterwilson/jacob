@@ -20,7 +20,7 @@ export default function LandingPage() {
 
   if (loading || user) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-ink">
+      <main className="flex min-h-svh items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted" role="status">
           Loading…
         </span>
@@ -29,7 +29,7 @@ export default function LandingPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-10 bg-ink px-6 py-16 text-center">
+    <main className="mx-auto flex min-h-svh max-w-2xl flex-col items-center justify-center gap-10 bg-ink px-6 py-16 text-center">
       <Dove className="h-32 w-auto text-gold-soft opacity-90" />
 
       <div className="space-y-4">

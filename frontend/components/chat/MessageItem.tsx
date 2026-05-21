@@ -291,7 +291,7 @@ export function MessageItem({
                 <PhotoView
                   src={url}
                   alt=""
-                  className="max-h-64 w-auto rounded-md border border-line"
+                  className="max-h-64 w-full max-w-xs rounded-md border border-line"
                 />
               </li>
             ))}
