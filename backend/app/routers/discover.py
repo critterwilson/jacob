@@ -275,12 +275,23 @@ def list_join_requests(
     has_more = len(snaps) > limit
     page = snaps[:limit]
 
+    # Bulk-read user profiles in one round-trip (same pattern as groups.list_members).
+    user_refs = [db.collection("users").document(s.id) for s in page]
+    user_docs = list(db.get_all(user_refs)) if user_refs else []
+    profiles: dict[str, dict[str, Any]] = {}
+    for doc in user_docs:
+        if getattr(doc, "exists", False):
+            profiles[doc.id] = doc.to_dict() or {}
+
     requests_out: list[PendingRequest] = []
     for snap in page:
         d = snap.to_dict() or {}
+        profile = profiles.get(snap.id, {})
         requests_out.append(
             PendingRequest(
                 uid=snap.id,
+                displayName=str(profile.get("displayName") or "") or snap.id,
+                photoURL=profile.get("photoURL"),
                 message=d.get("message") or "",
                 requestedAt=_ts_to_iso(d.get("requestedAt")),
                 status=d.get("status", "pending"),
