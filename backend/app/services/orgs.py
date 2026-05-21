@@ -108,6 +108,7 @@ def create_org(
     batch.set(
         admin_ref,
         {
+            "uid": initial_admin_uid,
             "addedBy": actor_uid,
             "addedAt": fb_firestore.SERVER_TIMESTAMP,
         },
@@ -167,6 +168,7 @@ def add_admin(
         return False
     ref.set(
         {
+            "uid": uid,
             "addedBy": actor_uid,
             "addedAt": fb_firestore.SERVER_TIMESTAMP,
         }

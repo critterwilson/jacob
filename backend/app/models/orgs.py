@@ -86,6 +86,19 @@ class OrgListResponse(BaseModel):
     orgs: list[Org]
 
 
+class OrgSummary(BaseModel):
+    orgId: str
+    name: str
+    slug: str
+    audience: OrgAudience
+    logoUrl: str | None = None
+    role: Literal["admin", "member"]
+
+
+class MyOrgsResponse(BaseModel):
+    orgs: list[OrgSummary]
+
+
 class OrgAdmin(BaseModel):
     uid: str
     addedBy: str | None

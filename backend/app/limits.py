@@ -105,6 +105,7 @@ USER_BLOCKS_WRITE: str = "30/minute"
 # the page-load critical path for chat/groups; pagination + polling
 # multiply request count per user.
 MY_GROUPS_LIST: str = "30/minute"
+MY_ORGS_LIST: str = "30/minute"
 GROUP_READ: str = "60/minute"
 GROUP_MEMBERSHIP_READ: str = "60/minute"
 MEMBERS_LIST: str = "60/minute"
