@@ -8,9 +8,17 @@ const IS_IOS =
   !(window as Window & { MSStream?: unknown }).MSStream;
 
 export function InstallPrompt() {
-  const { canInstall, promptInstall, dismiss } = usePWAInstall();
+  const { canInstall, promptInstall, dismiss, permanentDismiss, dismissed, isStandalone } =
+    usePWAInstall();
 
-  if (!canInstall && !IS_IOS) return null;
+  // Never show when already running as an installed PWA.
+  if (isStandalone) return null;
+
+  // Hidden until snooze expires or permanently dismissed.
+  if (dismissed) return null;
+
+  // Non-iOS only shows when the browser has surfaced a native install prompt.
+  if (!IS_IOS && !canInstall) return null;
 
   return (
     <div
@@ -26,7 +34,15 @@ export function InstallPrompt() {
         <span className="text-cream">Install JACOB for a faster, offline-capable experience.</span>
       )}
       <div className="flex shrink-0 gap-2">
-        {!IS_IOS && (
+        {IS_IOS ? (
+          <button
+            type="button"
+            onClick={permanentDismiss}
+            className="rounded bg-gold px-3 py-1 text-xs font-medium text-ink hover:bg-gold-soft"
+          >
+            Already installed
+          </button>
+        ) : (
           <button
             type="button"
             onClick={() => void promptInstall()}

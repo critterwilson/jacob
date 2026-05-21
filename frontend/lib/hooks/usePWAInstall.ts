@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 const SNOOZE_KEY = "pwa-install-snoozed-until";
-const SNOOZE_DAYS = 30;
+const PERMANENT_KEY = "pwa-install-dismissed";
+const SNOOZE_DAYS = 14;
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -14,7 +15,17 @@ export function usePWAInstall() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
+  // Stable across the lifetime of the page — if you're in standalone you're in standalone.
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      !!(navigator as Navigator & { standalone?: boolean }).standalone);
+
   useEffect(() => {
+    if (localStorage.getItem(PERMANENT_KEY) === "1") {
+      setDismissed(true);
+      return;
+    }
     const snoozedUntil = localStorage.getItem(SNOOZE_KEY);
     if (snoozedUntil && Date.now() < Number(snoozedUntil)) {
       setDismissed(true);
@@ -35,6 +46,7 @@ export function usePWAInstall() {
     const { outcome } = await promptEvent.userChoice;
     if (outcome === "dismissed") {
       snooze();
+      setDismissed(true);
     }
     setPromptEvent(null);
   }, [promptEvent]);
@@ -45,7 +57,20 @@ export function usePWAInstall() {
     setPromptEvent(null);
   }, []);
 
-  return { canInstall: !!promptEvent && !dismissed, promptInstall, dismiss };
+  const permanentDismiss = useCallback(() => {
+    localStorage.setItem(PERMANENT_KEY, "1");
+    setDismissed(true);
+    setPromptEvent(null);
+  }, []);
+
+  return {
+    canInstall: !!promptEvent && !dismissed,
+    promptInstall,
+    dismiss,
+    permanentDismiss,
+    dismissed,
+    isStandalone,
+  };
 }
 
 function snooze() {
