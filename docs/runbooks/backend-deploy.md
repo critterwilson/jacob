@@ -122,3 +122,26 @@ terraform apply -var=cloudrun_min_instances=1
 
 Default is 0 (scale to zero). Flip per the user's "no costs" policy when
 the SLO requires it.
+
+## Bootstrapping the first admin
+
+There is no in-app flow for granting the `admin` Firebase custom claim
+(privilege-escalation risk). Use the operator script instead:
+
+```bash
+# Grant (email or UID accepted)
+GOOGLE_APPLICATION_CREDENTIALS=path/to/sa.json \
+python infra/scripts/grant_admin_claim.py --project jacob-prod user@example.com
+
+# Revoke
+GOOGLE_APPLICATION_CREDENTIALS=path/to/sa.json \
+python infra/scripts/grant_admin_claim.py --project jacob-prod --revoke user@example.com
+
+# Preview without writing
+GOOGLE_APPLICATION_CREDENTIALS=path/to/sa.json \
+python infra/scripts/grant_admin_claim.py --project jacob-prod --dry-run user@example.com
+```
+
+The script merges the `admin` claim into any existing claims — existing
+`moderator` or `ministry_owner` claims survive. The grantee must sign out
+and back in before the claim takes effect in the app.
