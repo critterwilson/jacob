@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { ApiError, apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 type AdminUser = {
@@ -13,7 +13,21 @@ type AdminUser = {
   isBanned: boolean;
 };
 
+type UserRoles = {
+  isAdmin: boolean;
+  isModerator: boolean;
+  isMinistryOwner: boolean;
+};
+
 type BanDuration = "24h" | "7d" | "permanent";
+
+const ROLE_DESCRIPTIONS: Record<keyof UserRoles, string> = {
+  isAdmin: "Full platform access — can manage all users, groups, and settings.",
+  isModerator:
+    "Can review and action wellbeing flags and moderation queue items.",
+  isMinistryOwner:
+    "Can author and publish posts to the central ministry feed.",
+};
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -21,7 +35,18 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [actionState, setActionState] = useState<Record<string, string>>({});
+
+  // Per-user ban action state
+  const [banState, setBanState] = useState<Record<string, string>>({});
+
+  // Per-user roles panel state: open/loading/data/error
+  const [rolesOpen, setRolesOpen] = useState<Record<string, boolean>>({});
+  const [rolesLoading, setRolesLoading] = useState<Record<string, boolean>>({});
+  const [rolesData, setRolesData] = useState<Record<string, UserRoles>>({});
+  const [rolesError, setRolesError] = useState<Record<string, string>>({});
+  const [rolesActionState, setRolesActionState] = useState<
+    Record<string, string>
+  >({});
 
   const searchUsers = useCallback(async () => {
     if (!user) return;
@@ -48,7 +73,7 @@ export default function AdminUsersPage() {
 
   const banUser = async (uid: string, duration: BanDuration) => {
     if (!user) return;
-    setActionState((s) => ({ ...s, [uid]: "loading" }));
+    setBanState((s) => ({ ...s, [uid]: "loading" }));
     try {
       await apiPost(`/api/admin/users/${uid}/ban`, {
         reason: "Admin ban",
@@ -57,9 +82,9 @@ export default function AdminUsersPage() {
       setUsers((prev) =>
         prev.map((u) => (u.uid === uid ? { ...u, isBanned: true } : u)),
       );
-      setActionState((s) => ({ ...s, [uid]: "done" }));
+      setBanState((s) => ({ ...s, [uid]: "done" }));
     } catch (e) {
-      setActionState((s) => ({
+      setBanState((s) => ({
         ...s,
         [uid]:
           e instanceof ApiError
@@ -73,15 +98,15 @@ export default function AdminUsersPage() {
 
   const unbanUser = async (uid: string) => {
     if (!user) return;
-    setActionState((s) => ({ ...s, [uid]: "loading" }));
+    setBanState((s) => ({ ...s, [uid]: "loading" }));
     try {
       await apiPost(`/api/admin/users/${uid}/unban`, undefined);
       setUsers((prev) =>
         prev.map((u) => (u.uid === uid ? { ...u, isBanned: false } : u)),
       );
-      setActionState((s) => ({ ...s, [uid]: "done" }));
+      setBanState((s) => ({ ...s, [uid]: "done" }));
     } catch (e) {
-      setActionState((s) => ({
+      setBanState((s) => ({
         ...s,
         [uid]:
           e instanceof ApiError
@@ -89,6 +114,97 @@ export default function AdminUsersPage() {
             : e instanceof Error
               ? e.message
               : "error",
+      }));
+    }
+  };
+
+  const loadRoles = async (uid: string) => {
+    if (!user) return;
+    setRolesLoading((s) => ({ ...s, [uid]: true }));
+    setRolesError((s) => ({ ...s, [uid]: "" }));
+    try {
+      const data = await apiGet<UserRoles>(`/api/admin/users/${uid}/roles`);
+      setRolesData((s) => ({ ...s, [uid]: data }));
+    } catch (e) {
+      setRolesError((s) => ({
+        ...s,
+        [uid]:
+          e instanceof ApiError
+            ? e.message || `HTTP ${e.status}`
+            : "Failed to load roles",
+      }));
+    } finally {
+      setRolesLoading((s) => ({ ...s, [uid]: false }));
+    }
+  };
+
+  const toggleRolesPanel = (uid: string) => {
+    const opening = !rolesOpen[uid];
+    setRolesOpen((s) => ({ ...s, [uid]: opening }));
+    if (opening && !rolesData[uid]) {
+      void loadRoles(uid);
+    }
+  };
+
+  const toggleModerator = async (uid: string, grant: boolean) => {
+    if (!user) return;
+    if (
+      !grant &&
+      !window.confirm(
+        "Remove moderator access? This user will no longer be able to review wellbeing flags.",
+      )
+    )
+      return;
+    setRolesActionState((s) => ({ ...s, [`${uid}:moderator`]: "loading" }));
+    try {
+      await apiPost(`/api/admin/users/${uid}/moderator`, { grant });
+      setRolesData((s) => ({
+        ...s,
+        [uid]: { ...s[uid]!, isModerator: grant },
+      }));
+      setRolesActionState((s) => ({ ...s, [`${uid}:moderator`]: "" }));
+    } catch (e) {
+      setRolesActionState((s) => ({
+        ...s,
+        [`${uid}:moderator`]:
+          e instanceof ApiError
+            ? e.message || `HTTP ${e.status}`
+            : "Error updating role",
+      }));
+    }
+  };
+
+  const toggleMinistryOwner = async (uid: string, grant: boolean) => {
+    if (!user) return;
+    if (
+      !grant &&
+      !window.confirm(
+        "Remove Ministry Owner access? This user will no longer be able to publish to the ministry feed.",
+      )
+    )
+      return;
+    setRolesActionState((s) => ({
+      ...s,
+      [`${uid}:ministry_owner`]: "loading",
+    }));
+    try {
+      if (grant) {
+        await apiPost(`/api/admin/users/${uid}/ministry-owner`, undefined);
+      } else {
+        await apiDelete(`/api/admin/users/${uid}/ministry-owner`);
+      }
+      setRolesData((s) => ({
+        ...s,
+        [uid]: { ...s[uid]!, isMinistryOwner: grant },
+      }));
+      setRolesActionState((s) => ({ ...s, [`${uid}:ministry_owner`]: "" }));
+    } catch (e) {
+      setRolesActionState((s) => ({
+        ...s,
+        [`${uid}:ministry_owner`]:
+          e instanceof ApiError
+            ? e.message || `HTTP ${e.status}`
+            : "Error updating role",
       }));
     }
   };
@@ -115,70 +231,225 @@ export default function AdminUsersPage() {
         </button>
       </div>
       {error && (
-        <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta">{error}</p>
+        <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta">
+          {error}
+        </p>
       )}
       {users.length === 0 && !loading && (
-        <p className="text-sm text-cream-muted">No users found. Run a search to load users.</p>
+        <p className="text-sm text-cream-muted">
+          No users found. Run a search to load users.
+        </p>
       )}
       <ul className="space-y-3">
         {users.map((u) => (
           <li
             key={u.uid}
-            className="flex items-center justify-between gap-4 rounded border border-line bg-ink-raised p-4 shadow-sm"
+            className="rounded border border-line bg-ink-raised shadow-sm"
           >
-            <div className="min-w-0">
-              <p className="truncate font-medium text-cream">
-                {u.displayName ?? "(no name)"}
-              </p>
-              <p className="truncate text-xs text-cream-muted">{u.email ?? u.uid}</p>
-              {u.isBanned && (
-                <span className="mt-1 inline-block rounded bg-ink-overlay px-2 py-0.5 text-xs font-medium text-terracotta">
-                  Banned
-                </span>
-              )}
-            </div>
-            <div className="shrink-0">
-              {actionState[u.uid] === "loading" ? (
-                <span className="text-xs text-cream-muted">Processing…</span>
-              ) : actionState[u.uid] && actionState[u.uid] !== "done" ? (
-                <span className="text-xs text-terracotta">{actionState[u.uid]}</span>
-              ) : u.isBanned ? (
+            {/* Main row */}
+            <div className="flex items-center justify-between gap-4 p-4">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-cream">
+                  {u.displayName ?? "(no name)"}
+                </p>
+                <p className="truncate text-xs text-cream-muted">
+                  {u.email ?? u.uid}
+                </p>
+                {u.isBanned && (
+                  <span className="mt-1 inline-block rounded bg-ink-overlay px-2 py-0.5 text-xs font-medium text-terracotta">
+                    Banned
+                  </span>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Roles toggle */}
                 <button
                   type="button"
-                  onClick={() => void unbanUser(u.uid)}
-                  className="rounded bg-ink-overlay px-3 py-1.5 text-xs font-medium text-cream hover:bg-ink-overlay/80"
+                  onClick={() => toggleRolesPanel(u.uid)}
+                  className="rounded border border-line px-3 py-1.5 text-xs font-medium text-cream-muted hover:bg-ink-overlay"
+                  aria-expanded={rolesOpen[u.uid] ?? false}
                 >
-                  Unban
+                  {rolesOpen[u.uid] ? "Hide roles" : "Manage roles"}
                 </button>
-              ) : (
-                <div className="flex gap-2">
+
+                {/* Ban controls */}
+                {banState[u.uid] === "loading" ? (
+                  <span className="text-xs text-cream-muted">
+                    Processing…
+                  </span>
+                ) : banState[u.uid] && banState[u.uid] !== "done" ? (
+                  <span className="text-xs text-terracotta">
+                    {banState[u.uid]}
+                  </span>
+                ) : u.isBanned ? (
                   <button
                     type="button"
-                    onClick={() => void banUser(u.uid, "24h")}
-                    className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
+                    onClick={() => void unbanUser(u.uid)}
+                    className="rounded bg-ink-overlay px-3 py-1.5 text-xs font-medium text-cream hover:bg-ink-overlay/80"
                   >
-                    Ban 24h
+                    Unban
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void banUser(u.uid, "7d")}
-                    className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
-                  >
-                    Ban 7d
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void banUser(u.uid, "permanent")}
-                    className="rounded border border-terracotta/60 bg-ink-raised px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
-                  >
-                    Ban ∞
-                  </button>
-                </div>
-              )}
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void banUser(u.uid, "24h")}
+                      className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
+                    >
+                      Ban 24h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void banUser(u.uid, "7d")}
+                      className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
+                    >
+                      Ban 7d
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void banUser(u.uid, "permanent")}
+                      className="rounded border border-terracotta/60 bg-ink-raised px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
+                    >
+                      Ban ∞
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Roles panel */}
+            {rolesOpen[u.uid] && (
+              <div className="border-t border-line px-4 py-3">
+                {rolesLoading[u.uid] ? (
+                  <p className="text-xs text-cream-muted">
+                    Loading roles…
+                  </p>
+                ) : rolesError[u.uid] ? (
+                  <p className="text-xs text-terracotta">
+                    {rolesError[u.uid]}
+                  </p>
+                ) : rolesData[u.uid] ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-cream-muted">
+                      Platform roles
+                    </p>
+
+                    {/* Admin claim — read-only, no endpoint to grant */}
+                    <RoleRow
+                      label="Admin"
+                      description={ROLE_DESCRIPTIONS.isAdmin}
+                      active={rolesData[u.uid]!.isAdmin}
+                      readOnly
+                      readOnlyNote={
+                        rolesData[u.uid]!.isAdmin
+                          ? undefined
+                          : "Grant via Admin SDK script — no in-app endpoint."
+                      }
+                    />
+
+                    {/* Moderator */}
+                    <RoleRow
+                      label="Moderator"
+                      description={ROLE_DESCRIPTIONS.isModerator}
+                      active={rolesData[u.uid]!.isModerator}
+                      actionState={
+                        rolesActionState[`${u.uid}:moderator`] ?? ""
+                      }
+                      onGrant={() => void toggleModerator(u.uid, true)}
+                      onRevoke={() => void toggleModerator(u.uid, false)}
+                    />
+
+                    {/* Ministry Owner */}
+                    <RoleRow
+                      label="Ministry Owner"
+                      description={ROLE_DESCRIPTIONS.isMinistryOwner}
+                      active={rolesData[u.uid]!.isMinistryOwner}
+                      actionState={
+                        rolesActionState[`${u.uid}:ministry_owner`] ?? ""
+                      }
+                      onGrant={() => void toggleMinistryOwner(u.uid, true)}
+                      onRevoke={() => void toggleMinistryOwner(u.uid, false)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+type RoleRowProps = {
+  label: string;
+  description: string;
+  active: boolean;
+  readOnly?: boolean;
+  readOnlyNote?: string;
+  actionState?: string;
+  onGrant?: () => void;
+  onRevoke?: () => void;
+};
+
+function RoleRow({
+  label,
+  description,
+  active,
+  readOnly,
+  readOnlyNote,
+  actionState,
+  onGrant,
+  onRevoke,
+}: RoleRowProps) {
+  const busy = actionState === "loading";
+  const err = actionState && actionState !== "loading" ? actionState : null;
+
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-block h-2 w-2 rounded-full ${active ? "bg-sage" : "bg-line"}`}
+          />
+          <span className="text-sm font-medium text-cream">{label}</span>
+          {active && (
+            <span className="rounded bg-ink-overlay px-1.5 py-0.5 text-xs font-medium text-sage">
+              Active
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 pl-4 text-xs text-cream-muted">{description}</p>
+        {readOnlyNote && (
+          <p className="mt-0.5 pl-4 text-xs text-parchment-amber">
+            {readOnlyNote}
+          </p>
+        )}
+        {err && <p className="mt-0.5 pl-4 text-xs text-terracotta">{err}</p>}
+      </div>
+      {!readOnly && (
+        <div className="shrink-0">
+          {busy ? (
+            <span className="text-xs text-cream-muted">Updating…</span>
+          ) : active ? (
+            <button
+              type="button"
+              onClick={onRevoke}
+              className="rounded border border-terracotta/40 px-2.5 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay"
+            >
+              Revoke
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onGrant}
+              className="rounded border border-gold/40 px-2.5 py-1 text-xs font-medium text-gold hover:bg-gold/10"
+            >
+              Grant
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -411,3 +411,78 @@ def test_search_groups_partial_prefix_uses_unicode_sentinel() -> None:
     assert {g["name"] for g in res.json()["groups"]} == {"men of valor", "men's bible study"}
     upper_calls = [c for c in db.where_calls if c[1] == "<="]
     assert ("name", "<=", "men") in upper_calls
+
+
+# ── GET /api/admin/users/{uid}/roles ─────────────────────────────────────────
+
+
+def _make_firebase_user(
+    uid: str = "target-uid",
+    *,
+    admin: bool = False,
+    moderator: bool = False,
+    ministry_owner: bool = False,
+) -> MagicMock:
+    fb_user = MagicMock()
+    claims: dict[str, bool] = {}
+    if admin:
+        claims["admin"] = True
+    if moderator:
+        claims["moderator"] = True
+    if ministry_owner:
+        claims["ministry_owner"] = True
+    fb_user.custom_claims = claims or None
+    return fb_user
+
+
+def test_get_roles_no_claims() -> None:
+    fb_user = _make_firebase_user()
+    with patch("app.routers.admin.firebase_auth.get_user", return_value=fb_user):
+        res = TestClient(_admin_app()).get("/api/admin/users/target-uid/roles")
+    assert res.status_code == 200
+    data = res.json()
+    assert data == {
+        "uid": "target-uid",
+        "isAdmin": False,
+        "isModerator": False,
+        "isMinistryOwner": False,
+    }
+
+
+def test_get_roles_all_claims() -> None:
+    fb_user = _make_firebase_user(admin=True, moderator=True, ministry_owner=True)
+    with patch("app.routers.admin.firebase_auth.get_user", return_value=fb_user):
+        res = TestClient(_admin_app()).get("/api/admin/users/target-uid/roles")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["isAdmin"] is True
+    assert data["isModerator"] is True
+    assert data["isMinistryOwner"] is True
+
+
+def test_get_roles_moderator_only() -> None:
+    fb_user = _make_firebase_user(moderator=True)
+    with patch("app.routers.admin.firebase_auth.get_user", return_value=fb_user):
+        res = TestClient(_admin_app()).get("/api/admin/users/target-uid/roles")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["isModerator"] is True
+    assert data["isAdmin"] is False
+    assert data["isMinistryOwner"] is False
+
+
+def test_get_roles_404_when_user_not_found() -> None:
+    from firebase_admin.auth import UserNotFoundError
+
+    with patch(
+        "app.routers.admin.firebase_auth.get_user",
+        side_effect=UserNotFoundError("not found"),
+    ):
+        res = TestClient(_admin_app()).get("/api/admin/users/ghost-uid/roles")
+    assert res.status_code == 404
+    assert res.json()["error"]["code"] == "user_not_found"
+
+
+def test_get_roles_non_admin_403() -> None:
+    res = TestClient(_non_admin_app()).get("/api/admin/users/uid-x/roles")
+    assert res.status_code == 403
