@@ -142,6 +142,8 @@ let devotionalsMock: DevotionalsMock = {
       sourceAttribution: "Public domain.",
       publishedAt: null,
       audience: "christian",
+      groupId: null,
+      groupName: null,
     },
   ],
   loading: false,
@@ -274,6 +276,8 @@ beforeEach(() => {
         sourceAttribution: "Public domain.",
         publishedAt: null,
         audience: "christian",
+        groupId: null,
+        groupName: null,
       },
     ],
     loading: false,
@@ -458,6 +462,8 @@ describe("TodayDevotional", () => {
           sourceAttribution: "",
           publishedAt: null,
           audience: "christian",
+          groupId: null,
+          groupName: null,
         }}
         loading={false}
       />,

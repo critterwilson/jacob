@@ -5,7 +5,9 @@ import { useState } from "react";
 
 import { DevotionalForm } from "@/components/devotionals/DevotionalForm";
 import type { DevotionalFormValues } from "@/components/devotionals/DevotionalForm";
+import { useAuth } from "@/lib/auth-context";
 import { Button, Eyebrow, Heading, Link } from "@/components/ui";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 import {
   useDevotional,
@@ -77,10 +79,25 @@ export default function DevotionalPage() {
   );
   const { devotional, loading } = useDevotional(slug);
   const claims = useRoleClaims();
+  const { user } = useAuth();
   const { patchDevotional, deleteDevotional } = useDevotionalMutations();
   const [editing, setEditing] = useState(false);
 
+  // Mutation gates mirror the backend (`_authorize_devotional_mutation`):
+  // platform-wide → ministry_owner (or admin); group-scoped → leader of
+  // the named group (or admin). Admins always see edit/delete.
+  const isAdmin = claims?.isAdmin === true;
   const isMinistryOwner = claims?.isMinistryOwner === true;
+  const groupId = devotional?.groupId ?? null;
+  const { isLeader: isLeaderOfDevotionalGroup } = useGroupMembership(
+    user?.uid,
+    groupId ?? undefined,
+  );
+  const canMutate = isAdmin
+    ? true
+    : groupId
+      ? isLeaderOfDevotionalGroup
+      : isMinistryOwner;
 
   if (loading) {
     return (
@@ -134,7 +151,11 @@ export default function DevotionalPage() {
       {!editing ? (
         <>
           <header className="space-y-2">
-            <Eyebrow>Devotional</Eyebrow>
+            <Eyebrow>
+              {devotional.groupName
+                ? `Devotional · ${devotional.groupName}`
+                : "Devotional"}
+            </Eyebrow>
             <Heading level={1} size="lg">
               {devotional.title}
             </Heading>
@@ -160,7 +181,7 @@ export default function DevotionalPage() {
             </p>
           )}
 
-          {isMinistryOwner && (
+          {canMutate && (
             <div className="flex flex-wrap gap-3 border-t border-line pt-4">
               <Button
                 type="button"

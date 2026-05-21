@@ -126,7 +126,12 @@ export default function GroupPage({ params }: Props) {
        *  so non-leaders see exactly one nav block and leaders can tell
        *  at a glance which tools are theirs. */}
       <nav aria-label="Group sections" className="mt-2">
-        <ul className="grid grid-cols-3 gap-2">
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <li>
+            <Link href={`/groups/${gid}/devotionals`} className={tileClass}>
+              Devotionals
+            </Link>
+          </li>
           <li>
             <Link href={`/groups/${gid}/sermons`} className={tileClass}>
               Sermons
