@@ -35,9 +35,11 @@ type Props = {
    * debounced — it's safe to call this on every keystroke.
    */
   onTyping?: (active: boolean) => void;
+  /** T56 — filters the sticker picker to the group's audience + general. */
+  groupAudience?: "christian" | "bjj" | "general";
 };
 
-export function MessageInput({ gid, archived = false, onTyping }: Props) {
+export function MessageInput({ gid, archived = false, onTyping, groupAudience }: Props) {
   const { user } = useAuth();
   const { members } = useMembers(gid);
   const [stickers, setStickers] = useState<string[]>([]);
@@ -123,7 +125,7 @@ export function MessageInput({ gid, archived = false, onTyping }: Props) {
       aria-label="Send a message"
       className="shrink-0 border-t border-line bg-ink px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
     >
-      <StickerPicker value={stickers} onChange={setStickers} />
+      <StickerPicker value={stickers} onChange={setStickers} groupAudience={groupAudience} />
 
       {mediaRefs.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-2" aria-label="Attached photos">

@@ -7,12 +7,14 @@ type Props = {
 
 export function StickerBadge({ sticker, size = "md" }: Props) {
   const cls =
-    size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
+    size === "sm"
+      ? "px-2 py-0.5 text-xs font-normal"
+      : "px-3 py-1 text-sm font-medium";
 
   return (
     <span
       data-sticker={sticker.slug}
-      className={`inline-flex items-center rounded-full font-medium ${cls}`}
+      className={`inline-flex items-center rounded-full ${cls}`}
       style={{
         backgroundColor: sticker.color + "26",
         color: sticker.color,

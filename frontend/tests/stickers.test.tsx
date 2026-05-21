@@ -16,12 +16,14 @@ import {
 // Shared mock sticker data (mirrors firestore/seed/stickers.ts)
 // ---------------------------------------------------------------------------
 const MOCK_STICKERS: Sticker[] = [
-  { id: "check-in",       slug: "check-in",       name: "Check-In",       audience: "christian", order: 1, color: "#2563EB" },
-  { id: "prayer-request", slug: "prayer-request", name: "Prayer Request",  audience: "christian", order: 2, color: "#7C3AED" },
-  { id: "praise-report",  slug: "praise-report",  name: "Praise Report",   audience: "christian", order: 3, color: "#D97706" },
-  { id: "offering-help",  slug: "offering-help",  name: "Offering Help",   audience: "christian", order: 4, color: "#059669" },
-  { id: "need-help",      slug: "need-help",      name: "Need Help",       audience: "christian", order: 5, color: "#DC2626" },
-  { id: "event-meetup",   slug: "event-meetup",   name: "Event / Meetup",  audience: "christian", order: 6, color: "#DB2777" },
+  { id: "check-in",            slug: "check-in",            name: "Check-In",            audience: "christian", order: 1,  color: "#2563EB" },
+  { id: "prayer-request",      slug: "prayer-request",      name: "Prayer Request",       audience: "christian", order: 2,  color: "#7C3AED" },
+  { id: "praise-report",       slug: "praise-report",       name: "Praise Report",        audience: "christian", order: 3,  color: "#D97706" },
+  { id: "offering-help",       slug: "offering-help",       name: "Offering Help",        audience: "christian", order: 4,  color: "#059669" },
+  { id: "need-help",           slug: "need-help",           name: "Need Help",            audience: "christian", order: 5,  color: "#DC2626" },
+  { id: "event-meetup",        slug: "event-meetup",        name: "Event / Meetup",       audience: "christian", order: 6,  color: "#DB2777" },
+  { id: "roll-partner-needed", slug: "roll-partner-needed", name: "Roll Partner Needed",  audience: "bjj",       order: 11, color: "#6E8AA9" },
+  { id: "encouragement",       slug: "encouragement",       name: "Encouragement",        audience: "general",   order: 21, color: "#7FB39A" },
 ];
 
 vi.mock("@/lib/hooks/useStickers", () => ({
@@ -44,16 +46,18 @@ describe("StickerBadge", () => {
     });
   }
 
-  it("applies sm padding class when size=sm", () => {
+  it("applies sm classes when size=sm (text-xs, font-normal)", () => {
     const { container } = render(
       <StickerBadge sticker={MOCK_STICKERS[0]} size="sm" />,
     );
     expect(container.firstChild).toHaveClass("text-xs");
+    expect(container.firstChild).toHaveClass("font-normal");
   });
 
-  it("applies md padding class by default", () => {
+  it("applies md classes by default (text-sm, font-medium)", () => {
     const { container } = render(<StickerBadge sticker={MOCK_STICKERS[0]} />);
     expect(container.firstChild).toHaveClass("text-sm");
+    expect(container.firstChild).toHaveClass("font-medium");
   });
 });
 
@@ -130,5 +134,29 @@ describe("StickerPicker", () => {
 
   it("exports DEFAULT_STICKER_SLUG as check-in", () => {
     expect(DEFAULT_STICKER_SLUG).toBe("check-in");
+  });
+
+  it("groupAudience=christian hides bjj stickers but shows general ones", () => {
+    render(<StickerPicker value={[]} onChange={() => {}} groupAudience="christian" />);
+    // christian sticker visible
+    expect(screen.getByRole("button", { name: "Check-In" })).toBeInTheDocument();
+    // general sticker visible
+    expect(screen.getByRole("button", { name: "Encouragement" })).toBeInTheDocument();
+    // bjj-only sticker hidden
+    expect(screen.queryByRole("button", { name: "Roll Partner Needed" })).not.toBeInTheDocument();
+  });
+
+  it("groupAudience=bjj hides christian stickers but shows general ones", () => {
+    render(<StickerPicker value={[]} onChange={() => {}} groupAudience="bjj" />);
+    expect(screen.getByRole("button", { name: "Roll Partner Needed" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Encouragement" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check-In" })).not.toBeInTheDocument();
+  });
+
+  it("no groupAudience shows all stickers", () => {
+    render(<StickerPicker value={[]} onChange={() => {}} />);
+    expect(screen.getByRole("button", { name: "Check-In" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Roll Partner Needed" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Encouragement" })).toBeInTheDocument();
   });
 });
