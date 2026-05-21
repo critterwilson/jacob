@@ -86,14 +86,14 @@ describe("InviteForm", () => {
   });
 
   it("renders expiry and maxUses selects with defaults", () => {
-    render(<InviteForm gid="g1" />);
+    render(<InviteForm gid="g1" groupName="Sunday Crew" />);
     expect(screen.getByRole("combobox", { name: /expires/i })).toHaveValue("never");
     expect(screen.getByRole("combobox", { name: /max uses/i })).toHaveValue("unlimited");
   });
 
   it("shows invite URL after successful generation", async () => {
     const user = userEvent.setup();
-    render(<InviteForm gid="g1" />);
+    render(<InviteForm gid="g1" groupName="Sunday Crew" />);
     await user.click(screen.getByRole("button", { name: /generate invite/i }));
     await waitFor(() => {
       expect(screen.getByText("https://jacob.app/join?code=ABCD1234")).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe("InviteForm", () => {
 
   it("shows Copied! feedback when Copy is clicked", async () => {
     const user = userEvent.setup();
-    render(<InviteForm gid="g1" />);
+    render(<InviteForm gid="g1" groupName="Sunday Crew" />);
     await user.click(screen.getByRole("button", { name: /generate invite/i }));
     await waitFor(() => screen.getByRole("button", { name: /copy/i }));
     await user.click(screen.getByRole("button", { name: /copy/i }));
@@ -118,7 +118,7 @@ describe("InviteForm", () => {
       json: () => Promise.resolve({ error: { message: "Server error" } }),
     });
     const user = userEvent.setup();
-    render(<InviteForm gid="g1" />);
+    render(<InviteForm gid="g1" groupName="Sunday Crew" />);
     await user.click(screen.getByRole("button", { name: /generate invite/i }));
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("Server error");
@@ -127,7 +127,7 @@ describe("InviteForm", () => {
 
   it("posts correct JSON body with selected options", async () => {
     const user = userEvent.setup();
-    render(<InviteForm gid="g1" />);
+    render(<InviteForm gid="g1" groupName="Sunday Crew" />);
     await user.selectOptions(screen.getByRole("combobox", { name: /expires/i }), "24h");
     await user.selectOptions(screen.getByRole("combobox", { name: /max uses/i }), "1");
     await user.click(screen.getByRole("button", { name: /generate invite/i }));
@@ -149,12 +149,12 @@ describe("InviteList", () => {
   });
 
   it("shows empty state when no invites", () => {
-    render(<InviteList gid="g1" invites={[]} />);
+    render(<InviteList gid="g1" groupName="Sunday Crew" invites={[]} />);
     expect(screen.getByText(/no invites yet/i)).toBeInTheDocument();
   });
 
   it("renders invite code and Active status", () => {
-    render(<InviteList gid="g1" invites={[makeInvite()]} />);
+    render(<InviteList gid="g1" groupName="Sunday Crew" invites={[makeInvite()]} />);
     expect(screen.getByText("ABCD1234")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
   });
@@ -164,6 +164,7 @@ describe("InviteList", () => {
     render(
       <InviteList
         gid="g1"
+        groupName="Sunday Crew"
         invites={[makeInvite({ revokedAt: makeIso(past) })]}
       />,
     );
@@ -176,6 +177,7 @@ describe("InviteList", () => {
     render(
       <InviteList
         gid="g1"
+        groupName="Sunday Crew"
         invites={[
           makeInvite({
             expiresAt: makeIso(past),
@@ -188,18 +190,18 @@ describe("InviteList", () => {
   });
 
   it("shows Used up status when useCount >= maxUses", () => {
-    render(<InviteList gid="g1" invites={[makeInvite({ maxUses: 1, useCount: 1 })]} />);
+    render(<InviteList gid="g1" groupName="Sunday Crew" invites={[makeInvite({ maxUses: 1, useCount: 1 })]} />);
     expect(screen.getByText("Used up")).toBeInTheDocument();
   });
 
   it("displays ∞ when maxUses is null", () => {
-    render(<InviteList gid="g1" invites={[makeInvite({ maxUses: null })]} />);
+    render(<InviteList gid="g1" groupName="Sunday Crew" invites={[makeInvite({ maxUses: null })]} />);
     expect(screen.getByText("∞")).toBeInTheDocument();
   });
 
   it("calls DELETE on revoke and shows Revoking state", async () => {
     const user = userEvent.setup();
-    render(<InviteList gid="g1" invites={[makeInvite()]} />);
+    render(<InviteList gid="g1" groupName="Sunday Crew" invites={[makeInvite()]} />);
     const btn = screen.getByRole("button", { name: /revoke/i });
     await user.click(btn);
     await waitFor(() => expect(mockFetch).toHaveBeenCalledWith(

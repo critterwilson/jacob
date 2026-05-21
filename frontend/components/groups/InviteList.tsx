@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Banner } from "@/components/ui";
+import { InviteMessagePanel } from "@/components/groups/InviteMessagePanel";
 import { ApiError, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type { Invite } from "@/lib/hooks/useInvites";
@@ -68,11 +69,12 @@ const STATUS_CLASSES: Record<Status, string> = {
   used_up: "bg-ink text-cream-muted",
 };
 
-type Props = { gid: string; invites: Invite[] };
+type Props = { gid: string; groupName: string; invites: Invite[] };
 
-export function InviteList({ gid, invites }: Props) {
+export function InviteList({ gid, groupName, invites }: Props) {
   const { user } = useAuth();
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [shareInvite, setShareInvite] = useState<Invite | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const revoke = async (inviteId: string) => {
@@ -99,6 +101,13 @@ export function InviteList({ gid, invites }: Props) {
   return (
     <div className="space-y-3">
       {error && <Banner tone="error">{error}</Banner>}
+      {shareInvite && (
+        <InviteMessagePanel
+          groupName={groupName}
+          inviteUrl={shareInvite.url}
+          onClose={() => setShareInvite(null)}
+        />
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-body-sm">
           <thead>
@@ -138,13 +147,21 @@ export function InviteList({ gid, invites }: Props) {
                   </td>
                   <td className="py-2">
                     {status === "active" && (
-                      <button
-                        onClick={() => void revoke(inv.inviteId)}
-                        disabled={revoking === inv.inviteId}
-                        className="rounded-sm text-caption text-terracotta transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
-                      >
-                        {revoking === inv.inviteId ? "Revoking…" : "Revoke"}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShareInvite(inv)}
+                          className="rounded-sm text-caption text-gold transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold"
+                        >
+                          Share
+                        </button>
+                        <button
+                          onClick={() => void revoke(inv.inviteId)}
+                          disabled={revoking === inv.inviteId}
+                          className="rounded-sm text-caption text-terracotta transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
+                        >
+                          {revoking === inv.inviteId ? "Revoking…" : "Revoke"}
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>

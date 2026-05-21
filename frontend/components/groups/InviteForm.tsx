@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Banner, Button, Select } from "@/components/ui";
+import { InviteMessagePanel } from "@/components/groups/InviteMessagePanel";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -25,12 +26,13 @@ type InviteResult = {
   useCount: number;
 };
 
-type Props = { gid: string };
+type Props = { gid: string; groupName: string };
 
-export function InviteForm({ gid }: Props) {
+export function InviteForm({ gid, groupName }: Props) {
   const { user } = useAuth();
   const [created, setCreated] = useState<InviteResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showPanel, setShowPanel] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -100,19 +102,36 @@ export function InviteForm({ gid }: Props) {
       {serverError && <Banner tone="error">{serverError}</Banner>}
 
       {created && (
-        <div className="flex items-center gap-3 rounded-lg border border-line bg-ink-raised p-3">
-          <span className="flex-1 truncate font-mono text-body-sm text-cream">
-            {created.url}
-          </span>
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            onClick={() => void copy()}
-          >
-            {copied ? "Copied!" : "Copy"}
-          </Button>
-        </div>
+        <>
+          <div className="flex items-center gap-3 rounded-lg border border-line bg-ink-raised p-3">
+            <span className="flex-1 truncate font-mono text-body-sm text-cream">
+              {created.url}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => void copy()}
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => setShowPanel(true)}
+            >
+              Share message
+            </Button>
+          </div>
+          {showPanel && (
+            <InviteMessagePanel
+              groupName={groupName}
+              inviteUrl={created.url}
+              onClose={() => setShowPanel(false)}
+            />
+          )}
+        </>
       )}
     </div>
   );

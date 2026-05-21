@@ -7,6 +7,7 @@ import { InviteForm } from "@/components/groups/InviteForm";
 import { InviteList } from "@/components/groups/InviteList";
 import { Heading, Link, Section } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useInvites } from "@/lib/hooks/useInvites";
 
@@ -20,7 +21,9 @@ export default function GroupInvitesPage({ params }: Props) {
     user?.uid,
     gid,
   );
+  const { group } = useGroup(gid);
   const { invites, loading: invitesLoading } = useInvites(gid);
+  const groupName = group?.name ?? "";
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -62,7 +65,7 @@ export default function GroupInvitesPage({ params }: Props) {
         title="Create invite"
         description="Generate a shareable link with optional expiry and use limits."
       >
-        <InviteForm gid={gid} />
+        <InviteForm gid={gid} groupName={groupName} />
       </Section>
 
       <Section
@@ -72,7 +75,7 @@ export default function GroupInvitesPage({ params }: Props) {
         {invitesLoading ? (
           <p className="text-body-sm text-cream-muted">Loading…</p>
         ) : (
-          <InviteList gid={gid} invites={invites} />
+          <InviteList gid={gid} groupName={groupName} invites={invites} />
         )}
       </Section>
     </main>
