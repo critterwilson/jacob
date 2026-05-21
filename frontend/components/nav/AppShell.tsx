@@ -4,18 +4,17 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { DeletionBanner } from "@/components/account/DeletionBanner";
-import { SearchBar } from "@/components/search/SearchBar";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
-// Event name fired by the mobile search button. SearchBar listens for it
-// so the keyboard-only Cmd-K affordance gains a tappable entry point.
-const OPEN_SEARCH_EVENT = "jacob:open-search";
-
+// The mobile search button dispatches this event; SearchBar (mounted by
+// AuthedLayout) listens for it. Going through window means AppShell
+// doesn't need to import SearchBar — that kept several test bundles
+// lean and avoided dragging useSearch into every AppShell mount.
 function dispatchOpenSearch() {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(OPEN_SEARCH_EVENT));
+    window.dispatchEvent(new CustomEvent("jacob:open-search"));
   }
 }
 
@@ -296,11 +295,6 @@ export function AppShell({
           {children}
         </main>
       </div>
-
-      {/* Mounted once at the shell level so the mobile header's search
-       * button can open it on any route, and so Cmd-K / Ctrl-K keeps
-       * working everywhere. SearchBar self-renders nothing when closed. */}
-      <SearchBar />
     </div>
   );
 }
