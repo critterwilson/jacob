@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  *
  * ADR 0011 — frontend tests for the central ministry feed surface.
- * Covers: read view rendering (incl. pinned badge), compose form
- * visibility gated on the `ministry_owner` custom claim, and the
- * post-submit POST payload.
+ * Covers: read view rendering (incl. pinned badge), "New post" button
+ * visibility gated on the `ministry_owner` custom claim, compose page
+ * role-gating, and the post-submit POST payload.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,8 +14,10 @@ vi.mock("@/lib/firebase", () => ({
   firestore: {},
 }));
 
+const mockRouterPush = vi.fn();
+const mockRouterReplace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: mockRouterReplace, push: mockRouterPush }),
   usePathname: () => "/feed",
 }));
 
@@ -66,6 +68,7 @@ import { apiPost as apiPostExport } from "@/lib/api";
 const apiPostMock = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 
 import MinistryFeedPage from "@/app/(authed)/feed/page";
+import NewMinistryPostPage from "@/app/(authed)/feed/new/page";
 import { NewMinistryPostForm } from "@/components/ministry/NewMinistryPostForm";
 import type { MinistryPost } from "@/lib/hooks/useMinistryFeed";
 
@@ -100,6 +103,8 @@ const recentPost: MinistryPost = {
 };
 
 beforeEach(() => {
+  mockRouterPush.mockReset();
+  mockRouterReplace.mockReset();
   mockUseAuth.mockReturnValue({
     user: { uid: "alice", getIdToken: vi.fn().mockResolvedValue("tok") },
     loading: false,
@@ -127,20 +132,26 @@ describe("MinistryFeedPage read view", () => {
     expect(badge?.textContent ?? "").toMatch(/Pinned/);
   });
 
-  it("hides the compose form when the user is not a ministry owner", () => {
+  it("hides the New post button when the user is not a ministry owner", () => {
     mockUseMinistryOwner.mockReturnValue(false);
     render(<MinistryFeedPage />);
+    expect(
+      screen.queryByRole("button", { name: /new post/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("form", { name: /new ministry post/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows the compose form when the user IS a ministry owner", () => {
+  it("shows the New post button (not the inline form) when the user IS a ministry owner", () => {
     mockUseMinistryOwner.mockReturnValue(true);
     render(<MinistryFeedPage />);
     expect(
-      screen.getByRole("form", { name: /new ministry post/i }),
+      screen.getByRole("button", { name: /new post/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("form", { name: /new ministry post/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders empty-state copy when there are no posts", () => {
@@ -208,5 +219,54 @@ describe("NewMinistryPostForm submit", () => {
     // Wait a tick so the form has a chance to attempt submission.
     await new Promise((r) => setTimeout(r, 50));
     expect(apiPostMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("NewMinistryPostPage (/feed/new) role gate", () => {
+  it("shows loading state while ownership is resolving", () => {
+    mockUseMinistryOwner.mockReturnValue(null);
+    render(<NewMinistryPostPage />);
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("form", { name: /new ministry post/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows an error and back link when user is not a ministry owner", () => {
+    mockUseMinistryOwner.mockReturnValue(false);
+    render(<NewMinistryPostPage />);
+    expect(
+      screen.getByText(/only ministry owners can create posts/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ministry feed/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("form", { name: /new ministry post/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the compose form for ministry owners", () => {
+    mockUseMinistryOwner.mockReturnValue(true);
+    render(<NewMinistryPostPage />);
+    expect(
+      screen.getByRole("form", { name: /new ministry post/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to /feed after a successful post", async () => {
+    mockUseMinistryOwner.mockReturnValue(true);
+    apiPostMock.mockResolvedValueOnce({ postId: "new123" });
+    render(<NewMinistryPostPage />);
+
+    fireEvent.change(screen.getByLabelText(/title/i), {
+      target: { value: "Grace Sunday" },
+    });
+    fireEvent.change(screen.getByLabelText(/body/i), {
+      target: { value: "Walk in the light." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /publish/i }));
+
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/feed");
+    });
   });
 });
