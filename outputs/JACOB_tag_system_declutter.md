@@ -71,7 +71,7 @@ No sticker categories were removed. No interaction model was changed.
 - **Tag categories**: all 15 stickers remain in the system; no category was removed.
 - **Selection model**: picking tags is still how you post. The fallback to "Check-In" on submit is unchanged.
 - **Max selection (2)**: unchanged.
-- **Boards `NewPostForm`**: also gets the horizontal-scroll picker since `StickerPicker` is a shared component, but no audience filtering (boards are cross-group by design).
+- **Boards `NewPostForm`**: gets the horizontal-scroll picker for free since `StickerPicker` is shared. Audience filtering was originally left off — the `Board` type *does* carry `audience: "christian" | "general"`, so a christian board was still showing all 15 stickers including BJJ-specific ones. Follow-up PR mirrors the chat wiring: `board.audience === "christian"` narrows the picker to 9 stickers; "general" boards continue to show all 15 (legacy fall-through to preserve cross-audience flexibility on boards labelled `general`).
 - **ReactionBar / ReactionPicker**: left as-is. Reactions are a secondary surface; their current text-name display is acceptable and is a separate system from the intent-tagging picker.
 - **Design system colors**: no color, font, or motif changes. Still ink/gold/cream.
 
@@ -94,3 +94,4 @@ The picker currently appears above the textarea with no label — it's described
 | Stickers shown (christian group) | 15 | 9 |
 | Tag badge font weight (messages) | medium | normal |
 | Tag badge top gap (messages) | 4px | 2px |
+| Stickers shown (christian *board*) | 15 | 9 |
