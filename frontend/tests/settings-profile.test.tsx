@@ -64,6 +64,7 @@ vi.mock("@/lib/api", () => ({
       this.status = status;
     }
   },
+  apiGet: vi.fn(),
   apiPatch: vi.fn(),
 }));
 

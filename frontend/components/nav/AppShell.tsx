@@ -10,33 +10,86 @@ import { useAuth } from "@/lib/auth-context";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
-import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
+import { type RoleClaims, useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
-// The mobile search button dispatches this event; SearchBar (mounted by
-// AuthedLayout) listens for it. Going through window means AppShell
-// doesn't need to import SearchBar — that kept several test bundles
-// lean and avoided dragging useSearch into every AppShell mount.
+// The search button (mobile header + desktop sidebar header) dispatches
+// this event; SearchBar (mounted by AuthedLayout) listens for it. Going
+// through window means AppShell doesn't need to import SearchBar — that
+// kept several test bundles lean and avoided dragging useSearch into
+// every AppShell mount.
 function dispatchOpenSearch() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("jacob:open-search"));
   }
 }
 
-// Drawer (mobile hamburger + desktop sidebar) carries the full nav set.
-// Mobile users primarily navigate via the bottom tab bar; the drawer
-// is the secondary menu for everything else.
-const baseNavLinks = [
-  { href: "/home", label: "Home" },
-  { href: "/feed", label: "Feed" },
-  { href: "/groups", label: "Chats" },
-  { href: "/boards", label: "Boards" },
-  { href: "/discover", label: "Discover" },
-  { href: "/devotionals", label: "Devotionals" },
-  { href: "/reading-plans", label: "Reading plans" },
+// Nav structure — the drawer/sidebar groups the same labels into sections
+// (Explore / Grow / You / Admin) so a flat 12-item list becomes a
+// navigable hierarchy. The five most-used Explore entries are also
+// surfaced as the mobile bottom tab bar (see MobileTabBar); the drawer
+// continues to list them so desktop (which has no tab bar) and any user
+// browsing the long tail still has one authoritative list.
+type NavLink = { href: string; label: string };
+type NavGroup = { label: string; links: NavLink[] };
+
+const EXPLORE: NavGroup = {
+  label: "Explore",
+  links: [
+    { href: "/home", label: "Home" },
+    { href: "/groups", label: "Chats" },
+    { href: "/feed", label: "Feed" },
+    { href: "/boards", label: "Boards" },
+  ],
+};
+
+const GROW: NavGroup = {
+  label: "Grow",
+  links: [
+    { href: "/devotionals", label: "Devotionals" },
+    { href: "/reading-plans", label: "Reading plans" },
+    { href: "/discover", label: "Discover groups" },
+    { href: "/search", label: "Search" },
+  ],
+};
+
+const YOU_BASE_LINKS: NavLink[] = [
+  { href: "/settings", label: "Settings" },
+  { href: "/appeals/new", label: "Submit an appeal" },
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
-  { href: "/settings", label: "Settings" },
 ];
+
+function buildYouGroup(hasOrgs: boolean): NavGroup {
+  // Organizations sits between Settings and the legal/info long-tail —
+  // visible only when the user actually belongs to ≥1 org, matching the
+  // previous "irrelevant for most users" treatment.
+  const links: NavLink[] = [YOU_BASE_LINKS[0]];
+  if (hasOrgs) {
+    links.push({ href: "/orgs", label: "Organizations" });
+  }
+  links.push(...YOU_BASE_LINKS.slice(1));
+  return { label: "You", links };
+}
+
+function buildAdminGroup(roles: RoleClaims | null): NavGroup | null {
+  // While `roles` is `null` (first paint after token refresh) we render
+  // nothing so admins don't see a flash-then-disappear "Admin" entry if
+  // the claim later resolves to false.
+  if (!roles) return null;
+  if (roles.isAdmin) {
+    return {
+      label: "Admin",
+      links: [{ href: "/admin/queue", label: "Admin console" }],
+    };
+  }
+  if (roles.isModerator) {
+    return {
+      label: "Moderation",
+      links: [{ href: "/admin/wellbeing", label: "Wellbeing" }],
+    };
+  }
+  return null;
+}
 
 function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
   return (
@@ -50,53 +103,61 @@ function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
   );
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavSection({
+  group,
+  onNavigate,
+}: {
+  group: NavGroup;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
+  return (
+    <div className="px-2 pb-2 pt-3 first:pt-1">
+      <p className="px-3 pb-1 text-eyebrow uppercase tracking-wider text-cream-muted/70">
+        {group.label}
+      </p>
+      <ul className="space-y-1">
+        {group.links.map(({ href, label }) => {
+          const active =
+            pathname === href || pathname.startsWith(href + "/");
+          return (
+            <li key={href}>
+              <Link
+                href={href}
+                variant="muted"
+                onClick={onNavigate}
+                className={cn(
+                  "flex min-h-11 items-center rounded-md py-2 pl-[10px] pr-3 font-sans text-label no-underline " +
+                    "transition-colors duration-fast",
+                  "border-l-2",
+                  active
+                    ? "border-gold bg-ink-raised text-cream hover:text-cream"
+                    : "border-transparent hover:bg-ink-raised hover:text-cream",
+                )}
+              >
+                {label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const roles = useRoleClaims();
   const { orgs } = useMyOrgs();
-  // Role-conditional entries are appended after the base set so they
-  // sit between the long-tail (About/FAQ) and Settings without
-  // shifting the primary ordering. While `roles` is `null` (first
-  // paint after token refresh) we render the base set only so admins
-  // don't see a flash-then-disappear "Admin" link if the claim check
-  // later resolves to false.
-  const links = [...baseNavLinks];
-  // Only show the Organizations link when the user actually belongs to at
-  // least one org — it's irrelevant for the vast majority of users.
-  if (orgs.length > 0) {
-    links.push({ href: "/orgs", label: "Organizations" });
-  }
-  if (roles?.isAdmin) {
-    links.push({ href: "/admin/queue", label: "Admin" });
-  } else if (roles?.isModerator) {
-    links.push({ href: "/admin/wellbeing", label: "Moderation" });
-  }
+  const youGroup = buildYouGroup(orgs.length > 0);
+  const adminGroup = buildAdminGroup(roles);
+  const groups: NavGroup[] = [EXPLORE, GROW, youGroup];
+  if (adminGroup) groups.push(adminGroup);
   return (
-    <ul className="space-y-1 px-2">
-      {links.map(({ href, label }) => {
-        const active =
-          pathname === href || pathname.startsWith(href + "/");
-        return (
-          <li key={href}>
-            <Link
-              href={href}
-              variant="muted"
-              onClick={onNavigate}
-              className={cn(
-                "flex min-h-11 items-center rounded-md py-2 pl-[10px] pr-3 font-sans text-label no-underline " +
-                  "transition-colors duration-fast",
-                "border-l-2",
-                active
-                  ? "border-gold bg-ink-raised text-cream hover:text-cream"
-                  : "border-transparent hover:bg-ink-raised hover:text-cream",
-              )}
-            >
-              {label}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <div>
+      {groups.map((group) => (
+        <NavSection key={group.label} group={group} onNavigate={onNavigate} />
+      ))}
+    </div>
   );
 }
 
@@ -210,10 +271,26 @@ export function AppShell({
     <div className="flex min-h-svh bg-ink text-cream">
       {/* Desktop sidebar */}
       <aside className="hidden w-56 flex-none flex-col border-r border-line bg-ink md:flex">
-        <div className="px-5 py-6">
+        <div className="flex items-center justify-between px-5 py-6">
           <Wordmark size="sm" />
+          {/* Parity with the mobile header search icon — desktop didn't
+           * have a search shortcut before, so /search was effectively
+           * undiscoverable without typing the URL. The Grow > Search nav
+           * link covers discovery; this icon covers speed. */}
+          <button
+            type="button"
+            aria-label="Search messages"
+            onClick={dispatchOpenSearch}
+            className={
+              "-mr-2 inline-flex h-9 w-9 items-center justify-center rounded text-cream-muted " +
+              "hover:bg-ink-raised hover:text-cream " +
+              "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
+            }
+          >
+            <SearchIcon />
+          </button>
         </div>
-        <nav aria-label="Main navigation" className="flex-1">
+        <nav aria-label="Main navigation" className="flex-1 overflow-y-auto">
           <NavLinks />
         </nav>
         <div className="border-t border-line px-2 py-3">
