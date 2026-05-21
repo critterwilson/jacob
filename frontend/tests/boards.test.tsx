@@ -75,6 +75,8 @@ const fakeBoard: Board = {
 
 const fakeStickers = [
   { id: "s1", slug: "pray", name: "Praying", audience: "christian", order: 1, color: "#7c3aed" },
+  { id: "s2", slug: "roll", name: "Roll Partner", audience: "bjj", order: 11, color: "#6E8AA9" },
+  { id: "s3", slug: "enc",  name: "Encouragement", audience: "general", order: 21, color: "#7FB39A" },
 ];
 
 beforeEach(() => {
@@ -166,6 +168,20 @@ describe("NewPostForm", () => {
     render(<NewPostForm boardId="b1" archived />);
     expect(screen.getByText(/archived/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^post$/i })).toBeNull();
+  });
+
+  it("boardAudience=christian narrows picker to christian + general (hides bjj)", () => {
+    render(<NewPostForm boardId="b1" boardAudience="christian" />);
+    expect(screen.getByRole("button", { name: /praying/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /encouragement/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /roll partner/i })).toBeNull();
+  });
+
+  it("boardAudience=general shows all stickers (legacy fall-through)", () => {
+    render(<NewPostForm boardId="b1" boardAudience="general" />);
+    expect(screen.getByRole("button", { name: /praying/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /roll partner/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /encouragement/i })).toBeInTheDocument();
   });
 });
 

@@ -50,7 +50,11 @@ export default function BoardPage() {
         )}
       </header>
 
-      <NewPostForm boardId={boardId} archived={board?.archivedAt != null} />
+      <NewPostForm
+        boardId={boardId}
+        archived={board?.archivedAt != null}
+        boardAudience={board?.audience}
+      />
 
       {loading ? (
         <p className="text-body-sm text-cream-muted">Loading posts…</p>

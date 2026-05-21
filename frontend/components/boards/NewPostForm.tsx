@@ -24,6 +24,13 @@ type FormValues = z.infer<typeof schema>;
 type Props = {
   boardId: string;
   archived?: boolean;
+  /**
+   * Board audience — when "christian", narrows the sticker picker to
+   * christian + general stickers (9 of 15) and hides the BJJ-specific
+   * set. "general" boards fall through to all stickers (legacy). Mirrors
+   * the wiring landed for chat in PR #280.
+   */
+  boardAudience?: "christian" | "general";
 };
 
 const postBodyClass =
@@ -32,7 +39,11 @@ const postBodyClass =
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 
-export function NewPostForm({ boardId, archived = false }: Props) {
+export function NewPostForm({
+  boardId,
+  archived = false,
+  boardAudience,
+}: Props) {
   const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +104,13 @@ export function NewPostForm({ boardId, archived = false }: Props) {
           name="stickerIds"
           control={control}
           render={({ field }) => (
-            <StickerPicker value={field.value} onChange={field.onChange} />
+            <StickerPicker
+              value={field.value}
+              onChange={field.onChange}
+              groupAudience={
+                boardAudience === "christian" ? "christian" : undefined
+              }
+            />
           )}
         />
         {errors.stickerIds && (
