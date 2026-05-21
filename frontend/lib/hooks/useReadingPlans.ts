@@ -2,7 +2,27 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+
+export type ReadingPlanDayInput = {
+  scriptureRef: string;
+  prompt: string;
+};
+
+export type ReadingPlanCreatePayload = {
+  slug: string;
+  title: string;
+  description: string;
+  days: ReadingPlanDayInput[];
+  audience: "christian" | "general";
+};
+
+export type ReadingPlanUpdatePayload = {
+  title?: string;
+  description?: string;
+  days?: ReadingPlanDayInput[];
+  audience?: "christian" | "general";
+};
 
 export type ReadingPlanDay = {
   dayNumber: number;
@@ -199,4 +219,49 @@ export function usePlanProgress(slug: string | null): {
   );
 
   return { progress, loading, reload, markComplete };
+}
+
+export function useReadingPlansAdmin(): {
+  createPlan: (payload: ReadingPlanCreatePayload) => Promise<ReadingPlan | null>;
+  updatePlan: (slug: string, payload: ReadingPlanUpdatePayload) => Promise<ReadingPlan | null>;
+  deletePlan: (slug: string) => Promise<boolean>;
+} {
+  const createPlan = useCallback(
+    async (payload: ReadingPlanCreatePayload): Promise<ReadingPlan | null> => {
+      try {
+        return await apiPost<ReadingPlan>("/api/reading-plans", payload);
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+        return null;
+      }
+    },
+    [],
+  );
+
+  const updatePlan = useCallback(
+    async (slug: string, payload: ReadingPlanUpdatePayload): Promise<ReadingPlan | null> => {
+      try {
+        return await apiPatch<ReadingPlan>(
+          `/api/reading-plans/${encodeURIComponent(slug)}`,
+          payload,
+        );
+      } catch (err) {
+        if (err instanceof ApiError) throw err;
+        return null;
+      }
+    },
+    [],
+  );
+
+  const deletePlan = useCallback(async (slug: string): Promise<boolean> => {
+    try {
+      await apiDelete(`/api/reading-plans/${encodeURIComponent(slug)}`);
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      return false;
+    }
+  }, []);
+
+  return { createPlan, updatePlan, deletePlan };
 }

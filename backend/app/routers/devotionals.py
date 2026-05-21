@@ -1,11 +1,14 @@
 """Devotionals + reading-plans router (T51).
 
-* `GET  /api/devotionals` — list (any signed-in)
-* `GET  /api/devotionals/{slug}` — detail
-* `GET  /api/reading-plans` — list (summary; days dropped)
-* `GET  /api/reading-plans/{slug}` — detail with day list
-* `GET  /api/reading-plans/{slug}/progress` — caller's progress
-* `POST /api/reading-plans/{slug}/progress/mark` — mark a day complete
+* `GET    /api/devotionals` — list (any signed-in)
+* `GET    /api/devotionals/{slug}` — detail
+* `GET    /api/reading-plans` — list (summary; days dropped)
+* `GET    /api/reading-plans/{slug}` — detail with day list
+* `POST   /api/reading-plans` — create (admin only)
+* `PATCH  /api/reading-plans/{slug}` — update (admin only)
+* `DELETE /api/reading-plans/{slug}` — delete (admin only)
+* `GET    /api/reading-plans/{slug}/progress` — caller's progress
+* `POST   /api/reading-plans/{slug}/progress/mark` — mark a day complete
 
 Direct Firestore access on `devotionals/`, `reading_plans/`, and
 `users/{uid}/plan_progress/` is denied per M6.
@@ -19,10 +22,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user, require_not_banned
+from app.deps import get_current_user, require_admin, require_not_banned
 from app.errors import APIError
 from app.limits import (
     DEVOTIONAL_LIST,
+    PLAN_MUTATION,
     PLAN_PROGRESS_READ,
     PLAN_PROGRESS_WRITE,
 )
@@ -36,12 +40,15 @@ from app.models.devotionals import (
     MarkDayCompleteResponse,
     PlanProgress,
     ReadingPlan,
+    ReadingPlanCreateRequest,
     ReadingPlanDay,
     ReadingPlanListResponse,
     ReadingPlanSummary,
+    ReadingPlanUpdateRequest,
 )
 from app.models.user import CurrentUser
 from app.services import devotionals as devotionals_service
+from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
 
 logger = logging.getLogger(__name__)
@@ -189,6 +196,130 @@ def get_reading_plan(
             message=f"Reading plan {slug!r} not found",
         )
     return _doc_to_plan(snap)
+
+
+@router.post(
+    "/api/reading-plans",
+    response_model=ReadingPlan,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(PLAN_MUTATION)
+def create_reading_plan(
+    body: ReadingPlanCreateRequest,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_admin),
+) -> ReadingPlan:
+    db = _db()
+    existing = db.collection("reading_plans").document(body.slug).get()
+    if existing.exists:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="slug_taken",
+            message=f"Reading plan slug {body.slug!r} is already in use",
+        )
+    days_data = [
+        {
+            "dayNumber": i + 1,
+            "scriptureRef": d.scriptureRef,
+            "prompt": d.prompt,
+        }
+        for i, d in enumerate(body.days)
+    ]
+    plan_ref = db.collection("reading_plans").document(body.slug)
+    plan_ref.set(
+        {
+            "slug": body.slug,
+            "title": body.title,
+            "description": body.description,
+            "days": days_data,
+            "duration": len(body.days),
+            "audience": body.audience,
+            "publishedAt": fb_firestore.SERVER_TIMESTAMP,
+            "schemaVersion": 1,
+        }
+    )
+    write_audit_log(
+        actor_uid=user.uid,
+        action="reading_plan_create",
+        target_ref=f"reading_plans/{body.slug}",
+        payload={"duration": len(body.days), "audience": body.audience},
+    )
+    return _doc_to_plan(plan_ref.get())
+
+
+@router.patch("/api/reading-plans/{slug}", response_model=ReadingPlan)
+@limiter.limit(PLAN_MUTATION)
+def update_reading_plan(
+    slug: str,
+    body: ReadingPlanUpdateRequest,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_admin),
+) -> ReadingPlan:
+    db = _db()
+    plan_ref = db.collection("reading_plans").document(slug)
+    snap = plan_ref.get()
+    if not snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="plan_not_found",
+            message=f"Reading plan {slug!r} not found",
+        )
+    update: dict[str, Any] = {}
+    if body.title is not None:
+        update["title"] = body.title
+    if body.description is not None:
+        update["description"] = body.description
+    if body.audience is not None:
+        update["audience"] = body.audience
+    if body.days is not None:
+        update["days"] = [
+            {"dayNumber": i + 1, "scriptureRef": d.scriptureRef, "prompt": d.prompt}
+            for i, d in enumerate(body.days)
+        ]
+        update["duration"] = len(body.days)
+    if not update:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="empty_update",
+            message="No mutable fields supplied",
+        )
+    plan_ref.update(update)
+    write_audit_log(
+        actor_uid=user.uid,
+        action="reading_plan_update",
+        target_ref=f"reading_plans/{slug}",
+        payload={"changedKeys": sorted(update.keys())},
+    )
+    return _doc_to_plan(plan_ref.get())
+
+
+@router.delete("/api/reading-plans/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(PLAN_MUTATION)
+def delete_reading_plan(
+    slug: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_admin),
+) -> Response:
+    db = _db()
+    plan_ref = db.collection("reading_plans").document(slug)
+    snap = plan_ref.get()
+    if not snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="plan_not_found",
+            message=f"Reading plan {slug!r} not found",
+        )
+    plan_ref.delete()
+    write_audit_log(
+        actor_uid=user.uid,
+        action="reading_plan_delete",
+        target_ref=f"reading_plans/{slug}",
+        payload={},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

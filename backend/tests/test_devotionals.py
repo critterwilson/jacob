@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.deps import get_current_user, require_not_banned
+from app.deps import get_current_user, require_admin, require_not_banned
 from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.rate_limit import limiter
 from app.models.user import CurrentUser
@@ -45,6 +45,28 @@ def _app(*, user: CurrentUser) -> FastAPI:
     app.include_router(router)
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[require_not_banned] = lambda: user
+    return app
+
+
+def _admin_app(*, admin_uid: str = "admin1") -> FastAPI:
+    """App where require_admin is satisfied."""
+    user = CurrentUser(uid=admin_uid, email=f"{admin_uid}@example.com", claims={"admin": True})
+    app = _app(user=user)
+    app.dependency_overrides[require_admin] = lambda: user
+    return app
+
+
+def _non_admin_app() -> FastAPI:
+    """App where require_admin raises 403."""
+    user = CurrentUser(uid="regular", email="regular@example.com", claims={})
+
+    def _forbid() -> None:
+        from app.errors import APIError
+
+        raise APIError(status_code=403, code="forbidden", message="forbidden")
+
+    app = _app(user=user)
+    app.dependency_overrides[require_admin] = _forbid
     return app
 
 
@@ -430,6 +452,195 @@ def test_reading_plan_today_uses_started_at_when_no_completions() -> None:
     assert body["plan"]["slug"] == "just-started"
     # No completions → next day is day 1.
     assert body["nextDay"]["dayNumber"] == 1
+
+
+# ── admin CRUD: reading plans ─────────────────────────────────────────────────
+
+_VALID_CREATE_BODY = {
+    "slug": "new-plan",
+    "title": "New Plan",
+    "description": "A test plan.",
+    "days": [
+        {"scriptureRef": "John 1:1", "prompt": "Day one prompt."},
+        {"scriptureRef": "John 1:2", "prompt": "Day two prompt."},
+    ],
+    "audience": "christian",
+}
+
+
+def test_create_reading_plan_returns_201() -> None:
+    fs = FakeFirestore()
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+        patch.object(__import__("firebase_admin").firestore, "SERVER_TIMESTAMP", datetime.now(UTC)),
+    ):
+        res = TestClient(_admin_app()).post("/api/reading-plans", json=_VALID_CREATE_BODY)
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["slug"] == "new-plan"
+    assert body["title"] == "New Plan"
+    assert len(body["days"]) == 2
+    assert body["days"][0]["dayNumber"] == 1
+    assert body["days"][0]["scriptureRef"] == "John 1:1"
+    assert body["duration"] == 2
+
+
+def test_create_reading_plan_assigns_day_numbers_sequentially() -> None:
+    fs = FakeFirestore()
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+        patch.object(__import__("firebase_admin").firestore, "SERVER_TIMESTAMP", datetime.now(UTC)),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/reading-plans",
+            json={**_VALID_CREATE_BODY, "slug": "seq-plan"},
+        )
+    assert res.status_code == 201
+    days = res.json()["days"]
+    assert [d["dayNumber"] for d in days] == [1, 2]
+
+
+def test_create_reading_plan_409_when_slug_taken() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="taken", duration=3)
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+        patch.object(__import__("firebase_admin").firestore, "SERVER_TIMESTAMP", datetime.now(UTC)),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/reading-plans",
+            json={**_VALID_CREATE_BODY, "slug": "taken"},
+        )
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "slug_taken"
+
+
+def test_create_reading_plan_403_for_non_admin() -> None:
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_non_admin_app()).post("/api/reading-plans", json=_VALID_CREATE_BODY)
+    assert res.status_code == 403
+
+
+def test_create_reading_plan_422_when_days_empty() -> None:
+    fs = FakeFirestore()
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/reading-plans",
+            json={**_VALID_CREATE_BODY, "days": []},
+        )
+    assert res.status_code == 422
+
+
+def test_update_reading_plan_changes_title() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).patch(
+            "/api/reading-plans/psalms",
+            json={"title": "Updated Title"},
+        )
+    assert res.status_code == 200, res.text
+    assert res.json()["title"] == "Updated Title"
+
+
+def test_update_reading_plan_replaces_days() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    new_days = [
+        {"scriptureRef": "Rev 1:1", "prompt": "New day one."},
+        {"scriptureRef": "Rev 1:2", "prompt": "New day two."},
+        {"scriptureRef": "Rev 1:3", "prompt": "New day three."},
+        {"scriptureRef": "Rev 1:4", "prompt": "New day four."},
+    ]
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).patch(
+            "/api/reading-plans/psalms",
+            json={"days": new_days},
+        )
+    assert res.status_code == 200
+    body = res.json()
+    assert len(body["days"]) == 4
+    assert body["duration"] == 4
+    assert body["days"][-1]["dayNumber"] == 4
+
+
+def test_update_reading_plan_404_when_missing() -> None:
+    fs = FakeFirestore()
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).patch(
+            "/api/reading-plans/missing",
+            json={"title": "x"},
+        )
+    assert res.status_code == 404
+
+
+def test_update_reading_plan_400_when_no_fields() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).patch("/api/reading-plans/psalms", json={})
+    assert res.status_code == 400
+    assert res.json()["error"]["code"] == "empty_update"
+
+
+def test_update_reading_plan_403_for_non_admin() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_non_admin_app()).patch(
+            "/api/reading-plans/psalms",
+            json={"title": "x"},
+        )
+    assert res.status_code == 403
+
+
+def test_delete_reading_plan_returns_204() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).delete("/api/reading-plans/psalms")
+    assert res.status_code == 204
+    assert fs._doc_get("reading_plans/psalms") is None
+
+
+def test_delete_reading_plan_404_when_missing() -> None:
+    fs = FakeFirestore()
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
+        res = TestClient(_admin_app()).delete("/api/reading-plans/missing")
+    assert res.status_code == 404
+
+
+def test_delete_reading_plan_403_for_non_admin() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_non_admin_app()).delete("/api/reading-plans/psalms")
+    assert res.status_code == 403
 
 
 def test_reading_plan_today_flags_all_days_complete() -> None:
