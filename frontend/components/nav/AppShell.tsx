@@ -127,7 +127,20 @@ function CloseIcon() {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  fullHeight = false,
+}: {
+  children: ReactNode;
+  /**
+   * When true, the page is expected to be a fixed-height surface
+   * (e.g. chat) that fills the AppShell main area. The outer column
+   * stops scrolling — children that need to scroll declare it
+   * themselves — and `<main>` has overflow-hidden so nested scroll
+   * containers don't double up.
+   */
+  fullHeight?: boolean;
+}) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = () => setDrawerOpen(false);
   const drawerRef = useFocusTrap<HTMLDivElement>({
@@ -229,7 +242,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <DeletionBanner />
-        <main className="flex-1 overflow-y-auto bg-ink">{children}</main>
+        <main
+          className={cn(
+            "flex-1 bg-ink",
+            // Full-height surfaces (chat) manage their own scrolling
+            // inside; without overflow-hidden the outer would scroll
+            // and push the composer below the visible viewport on iOS.
+            fullHeight
+              ? "flex min-h-0 flex-col overflow-hidden"
+              : "overflow-y-auto",
+          )}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

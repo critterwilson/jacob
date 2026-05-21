@@ -50,6 +50,7 @@ export function MessageList({
   onAnnounce,
   readonly = false,
 }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const { isMuted } = useMutes();
@@ -62,15 +63,29 @@ export function MessageList({
   } = useReactions(gid, messages);
   const [expandedMutes, setExpandedMutes] = useState<Set<string>>(new Set());
 
-  // Scroll to bottom only when new messages arrive (not on older-page loads).
+  // Scroll to bottom only when new messages arrive (not on older-page loads),
+  // and only when the user is already near the bottom — otherwise we yank
+  // them down while they're reading earlier history. Scrolls the local
+  // container, not the page; `scrollIntoView` would walk up to the nearest
+  // scrollable ancestor (often AppShell's <main>) and yank chrome.
   useEffect(() => {
-    if (
-      messages.length > prevCountRef.current &&
-      typeof bottomRef.current?.scrollIntoView === "function"
-    ) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    if (messages.length <= prevCountRef.current) {
+      prevCountRef.current = messages.length;
+      return;
     }
     prevCountRef.current = messages.length;
+    const container = scrollRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - (container.scrollTop + container.clientHeight);
+    if (distanceFromBottom > 120) return;
+    // jsdom's Element doesn't implement scrollTo; fall back to scrollTop
+    // when the method isn't present.
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages.length]);
 
   // Hide blocked-author messages entirely. They never render.
@@ -85,7 +100,10 @@ export function MessageList({
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto bg-ink">
+    <div
+      ref={scrollRef}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-momentum bg-ink"
+    >
       {offline && (
         <Banner
           tone="warning"

@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { MessageItem } from "@/components/chat/MessageItem";
 import { ThreadReplyInput } from "@/components/chat/ThreadReplyInput";
-import { Eyebrow } from "@/components/ui";
+import { Eyebrow, cn } from "@/components/ui";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useReactions } from "@/lib/hooks/useReactions";
 import { useThreadMessages } from "@/lib/hooks/useThreadMessages";
@@ -40,17 +40,27 @@ export function ThreadPanel({
   const onToggleReaction = (mid: string, slug: string) =>
     void toggleReaction(mid, slug);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
 
+  // Same pattern as MessageList: scroll the local container, not the page.
   useEffect(() => {
-    if (
-      messages.length > prevCountRef.current &&
-      typeof bottomRef.current?.scrollIntoView === "function"
-    ) {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    if (messages.length <= prevCountRef.current) {
+      prevCountRef.current = messages.length;
+      return;
     }
     prevCountRef.current = messages.length;
+    const container = scrollRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - (container.scrollTop + container.clientHeight);
+    if (distanceFromBottom > 120) return;
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [messages.length]);
 
   const hasParticipated =
@@ -67,7 +77,12 @@ export function ThreadPanel({
       role="dialog"
       aria-modal="true"
       aria-label="Thread"
-      className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-ink-raised"
+      className={cn(
+        // Mobile: full-screen overlay sliding in from the right.
+        "fixed inset-0 z-40 flex flex-col bg-ink-raised pt-safe-t pb-safe-b pr-safe-r",
+        // Desktop: classic side panel embedded next to the chat column.
+        "md:static md:z-auto md:h-full md:w-80 md:shrink-0 md:border-l md:border-line md:pt-0 md:pb-0 md:pr-0",
+      )}
     >
       <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
         <h2 className="flex items-center gap-2 text-body-sm font-semibold text-cream">
@@ -84,7 +99,7 @@ export function ThreadPanel({
           onClick={onClose}
           aria-label="Close thread"
           className={
-            "rounded p-1 text-cream-muted transition-colors duration-fast " +
+            "-mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted transition-colors duration-fast " +
             "hover:bg-ink hover:text-cream " +
             "focus:outline-none focus-visible:shadow-glow-gold"
           }
@@ -106,7 +121,10 @@ export function ThreadPanel({
         />
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto bg-ink-raised">
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto scroll-momentum bg-ink-raised"
+      >
         {loading ? (
           <div className="flex flex-1 items-center justify-center">
             <span className="text-body-sm text-cream-muted">
