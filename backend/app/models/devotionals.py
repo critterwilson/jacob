@@ -71,6 +71,29 @@ class PlanProgress(BaseModel):
     lastCompletedAt: str | None
 
 
+class ReadingPlanDayInput(BaseModel):
+    scriptureRef: str = Field(min_length=1, max_length=200)
+    prompt: str = Field(default="", max_length=500)
+
+
+_SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$"
+
+
+class ReadingPlanCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=100, pattern=_SLUG_PATTERN)
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=1000)
+    days: list[ReadingPlanDayInput] = Field(min_length=1, max_length=365)
+    audience: Audience = "christian"
+
+
+class ReadingPlanUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+    days: list[ReadingPlanDayInput] | None = Field(default=None, min_length=1, max_length=365)
+    audience: Audience | None = None
+
+
 class MarkDayCompleteRequest(BaseModel):
     dayNumber: int = Field(ge=1, le=365)
 
