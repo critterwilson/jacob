@@ -13,6 +13,12 @@ import { ReportButton } from "@/components/moderation/ReportButton";
 
 type Props = { params: { gid: string } };
 
+// Visual classes shared by every section-nav tile inside a group.
+// Pulled out so the member strip and the leader "Manage" row look
+// identical and we never accidentally style them differently.
+const tileClass =
+  "block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline transition-colors duration-fast hover:bg-ink-overlay";
+
 export default function GroupPage({ params }: Props) {
   const { gid } = params;
   const router = useRouter();
@@ -115,78 +121,85 @@ export default function GroupPage({ params }: Props) {
         Open chat
       </Link>
 
+      {/* Member sub-nav — the three sections every member of this group
+       *  can use. Visually distinct from the leader "Manage" row below
+       *  so non-leaders see exactly one nav block and leaders can tell
+       *  at a glance which tools are theirs. */}
       <nav aria-label="Group sections" className="mt-2">
-        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <ul className="grid grid-cols-3 gap-2">
           <li>
-            <Link
-              href={`/groups/${gid}/sermons`}
-              className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-            >
+            <Link href={`/groups/${gid}/sermons`} className={tileClass}>
               Sermons
             </Link>
           </li>
           <li>
-            <Link
-              href={`/groups/${gid}/events`}
-              className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-            >
+            <Link href={`/groups/${gid}/events`} className={tileClass}>
               Events
             </Link>
           </li>
           <li>
-            <Link
-              href={`/groups/${gid}/members`}
-              className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-            >
+            <Link href={`/groups/${gid}/members`} className={tileClass}>
               Members
             </Link>
           </li>
-          {isLeader && (
-            <>
-              <li>
-                <Link
-                  href={`/groups/${gid}/join-requests`}
-                  className="relative block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-                >
-                  Join requests
-                  {pendingCount > 0 && (
-                    <span
-                      aria-label={`${pendingCount} pending`}
-                      className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-terracotta px-1 text-[10px] font-semibold text-white"
-                    >
-                      {pendingCount}
-                    </span>
-                  )}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href={`/groups/${gid}/settings`}
-                  className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-                >
-                  Settings
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href={`/groups/${gid}/settings/invites`}
-                  className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-                >
-                  Invites
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href={`/groups/${gid}/analytics`}
-                  className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
-                >
-                  Analytics
-                </Link>
-              </li>
-            </>
-          )}
         </ul>
       </nav>
+
+      {isLeader && (
+        // Leader-only "Manage group" block. Pulled out from the member
+        // sub-nav grid (where it used to live as four extra grid items)
+        // because mixing member-tabs with leader-tools made it hard for
+        // a leader to spot their admin actions. Invites also moves up
+        // one level here from /settings/invites so rotating an invite
+        // is 4 clicks from /home rather than 5.
+        <section
+          className="mt-6 rounded border border-line bg-ink-raised/40 p-3"
+          aria-labelledby="group-manage-heading"
+        >
+          <h2
+            id="group-manage-heading"
+            className="mb-2 px-1 text-eyebrow uppercase tracking-wider text-cream-muted"
+          >
+            Manage group
+          </h2>
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <li>
+              <Link
+                href={`/groups/${gid}/join-requests`}
+                className={`relative ${tileClass}`}
+              >
+                Join requests
+                {pendingCount > 0 && (
+                  <span
+                    aria-label={`${pendingCount} pending`}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-terracotta px-1 text-[10px] font-semibold text-white"
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+              </Link>
+            </li>
+            <li>
+              <Link href={`/groups/${gid}/settings`} className={tileClass}>
+                Settings
+              </Link>
+            </li>
+            <li>
+              <Link
+                href={`/groups/${gid}/settings/invites`}
+                className={tileClass}
+              >
+                Invites
+              </Link>
+            </li>
+            <li>
+              <Link href={`/groups/${gid}/analytics`} className={tileClass}>
+                Analytics
+              </Link>
+            </li>
+          </ul>
+        </section>
+      )}
 
       {isLeader && (
         <section className="mt-8 rounded border border-line p-4">
