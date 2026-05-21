@@ -245,6 +245,27 @@ function SearchIcon() {
   );
 }
 
+function PersonIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8"
+      />
+    </svg>
+  );
+}
+
 export function AppShell({
   children,
   fullHeight = false,
@@ -321,13 +342,29 @@ export function AppShell({
             aria-label="Search messages"
             onClick={dispatchOpenSearch}
             className={
-              "ml-auto -mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
+              "ml-auto inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
               "hover:bg-ink-raised hover:text-cream " +
               "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
             }
           >
             <SearchIcon />
           </button>
+          {/* Profile shortcut — the bottom-tab 5th slot is "Grow", so
+           * this is the one-tap path to /settings (account, appeals,
+           * orgs, admin, info, sign out). Drawer YOU > Settings also
+           * works (two taps). */}
+          <Link
+            href="/settings"
+            aria-label="Account"
+            variant="muted"
+            className={
+              "-mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted no-underline " +
+              "hover:bg-ink-raised hover:text-cream " +
+              "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
+            }
+          >
+            <PersonIcon />
+          </Link>
         </header>
 
         {/* Mobile drawer */}
