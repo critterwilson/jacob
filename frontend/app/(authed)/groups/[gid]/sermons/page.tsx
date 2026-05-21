@@ -21,7 +21,7 @@ import {
 } from "@/lib/hooks/useGroupSermons";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
-import { safeImageSrc } from "@/lib/safeUrl";
+import { safeHttpUrl, safeImageSrc } from "@/lib/safeUrl";
 
 const inputClass =
   "w-full rounded border border-line bg-ink-overlay px-3 py-2 " +
@@ -56,8 +56,10 @@ export default function SermonsListPage() {
     return sermons.filter((s) => s.preacher === preacherFilter);
   }, [sermons, preacherFilter]);
 
+  const urlValid = Boolean(safeHttpUrl(newUrl));
+
   const submit = async () => {
-    if (!newUrl) return;
+    if (!urlValid) return;
     setPending(true);
     setAddError(null);
     const res = await addSermon({
@@ -120,8 +122,14 @@ export default function SermonsListPage() {
               value={newUrl}
               onChange={(e) => setNewUrl(e.target.value)}
               placeholder="YouTube URL or podcast link"
+              aria-label="Source URL"
               className={inputClass}
             />
+            {newUrl && !urlValid && (
+              <p role="alert" className="text-caption text-terracotta">
+                Must be a valid http:// or https:// URL.
+              </p>
+            )}
             <input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
@@ -159,7 +167,7 @@ export default function SermonsListPage() {
               size="md"
               onClick={submit}
               loading={pending}
-              disabled={!newUrl || pending}
+              disabled={!urlValid || pending}
             >
               {pending ? "Adding…" : "Add"}
             </Button>
