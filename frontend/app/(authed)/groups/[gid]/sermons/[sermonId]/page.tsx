@@ -1,11 +1,19 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
-import { Button, Eyebrow, Heading, Link } from "@/components/ui";
+import { Banner, Button, Eyebrow, Heading, Link, Section } from "@/components/ui";
+import { useAuth } from "@/lib/auth-context";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useGroupSermons } from "@/lib/hooks/useGroupSermons";
 import { safeHttpUrl, safeImageSrc } from "@/lib/safeUrl";
+
+const inputClass =
+  "w-full rounded border border-line bg-ink-overlay px-3 py-2 " +
+  "font-sans text-body-sm text-cream placeholder:text-cream-muted " +
+  "transition-colors duration-fast " +
+  "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 
 export default function SermonDetailPage() {
   const params = useParams();
@@ -17,11 +25,49 @@ export default function SermonDetailPage() {
       ? params.sermonId[0]
       : (params?.sermonId ?? ""),
   );
-  const { sermons, loading, deleteSermon } = useGroupSermons(gid);
+  const { user } = useAuth();
+  const { isLeader } = useGroupMembership(user?.uid, gid);
+  const { sermons, loading, deleteSermon, patchSermon } = useGroupSermons(gid);
   const sermon = useMemo(
     () => sermons.find((s) => s.sermonId === sermonId) ?? null,
     [sermons, sermonId],
   );
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPreacher, setEditPreacher] = useState("");
+  const [editScripture, setEditScripture] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editPending, setEditPending] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const openEdit = () => {
+    if (!sermon) return;
+    setEditTitle(sermon.title);
+    setEditPreacher(sermon.preacher ?? "");
+    setEditScripture(sermon.scripture ?? "");
+    setEditDate(sermon.sermonDate ?? "");
+    setEditError(null);
+    setShowEdit(true);
+  };
+
+  const submitEdit = async () => {
+    if (!sermon) return;
+    setEditPending(true);
+    setEditError(null);
+    const result = await patchSermon(sermonId, {
+      title: editTitle || undefined,
+      preacher: editPreacher || undefined,
+      scripture: editScripture || undefined,
+      sermonDate: editDate || undefined,
+    });
+    setEditPending(false);
+    if (!result) {
+      setEditError("Failed to save changes — please try again.");
+      return;
+    }
+    setShowEdit(false);
+  };
 
   if (loading) {
     return (
@@ -134,15 +180,88 @@ export default function SermonDetailPage() {
         >
           Watch with the group (not available)
         </Button>
-        <Button
-          type="button"
-          variant="destructive"
-          size="md"
-          onClick={() => void handleDelete()}
-        >
-          Delete
-        </Button>
+        {isLeader && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={openEdit}
+          >
+            Edit
+          </Button>
+        )}
+        {isLeader && (
+          <Button
+            type="button"
+            variant="destructive"
+            size="md"
+            onClick={() => void handleDelete()}
+          >
+            Delete
+          </Button>
+        )}
       </div>
+
+      {isLeader && showEdit && (
+        <Section title="Edit sermon">
+          <div className="space-y-2">
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Title"
+              aria-label="Title"
+              className={inputClass}
+            />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <input
+                value={editPreacher}
+                onChange={(e) => setEditPreacher(e.target.value)}
+                placeholder="Preacher"
+                aria-label="Preacher"
+                className={inputClass}
+              />
+              <input
+                value={editScripture}
+                onChange={(e) => setEditScripture(e.target.value)}
+                placeholder="Scripture (e.g. John 3:16)"
+                aria-label="Scripture"
+                className={inputClass}
+              />
+              <input
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                placeholder="YYYY-MM-DD"
+                aria-label="Date"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {editError && <Banner tone="error">{editError}</Banner>}
+
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setShowEdit(false)}
+              disabled={editPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => void submitEdit()}
+              loading={editPending}
+              disabled={editPending}
+            >
+              {editPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </Section>
+      )}
     </main>
   );
 }
