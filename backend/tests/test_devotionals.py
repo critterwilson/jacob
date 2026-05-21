@@ -330,3 +330,146 @@ def test_mark_complete_consecutive_day_increments_streak() -> None:
     body = res.json()
     assert body["streak"] == 2
     assert sorted(body["completedDays"]) == [1, 2]
+
+
+# ── reading-plan-today (home surface aggregator) ────────────────────────────
+
+
+def test_reading_plan_today_returns_null_when_no_progress() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=3)
+    user = _user("u-today")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=user)).get("/api/users/me/reading-plan-today")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["plan"] is None
+    assert body["nextDay"] is None
+    assert body["completedDays"] == []
+    assert body["streak"] == 0
+    assert body["allDaysComplete"] is False
+
+
+def test_reading_plan_today_returns_next_uncompleted_day() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="psalms", duration=5)
+    yesterday = datetime.now(UTC) - timedelta(days=1)
+    fs._doc_set(
+        "users/u-today/plan_progress/psalms",
+        {
+            "planSlug": "psalms",
+            "startedAt": yesterday,
+            "completedDays": [1, 2],
+            "streak": 2,
+            "lastCompletedAt": yesterday,
+        },
+    )
+    user = _user("u-today")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=user)).get("/api/users/me/reading-plan-today")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["plan"]["slug"] == "psalms"
+    assert body["nextDay"]["dayNumber"] == 3
+    assert body["completedDays"] == [1, 2]
+    assert body["streak"] == 2
+    assert body["allDaysComplete"] is False
+
+
+def test_reading_plan_today_picks_most_recently_engaged_plan() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="older", duration=3)
+    _seed_plan(fs, slug="newer", duration=3)
+    older_day = datetime.now(UTC) - timedelta(days=10)
+    newer_day = datetime.now(UTC) - timedelta(hours=2)
+    fs._doc_set(
+        "users/u-multi/plan_progress/older",
+        {
+            "planSlug": "older",
+            "startedAt": older_day,
+            "completedDays": [1],
+            "streak": 1,
+            "lastCompletedAt": older_day,
+        },
+    )
+    fs._doc_set(
+        "users/u-multi/plan_progress/newer",
+        {
+            "planSlug": "newer",
+            "startedAt": newer_day,
+            "completedDays": [1],
+            "streak": 1,
+            "lastCompletedAt": newer_day,
+        },
+    )
+    user = _user("u-multi")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=user)).get("/api/users/me/reading-plan-today")
+    body = res.json()
+    assert body["plan"]["slug"] == "newer"
+
+
+def test_reading_plan_today_uses_started_at_when_no_completions() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="just-started", duration=3)
+    started = datetime.now(UTC) - timedelta(minutes=5)
+    fs._doc_set(
+        "users/u-fresh/plan_progress/just-started",
+        {
+            "planSlug": "just-started",
+            "startedAt": started,
+            "completedDays": [],
+            "streak": 0,
+            "lastCompletedAt": None,
+        },
+    )
+    user = _user("u-fresh")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=user)).get("/api/users/me/reading-plan-today")
+    body = res.json()
+    assert body["plan"]["slug"] == "just-started"
+    # No completions → next day is day 1.
+    assert body["nextDay"]["dayNumber"] == 1
+
+
+def test_reading_plan_today_flags_all_days_complete() -> None:
+    fs = FakeFirestore()
+    _seed_plan(fs, slug="short", duration=2)
+    fs._doc_set(
+        "users/u-done/plan_progress/short",
+        {
+            "planSlug": "short",
+            "startedAt": datetime.now(UTC),
+            "completedDays": [1, 2],
+            "streak": 2,
+            "lastCompletedAt": datetime.now(UTC),
+        },
+    )
+    user = _user("u-done")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=user)).get("/api/users/me/reading-plan-today")
+    body = res.json()
+    assert body["plan"]["slug"] == "short"
+    assert body["nextDay"] is None
+    assert body["allDaysComplete"] is True
+
+
+def test_reading_plan_today_handles_orphaned_progress() -> None:
+    fs = FakeFirestore()
+    # Plan was deleted but progress doc still exists.
+    fs._doc_set(
+        "users/u-orphan/plan_progress/deleted",
+        {
+            "planSlug": "deleted",
+            "startedAt": datetime.now(UTC),
+            "completedDays": [1],
+            "streak": 1,
+            "lastCompletedAt": datetime.now(UTC),
+        },
+    )
+    user = _user("u-orphan")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=user)).get("/api/users/me/reading-plan-today")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["plan"] is None

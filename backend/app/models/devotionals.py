@@ -80,3 +80,20 @@ class MarkDayCompleteResponse(BaseModel):
     completedDays: list[int]
     streak: int
     lastCompletedAt: str
+
+
+class ActivePlanToday(BaseModel):
+    """Composite "today's reading plan" payload for the home surface.
+
+    Picks the user's most-recently-engaged plan from `plan_progress`,
+    joins with the plan content, and surfaces the next uncompleted day.
+    `plan` is null when the user has no plan_progress at all — the
+    frontend uses that to render the "start a plan" empty state.
+    """
+
+    plan: ReadingPlanSummary | None
+    nextDay: ReadingPlanDay | None
+    completedDays: list[int] = Field(default_factory=list)
+    streak: int = 0
+    lastCompletedAt: str | None = None
+    allDaysComplete: bool = False

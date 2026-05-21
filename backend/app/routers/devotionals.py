@@ -28,6 +28,7 @@ from app.limits import (
 )
 from app.middleware.rate_limit import limiter
 from app.models.devotionals import (
+    ActivePlanToday,
     Audience,
     Devotional,
     DevotionalListResponse,
@@ -270,4 +271,94 @@ def mark_day_complete(
         completedDays=completed,
         streak=streak,
         lastCompletedAt=_ts_to_str(last_at) or "",
+    )
+
+
+# ── home-surface aggregator ──────────────────────────────────────────────────
+
+
+@router.get("/api/users/me/reading-plan-today", response_model=ActivePlanToday)
+@limiter.limit(PLAN_PROGRESS_READ)
+def reading_plan_today(
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> ActivePlanToday:
+    """Pick the user's active reading plan and its next uncompleted day.
+
+    Composite call for the /home "Today" surface — avoids the
+    list-plans + per-plan-progress fan-out a naive client would do.
+    Returns an empty payload (plan=None) when the user has no
+    plan_progress; the frontend renders a "start a plan" empty state.
+    """
+    db = _db()
+    progress_docs = list(
+        db.collection("users").document(user.uid).collection("plan_progress").stream()
+    )
+    if not progress_docs:
+        return ActivePlanToday(plan=None, nextDay=None)
+
+    def _engaged_at(snap: Any) -> str:
+        # Sort key: most recent activity first. lastCompletedAt is the
+        # strongest signal; startedAt as fallback for plans the user
+        # opened but hasn't marked a day on.
+        data = snap.to_dict() or {}
+        last = data.get("lastCompletedAt")
+        started = data.get("startedAt")
+        for cand in (last, started):
+            if cand is None:
+                continue
+            try:
+                result: str = cand.isoformat()
+                return result
+            except AttributeError:
+                return str(cand)
+        return ""
+
+    progress_docs.sort(key=_engaged_at, reverse=True)
+    top = progress_docs[0]
+    top_data = top.to_dict() or {}
+    plan_slug = str(top_data.get("planSlug") or top.id)
+
+    plan_snap = db.collection("reading_plans").document(plan_slug).get()
+    if not plan_snap.exists:
+        # Stale progress for a deleted plan — treat as no active plan
+        # rather than 500.
+        return ActivePlanToday(plan=None, nextDay=None)
+
+    plan_data = plan_snap.to_dict() or {}
+    raw_days = plan_data.get("days") or []
+    completed = sorted({int(d) for d in (top_data.get("completedDays") or [])})
+    completed_set = set(completed)
+
+    next_day_payload: ReadingPlanDay | None = None
+    all_done = False
+    for d in raw_days:
+        day_number = int(d.get("dayNumber", 0) or 0)
+        if day_number in completed_set:
+            continue
+        next_day_payload = ReadingPlanDay(
+            dayNumber=day_number,
+            scriptureRef=str(d.get("scriptureRef", "")),
+            prompt=str(d.get("prompt", "")),
+        )
+        break
+    else:
+        # Loop fell through with no break — every day is complete.
+        all_done = len(raw_days) > 0
+
+    return ActivePlanToday(
+        plan=ReadingPlanSummary(
+            slug=plan_slug,
+            title=str(plan_data.get("title", "")),
+            description=str(plan_data.get("description", "")),
+            duration=int(plan_data.get("duration") or len(raw_days)),
+            audience=plan_data.get("audience", "christian"),
+            publishedAt=_ts_to_str(plan_data.get("publishedAt")),
+        ),
+        nextDay=next_day_payload,
+        completedDays=completed,
+        streak=int(top_data.get("streak") or 0),
+        lastCompletedAt=_ts_to_str(top_data.get("lastCompletedAt")),
+        allDaysComplete=all_done,
     )
