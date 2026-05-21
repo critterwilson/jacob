@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 
-import { Banner, Button } from "@/components/ui";
+import { Banner, Button, cn } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
+import { useDelayedUnmount } from "@/lib/hooks/useDelayedUnmount";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 type Props = {
@@ -34,6 +36,8 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
     active: open,
     onEscape: closeDialog,
   });
+  const { render, state } = useDelayedUnmount(open, 180);
+  useBodyScrollLock(open);
 
   const handleConfirm = async () => {
     if (!user) return;
@@ -76,20 +80,31 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
         {isArchived ? "Unarchive group" : "Archive group"}
       </Button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {render && (
+        <div
+          data-state={state}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
           <button
             type="button"
             aria-label="Dismiss dialog"
             onClick={closeDialog}
-            className="fixed inset-0 cursor-default bg-black/60 focus:outline-none focus-visible:shadow-glow-gold"
+            className={cn(
+              "fixed inset-0 cursor-default bg-black/60 transition-opacity duration-base",
+              "focus:outline-none focus-visible:shadow-glow-gold",
+              state === "open" ? "opacity-100" : "opacity-0",
+            )}
           />
           <div
             ref={trapRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="archive-dialog-title"
-            className="relative w-full max-w-md rounded-2xl border border-line bg-ink-overlay p-6 shadow-pop"
+            className={cn(
+              "relative w-full max-w-md rounded-2xl border border-line bg-ink-overlay p-6 shadow-pop",
+              "transition-all duration-base",
+              state === "open" ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+            )}
           >
             <h2
               id="archive-dialog-title"

@@ -5,6 +5,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
+import { cn } from "@/components/ui";
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
+import { useDelayedUnmount } from "@/lib/hooks/useDelayedUnmount";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useWellbeingFlag } from "@/lib/hooks/useWellbeingFlag";
 
@@ -52,7 +55,10 @@ export function WellbeingFlagDialog({
     reset({ note: "" });
   }, [open, reset]);
 
-  if (!open) return null;
+  const { render, state } = useDelayedUnmount(open, 180);
+  useBodyScrollLock(open);
+
+  if (!render) return null;
 
   const onSubmit = async (values: FormValues) => {
     const result = await submit({
@@ -67,12 +73,19 @@ export function WellbeingFlagDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      data-state={state}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
       <button
         type="button"
         aria-label="Dismiss"
         onClick={onClose}
-        className="fixed inset-0 cursor-default bg-black/40 focus:outline-none focus-visible:shadow-glow-gold"
+        className={cn(
+          "fixed inset-0 cursor-default bg-black/40 transition-opacity duration-base",
+          "focus:outline-none focus-visible:shadow-glow-gold",
+          state === "open" ? "opacity-100" : "opacity-0",
+        )}
       />
       <div
         ref={trapRef}
@@ -80,7 +93,11 @@ export function WellbeingFlagDialog({
         aria-modal="true"
         aria-labelledby="wellbeing-dialog-title"
         tabIndex={-1}
-        className="relative w-full max-w-md rounded-lg bg-ink-raised p-6 shadow-pop outline-none"
+        className={cn(
+          "relative w-full max-w-md rounded-lg bg-ink-raised p-6 shadow-pop outline-none",
+          "transition-all duration-base",
+          state === "open" ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+        )}
       >
         {submitted ? (
           <div className="space-y-4" data-testid="wellbeing-flag-success">

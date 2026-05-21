@@ -4,6 +4,8 @@ import Link from "next/link";
 
 import { DailyVerse } from "@/components/home/DailyVerse";
 import { RecentActivity } from "@/components/home/RecentActivity";
+import { InstallPrompt } from "@/components/nav/InstallPrompt";
+import { PushPrompt } from "@/components/nav/PushPrompt";
 import { Banner, Heading, Link as UILink } from "@/components/ui";
 
 // Button-shaped <Link> classes. Mirrors Button.tsx primary/secondary
@@ -40,6 +42,15 @@ export default function HomePage() {
           JACOB is currently undergoing maintenance. Some features may be
           temporarily unavailable.
         </Banner>
+      )}
+
+      {/* Install + Push prompts live on /home only. Both render null when
+       * already installed / permitted / dismissed, so the flex gap collapses. */}
+      {user && (
+        <div className="flex flex-col gap-2">
+          <PushPrompt uid={user.uid} />
+          <InstallPrompt />
+        </div>
       )}
 
       <Heading level={1} size="md">

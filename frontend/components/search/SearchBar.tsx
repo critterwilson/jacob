@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useSearch } from "@/lib/hooks/useSearch";
 import { SearchResultRow } from "@/components/search/SearchResultRow";
 
@@ -19,6 +20,7 @@ export function SearchBar() {
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { data, loading, error } = useSearch(q);
+  useBodyScrollLock(open);
 
   // Cmd-K / Ctrl-K toggles the modal. Esc closes it.
   useEffect(() => {
