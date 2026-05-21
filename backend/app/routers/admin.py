@@ -36,6 +36,7 @@ from app.models.admin import (
     ResolveRequest,
     ResolveResponse,
     UnbanResponse,
+    UserRolesResponse,
 )
 from app.models.applications import (
     ApplicationDecisionResponse,
@@ -453,6 +454,38 @@ def unban_user(
 
     logger.info("admin=%s unbanned uid=%s was_banned=%s", admin.uid, uid, ban_snap.exists)
     return UnbanResponse(uid=uid, unbanned=True)
+
+
+@router.get("/users/{uid}/roles", response_model=UserRolesResponse)
+@limiter.limit(ADMIN_LIST)
+def get_user_roles(
+    uid: str,
+    request: Request,
+    response: Response,
+    admin: CurrentUser = Depends(require_admin),
+) -> UserRolesResponse:
+    """Return the current platform-level custom claims for a user.
+
+    Reports admin, moderator, and ministry_owner. There is intentionally no
+    endpoint to grant the admin claim itself — use a one-off script via the
+    Admin SDK for that (granting admin from within the app would be a
+    privilege-escalation risk without an out-of-band approval step).
+    """
+    try:
+        fb_user = firebase_auth.get_user(uid)
+    except firebase_auth.UserNotFoundError as exc:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="user_not_found",
+            message="Firebase user not found",
+        ) from exc
+    claims: dict[str, object] = dict(fb_user.custom_claims or {})
+    return UserRolesResponse(
+        uid=uid,
+        isAdmin=bool(claims.get("admin")),
+        isModerator=bool(claims.get("moderator")),
+        isMinistryOwner=bool(claims.get("ministry_owner")),
+    )
 
 
 # ── groups ─────────────────────────────────────────────────────────────────────

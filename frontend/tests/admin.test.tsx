@@ -264,3 +264,149 @@ describe("AdminGroupsPage", () => {
     expect(screen.getByText(/5 members/)).toBeInTheDocument();
   });
 });
+
+// ── AdminUsersPage — role management ─────────────────────────────────────────
+
+describe("AdminUsersPage — role management", () => {
+  const baseUsers = {
+    users: [
+      {
+        uid: "uid-1",
+        displayName: "Alice",
+        email: "alice@example.com",
+        createdAt: null,
+        isBanned: false,
+      },
+    ],
+  };
+
+  const noRoles = {
+    uid: "uid-1",
+    isAdmin: false,
+    isModerator: false,
+    isMinistryOwner: false,
+  };
+
+  it("shows Manage roles button for each user", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => baseUsers,
+    });
+    render(<AdminUsersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Alice")).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("button", { name: /manage roles/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens roles panel and fetches roles on click", async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => baseUsers,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => noRoles,
+      });
+    render(<AdminUsersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Alice")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /manage roles/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Moderator")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Ministry Owner")).toBeInTheDocument();
+    // Roles fetch should have been called for uid-1
+    const roleCall = fetchMock.mock.calls.find((c) =>
+      String(c[0]).includes("/roles"),
+    );
+    expect(roleCall).toBeDefined();
+  });
+
+  it("shows Grant buttons when user has no roles", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => baseUsers })
+      .mockResolvedValueOnce({ ok: true, json: async () => noRoles });
+    render(<AdminUsersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Alice")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /manage roles/i }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /grant/i }).length).toBeGreaterThan(0),
+    );
+  });
+
+  it("calls moderator endpoint when Grant is clicked", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => baseUsers })
+      .mockResolvedValueOnce({ ok: true, json: async () => noRoles })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ uid: "uid-1", moderator: true }),
+      });
+    render(<AdminUsersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Alice")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /manage roles/i }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /grant/i }).length).toBeGreaterThan(0),
+    );
+    // Click first Grant button (Moderator row)
+    fireEvent.click(screen.getAllByRole("button", { name: /grant/i })[0]!);
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find((c) =>
+        String(c[0]).includes("/moderator"),
+      );
+      expect(call).toBeDefined();
+      expect(JSON.parse(call![1].body as string).grant).toBe(true);
+    });
+  });
+
+  it("shows Revoke buttons when user already has roles", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => baseUsers })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          uid: "uid-1",
+          isAdmin: false,
+          isModerator: true,
+          isMinistryOwner: true,
+        }),
+      });
+    render(<AdminUsersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Alice")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /manage roles/i }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /revoke/i }).length).toBeGreaterThan(0),
+    );
+  });
+
+  it("shows note that admin claim cannot be granted in-app", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => baseUsers })
+      .mockResolvedValueOnce({ ok: true, json: async () => noRoles });
+    render(<AdminUsersPage />);
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+    await waitFor(() =>
+      expect(screen.getByText("Alice")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /manage roles/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/Admin SDK script/i)).toBeInTheDocument(),
+    );
+  });
+});

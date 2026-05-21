@@ -95,3 +95,10 @@ class AdminGroupListResponse(BaseModel):
 class ModerationPolicyResponse(BaseModel):
     gid: str
     policy: str
+
+
+class UserRolesResponse(BaseModel):
+    uid: str
+    isAdmin: bool
+    isModerator: bool
+    isMinistryOwner: bool
