@@ -23,9 +23,10 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { apiGet as apiGetExport } from "@/lib/api";
+import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
 import { useOrg, useOrgDashboard } from "@/lib/hooks/useOrg";
-import { useOrgGroups } from "@/lib/hooks/useOrgGroups";
 import { useOrgAdmins } from "@/lib/hooks/useOrgAdmins";
+import { useOrgGroups } from "@/lib/hooks/useOrgGroups";
 
 const apiGet = apiGetExport as unknown as ReturnType<typeof vi.fn>;
 
@@ -119,5 +120,36 @@ describe("org hooks", () => {
     const { result } = renderHook(() => useOrg("o1"));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.org).toBeNull();
+  });
+
+  it("useMyOrgs returns the caller's org list", async () => {
+    apiGet.mockResolvedValue({
+      orgs: [
+        {
+          orgId: "o1",
+          name: "Grace Church",
+          slug: "grace",
+          audience: "christian",
+          logoUrl: null,
+          role: "admin",
+        },
+      ],
+    });
+    const { result } = renderHook(() => useMyOrgs());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.orgs).toHaveLength(1);
+    expect(result.current.orgs[0].orgId).toBe("o1");
+    expect(result.current.orgs[0].role).toBe("admin");
+    expect(apiGet).toHaveBeenCalledWith(
+      "/api/users/me/orgs",
+      expect.anything(),
+    );
+  });
+
+  it("useMyOrgs returns empty list when the user has no orgs", async () => {
+    apiGet.mockResolvedValue({ orgs: [] });
+    const { result } = renderHook(() => useMyOrgs());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.orgs).toHaveLength(0);
   });
 });

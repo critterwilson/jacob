@@ -9,6 +9,7 @@ import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 // The mobile search button dispatches this event; SearchBar (mounted by
@@ -52,6 +53,7 @@ function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const roles = useRoleClaims();
+  const { orgs } = useMyOrgs();
   // Role-conditional entries are appended after the base set so they
   // sit between the long-tail (About/FAQ) and Settings without
   // shifting the primary ordering. While `roles` is `null` (first
@@ -59,6 +61,11 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   // don't see a flash-then-disappear "Admin" link if the claim check
   // later resolves to false.
   const links = [...baseNavLinks];
+  // Only show the Organizations link when the user actually belongs to at
+  // least one org — it's irrelevant for the vast majority of users.
+  if (orgs.length > 0) {
+    links.push({ href: "/orgs", label: "Organizations" });
+  }
   if (roles?.isAdmin) {
     links.push({ href: "/admin/queue", label: "Admin" });
   } else if (roles?.isModerator) {

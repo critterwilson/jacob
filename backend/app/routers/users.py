@@ -29,6 +29,7 @@ from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import (
     MY_GROUPS_LIST,
+    MY_ORGS_LIST,
     NOTIFICATION_READ,
     RECENT_MESSAGES_READ,
     USER_BLOCKS_WRITE,
@@ -43,6 +44,7 @@ from app.limits import (
 from app.middleware.rate_limit import limiter
 from app.models.members import GroupSummary, MyGroupsResponse
 from app.models.messages import RecentMessage, RecentMessagesResponse
+from app.models.orgs import MyOrgsResponse, OrgSummary
 from app.models.user import CurrentUser
 from app.models.users import (
     BlockResponse,
@@ -758,6 +760,67 @@ def my_groups(
         return StarletteResponse(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
     response.headers["ETag"] = etag
     return payload
+
+
+@router.get("/orgs", response_model=MyOrgsResponse)
+@limiter.limit(MY_ORGS_LIST)
+def my_orgs(
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+) -> MyOrgsResponse:
+    """Return the orgs the caller is an admin or member of.
+
+    Admin membership: `orgs/{orgId}/admins/{uid}` docs that carry
+    `uid == user.uid` (indexed field added alongside this endpoint).
+    Member membership: derived from group memberships — any group the
+    caller belongs to that has an `orgId` field set.
+    Results are deduplicated with "admin" role taking precedence over "member".
+    """
+    db = get_firestore()
+
+    org_roles: dict[str, Literal["admin", "member"]] = {}
+
+    # 1. Org admin memberships — collection_group("admins") indexed by uid field.
+    for snap in db.collection_group("admins").where("uid", "==", user.uid).stream():
+        parent_org = snap.reference.parent.parent
+        if parent_org is not None:
+            org_roles[parent_org.id] = "admin"
+
+    # 2. Org member memberships — derived from group memberships that carry orgId.
+    for snap in db.collection_group("members").where("uid", "==", user.uid).stream():
+        parent_group = snap.reference.parent.parent
+        if parent_group is None:
+            continue
+        group_snap = parent_group.get()
+        if not getattr(group_snap, "exists", False):
+            continue
+        org_id = (group_snap.to_dict() or {}).get("orgId")
+        if org_id and org_id not in org_roles:
+            org_roles[org_id] = "member"
+
+    if not org_roles:
+        return MyOrgsResponse(orgs=[])
+
+    # 3. Fetch the org docs.
+    org_refs = [db.collection("orgs").document(oid) for oid in org_roles]
+    orgs: list[OrgSummary] = []
+    for doc in db.get_all(org_refs):
+        if not getattr(doc, "exists", False):
+            continue
+        data = doc.to_dict() or {}
+        orgs.append(
+            OrgSummary(
+                orgId=doc.id,
+                name=str(data.get("name", "")),
+                slug=str(data.get("slug", "")),
+                audience=data.get("audience", "christian"),
+                logoUrl=data.get("logoUrl"),
+                role=org_roles[doc.id],
+            )
+        )
+
+    return MyOrgsResponse(orgs=orgs)
 
 
 @router.get("/recent-messages", response_model=RecentMessagesResponse)
