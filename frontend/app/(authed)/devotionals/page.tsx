@@ -51,6 +51,17 @@ export default function DevotionalsIndexPage() {
                 className="block rounded-lg no-underline hover:no-underline focus:outline-none focus-visible:shadow-glow-gold"
               >
                 <Card surface="raised" interactive padding="md" className="space-y-2">
+                  {d.groupId && d.groupName && (
+                    // Pill label so readers see at a glance which group
+                    // authored this devotional vs. platform-wide entries
+                    // that have no label.
+                    <p
+                      className="inline-block rounded-full bg-ink-overlay px-2 py-0.5 text-eyebrow uppercase tracking-wider text-cream-muted"
+                      aria-label={`From ${d.groupName}`}
+                    >
+                      {d.groupName}
+                    </p>
+                  )}
                   <h2 className="font-display text-display-sm text-cream">
                     {d.title}
                   </h2>

@@ -47,7 +47,11 @@ export function TodayDevotional({ devotional, loading }: Props) {
       className="block rounded-lg no-underline focus:outline-none focus-visible:shadow-glow-gold"
     >
       <Card surface="raised" interactive className="space-y-2">
-        <Eyebrow>Today&apos;s devotional</Eyebrow>
+        <Eyebrow>
+          {devotional.groupName
+            ? `Today's devotional · ${devotional.groupName}`
+            : "Today's devotional"}
+        </Eyebrow>
         <Heading level={2} size="sm">
           {devotional.title}
         </Heading>

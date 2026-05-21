@@ -13,6 +13,13 @@ export type Devotional = {
   sourceAttribution: string;
   publishedAt: string | null;
   audience: "christian" | "general";
+  // null = platform-wide (ministry-owner-authored). Set = group-scoped
+  // (leader-authored); only members of the named group can see it.
+  groupId: string | null;
+  // Hydrated by list endpoints that merge across groups. The
+  // /api/devotionals list returns null for platform entries and the
+  // group's display name for group-scoped entries.
+  groupName: string | null;
 };
 
 export type DevotionalCreatePayload = {
@@ -24,6 +31,11 @@ export type DevotionalCreatePayload = {
   sourceAttribution?: string;
   publishedAt?: string | null;
   audience?: "christian" | "general";
+  // When set, the devotional is created as group-scoped and the backend
+  // enforces that the caller is a leader of `groupId`. When omitted, the
+  // create defaults to a platform-wide devotional and requires the
+  // `ministry_owner` claim.
+  groupId?: string | null;
 };
 
 export type DevotionalUpdatePayload = Partial<Omit<DevotionalCreatePayload, "slug">>;
@@ -103,6 +115,44 @@ export function useDevotionals(audience?: "christian" | "general"): {
 
   return { devotionals, loading };
 }
+
+export function useGroupDevotionals(gid: string | null | undefined): {
+  devotionals: Devotional[];
+  loading: boolean;
+  reload: () => void;
+} {
+  const [devotionals, setDevotionals] = useState<Devotional[]>([]);
+  const [loading, setLoading] = useState<boolean>(Boolean(gid));
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    if (!gid) {
+      setDevotionals([]);
+      setLoading(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setLoading(true);
+    apiGet<{ devotionals: Devotional[] }>(
+      `/api/groups/${encodeURIComponent(gid)}/devotionals`,
+      { signal: ctrl.signal },
+    )
+      .then((res) => {
+        setDevotionals(res.devotionals);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.code === "aborted") return;
+        setDevotionals([]);
+        setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [gid, version]);
+
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
+  return { devotionals, loading, reload };
+}
+
 
 export function useDevotional(slug: string | null): {
   devotional: Devotional | null;
