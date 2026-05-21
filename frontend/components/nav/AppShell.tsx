@@ -9,6 +9,7 @@ import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 // The mobile search button dispatches this event; SearchBar (mounted by
 // AuthedLayout) listens for it. Going through window means AppShell
@@ -23,11 +24,14 @@ function dispatchOpenSearch() {
 // Drawer (mobile hamburger + desktop sidebar) carries the full nav set.
 // Mobile users primarily navigate via the bottom tab bar; the drawer
 // is the secondary menu for everything else.
-const navLinks = [
+const baseNavLinks = [
   { href: "/home", label: "Home" },
   { href: "/feed", label: "Feed" },
   { href: "/groups", label: "Chats" },
   { href: "/boards", label: "Boards" },
+  { href: "/discover", label: "Discover" },
+  { href: "/devotionals", label: "Devotionals" },
+  { href: "/reading-plans", label: "Reading plans" },
   { href: "/about", label: "About" },
   { href: "/faq", label: "FAQ" },
   { href: "/settings", label: "Settings" },
@@ -47,9 +51,22 @@ function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const roles = useRoleClaims();
+  // Role-conditional entries are appended after the base set so they
+  // sit between the long-tail (About/FAQ) and Settings without
+  // shifting the primary ordering. While `roles` is `null` (first
+  // paint after token refresh) we render the base set only so admins
+  // don't see a flash-then-disappear "Admin" link if the claim check
+  // later resolves to false.
+  const links = [...baseNavLinks];
+  if (roles?.isAdmin) {
+    links.push({ href: "/admin/queue", label: "Admin" });
+  } else if (roles?.isModerator) {
+    links.push({ href: "/admin/wellbeing", label: "Moderation" });
+  }
   return (
     <ul className="space-y-1 px-2">
-      {navLinks.map(({ href, label }) => {
+      {links.map(({ href, label }) => {
         const active =
           pathname === href || pathname.startsWith(href + "/");
         return (

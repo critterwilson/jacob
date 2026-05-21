@@ -124,6 +124,50 @@ export default function HomePage() {
         </Heading>
         <RecentActivity messages={recentMessages} loading={recentLoading} />
       </section>
+
+      <section className="space-y-3">
+        <Heading level={2} size="sm">
+          Browse
+        </Heading>
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <li>
+            <UILink
+              href="/devotionals"
+              variant="muted"
+              className="block rounded-lg border border-line bg-ink-raised px-4 py-3 text-body no-underline transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
+            >
+              <span className="block text-body text-cream">Devotionals</span>
+              <span className="block text-caption text-cream-muted">
+                Short scripture reflections
+              </span>
+            </UILink>
+          </li>
+          <li>
+            <UILink
+              href="/reading-plans"
+              variant="muted"
+              className="block rounded-lg border border-line bg-ink-raised px-4 py-3 text-body no-underline transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
+            >
+              <span className="block text-body text-cream">Reading plans</span>
+              <span className="block text-caption text-cream-muted">
+                Multi-day scripture journeys
+              </span>
+            </UILink>
+          </li>
+          <li>
+            <UILink
+              href="/discover"
+              variant="muted"
+              className="block rounded-lg border border-line bg-ink-raised px-4 py-3 text-body no-underline transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
+            >
+              <span className="block text-body text-cream">Discover groups</span>
+              <span className="block text-caption text-cream-muted">
+                Find a public small group
+              </span>
+            </UILink>
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }

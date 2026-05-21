@@ -5,6 +5,7 @@ const SETTINGS_SECTIONS = [
   { href: "/settings/notifications", label: "Notification settings", danger: false },
   { href: "/settings/blocked", label: "Blocked users", danger: false },
   { href: "/settings/export", label: "Export my data", danger: false },
+  { href: "/appeals/new", label: "Submit an appeal", danger: false },
   { href: "/settings/delete-account", label: "Delete account", danger: true },
 ] as const;
 

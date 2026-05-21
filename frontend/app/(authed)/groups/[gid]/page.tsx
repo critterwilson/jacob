@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { ReportButton } from "@/components/moderation/ReportButton";
 
 type Props = { params: { gid: string } };
@@ -17,7 +18,10 @@ export default function GroupPage({ params }: Props) {
   const { user, loading: authLoading } = useAuth();
   const { group, loading: groupLoading } = useGroup(gid);
 
-  const [isLeader, setIsLeader] = useState(false);
+  // `useGroupMembership` reads the canonical members/{uid} row, so
+  // promoted leaders (not just the founder) get the leader-only UI.
+  // The previous `createdBy === user.uid` heuristic missed them.
+  const { isLeader } = useGroupMembership(user?.uid, gid);
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [currentCode, setCurrentCode] = useState<string | null>(null);
@@ -31,9 +35,8 @@ export default function GroupPage({ params }: Props) {
   useEffect(() => {
     if (group) {
       setCurrentCode(group.inviteCode);
-      setIsLeader(group.createdBy === user?.uid);
     }
-  }, [group, user?.uid]);
+  }, [group]);
 
   const handleRotate = async () => {
     if (!user) return;
@@ -109,6 +112,63 @@ export default function GroupPage({ params }: Props) {
       >
         Open chat
       </Link>
+
+      <nav aria-label="Group sections" className="mt-2">
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <li>
+            <Link
+              href={`/groups/${gid}/sermons`}
+              className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+            >
+              Sermons
+            </Link>
+          </li>
+          <li>
+            <Link
+              href={`/groups/${gid}/events`}
+              className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+            >
+              Events
+            </Link>
+          </li>
+          <li>
+            <Link
+              href={`/groups/${gid}/members`}
+              className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+            >
+              Members
+            </Link>
+          </li>
+          {isLeader && (
+            <>
+              <li>
+                <Link
+                  href={`/groups/${gid}/settings`}
+                  className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+                >
+                  Settings
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/groups/${gid}/settings/invites`}
+                  className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+                >
+                  Invites
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/groups/${gid}/analytics`}
+                  className="block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+                >
+                  Analytics
+                </Link>
+              </li>
+            </>
+          )}
+        </ul>
+      </nav>
 
       {isLeader && (
         <section className="mt-8 rounded border border-line p-4">

@@ -34,6 +34,12 @@ export default function GroupsPage() {
         <h1 className="text-2xl font-semibold">Your groups</h1>
         <div className="flex flex-wrap gap-2">
           <Link
+            href="/discover"
+            className="inline-flex h-11 items-center rounded border border-line px-4 text-body-sm transition-colors duration-fast hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
+          >
+            Discover groups
+          </Link>
+          <Link
             href="/join"
             className="inline-flex h-11 items-center rounded border border-line px-4 text-body-sm transition-colors duration-fast hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
           >

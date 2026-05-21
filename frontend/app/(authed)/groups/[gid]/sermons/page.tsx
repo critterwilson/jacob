@@ -19,6 +19,8 @@ import {
   type Sermon,
   useGroupSermons,
 } from "@/lib/hooks/useGroupSermons";
+import { useAuth } from "@/lib/auth-context";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { safeImageSrc } from "@/lib/safeUrl";
 
 const inputClass =
@@ -34,6 +36,10 @@ export default function SermonsListPage() {
   );
   const { sermons, preachers, loading, error, addSermon } =
     useGroupSermons(gid);
+  const { user } = useAuth();
+  // The backend rejects non-leader POSTs with 403; hide the affordance
+  // so members aren't tempted to click a button that always fails.
+  const { isLeader } = useGroupMembership(user?.uid, gid);
 
   const [preacherFilter, setPreacherFilter] = useState<string>("");
   const [showAdd, setShowAdd] = useState(false);
@@ -95,17 +101,19 @@ export default function SermonsListPage() {
             </Heading>
           </div>
         </div>
-        <Button
-          type="button"
-          variant={showAdd ? "secondary" : "primary"}
-          size="md"
-          onClick={() => setShowAdd((s) => !s)}
-        >
-          {showAdd ? "Cancel" : "Add sermon"}
-        </Button>
+        {isLeader && (
+          <Button
+            type="button"
+            variant={showAdd ? "secondary" : "primary"}
+            size="md"
+            onClick={() => setShowAdd((s) => !s)}
+          >
+            {showAdd ? "Cancel" : "Add sermon"}
+          </Button>
+        )}
       </header>
 
-      {showAdd && (
+      {isLeader && showAdd && (
         <Section title="Add a sermon" description="Paste a YouTube URL or podcast link. Title is auto-filled when possible.">
           <div className="space-y-2">
             <input
