@@ -2,6 +2,9 @@
 
 * `GET    /api/devotionals` — list (any signed-in)
 * `GET    /api/devotionals/{slug}` — detail
+* `POST   /api/devotionals` — create (ministry_owner only)
+* `PATCH  /api/devotionals/{slug}` — update (ministry_owner only)
+* `DELETE /api/devotionals/{slug}` — delete (ministry_owner only)
 * `GET    /api/reading-plans` — list (summary; days dropped)
 * `GET    /api/reading-plans/{slug}` — detail with day list
 * `POST   /api/reading-plans` — create (admin only)
@@ -17,15 +20,17 @@ Direct Firestore access on `devotionals/`, `reading_plans/`, and
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user, require_admin, require_not_banned
+from app.deps import get_current_user, require_admin, require_ministry_owner, require_not_banned
 from app.errors import APIError
 from app.limits import (
     DEVOTIONAL_LIST,
+    DEVOTIONAL_MUTATION,
     PLAN_MUTATION,
     PLAN_PROGRESS_READ,
     PLAN_PROGRESS_WRITE,
@@ -35,7 +40,9 @@ from app.models.devotionals import (
     ActivePlanToday,
     Audience,
     Devotional,
+    DevotionalCreateRequest,
     DevotionalListResponse,
+    DevotionalUpdateRequest,
     MarkDayCompleteRequest,
     MarkDayCompleteResponse,
     PlanProgress,
@@ -68,6 +75,16 @@ def _ts_to_str(ts: Any) -> str | None:
         return result
     except AttributeError:
         return str(ts)
+
+
+def _parse_date_str(s: str | None) -> datetime | None:
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=UTC) if "T" not in s else dt.astimezone(UTC)
+    except ValueError:
+        return None
 
 
 def _doc_to_devotional(snap: Any) -> Devotional:
@@ -157,6 +174,102 @@ def get_devotional(
             message=f"Devotional {slug!r} not found",
         )
     return _doc_to_devotional(snap)
+
+
+@router.post("/api/devotionals", response_model=Devotional, status_code=status.HTTP_201_CREATED)
+@limiter.limit(DEVOTIONAL_MUTATION)
+def create_devotional(
+    request: Request,
+    response: Response,
+    body: DevotionalCreateRequest,
+    user: CurrentUser = Depends(require_ministry_owner),
+) -> Devotional:
+    db = _db()
+    ref = db.collection("devotionals").document(body.slug)
+    if ref.get().exists:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="slug_taken",
+            message=f"A devotional with slug {body.slug!r} already exists",
+        )
+    published_at = _parse_date_str(body.publishedAt) or datetime.now(UTC)
+    ref.set(
+        {
+            "slug": body.slug,
+            "title": body.title,
+            "scriptureRef": body.scriptureRef,
+            "body": body.body,
+            "audioUrl": body.audioUrl,
+            "sourceAttribution": body.sourceAttribution,
+            "publishedAt": published_at,
+            "audience": body.audience,
+            "schemaVersion": 1,
+            "createdBy": user.uid,
+        }
+    )
+    logger.info("devotional created slug=%s actor=%s", body.slug, user.uid)
+    return _doc_to_devotional(ref.get())
+
+
+@router.patch("/api/devotionals/{slug}", response_model=Devotional)
+@limiter.limit(DEVOTIONAL_MUTATION)
+def update_devotional(
+    slug: str,
+    request: Request,
+    response: Response,
+    body: DevotionalUpdateRequest,
+    user: CurrentUser = Depends(require_ministry_owner),
+) -> Devotional:
+    db = _db()
+    ref = db.collection("devotionals").document(slug)
+    if not ref.get().exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="devotional_not_found",
+            message=f"Devotional {slug!r} not found",
+        )
+    patch: dict[str, Any] = {}
+    if body.title is not None:
+        patch["title"] = body.title
+    if body.scriptureRef is not None:
+        patch["scriptureRef"] = body.scriptureRef
+    if body.body is not None:
+        patch["body"] = body.body
+    if "audioUrl" in body.model_fields_set:
+        patch["audioUrl"] = body.audioUrl
+    if body.sourceAttribution is not None:
+        patch["sourceAttribution"] = body.sourceAttribution
+    if body.publishedAt is not None:
+        parsed = _parse_date_str(body.publishedAt)
+        if parsed is not None:
+            patch["publishedAt"] = parsed
+    if body.audience is not None:
+        patch["audience"] = body.audience
+    if patch:
+        ref.update(patch)
+    logger.info("devotional updated slug=%s actor=%s fields=%s", slug, user.uid, list(patch))
+    return _doc_to_devotional(ref.get())
+
+
+@router.delete("/api/devotionals/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(DEVOTIONAL_MUTATION)
+def delete_devotional(
+    slug: str,
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(require_ministry_owner),
+) -> Response:
+    db = _db()
+    ref = db.collection("devotionals").document(slug)
+    if not ref.get().exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="devotional_not_found",
+            message=f"Devotional {slug!r} not found",
+        )
+    ref.delete()
+    logger.info("devotional deleted slug=%s actor=%s", slug, user.uid)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ── reading plans ────────────────────────────────────────────────────────────

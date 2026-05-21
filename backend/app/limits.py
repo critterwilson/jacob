@@ -50,6 +50,7 @@ DOMAIN_BY_HOST: str = "120/minute"
 # cached client-side; mark-complete is per-user low-rate. Admin CRUD
 # is low-volume; matches SERMON_MUTATION ceiling.
 DEVOTIONAL_LIST: str = "60/minute"
+DEVOTIONAL_MUTATION: str = "20/hour"
 PLAN_PROGRESS_READ: str = "60/minute"
 PLAN_PROGRESS_WRITE: str = "30/hour"
 PLAN_MUTATION: str = "20/hour"
