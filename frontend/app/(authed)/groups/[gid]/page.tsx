@@ -8,6 +8,7 @@ import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
+import { useJoinRequests } from "@/lib/hooks/useJoinRequests";
 import { ReportButton } from "@/components/moderation/ReportButton";
 
 type Props = { params: { gid: string } };
@@ -22,6 +23,7 @@ export default function GroupPage({ params }: Props) {
   // promoted leaders (not just the founder) get the leader-only UI.
   // The previous `createdBy === user.uid` heuristic missed them.
   const { isLeader } = useGroupMembership(user?.uid, gid);
+  const { pendingCount } = useJoinRequests(isLeader ? gid : undefined);
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
   const [currentCode, setCurrentCode] = useState<string | null>(null);
@@ -141,6 +143,22 @@ export default function GroupPage({ params }: Props) {
           </li>
           {isLeader && (
             <>
+              <li>
+                <Link
+                  href={`/groups/${gid}/join-requests`}
+                  className="relative block rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream no-underline hover:bg-ink-overlay"
+                >
+                  Join requests
+                  {pendingCount > 0 && (
+                    <span
+                      aria-label={`${pendingCount} pending`}
+                      className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-terracotta px-1 text-[10px] font-semibold text-white"
+                    >
+                      {pendingCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
               <li>
                 <Link
                   href={`/groups/${gid}/settings`}

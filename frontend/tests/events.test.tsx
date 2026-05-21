@@ -12,6 +12,7 @@ vi.mock("@/lib/firebase", () => ({
 vi.mock("@/lib/api", () => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
+  apiPatch: vi.fn(),
   apiDelete: vi.fn(),
   ApiError: class ApiError extends Error {
     constructor(
@@ -27,18 +28,21 @@ vi.mock("@/lib/api", () => ({
 import {
   apiDelete as apiDeleteExport,
   apiGet as apiGetExport,
+  apiPatch as apiPatchExport,
   apiPost as apiPostExport,
 } from "@/lib/api";
 import { useEvents } from "@/lib/hooks/useEvents";
 
 const apiGet = apiGetExport as unknown as ReturnType<typeof vi.fn>;
 const apiPost = apiPostExport as unknown as ReturnType<typeof vi.fn>;
+const apiPatch = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
 const apiDelete = apiDeleteExport as unknown as ReturnType<typeof vi.fn>;
 
 describe("useEvents (T49)", () => {
   beforeEach(() => {
     apiGet.mockReset();
     apiPost.mockReset();
+    apiPatch.mockReset();
     apiDelete.mockReset();
   });
 
@@ -128,5 +132,89 @@ describe("useEvents (T49)", () => {
     const ok = await result.current.deleteEvent("e1");
     expect(ok).toBe(true);
     expect(apiDelete).toHaveBeenCalledWith("/api/groups/g1/events/e1");
+  });
+
+  it("updateEvent patches the right path and body", async () => {
+    apiGet.mockResolvedValue({ events: [] });
+    apiPatch.mockResolvedValue({
+      eventId: "e1",
+      title: "Updated title",
+      description: "",
+      startsAt: "2026-05-10T18:00:00Z",
+      endsAt: "2026-05-10T19:00:00Z",
+      location: null,
+      recurrence: null,
+      parentEventId: null,
+      occurrenceIndex: 0,
+      createdBy: "leader-1",
+      createdAt: null,
+      deletedAt: null,
+      reminderSentAt: null,
+      rsvpGoing: 0,
+      rsvpMaybe: 0,
+      rsvpNo: 0,
+      attendedCount: 0,
+    });
+    const { result } = renderHook(() => useEvents("g1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const updated = await result.current.updateEvent("e1", { title: "Updated title" });
+    expect(updated?.title).toBe("Updated title");
+    expect(apiPatch).toHaveBeenCalledWith(
+      "/api/groups/g1/events/e1",
+      { title: "Updated title" },
+    );
+  });
+
+  it("listRsvps fetches the right endpoint", async () => {
+    apiGet
+      .mockResolvedValueOnce({ events: [] })
+      .mockResolvedValueOnce({
+        rsvps: [
+          { uid: "u1", status: "going", respondedAt: null, attended: null, checkedInAt: null },
+          { uid: "u2", status: "no", respondedAt: null, attended: false, checkedInAt: null },
+        ],
+      });
+    const { result } = renderHook(() => useEvents("g1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const rsvps = await result.current.listRsvps("e1");
+    expect(rsvps).toHaveLength(2);
+    expect(rsvps[0].uid).toBe("u1");
+    expect(rsvps[0].status).toBe("going");
+    expect(apiGet).toHaveBeenCalledWith(
+      "/api/groups/g1/events/e1/rsvps",
+    );
+  });
+
+  it("markAttendance posts the right path and body", async () => {
+    apiGet.mockResolvedValue({ events: [] });
+    apiPost.mockResolvedValue({ eventId: "e1", uid: "u1", attended: true });
+    const { result } = renderHook(() => useEvents("g1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const ok = await result.current.markAttendance("e1", "u1", true);
+    expect(ok).toBe(true);
+    expect(apiPost).toHaveBeenCalledWith(
+      "/api/groups/g1/events/e1/manual-attendance",
+      { uid: "u1", attended: true },
+    );
+  });
+
+  it("updateEvent returns null and warns on error", async () => {
+    apiGet.mockResolvedValue({ events: [] });
+    const { ApiError: Err } = await import("@/lib/api");
+    apiPatch.mockRejectedValue(new Err(400, "invalid_event", "bad dates"));
+    const { result } = renderHook(() => useEvents("g1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const updated = await result.current.updateEvent("e1", { title: "x" });
+    expect(updated).toBeNull();
+  });
+
+  it("listRsvps returns empty array on error", async () => {
+    apiGet.mockResolvedValueOnce({ events: [] });
+    const { ApiError: Err } = await import("@/lib/api");
+    apiGet.mockRejectedValueOnce(new Err(403, "forbidden", "not a leader"));
+    const { result } = renderHook(() => useEvents("g1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const rsvps = await result.current.listRsvps("e1");
+    expect(rsvps).toEqual([]);
   });
 });

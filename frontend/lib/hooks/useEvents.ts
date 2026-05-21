@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 
 export type Recurrence = { kind: "weekly" | "biweekly"; count: number };
 
@@ -35,7 +35,23 @@ export type EventCreatePayload = {
   recurrence?: Recurrence | null;
 };
 
+export type EventUpdatePayload = {
+  title?: string;
+  description?: string;
+  startsAt?: string;
+  endsAt?: string;
+  location?: string | null;
+};
+
 export type RsvpStatus = "going" | "maybe" | "no";
+
+export type Rsvp = {
+  uid: string;
+  status: RsvpStatus;
+  respondedAt: string | null;
+  attended: boolean | null;
+  checkedInAt: string | null;
+};
 
 export function useEvents(gid: string | null | undefined): {
   events: Event[];
@@ -43,9 +59,12 @@ export function useEvents(gid: string | null | undefined): {
   error: ApiError | null;
   reload: () => void;
   createEvent: (payload: EventCreatePayload) => Promise<Event | null>;
+  updateEvent: (eventId: string, payload: EventUpdatePayload) => Promise<Event | null>;
   deleteEvent: (eventId: string) => Promise<boolean>;
   rsvp: (eventId: string, status: RsvpStatus) => Promise<boolean>;
   checkIn: (eventId: string) => Promise<boolean>;
+  listRsvps: (eventId: string) => Promise<Rsvp[]>;
+  markAttendance: (eventId: string, uid: string, attended: boolean) => Promise<boolean>;
 } {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(Boolean(gid));
@@ -158,14 +177,74 @@ export function useEvents(gid: string | null | undefined): {
     [gid, reload],
   );
 
+  const updateEvent = useCallback(
+    async (eventId: string, payload: EventUpdatePayload): Promise<Event | null> => {
+      if (!gid) return null;
+      try {
+        const res = await apiPatch<Event>(
+          `/api/groups/${encodeURIComponent(gid)}/events/${encodeURIComponent(eventId)}`,
+          payload,
+        );
+        reload();
+        return res;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          console.warn("event_update_failed", err.code, err.status);
+        }
+        return null;
+      }
+    },
+    [gid, reload],
+  );
+
+  const listRsvps = useCallback(
+    async (eventId: string): Promise<Rsvp[]> => {
+      if (!gid) return [];
+      try {
+        const res = await apiGet<{ rsvps: Rsvp[] }>(
+          `/api/groups/${encodeURIComponent(gid)}/events/${encodeURIComponent(eventId)}/rsvps`,
+        );
+        return res.rsvps;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          console.warn("event_rsvps_failed", err.code, err.status);
+        }
+        return [];
+      }
+    },
+    [gid],
+  );
+
+  const markAttendance = useCallback(
+    async (eventId: string, uid: string, attended: boolean): Promise<boolean> => {
+      if (!gid) return false;
+      try {
+        await apiPost(
+          `/api/groups/${encodeURIComponent(gid)}/events/${encodeURIComponent(eventId)}/manual-attendance`,
+          { uid, attended },
+        );
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          console.warn("event_attendance_failed", err.code, err.status);
+        }
+        return false;
+      }
+    },
+    [gid],
+  );
+
   return {
     events,
     loading,
     error,
     reload,
     createEvent,
+    updateEvent,
     deleteEvent,
     rsvp,
     checkIn,
+    listRsvps,
+    markAttendance,
   };
 }

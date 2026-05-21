@@ -11,6 +11,7 @@ const ADMIN_NAV_LINKS = [
   { href: "/admin/applications", label: "Applications" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/groups", label: "Groups" },
+  { href: "/admin/boards", label: "Boards" },
   { href: "/admin/flags", label: "Feature Flags" },
   { href: "/admin/incidents", label: "Incidents" },
   { href: "/admin/ncmec", label: "NCMEC" },
