@@ -38,6 +38,8 @@ class JoinModeRequest(BaseModel):
 
 class PendingRequest(BaseModel):
     uid: str
+    displayName: str = ""
+    photoURL: str | None = None
     message: str
     requestedAt: str  # ISO-8601
     status: Literal["pending", "approved", "rejected"]
