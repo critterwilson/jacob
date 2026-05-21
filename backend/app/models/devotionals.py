@@ -24,6 +24,15 @@ class Devotional(BaseModel):
     sourceAttribution: str
     publishedAt: str | None
     audience: Audience
+    # `groupId is None` => platform-wide (ministry-owner-authored).
+    # `groupId` set => scoped to that group (leader-authored); visible
+    # only to members of the named group.
+    groupId: str | None = None
+    # Hydrated by list endpoints that merge across groups so the UI can
+    # label which group a devotional came from. None on platform-wide
+    # entries and on responses where the group context is already
+    # implied (e.g. /api/groups/{gid}/devotionals).
+    groupName: str | None = None
     schemaVersion: int = 1
 
 
@@ -116,6 +125,11 @@ class DevotionalCreateRequest(BaseModel):
         default=None, description="ISO date string YYYY-MM-DD; defaults to now."
     )
     audience: Audience = "christian"
+    # When present, authoring is gated on the caller being a leader of
+    # that group; the resulting devotional is visible only to members of
+    # that group. When absent/null, authoring requires `ministry_owner`
+    # and the devotional surfaces platform-wide.
+    groupId: str | None = Field(default=None, max_length=64)
 
 
 class DevotionalUpdateRequest(BaseModel):
