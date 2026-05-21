@@ -86,7 +86,7 @@ export default function GroupPage({ params }: Props) {
             resourceType="group"
             resourceId={gid}
             groupId={gid}
-            className="text-xs text-cream-dim hover:text-cream-muted"
+            className="text-xs text-cream-muted hover:text-cream-muted"
           />
           <Link href="/groups" className="text-sm text-gold hover:underline">
             All groups

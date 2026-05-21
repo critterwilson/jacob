@@ -82,7 +82,7 @@ export default function GroupsPage() {
                     </p>
                   )}
                 </div>
-                <span className="text-sm text-cream-dim">
+                <span className="text-sm text-cream-muted">
                   {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
                 </span>
               </Link>

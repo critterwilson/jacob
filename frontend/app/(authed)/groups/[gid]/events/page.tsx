@@ -200,7 +200,7 @@ export default function EventsListPage() {
                     {s}
                   </button>
                 ))}
-                <span className="text-cream-dim">
+                <span className="text-cream-muted">
                   ({event.rsvpGoing} going)
                 </span>
               </div>

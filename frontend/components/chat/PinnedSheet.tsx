@@ -36,7 +36,7 @@ export function PinnedSheet({
         role="dialog"
         aria-modal="true"
         aria-label="Pinned messages"
-        className="relative w-full max-w-lg rounded-t-2xl border border-line bg-ink-overlay p-5 shadow-pop sm:rounded-2xl"
+        className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto scroll-momentum rounded-t-2xl border border-line bg-ink-overlay p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-pop sm:max-h-[80vh] sm:rounded-2xl sm:pb-5"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-body font-semibold text-cream">
@@ -45,7 +45,7 @@ export function PinnedSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm text-caption text-cream-muted transition-colors duration-fast hover:text-cream focus:outline-none focus-visible:shadow-glow-gold"
+            className="-mr-2 inline-flex h-11 items-center rounded-sm px-3 text-body-sm text-cream-muted transition-colors duration-fast hover:text-cream focus:outline-none focus-visible:shadow-glow-gold"
             aria-label="Close pinned messages"
           >
             Close
@@ -64,10 +64,10 @@ export function PinnedSheet({
                   by {msg.authorUid}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-1">
                 <a
                   href={`/groups/${gid}/chat#${msg.id}`}
-                  className="rounded-sm text-caption text-gold-soft transition-colors duration-fast hover:text-gold focus:outline-none focus-visible:shadow-glow-gold"
+                  className="inline-flex h-11 items-center rounded-sm px-3 text-body-sm text-gold-soft transition-colors duration-fast hover:text-gold focus:outline-none focus-visible:shadow-glow-gold"
                   onClick={onClose}
                 >
                   Jump
@@ -76,7 +76,7 @@ export function PinnedSheet({
                   <button
                     type="button"
                     onClick={() => onUnpin(msg.id)}
-                    className="rounded-sm text-caption text-terracotta transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold"
+                    className="inline-flex h-11 items-center rounded-sm px-3 text-body-sm text-terracotta transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold"
                     aria-label="Unpin message"
                   >
                     Unpin

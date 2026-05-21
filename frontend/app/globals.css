@@ -16,6 +16,9 @@
 @layer base {
   html {
     background-color: var(--color-ink);
+    /* Stop the system from re-firing horizontal swipes as back/forward
+     * navigation while scrolling chats and lists on mobile. */
+    overscroll-behavior-x: none;
   }
 
   body {
@@ -26,6 +29,19 @@
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Remove the blue tap-highlight square; the design system uses
+     * focus-visible:shadow-glow-gold instead. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Targets we deliberately want momentum-scrolling on iOS. The
+   * `.scroll-momentum` utility opts a container in; combined with
+   * `overscroll-behavior: contain` it prevents the page underneath
+   * from scrolling when the user runs out of room inside the
+   * container (chat, modals, sheets). */
+  .scroll-momentum {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   /*

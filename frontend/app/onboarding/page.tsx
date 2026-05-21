@@ -75,7 +75,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center bg-ink px-4 py-12">
+    <main className="flex min-h-svh flex-col items-center bg-ink px-4 py-12 pt-safe-t pb-safe-b">
       <div className="flex w-full max-w-lg flex-col items-center gap-6">
         <div className="flex flex-col items-center gap-3 text-gold-soft">
           <LightFromClouds className="h-16 w-auto opacity-90" />

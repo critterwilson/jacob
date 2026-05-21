@@ -75,6 +75,25 @@ const config: Config = {
       spacing: {
         // Section breathing room — the one custom spacing value.
         "18": "4.5rem",
+        // Safe-area insets — directional. Bound to env() with a 0 fallback
+        // so they no-op on browsers without safe areas (most desktop / Android).
+        // Usage: `pt-safe-t`, `pb-safe-b`, `pl-safe-l`, `pr-safe-r`.
+        "safe-t": "env(safe-area-inset-top, 0px)",
+        "safe-b": "env(safe-area-inset-bottom, 0px)",
+        "safe-l": "env(safe-area-inset-left, 0px)",
+        "safe-r": "env(safe-area-inset-right, 0px)",
+      },
+      height: {
+        // Dynamic / small / large viewport units. iOS Safari's 100vh
+        // includes the area behind the URL bar — `dvh` tracks the
+        // visible viewport instead.
+        "dvh": "100dvh",
+        "svh": "100svh",
+        "lvh": "100lvh",
+      },
+      minHeight: {
+        "dvh": "100dvh",
+        "svh": "100svh",
       },
       borderRadius: {
         sm: "var(--radius-sm)",

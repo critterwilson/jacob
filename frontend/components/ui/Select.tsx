@@ -15,7 +15,8 @@ type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
 };
 
 const selectBase =
-  "h-10 w-full appearance-none rounded border bg-ink-overlay pl-3 pr-9 " +
+  // 44 px tall — matches Input. iOS native select is its own UI either way.
+  "h-11 w-full appearance-none rounded border bg-ink-overlay pl-3 pr-9 " +
   "font-sans text-body text-cream " +
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:shadow-glow-gold focus-visible:border-gold " +

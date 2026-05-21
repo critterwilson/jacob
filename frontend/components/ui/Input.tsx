@@ -11,7 +11,9 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
 };
 
 const inputBase =
-  "h-10 w-full rounded border bg-ink-overlay px-3 " +
+  // 44 px tall — meets the iOS touch-target floor. `text-body` (16 px)
+  // also prevents iOS Safari's focus-zoom on input.
+  "h-11 w-full rounded border bg-ink-overlay px-3 " +
   "font-sans text-body text-cream placeholder:text-cream-muted " +
   "transition-colors duration-fast " +
   "focus:outline-none focus-visible:shadow-glow-gold focus-visible:border-gold " +

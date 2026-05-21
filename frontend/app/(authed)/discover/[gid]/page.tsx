@@ -64,7 +64,7 @@ export default function ReadOnlyGroupPage({ params }: Props) {
             ← Discover
           </Link>
           <h1 className="mt-0.5 text-base font-semibold">{group.name}</h1>
-          <p className="text-xs text-cream-dim">
+          <p className="text-xs text-cream-muted">
             Read-only ·{" "}
             <span className="font-medium text-gold">
               {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
