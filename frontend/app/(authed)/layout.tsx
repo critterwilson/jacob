@@ -45,7 +45,13 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
 
   return (
     <AppShell fullHeight={fullHeight}>
-      {!fullHeight && <SearchBar />}
+      {/* SearchBar is mounted on every authed route so the mobile
+       * header search button (in AppShell) can open it everywhere,
+       * and so Cmd-K / Ctrl-K keeps working. It self-renders nothing
+       * when closed; placing it here (not in AppShell) keeps test
+       * bundles that mount AppShell directly from dragging in the
+       * SearchBar tree. */}
+      <SearchBar />
       {!fullHeight && user && (
         <div className="mx-auto max-w-2xl px-4 pt-4 flex flex-col gap-2">
           <PushPrompt uid={user.uid} />

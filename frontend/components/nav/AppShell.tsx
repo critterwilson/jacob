@@ -8,6 +8,16 @@ import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
+// The mobile search button dispatches this event; SearchBar (mounted by
+// AuthedLayout) listens for it. Going through window means AppShell
+// doesn't need to import SearchBar — that kept several test bundles
+// lean and avoided dragging useSearch into every AppShell mount.
+function dispatchOpenSearch() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("jacob:open-search"));
+  }
+}
+
 const navLinks = [
   { href: "/feed", label: "Feed" },
   { href: "/groups", label: "Chats" },
@@ -127,6 +137,23 @@ function CloseIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
 export function AppShell({
   children,
   fullHeight = false,
@@ -181,6 +208,18 @@ export function AppShell({
             <HamburgerIcon />
           </button>
           <Wordmark size="sm" />
+          <button
+            type="button"
+            aria-label="Search messages"
+            onClick={dispatchOpenSearch}
+            className={
+              "ml-auto -mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
+              "hover:bg-ink-raised hover:text-cream " +
+              "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
+            }
+          >
+            <SearchIcon />
+          </button>
         </header>
 
         {/* Mobile drawer */}
