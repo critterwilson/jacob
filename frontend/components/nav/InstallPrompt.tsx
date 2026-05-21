@@ -38,7 +38,7 @@ export function InstallPrompt() {
           <button
             type="button"
             onClick={permanentDismiss}
-            className="rounded bg-gold px-3 py-1 text-xs font-medium text-ink hover:bg-gold-soft"
+            className="inline-flex h-9 items-center rounded bg-gold px-3 text-xs font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
           >
             Already installed
           </button>
@@ -46,7 +46,7 @@ export function InstallPrompt() {
           <button
             type="button"
             onClick={() => void promptInstall()}
-            className="rounded bg-gold px-3 py-1 text-xs font-medium text-ink hover:bg-gold-soft"
+            className="inline-flex h-9 items-center rounded bg-gold px-3 text-xs font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
           >
             Install
           </button>
@@ -55,7 +55,7 @@ export function InstallPrompt() {
           type="button"
           onClick={dismiss}
           aria-label="Dismiss install prompt"
-          className="rounded px-2 py-1 text-xs text-cream-muted hover:bg-ink-overlay"
+          className="inline-flex h-9 items-center rounded px-3 text-xs text-cream-muted transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
         >
           Not now
         </button>

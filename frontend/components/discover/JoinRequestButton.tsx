@@ -74,7 +74,7 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
           onChange={(e) => setMessage(e.target.value)}
           maxLength={280}
           placeholder="Optional message to the leader…"
-          className="w-full rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
+          className="w-full rounded border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
           rows={2}
         />
       )}

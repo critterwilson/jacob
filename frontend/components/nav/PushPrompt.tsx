@@ -82,7 +82,7 @@ export function PushPrompt({ uid }: Props) {
         <div className="flex shrink-0 gap-2">
           <button
             onClick={snooze}
-            className="rounded border border-line px-3 py-1.5 text-xs text-cream hover:bg-ink-overlay"
+            className="inline-flex h-9 items-center rounded border border-line px-3 text-xs text-cream transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
           >
             Dismiss
           </button>
@@ -108,13 +108,13 @@ export function PushPrompt({ uid }: Props) {
       <div className="flex shrink-0 gap-2">
         <button
           onClick={enable}
-          className="rounded bg-gold px-3 py-1.5 text-xs font-medium text-ink hover:bg-gold-soft"
+          className="inline-flex h-9 items-center rounded bg-gold px-3 text-xs font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
         >
           Enable
         </button>
         <button
           onClick={snooze}
-          className="rounded border border-line px-3 py-1.5 text-xs text-cream hover:bg-ink-overlay"
+          className="inline-flex h-9 items-center rounded border border-line px-3 text-xs text-cream transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
         >
           Not now
         </button>

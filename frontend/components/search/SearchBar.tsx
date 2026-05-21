@@ -71,7 +71,7 @@ export function SearchBar() {
             }}
             placeholder="Search messages…"
             aria-label="Search query"
-            className="w-full bg-transparent text-sm text-cream placeholder:text-cream-dim focus:outline-none"
+            className="w-full bg-transparent text-sm text-cream placeholder:text-cream-muted focus:outline-none"
             maxLength={200}
           />
         </div>
@@ -88,7 +88,7 @@ export function SearchBar() {
             </p>
           )}
           {!loading && !error && data && data.hits.length === 0 && q.trim() && (
-            <p className="px-3 py-2 text-xs text-cream-dim">No matches.</p>
+            <p className="px-3 py-2 text-xs text-cream-muted">No matches.</p>
           )}
           {data?.hits.map((hit) => (
             <SearchResultRow

@@ -66,7 +66,7 @@ function SearchInner() {
           placeholder="Find a message…"
           aria-label="Search query"
           maxLength={200}
-          className="flex-1 rounded-md border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
+          className="flex-1 rounded-md border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
         />
         <button
           type="submit"

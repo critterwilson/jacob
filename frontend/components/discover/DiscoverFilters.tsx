@@ -34,7 +34,7 @@ export function DiscoverFilters({ audience, q, onAudienceChange, onQChange }: Pr
         value={inputQ}
         onChange={(e) => setInputQ(e.target.value)}
         placeholder="Search groups…"
-        className="rounded border border-line bg-ink-raised px-3 py-1.5 text-sm text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
+        className="rounded border border-line bg-ink-raised px-3 py-1.5 text-sm text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
         aria-label="Search groups"
       />
       <div className="inline-flex rounded border border-line text-sm" role="group" aria-label="Filter by audience">

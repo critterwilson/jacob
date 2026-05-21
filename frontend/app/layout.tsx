@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { EB_Garamond, Inter } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
@@ -29,6 +29,16 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
 };
 
+// viewport-fit=cover is what makes env(safe-area-inset-*) non-zero on
+// iOS (notch + home indicator). Without it the page sits inside the
+// safe rectangle and fixed UI collides with system chrome.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0e1726",
+};
+
 function hydratedOrg(): WorkspaceOrg | null {
   const h = headers();
   const orgId = h.get("x-jacob-org-id");
@@ -56,7 +66,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${ebGaramond.variable}`}>
       <head>
-        <meta name="theme-color" content="#0e1726" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />

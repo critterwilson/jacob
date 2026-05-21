@@ -225,7 +225,7 @@ If any pair drops below the listed ratio after measurement, retune toward the ne
 
 Other accessibility commitments:
 - **Focus.** `shadow-glow-gold` ring on every interactive. `outline: none` is allowed only when paired with the ring.
-- **Hit targets.** Minimum 40 × 40 px on touch surfaces (buttons, toggles, nav links).
+- **Hit targets.** Minimum 44 × 44 px on touch surfaces (buttons, toggles, nav links). Aligns with the iOS HIG; Material's 48 dp is the looser sibling and we don't always meet it on dense chip rows but always meet 44.
 - **Motion.** `prefers-reduced-motion: reduce` collapses all transitions.
 - **Form fields.** Every input has a visible label (no placeholder-as-label). Errors are `aria-live="polite"`.
 - **Color is never the only signal.** Errors get an icon as well as `terracotta` text. Status pills include a label, not just a hue.

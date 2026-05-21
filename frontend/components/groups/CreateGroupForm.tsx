@@ -73,7 +73,7 @@ export function CreateGroupForm() {
           id="name"
           type="text"
           {...register("name")}
-          className="mt-1 block w-full rounded border border-line bg-ink-raised px-3 py-2 text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
+          className="mt-1 block w-full rounded border border-line bg-ink-raised px-3 py-2 text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
           placeholder="e.g. Sunday Morning Study"
         />
         {errors.name && (
@@ -91,7 +91,7 @@ export function CreateGroupForm() {
           id="description"
           rows={3}
           {...register("description")}
-          className="mt-1 block w-full rounded border border-line bg-ink-raised px-3 py-2 text-cream placeholder:text-cream-dim focus:outline-none focus-visible:shadow-glow-gold"
+          className="mt-1 block w-full rounded border border-line bg-ink-raised px-3 py-2 text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
           placeholder="What does your group focus on?"
         />
         {errors.description && (

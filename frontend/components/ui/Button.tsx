@@ -36,10 +36,12 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  // 32 px tall — for inline / dense rows.
-  sm: "h-8 px-3 text-body-sm gap-1.5",
-  // 40 px tall — default. Meets the 40 × 40 touch-target rule with horizontal padding.
-  md: "h-10 px-4 text-label gap-2",
+  // 36 px tall — for inline / dense rows (inline-edit Save/Cancel, etc.).
+  // Below the 44-px touch floor; only use in clusters where the parent
+  // row gives sufficient padded hit area.
+  sm: "h-9 px-3 text-body-sm gap-1.5",
+  // 44 px tall — default. Meets the iOS 44 × 44 touch-target rule.
+  md: "h-11 px-4 text-label gap-2",
   // 48 px tall — primary CTA on auth / landing surfaces.
   lg: "h-12 px-6 text-body gap-2",
 };

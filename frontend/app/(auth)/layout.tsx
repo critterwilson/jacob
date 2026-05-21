@@ -6,7 +6,7 @@ import { Card, Heading } from "@/components/ui";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-ink px-4 py-12">
+    <main className="flex min-h-svh flex-col items-center justify-center bg-ink px-4 py-12 pt-safe-t pb-safe-b">
       <div className="flex w-full max-w-md flex-col items-center gap-6">
         {/* Symbolic motif + wordmark — quiet hero above the form. */}
         <div className="flex flex-col items-center gap-3 text-gold-soft">

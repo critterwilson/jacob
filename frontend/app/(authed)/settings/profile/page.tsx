@@ -126,7 +126,7 @@ function ProfileForm({
           {...register("faithBackground")}
           error={errors.faithBackground?.message}
         />
-        <p className="text-right text-caption text-cream-dim">
+        <p className="text-right text-caption text-cream-muted">
           {faithBackground.length}/500
         </p>
       </div>

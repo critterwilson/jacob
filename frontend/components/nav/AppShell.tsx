@@ -43,7 +43,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
               variant="muted"
               onClick={onNavigate}
               className={cn(
-                "block rounded-md py-2 pl-[10px] pr-3 font-sans text-label no-underline " +
+                "flex min-h-11 items-center rounded-md py-2 pl-[10px] pr-3 font-sans text-label no-underline " +
                   "transition-colors duration-fast",
                 "border-l-2",
                 active
@@ -83,7 +83,7 @@ function SignOutButton({ onNavigate }: { onNavigate?: () => void }) {
       onClick={handleClick}
       disabled={pending}
       className={
-        "block w-full rounded-md px-3 py-2 text-left font-sans text-label " +
+        "flex min-h-11 w-full items-center rounded-md px-3 py-2 text-left font-sans text-label " +
         "text-cream-muted transition-colors duration-fast " +
         "hover:bg-ink-raised hover:text-cream " +
         "focus:outline-none focus-visible:shadow-glow-gold " +
@@ -136,7 +136,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
 
   return (
-    <div className="flex min-h-screen bg-ink text-cream">
+    <div className="flex min-h-svh bg-ink text-cream">
       {/* Desktop sidebar */}
       <aside className="hidden w-56 flex-none flex-col border-r border-line bg-ink md:flex">
         <div className="px-5 py-6">
@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Mobile header */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center border-b border-line bg-ink px-4 py-3 md:hidden">
+        <header className="flex items-center border-b border-line bg-ink px-4 py-3 pt-safe-t md:hidden">
           <button
             type="button"
             aria-label="Open navigation menu"
@@ -160,7 +160,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-controls="mobile-nav"
             onClick={() => setDrawerOpen(true)}
             className={
-              "mr-3 rounded p-1 text-cream-muted " +
+              "mr-3 -ml-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
               "hover:bg-ink-raised hover:text-cream " +
               "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
             }
@@ -171,49 +171,62 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile drawer */}
-        {drawerOpen && (
-          <div
-            ref={drawerRef}
-            id="mobile-nav"
-            role="dialog"
-            aria-modal="true"
+        <div
+          ref={drawerRef}
+          id="mobile-nav"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Main navigation"
+          aria-hidden={!drawerOpen}
+          className={cn(
+            "fixed inset-0 z-40 md:hidden",
+            drawerOpen ? "pointer-events-auto" : "pointer-events-none",
+          )}
+        >
+          <button
+            type="button"
+            aria-label="Dismiss navigation menu"
+            tabIndex={drawerOpen ? 0 : -1}
+            onClick={closeDrawer}
+            className={cn(
+              "fixed inset-0 cursor-default bg-black/60 transition-opacity duration-base",
+              "focus:outline-none focus-visible:shadow-glow-gold",
+              drawerOpen ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <nav
             aria-label="Main navigation"
-            className="fixed inset-0 z-40 flex md:hidden"
+            className={cn(
+              "absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-ink-raised shadow-pop",
+              "pt-safe-t pb-safe-b pl-safe-l",
+              "transition-transform duration-base will-change-transform",
+              drawerOpen ? "translate-x-0" : "-translate-x-full",
+            )}
           >
-            <button
-              type="button"
-              aria-label="Dismiss navigation menu"
-              onClick={closeDrawer}
-              className="fixed inset-0 cursor-default bg-black/60 focus:outline-none focus-visible:shadow-glow-gold"
-            />
-            <nav
-              aria-label="Main navigation"
-              className="relative z-50 flex w-64 flex-col bg-ink-raised shadow-pop"
-            >
-              <div className="flex items-center justify-between px-5 py-5">
-                <Wordmark size="sm" />
-                <button
-                  type="button"
-                  aria-label="Close navigation menu"
-                  onClick={closeDrawer}
-                  className={
-                    "rounded p-1 text-cream-muted " +
-                    "hover:bg-ink hover:text-cream " +
-                    "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
-                  }
-                >
-                  <CloseIcon />
-                </button>
-              </div>
-              <div className="flex-1">
-                <NavLinks onNavigate={closeDrawer} />
-              </div>
-              <div className="border-t border-line px-2 py-3">
-                <SignOutButton onNavigate={closeDrawer} />
-              </div>
-            </nav>
-          </div>
-        )}
+            <div className="flex items-center justify-between px-5 py-4">
+              <Wordmark size="sm" />
+              <button
+                type="button"
+                aria-label="Close navigation menu"
+                tabIndex={drawerOpen ? 0 : -1}
+                onClick={closeDrawer}
+                className={
+                  "-mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
+                  "hover:bg-ink hover:text-cream " +
+                  "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
+                }
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto scroll-momentum">
+              <NavLinks onNavigate={closeDrawer} />
+            </div>
+            <div className="border-t border-line px-2 py-3">
+              <SignOutButton onNavigate={closeDrawer} />
+            </div>
+          </nav>
+        </div>
 
         <DeletionBanner />
         <main className="flex-1 overflow-y-auto bg-ink">{children}</main>
