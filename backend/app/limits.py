@@ -49,6 +49,7 @@ DOMAIN_BY_HOST: str = "120/minute"
 # T51 — devotionals + reading plans. Content list is small + heavily
 # cached client-side; mark-complete is per-user low-rate.
 DEVOTIONAL_LIST: str = "60/minute"
+DEVOTIONAL_MUTATION: str = "20/hour"
 PLAN_PROGRESS_READ: str = "60/minute"
 PLAN_PROGRESS_WRITE: str = "30/hour"
 

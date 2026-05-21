@@ -82,6 +82,29 @@ class MarkDayCompleteResponse(BaseModel):
     lastCompletedAt: str
 
 
+class DevotionalCreateRequest(BaseModel):
+    slug: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    title: str = Field(min_length=1, max_length=200)
+    scriptureRef: str = Field(default="", max_length=200)
+    body: str = Field(min_length=1, max_length=8000)
+    audioUrl: str | None = Field(default=None, max_length=2000)
+    sourceAttribution: str = Field(default="", max_length=500)
+    publishedAt: str | None = Field(
+        default=None, description="ISO date string YYYY-MM-DD; defaults to now."
+    )
+    audience: Audience = "christian"
+
+
+class DevotionalUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    scriptureRef: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=8000)
+    audioUrl: str | None = None
+    sourceAttribution: str | None = Field(default=None, max_length=500)
+    publishedAt: str | None = Field(default=None, description="ISO date string YYYY-MM-DD.")
+    audience: Audience | None = None
+
+
 class ActivePlanToday(BaseModel):
     """Composite "today's reading plan" payload for the home surface.
 

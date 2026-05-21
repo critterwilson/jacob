@@ -1,17 +1,19 @@
 "use client";
 
 import { OpenBook } from "@/components/motifs/OpenBook";
-import { Card, Eyebrow, Heading, Link } from "@/components/ui";
+import { Button, Card, Eyebrow, Heading, Link } from "@/components/ui";
 import { useDevotionals } from "@/lib/hooks/useDevotionals";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 export default function DevotionalsIndexPage() {
   const { devotionals, loading } = useDevotionals();
+  const claims = useRoleClaims();
 
   return (
     <main className="mx-auto max-w-3xl space-y-8 p-6">
       <header className="flex items-center gap-6">
         <OpenBook className="h-16 w-auto shrink-0 text-gold-soft opacity-90" />
-        <div className="space-y-2">
+        <div className="flex-1 space-y-2">
           <Eyebrow>Daily reading</Eyebrow>
           <Heading level={1} size="md">
             Devotionals
@@ -20,6 +22,17 @@ export default function DevotionalsIndexPage() {
             Short reflections paired with scripture. Refreshed regularly.
           </p>
         </div>
+        {claims?.isMinistryOwner && (
+          <Link
+            href="/devotionals/new"
+            variant="muted"
+            className="no-underline hover:no-underline"
+          >
+            <Button type="button" variant="primary" size="md">
+              Write devotional
+            </Button>
+          </Link>
+        )}
       </header>
 
       {loading ? (

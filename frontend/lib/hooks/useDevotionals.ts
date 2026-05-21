@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, apiGet } from "@/lib/api";
+import { ApiError, apiDelete, apiPatch, apiPost, apiGet } from "@/lib/api";
 
 export type Devotional = {
   slug: string;
@@ -14,6 +14,67 @@ export type Devotional = {
   publishedAt: string | null;
   audience: "christian" | "general";
 };
+
+export type DevotionalCreatePayload = {
+  slug: string;
+  title: string;
+  scriptureRef?: string;
+  body: string;
+  audioUrl?: string | null;
+  sourceAttribution?: string;
+  publishedAt?: string | null;
+  audience?: "christian" | "general";
+};
+
+export type DevotionalUpdatePayload = Partial<Omit<DevotionalCreatePayload, "slug">>;
+
+export function useDevotionalMutations(): {
+  createDevotional: (payload: DevotionalCreatePayload) => Promise<Devotional | null>;
+  patchDevotional: (slug: string, payload: DevotionalUpdatePayload) => Promise<Devotional | null>;
+  deleteDevotional: (slug: string) => Promise<boolean>;
+} {
+  const createDevotional = useCallback(
+    async (payload: DevotionalCreatePayload): Promise<Devotional | null> => {
+      try {
+        return await apiPost<Devotional, DevotionalCreatePayload>(
+          "/api/devotionals",
+          payload,
+        );
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
+  const patchDevotional = useCallback(
+    async (
+      slug: string,
+      payload: DevotionalUpdatePayload,
+    ): Promise<Devotional | null> => {
+      try {
+        return await apiPatch<Devotional, DevotionalUpdatePayload>(
+          `/api/devotionals/${encodeURIComponent(slug)}`,
+          payload,
+        );
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
+  const deleteDevotional = useCallback(async (slug: string): Promise<boolean> => {
+    try {
+      await apiDelete(`/api/devotionals/${encodeURIComponent(slug)}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  return { createDevotional, patchDevotional, deleteDevotional };
+}
 
 export function useDevotionals(audience?: "christian" | "general"): {
   devotionals: Devotional[];

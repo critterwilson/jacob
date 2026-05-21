@@ -1,9 +1,16 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { useState } from "react";
 
-import { Eyebrow, Heading, Link } from "@/components/ui";
-import { useDevotional } from "@/lib/hooks/useDevotionals";
+import { DevotionalForm } from "@/components/devotionals/DevotionalForm";
+import type { DevotionalFormValues } from "@/components/devotionals/DevotionalForm";
+import { Button, Eyebrow, Heading, Link } from "@/components/ui";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
+import {
+  useDevotional,
+  useDevotionalMutations,
+} from "@/lib/hooks/useDevotionals";
 
 // Minimal markdown rendering: bold (**), italic (*), inline code (`),
 // blockquote (>), paragraphs. T53 will replace this with the shared
@@ -69,6 +76,11 @@ export default function DevotionalPage() {
     Array.isArray(params?.slug) ? params.slug[0] : (params?.slug ?? ""),
   );
   const { devotional, loading } = useDevotional(slug);
+  const claims = useRoleClaims();
+  const { patchDevotional, deleteDevotional } = useDevotionalMutations();
+  const [editing, setEditing] = useState(false);
+
+  const isMinistryOwner = claims?.isMinistryOwner === true;
 
   if (loading) {
     return (
@@ -88,42 +100,115 @@ export default function DevotionalPage() {
     );
   }
 
+  const handleDelete = async () => {
+    if (!confirm(`Delete "${devotional.title}"?`)) return;
+    const ok = await deleteDevotional(slug);
+    if (ok) window.location.assign("/devotionals");
+  };
+
+  const handleEdit = async (
+    values: DevotionalFormValues,
+  ): Promise<string | null> => {
+    const res = await patchDevotional(slug, {
+      title: values.title,
+      scriptureRef: values.scriptureRef || undefined,
+      body: values.body,
+      audioUrl: values.audioUrl || null,
+      sourceAttribution: values.sourceAttribution || undefined,
+      publishedAt: values.publishedAt || null,
+      audience: values.audience,
+    });
+    if (!res) return "Failed to save changes.";
+    setEditing(false);
+    // Reload to pick up updated content from the server.
+    window.location.reload();
+    return null;
+  };
+
   return (
     <main className="mx-auto max-w-2xl p-6 space-y-4">
       <Link href="/devotionals" variant="muted" className="text-caption">
         ← Devotionals
       </Link>
 
-      <header className="space-y-2">
-        <Eyebrow>Devotional</Eyebrow>
-        <Heading level={1} size="lg">
-          {devotional.title}
-        </Heading>
-        <p className="text-body-sm text-gold-soft">
-          {devotional.scriptureRef}
-        </p>
-      </header>
+      {!editing ? (
+        <>
+          <header className="space-y-2">
+            <Eyebrow>Devotional</Eyebrow>
+            <Heading level={1} size="lg">
+              {devotional.title}
+            </Heading>
+            <p className="text-body-sm text-gold-soft">
+              {devotional.scriptureRef}
+            </p>
+          </header>
 
-      <article className="max-w-none">
-        {renderMarkdown(devotional.body)}
-      </article>
+          <article className="max-w-none">
+            {renderMarkdown(devotional.body)}
+          </article>
 
-      {devotional.audioUrl && (
-        <p className="text-body-sm">
-          <Link
-            href={devotional.audioUrl}
-            variant="accent"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Listen (opens in a new tab)
-          </Link>
-        </p>
+          {devotional.audioUrl && (
+            <p className="text-body-sm">
+              <Link
+                href={devotional.audioUrl}
+                variant="accent"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Listen (opens in a new tab)
+              </Link>
+            </p>
+          )}
+
+          {isMinistryOwner && (
+            <div className="flex flex-wrap gap-3 border-t border-line pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="md"
+                onClick={() => void handleDelete()}
+              >
+                Delete
+              </Button>
+            </div>
+          )}
+
+          <footer className="border-t border-line pt-4 text-caption text-cream-muted">
+            {devotional.sourceAttribution}
+          </footer>
+        </>
+      ) : (
+        <section className="space-y-4">
+          <Heading level={2} size="sm">
+            Edit devotional
+          </Heading>
+          <DevotionalForm
+            mode="edit"
+            defaultValues={{
+              title: devotional.title,
+              scriptureRef: devotional.scriptureRef ?? "",
+              body: devotional.body,
+              audioUrl: devotional.audioUrl ?? "",
+              sourceAttribution: devotional.sourceAttribution ?? "",
+              publishedAt: devotional.publishedAt
+                ? devotional.publishedAt.slice(0, 10)
+                : "",
+              audience: devotional.audience,
+            }}
+            submitLabel="Save changes"
+            onSubmit={handleEdit}
+            onCancel={() => setEditing(false)}
+          />
+        </section>
       )}
-
-      <footer className="border-t border-line pt-4 text-caption text-cream-muted">
-        {devotional.sourceAttribution}
-      </footer>
     </main>
   );
 }

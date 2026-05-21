@@ -36,6 +36,10 @@ def _user(uid: str = "u1") -> CurrentUser:
     return CurrentUser(uid=uid, email=f"{uid}@example.com", claims={})
 
 
+def _ministry_owner(uid: str = "mo") -> CurrentUser:
+    return CurrentUser(uid=uid, email=f"{uid}@example.com", claims={"ministry_owner": True})
+
+
 def _app(*, user: CurrentUser) -> FastAPI:
     app = FastAPI()
     app.state.limiter = limiter
@@ -473,3 +477,110 @@ def test_reading_plan_today_handles_orphaned_progress() -> None:
     assert res.status_code == 200
     body = res.json()
     assert body["plan"] is None
+
+
+# ── create / update / delete (ministry_owner only) ──────────────────────────
+
+_CREATE_BODY = {
+    "slug": "john-3-16",
+    "title": "God So Loved",
+    "scriptureRef": "John 3:16",
+    "body": "For God so loved the world…",
+    "sourceAttribution": "Public domain",
+    "audience": "christian",
+}
+
+
+def test_create_devotional_requires_ministry_owner() -> None:
+    """A plain signed-in user gets 403 when attempting to create."""
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_user())).post("/api/devotionals", json=_CREATE_BODY)
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "forbidden"
+
+
+def test_create_devotional_success() -> None:
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=_CREATE_BODY)
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["slug"] == "john-3-16"
+    assert body["title"] == "God So Loved"
+    assert body["audience"] == "christian"
+    # Confirm doc was written to fake store.
+    assert fs._doc_get("devotionals/john-3-16") is not None
+
+
+def test_create_devotional_duplicate_slug_returns_409() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="john-3-16")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=_CREATE_BODY)
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "slug_taken"
+
+
+def test_create_devotional_invalid_slug_returns_422() -> None:
+    fs = FakeFirestore()
+    bad_body = {**_CREATE_BODY, "slug": "Has Spaces!"}
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=bad_body)
+    assert res.status_code == 422
+
+
+def test_update_devotional_requires_ministry_owner() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="psalm-23")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_user())).patch(
+            "/api/devotionals/psalm-23", json={"title": "New Title"}
+        )
+    assert res.status_code == 403
+
+
+def test_update_devotional_success() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="psalm-23", title="Old Title")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).patch(
+            "/api/devotionals/psalm-23",
+            json={"title": "Updated Title", "scriptureRef": "Ps 23"},
+        )
+    assert res.status_code == 200, res.text
+    assert res.json()["title"] == "Updated Title"
+    assert fs._doc_get("devotionals/psalm-23")["title"] == "Updated Title"
+
+
+def test_update_devotional_404() -> None:
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).patch(
+            "/api/devotionals/missing", json={"title": "X"}
+        )
+    assert res.status_code == 404
+
+
+def test_delete_devotional_requires_ministry_owner() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="to-delete")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_user())).delete("/api/devotionals/to-delete")
+    assert res.status_code == 403
+
+
+def test_delete_devotional_success() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="to-delete")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).delete("/api/devotionals/to-delete")
+    assert res.status_code == 204
+    assert fs._doc_get("devotionals/to-delete") is None
+
+
+def test_delete_devotional_404() -> None:
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).delete("/api/devotionals/missing")
+    assert res.status_code == 404
