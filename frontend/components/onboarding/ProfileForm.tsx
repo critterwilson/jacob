@@ -14,6 +14,7 @@ import {
   Input,
   Link,
   Textarea,
+  cn,
 } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { MIN_AGE, computeAge, dobSchema } from "@/lib/auth-schemas";
@@ -52,6 +53,8 @@ type ProfileFormProps = {
   email: string | null;
 };
 
+const TOTAL_STEPS = 2;
+
 export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
   void _email;
   const router = useRouter();
@@ -60,11 +63,16 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [under13Blocked, setUnder13Blocked] = useState(false);
+  // Step 1: profile fields (required + optional). Step 2: agree + submit.
+  // Kept light — splitting the optional fields into their own skip-able
+  // step felt like overhead for six fields; merged them into step 1.
+  const [step, setStep] = useState<1 | 2>(1);
 
   const {
     register,
     handleSubmit,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<ProfileValues>({ resolver: zodResolver(profileSchema) });
 
@@ -76,6 +84,12 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       setValue("dob", stashed, { shouldValidate: false });
     }
   }, [setValue]);
+
+  const goToStep2 = async () => {
+    const ok = await trigger(["displayName", "dob"]);
+    if (!ok) return;
+    setStep(2);
+  };
 
   const onSubmit = async (values: ProfileValues) => {
     const dob = new Date(`${values.dob}T00:00:00Z`);
@@ -166,102 +180,164 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       noValidate
       aria-label="Complete your profile"
     >
-      <div className="space-y-2">
-        <span className="font-sans text-label text-cream">Profile photo</span>
-        <PhotoUpload
-          uid={uid}
-          onUploadComplete={(url) => {
-            setPhotoURL(url);
-            setPhotoError(null);
-          }}
-          onUploadError={setPhotoError}
-        />
-        {photoError && (
-          <p role="alert" className="text-body-sm text-terracotta">
-            {photoError}
-          </p>
-        )}
-      </div>
+      <ProgressIndicator step={step} total={TOTAL_STEPS} />
 
-      <Input
-        label="Display name"
-        type="text"
-        autoComplete="name"
-        required
-        {...register("displayName")}
-        error={errors.displayName?.message}
-      />
-
-      <Input
-        label="Date of birth"
-        type="date"
-        autoComplete="bday"
-        required
-        {...register("dob")}
-        helperText="JACOB requires you to be at least 13. Applicants under 18 need parental consent — an admin will confirm this before your account is approved."
-        error={errors.dob?.message}
-      />
-
-      <Input
-        label="Phone (optional)"
-        type="tel"
-        autoComplete="tel"
-        {...register("phone")}
-      />
-
-      <Input
-        label="City (optional)"
-        type="text"
-        {...register("location")}
-      />
-
-      <Textarea
-        label="Faith background (optional)"
-        rows={3}
-        {...register("faithBackground")}
-      />
-
-      <div className="space-y-2">
-        <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-body-sm text-cream">
-          <input
-            id="communityGuidelines"
-            type="checkbox"
-            className="mt-0.5 h-5 w-5 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
-            {...register("communityGuidelines")}
-          />
-          <span>
-            I agree to the{" "}
-            <Link
-              href="/guidelines"
-              variant="accent"
-              target="_blank"
-              rel="noreferrer"
-            >
-              community guidelines
-            </Link>
-            <span aria-hidden="true" className="ml-1 text-terracotta">
-              *
+      {/* Step 1: profile fields. Step 2 keeps these in the form state via
+       * react-hook-form but they're not rendered, so a fresh mount can't
+       * read them — that's fine, we only Submit from step 2. */}
+      {step === 1 && (
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <span className="font-sans text-label text-cream">
+              Profile photo
             </span>
-          </span>
-        </label>
-        {errors.communityGuidelines && (
-          <p role="alert" className="text-body-sm text-terracotta">
-            {errors.communityGuidelines.message}
+            <PhotoUpload
+              uid={uid}
+              onUploadComplete={(url) => {
+                setPhotoURL(url);
+                setPhotoError(null);
+              }}
+              onUploadError={setPhotoError}
+            />
+            {photoError && (
+              <p role="alert" className="text-body-sm text-terracotta">
+                {photoError}
+              </p>
+            )}
+          </div>
+
+          <Input
+            label="Display name"
+            type="text"
+            autoComplete="name"
+            required
+            {...register("displayName")}
+            error={errors.displayName?.message}
+          />
+
+          <Input
+            label="Date of birth"
+            type="date"
+            autoComplete="bday"
+            required
+            {...register("dob")}
+            helperText="JACOB requires you to be at least 13. Applicants under 18 need parental consent — an admin will confirm this before your account is approved."
+            error={errors.dob?.message}
+          />
+
+          <Input
+            label="Phone (optional)"
+            type="tel"
+            autoComplete="tel"
+            {...register("phone")}
+          />
+
+          <Input
+            label="City (optional)"
+            type="text"
+            {...register("location")}
+          />
+
+          <Textarea
+            label="Faith background (optional)"
+            rows={3}
+            {...register("faithBackground")}
+          />
+
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            fullWidth
+            onClick={() => void goToStep2()}
+          >
+            Continue
+          </Button>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-6">
+          <p className="text-body-sm text-cream-muted">
+            Last step — agree to JACOB&rsquo;s community guidelines and submit
+            your application. An admin will review it before your account is
+            approved.
           </p>
-        )}
-      </div>
 
-      {submitError && <Banner tone="error">{submitError}</Banner>}
+          <div className="space-y-2">
+            <label className="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-body-sm text-cream">
+              <input
+                id="communityGuidelines"
+                type="checkbox"
+                className="mt-0.5 h-5 w-5 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
+                {...register("communityGuidelines")}
+              />
+              <span>
+                I agree to the{" "}
+                <Link
+                  href="/guidelines"
+                  variant="accent"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  community guidelines
+                </Link>
+                <span aria-hidden="true" className="ml-1 text-terracotta">
+                  *
+                </span>
+              </span>
+            </label>
+            {errors.communityGuidelines && (
+              <p role="alert" className="text-body-sm text-terracotta">
+                {errors.communityGuidelines.message}
+              </p>
+            )}
+          </div>
 
-      <Button
-        type="submit"
-        variant="primary"
-        size="lg"
-        fullWidth
-        loading={submitting}
-      >
-        {submitting ? "Submitting application…" : "Submit application"}
-      </Button>
+          {submitError && <Banner tone="error">{submitError}</Banner>}
+
+          <div className="flex flex-col-reverse gap-3 sm:flex-row">
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              onClick={() => setStep(1)}
+            >
+              Back
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={submitting}
+            >
+              {submitting ? "Submitting application…" : "Submit application"}
+            </Button>
+          </div>
+        </div>
+      )}
     </form>
+  );
+}
+
+function ProgressIndicator({ step, total }: { step: number; total: number }) {
+  return (
+    <div className="space-y-2" aria-hidden="true">
+      <p className="text-caption text-cream-muted">
+        Step {step} of {total}
+      </p>
+      <div className="flex gap-1.5">
+        {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
+          <span
+            key={n}
+            className={cn(
+              "h-1 flex-1 rounded-full transition-colors duration-base",
+              n <= step ? "bg-gold" : "bg-line",
+            )}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
