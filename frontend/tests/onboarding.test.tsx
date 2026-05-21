@@ -322,38 +322,46 @@ describe("ProfileForm validation", () => {
     return render(<ProfileForm uid="uid-1" email="user@example.com" />);
   }
 
-  it("shows error when displayName is empty on submit", async () => {
+  // Helper: walk through step 1 (profile fields) to land on step 2 (agree
+  // + submit). The form is split into two steps so each step's button
+  // surface is distinct; tests that exercise the final submit have to
+  // advance past step 1.
+  async function advanceToStep2(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText(/display name/i), "Alice");
+    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(
+      screen.getByRole("button", { name: /^continue$/i }),
+    );
+  }
+
+  it("shows error when displayName is empty when advancing to step 2", async () => {
     const user = userEvent.setup();
     renderForm();
 
     await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
-    await user.click(
-      screen.getByRole("checkbox", { name: /community guidelines/i }),
-    );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /^continue$/i }));
 
     expect(
       await screen.findByText(/display name is required/i),
     ).toBeInTheDocument();
   });
 
-  it("shows error when dob is empty on submit", async () => {
+  it("shows error when dob is empty when advancing to step 2", async () => {
     const user = userEvent.setup();
     renderForm();
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.click(
-      screen.getByRole("checkbox", { name: /community guidelines/i }),
-    );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /^continue$/i }));
 
     expect(
       await screen.findByText(/date of birth is required/i),
     ).toBeInTheDocument();
   });
 
-  it("links the community-guidelines label to /guidelines", () => {
+  it("links the community-guidelines label to /guidelines", async () => {
+    const user = userEvent.setup();
     renderForm();
+    await advanceToStep2(user);
     const link = screen.getByRole("link", { name: /community guidelines/i });
     expect(link).toHaveAttribute("href", "/guidelines");
   });
@@ -362,8 +370,7 @@ describe("ProfileForm validation", () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await advanceToStep2(user);
     await user.click(screen.getByRole("button", { name: /submit application/i }));
 
     expect(
@@ -393,8 +400,7 @@ describe("ProfileForm validation", () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await advanceToStep2(user);
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
@@ -427,8 +433,7 @@ describe("ProfileForm validation", () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await advanceToStep2(user);
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
@@ -450,8 +455,7 @@ describe("ProfileForm validation", () => {
     const user = userEvent.setup();
     renderForm();
 
-    await user.type(screen.getByLabelText(/display name/i), "Alice");
-    await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await advanceToStep2(user);
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
@@ -478,15 +482,14 @@ describe("Under-13 path", () => {
     const dobInput = screen.getByLabelText(/date of birth/i);
     fireEvent.change(dobInput, { target: { value: UNDER_13_DOB } });
 
-    // The blocking banner's "Continue" button must NOT be present — the form
-    // should still show the normal submit button. (The helper text on the DOB
-    // field always contains "at least 13", so we key on the Continue button
-    // which is unique to the banner.)
+    // The blocking banner's body text must NOT appear — the form should
+    // still be on step 1 with the normal Continue button. The DOB helper
+    // also includes "at least 13", so we key on the banner-only phrase.
     expect(
-      screen.queryByRole("button", { name: /continue/i }),
+      screen.queryByText(/permanently delete your account/i),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /submit application/i }),
+      screen.getByRole("button", { name: /^continue$/i }),
     ).toBeInTheDocument();
     expect(fbAuth.deleteUser).not.toHaveBeenCalled();
   });
@@ -513,6 +516,7 @@ describe("Under-13 path", () => {
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
     await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(screen.getByRole("button", { name: /^continue$/i }));
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
@@ -552,6 +556,7 @@ describe("Under-13 path", () => {
 
     await user.type(screen.getByLabelText(/display name/i), "Alice");
     await user.type(screen.getByLabelText(/date of birth/i), ADULT_DOB);
+    await user.click(screen.getByRole("button", { name: /^continue$/i }));
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
@@ -561,7 +566,7 @@ describe("Under-13 path", () => {
       screen.getByText(/JACOB requires you to be at least 13/i),
     );
 
-    // Deletion only happens on explicit Continue.
+    // Deletion only happens on explicit Continue (the banner's button).
     await user.click(screen.getByRole("button", { name: /continue/i }));
 
     await waitFor(() => {
