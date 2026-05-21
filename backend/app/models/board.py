@@ -27,6 +27,16 @@ class CreateBoardRequest(BaseModel):
         return v
 
 
+class PatchBoardRequest(BaseModel):
+    """Body of `PATCH /api/admin/boards/{id}`. All fields optional; slug is immutable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=500)
+    audience: BoardAudience | None = None
+
+
 class BoardResponse(BaseModel):
     boardId: str
     name: str

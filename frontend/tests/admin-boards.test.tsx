@@ -45,12 +45,12 @@ vi.mock("@/lib/api", () => ({
   apiDelete: vi.fn(),
   apiPatch: vi.fn(),
   ApiError: class ApiError extends Error {
-    constructor(
-      public status: number,
-      public code: string,
-      message: string,
-    ) {
+    status: number;
+    code: string;
+    constructor(status: number, code: string, message: string) {
       super(message);
+      this.status = status;
+      this.code = code;
     }
   },
 }));
@@ -58,6 +58,7 @@ vi.mock("@/lib/api", () => ({
 import {
   apiDelete as apiDeleteExport,
   apiGet as apiGetExport,
+  apiPatch as apiPatchExport,
   apiPost as apiPostExport,
 } from "@/lib/api";
 import AdminBoardsPage from "@/app/(authed)/admin/boards/page";
@@ -66,6 +67,7 @@ import AdminLayout from "@/app/(authed)/admin/layout";
 const apiGet = apiGetExport as unknown as ReturnType<typeof vi.fn>;
 const apiPost = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 const apiDelete = apiDeleteExport as unknown as ReturnType<typeof vi.fn>;
+const apiPatch = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
 
 const adminUser = {
   uid: "admin1",
@@ -100,6 +102,7 @@ beforeEach(() => {
   apiGet.mockReset();
   apiPost.mockReset();
   apiDelete.mockReset();
+  apiPatch.mockReset();
   vi.spyOn(window, "confirm").mockReturnValue(true);
 });
 
@@ -144,12 +147,11 @@ describe("AdminBoardsPage list", () => {
     expect(await screen.findByText(/server exploded/i)).toBeInTheDocument();
   });
 
-  it("surfaces backend-gap notice about missing edit endpoint", async () => {
-    apiGet.mockResolvedValue({ boards: [] });
+  it("renders an Edit button per row", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
     render(<AdminBoardsPage />);
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
-    expect(screen.getByText(/backend gaps/i)).toBeInTheDocument();
-    expect(screen.getByText(/PATCH \/api\/admin\/boards\/:id/)).toBeInTheDocument();
+    await screen.findByText("Prayer & Praise");
+    expect(screen.getAllByRole("button", { name: /^edit$/i })).toHaveLength(2);
   });
 });
 
@@ -270,6 +272,88 @@ describe("AdminBoardsPage archive", () => {
     fireEvent.click(firstArchiveBtn);
 
     expect(await screen.findByText(/archive failed/i)).toBeInTheDocument();
+    expect(screen.getByText("Prayer & Praise")).toBeInTheDocument();
+  });
+});
+
+// ── edit board ─────────────────────────────────────────────────────────
+
+describe("AdminBoardsPage edit", () => {
+  it("opens inline edit form on Edit click and pre-populates fields", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
+    const ue = userEvent.setup();
+    render(<AdminBoardsPage />);
+    await screen.findByText("Prayer & Praise");
+
+    const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
+    await ue.click(firstEditBtn);
+
+    const nameInput = screen.getByRole("textbox", { name: /edit name/i }) as HTMLInputElement;
+    expect(nameInput.value).toBe("Prayer & Praise");
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+  });
+
+  it("calls PATCH with updated values and closes edit row", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
+    apiPatch.mockResolvedValue({
+      ...fakeBoards[0],
+      name: "Renamed Board",
+      description: "Updated desc",
+    });
+
+    const ue = userEvent.setup();
+    render(<AdminBoardsPage />);
+    await screen.findByText("Prayer & Praise");
+
+    const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
+    await ue.click(firstEditBtn);
+
+    const nameInput = screen.getByRole("textbox", { name: /edit name/i });
+    await ue.clear(nameInput);
+    await ue.type(nameInput, "Renamed Board");
+
+    await ue.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(apiPatch).toHaveBeenCalledWith(
+        "/api/admin/boards/prayer-praise",
+        expect.objectContaining({ name: "Renamed Board" }),
+      ),
+    );
+    expect(await screen.findByText("Renamed Board")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows error banner on PATCH failure and keeps edit row open", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
+    const { ApiError } = await import("@/lib/api");
+    apiPatch.mockRejectedValue(new ApiError(500, "server_error", "Save failed"));
+
+    const ue = userEvent.setup();
+    render(<AdminBoardsPage />);
+    await screen.findByText("Prayer & Praise");
+
+    const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
+    await ue.click(firstEditBtn);
+    await ue.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(await screen.findByText(/save failed/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+  });
+
+  it("Cancel closes edit row without calling PATCH", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
+    const ue = userEvent.setup();
+    render(<AdminBoardsPage />);
+    await screen.findByText("Prayer & Praise");
+
+    const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
+    await ue.click(firstEditBtn);
+    await ue.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    expect(apiPatch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
     expect(screen.getByText("Prayer & Praise")).toBeInTheDocument();
   });
 });
