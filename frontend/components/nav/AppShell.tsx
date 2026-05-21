@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { DeletionBanner } from "@/components/account/DeletionBanner";
+import { MobileTabBar } from "@/components/nav/MobileTabBar";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
@@ -19,7 +20,11 @@ function dispatchOpenSearch() {
   }
 }
 
+// Drawer (mobile hamburger + desktop sidebar) carries the full nav set.
+// Mobile users primarily navigate via the bottom tab bar; the drawer
+// is the secondary menu for everything else.
 const navLinks = [
+  { href: "/home", label: "Home" },
   { href: "/feed", label: "Feed" },
   { href: "/groups", label: "Chats" },
   { href: "/boards", label: "Boards" },
@@ -296,6 +301,10 @@ export function AppShell({
         >
           {children}
         </main>
+        {/* Mobile bottom tabs render only on non-fullHeight routes (chat
+         * keeps the focus surface clear). Hidden at md+ where the
+         * desktop sidebar already covers nav. */}
+        {!fullHeight && <MobileTabBar />}
       </div>
     </div>
   );

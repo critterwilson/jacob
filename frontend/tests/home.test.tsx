@@ -117,7 +117,10 @@ beforeEach(() => {
 describe("AppShell", () => {
   it("renders desktop nav links", () => {
     render(<AppShell><div /></AppShell>);
-    expect(screen.getByRole("link", { name: "Chats" })).toBeInTheDocument();
+    // "Chats" appears in the desktop sidebar drawer AND the mobile bottom
+    // tab bar (rendered with md:hidden). About / FAQ only live in the
+    // drawer's long-tail menu, so they remain unique.
+    expect(screen.getAllByRole("link", { name: "Chats" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "FAQ" })).toBeInTheDocument();
   });
