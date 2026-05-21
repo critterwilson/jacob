@@ -9,6 +9,8 @@ import {
   type RsvpStatus,
   useEvents,
 } from "@/lib/hooks/useEvents";
+import { useAuth } from "@/lib/auth-context";
+import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 
 export default function EventsListPage() {
   const params = useParams();
@@ -16,6 +18,9 @@ export default function EventsListPage() {
     Array.isArray(params?.gid) ? params.gid[0] : (params?.gid ?? ""),
   );
   const { events, loading, error, createEvent, rsvp } = useEvents(gid);
+  const { user } = useAuth();
+  // Backend rejects non-leader POSTs with 403; hide the affordance.
+  const { isLeader } = useGroupMembership(user?.uid, gid);
 
   const [showAdd, setShowAdd] = useState(false);
   const [title, setTitle] = useState("");
@@ -70,16 +75,18 @@ export default function EventsListPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-semibold">Events</h1>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAdd((s) => !s)}
-          className="rounded bg-gold px-3 py-1 text-sm text-ink"
-        >
-          {showAdd ? "Cancel" : "New event"}
-        </button>
+        {isLeader && (
+          <button
+            type="button"
+            onClick={() => setShowAdd((s) => !s)}
+            className="rounded bg-gold px-3 py-1 text-sm text-ink"
+          >
+            {showAdd ? "Cancel" : "New event"}
+          </button>
+        )}
       </header>
 
-      {showAdd && (
+      {isLeader && showAdd && (
         <section className="space-y-2 rounded border border-line bg-ink-raised p-4">
           <input
             value={title}

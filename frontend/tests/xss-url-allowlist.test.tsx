@@ -50,7 +50,19 @@ vi.mock("@/lib/hooks/useWatchSession", () => ({
 }));
 
 vi.mock("@/lib/auth-context", () => ({
-  useAuth: vi.fn(),
+  useAuth: vi.fn(() => ({ user: null, loading: false })),
+}));
+
+// Sermons/events list pages read isLeader to gate the "Add"/"New" CTA.
+// XSS tests don't care about the CTA — return a stable false.
+vi.mock("@/lib/hooks/useGroupMembership", () => ({
+  useGroupMembership: () => ({
+    membership: null,
+    role: null,
+    isLeader: false,
+    loading: false,
+    refresh: vi.fn(),
+  }),
 }));
 
 import SermonDetailPage from "@/app/(authed)/groups/[gid]/sermons/[sermonId]/page";
