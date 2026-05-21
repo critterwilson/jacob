@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
 type Board = {
@@ -35,6 +35,12 @@ function errorMsg(e: unknown, fallback: string): string {
   return fallback;
 }
 
+type EditDraft = {
+  name: string;
+  description: string;
+  audience: "christian" | "general";
+};
+
 export default function AdminBoardsPage() {
   const { user } = useAuth();
 
@@ -54,6 +60,16 @@ export default function AdminBoardsPage() {
   // Per-board action state
   const [archiving, setArchiving] = useState<Record<string, boolean>>({});
   const [archiveError, setArchiveError] = useState<Record<string, string>>({});
+
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft>({
+    name: "",
+    description: "",
+    audience: "general",
+  });
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -116,24 +132,49 @@ export default function AdminBoardsPage() {
     }
   };
 
+  const startEdit = (board: Board) => {
+    setEditingId(board.boardId);
+    setEditDraft({
+      name: board.name,
+      description: board.description,
+      audience: board.audience,
+    });
+    setEditError(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async (boardId: string) => {
+    setSaving(true);
+    setEditError(null);
+    try {
+      const updated = await apiPatch<Board>(`/api/admin/boards/${boardId}`, {
+        name: editDraft.name.trim(),
+        description: editDraft.description.trim(),
+        audience: editDraft.audience,
+      });
+      setBoards((prev) =>
+        prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b)),
+      );
+      setEditingId(null);
+    } catch (e) {
+      setEditError(errorMsg(e, "Failed to save changes"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Boards</h1>
         <p className="mt-1 text-sm text-cream-muted">
-          Manage cross-group boards. Create new boards or archive existing ones.
+          Manage cross-group boards. Create, edit, or archive boards.
         </p>
       </header>
-
-      {/* Backend-gap notice */}
-      <div className="rounded border border-parchment-amber/40 bg-ink-raised px-4 py-2 text-sm text-parchment-amber">
-        <strong>Backend gaps:</strong> No edit endpoint exists (
-        <code className="font-mono text-xs">PATCH /api/admin/boards/:id</code> is not
-        implemented). Board metadata (name, description, audience) cannot be changed after
-        creation — archive and recreate. Archived boards are also not returned by{" "}
-        <code className="font-mono text-xs">GET /api/boards</code>, so they disappear
-        from this list immediately on archive.
-      </div>
 
       {/* Create form */}
       <section className="rounded border border-line bg-ink-raised p-4 space-y-3">
@@ -225,56 +266,145 @@ export default function AdminBoardsPage() {
           No boards yet. Create one above.
         </p>
       ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-muted">
-              <th className="py-2 pr-4">Name / Slug</th>
-              <th className="pr-4">Audience</th>
-              <th className="pr-4">Posts</th>
-              <th className="pr-4">Description</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {boards.map((board) => (
-              <tr key={board.boardId} className="border-b border-line">
-                <td className="py-2 pr-4">
-                  <a
-                    href={`/boards/${board.boardId}`}
-                    className="font-medium text-gold-soft hover:underline"
-                  >
-                    {board.name}
-                  </a>
-                  <p className="font-mono text-xs text-cream-muted">{board.slug}</p>
-                </td>
-                <td className="pr-4">
-                  <span className="inline-flex rounded bg-ink-overlay px-2 py-0.5 text-xs text-cream-muted">
-                    {board.audience}
-                  </span>
-                </td>
-                <td className="pr-4 text-cream-muted">{board.postCount}</td>
-                <td className="pr-4 text-xs text-cream-muted">
-                  {board.description || <span className="italic">—</span>}
-                </td>
-                <td className="text-right">
-                  {archiveError[board.boardId] && (
-                    <span className="mr-2 text-xs text-terracotta">
-                      {archiveError[board.boardId]}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void handleArchive(board.boardId)}
-                    disabled={archiving[board.boardId]}
-                    className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10 disabled:opacity-40"
-                  >
-                    {archiving[board.boardId] ? "Archiving…" : "Archive"}
-                  </button>
-                </td>
+        <div className="space-y-3">
+          {editError && (
+            <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
+              {editError}
+            </div>
+          )}
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-muted">
+                <th className="py-2 pr-4">Name / Slug</th>
+                <th className="pr-4">Audience</th>
+                <th className="pr-4">Posts</th>
+                <th className="pr-4">Description</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {boards.map((board) =>
+                editingId === board.boardId ? (
+                  <tr key={board.boardId} className="border-b border-line bg-ink-raised">
+                    <td colSpan={5} className="py-3 px-2">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div>
+                          <label className="block text-xs text-cream-muted mb-1">Name</label>
+                          <input
+                            aria-label="Edit name"
+                            value={editDraft.name}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({ ...d, name: e.target.value }))
+                            }
+                            maxLength={80}
+                            className="w-full rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-cream-muted mb-1">
+                            Description
+                          </label>
+                          <input
+                            aria-label="Edit description"
+                            value={editDraft.description}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({ ...d, description: e.target.value }))
+                            }
+                            maxLength={500}
+                            className="w-full rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-cream-muted mb-1">Audience</label>
+                          <select
+                            aria-label="Edit audience"
+                            value={editDraft.audience}
+                            onChange={(e) =>
+                              setEditDraft((d) => ({
+                                ...d,
+                                audience: e.target.value as "christian" | "general",
+                              }))
+                            }
+                            className="rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
+                          >
+                            <option value="general">General</option>
+                            <option value="christian">Christian</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveEdit(board.boardId)}
+                          disabled={saving || !editDraft.name.trim()}
+                          className="rounded bg-gold px-3 py-1 text-xs text-ink hover:bg-gold-soft disabled:opacity-40"
+                        >
+                          {saving ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={saving}
+                          className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:text-cream disabled:opacity-40"
+                        >
+                          Cancel
+                        </button>
+                        <span className="font-mono text-xs text-cream-muted/60">
+                          slug: {board.slug}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={board.boardId} className="border-b border-line">
+                    <td className="py-2 pr-4">
+                      <a
+                        href={`/boards/${board.boardId}`}
+                        className="font-medium text-gold-soft hover:underline"
+                      >
+                        {board.name}
+                      </a>
+                      <p className="font-mono text-xs text-cream-muted">{board.slug}</p>
+                    </td>
+                    <td className="pr-4">
+                      <span className="inline-flex rounded bg-ink-overlay px-2 py-0.5 text-xs text-cream-muted">
+                        {board.audience}
+                      </span>
+                    </td>
+                    <td className="pr-4 text-cream-muted">{board.postCount}</td>
+                    <td className="pr-4 text-xs text-cream-muted">
+                      {board.description || <span className="italic">—</span>}
+                    </td>
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {archiveError[board.boardId] && (
+                          <span className="text-xs text-terracotta">
+                            {archiveError[board.boardId]}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => startEdit(board)}
+                          className="rounded border border-line px-2 py-0.5 text-xs text-cream-muted hover:text-cream"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleArchive(board.boardId)}
+                          disabled={archiving[board.boardId]}
+                          className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10 disabled:opacity-40"
+                        >
+                          {archiving[board.boardId] ? "Archiving…" : "Archive"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
