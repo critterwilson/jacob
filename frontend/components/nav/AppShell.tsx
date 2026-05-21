@@ -4,9 +4,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { DeletionBanner } from "@/components/account/DeletionBanner";
+import { SearchBar } from "@/components/search/SearchBar";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+
+// Event name fired by the mobile search button. SearchBar listens for it
+// so the keyboard-only Cmd-K affordance gains a tappable entry point.
+const OPEN_SEARCH_EVENT = "jacob:open-search";
+
+function dispatchOpenSearch() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(OPEN_SEARCH_EVENT));
+  }
+}
 
 const navLinks = [
   { href: "/feed", label: "Feed" },
@@ -127,6 +138,23 @@ function CloseIcon() {
   );
 }
 
+function SearchIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
 export function AppShell({
   children,
   fullHeight = false,
@@ -181,6 +209,18 @@ export function AppShell({
             <HamburgerIcon />
           </button>
           <Wordmark size="sm" />
+          <button
+            type="button"
+            aria-label="Search messages"
+            onClick={dispatchOpenSearch}
+            className={
+              "ml-auto -mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
+              "hover:bg-ink-raised hover:text-cream " +
+              "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
+            }
+          >
+            <SearchIcon />
+          </button>
         </header>
 
         {/* Mobile drawer */}
@@ -256,6 +296,11 @@ export function AppShell({
           {children}
         </main>
       </div>
+
+      {/* Mounted once at the shell level so the mobile header's search
+       * button can open it on any route, and so Cmd-K / Ctrl-K keeps
+       * working everywhere. SearchBar self-renders nothing when closed. */}
+      <SearchBar />
     </div>
   );
 }

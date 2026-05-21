@@ -5,7 +5,6 @@ import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/nav/AppShell";
 import { InstallPrompt } from "@/components/nav/InstallPrompt";
 import { PushPrompt } from "@/components/nav/PushPrompt";
-import { SearchBar } from "@/components/search/SearchBar";
 import { useAuth } from "@/lib/auth-context";
 
 // Surfaces that need to fill the AppShell main area exactly (chat-style
@@ -45,7 +44,6 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
 
   return (
     <AppShell fullHeight={fullHeight}>
-      {!fullHeight && <SearchBar />}
       {!fullHeight && user && (
         <div className="mx-auto max-w-2xl px-4 pt-4 flex flex-col gap-2">
           <PushPrompt uid={user.uid} />

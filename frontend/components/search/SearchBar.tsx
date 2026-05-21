@@ -36,6 +36,17 @@ export function SearchBar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Mobile entry point — the AppShell header dispatches this event from
+  // its search-icon button. Keeping SearchBar's open state internal,
+  // signal in via window event so the trigger doesn't need a ref.
+  useEffect(() => {
+    function onOpen() {
+      setOpen(true);
+    }
+    window.addEventListener("jacob:open-search", onOpen);
+    return () => window.removeEventListener("jacob:open-search", onOpen);
+  }, []);
+
   // Focus the input when the modal opens.
   useEffect(() => {
     if (open && inputRef.current) inputRef.current.focus();
@@ -53,11 +64,11 @@ export function SearchBar() {
       role="dialog"
       aria-modal="true"
       aria-label="Search messages"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-24"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 pt-safe-t sm:pt-24"
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl rounded-lg bg-ink-raised shadow-pop"
+        className="mt-4 w-full max-w-xl rounded-lg bg-ink-raised shadow-pop sm:mt-0"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-line px-4 py-3">
