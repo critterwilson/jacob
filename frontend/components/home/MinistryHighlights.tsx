@@ -31,16 +31,16 @@ export function MinistryHighlights({ posts, loading }: Props) {
   if (visible.length === 0) {
     return (
       <Card surface="raised" className="space-y-2">
-        <Eyebrow>From your ministry</Eyebrow>
+        <Eyebrow>From your organization</Eyebrow>
         <p className="text-body-sm text-cream-muted">
-          Nothing posted yet. When your ministry shares a sermon or update
+          Nothing posted yet. When your organization shares a sermon or update
           here, it&apos;ll appear at the top of your home.
         </p>
         <Link
           href="/feed"
           className="inline-block pt-1 text-caption text-gold-soft hover:text-gold underline-offset-4 hover:underline"
         >
-          Open ministry feed →
+          Open organization feed →
         </Link>
       </Card>
     );
@@ -59,7 +59,7 @@ export function MinistryHighlights({ posts, loading }: Props) {
           >
             <Card surface="raised" interactive className="space-y-2">
               <div className="flex flex-wrap items-baseline gap-2">
-                <Eyebrow>{isPinned ? "Pinned" : "From your ministry"}</Eyebrow>
+                <Eyebrow>{isPinned ? "Pinned" : "From your organization"}</Eyebrow>
               </div>
               <Heading level={2} size="sm">
                 {post.title}

@@ -102,9 +102,9 @@ export default function AwaitingApprovalPage() {
                 Waiting for approval
               </Heading>
               <p className="text-body-sm text-cream-muted">
-                Thanks for applying to JACOB. A ministry admin will review
-                your application and approve it before your account becomes
-                active.{" "}
+                Thanks for applying to JACOB. An organization admin will
+                review your application and approve it before your account
+                becomes active.{" "}
                 {application.isMinor
                   ? "Because you're under 18, an admin will also confirm your parent or guardian has given consent."
                   : null}
@@ -145,8 +145,8 @@ export default function AwaitingApprovalPage() {
                 Your application was not approved
               </Heading>
               <p className="text-body-sm text-cream-muted">
-                A ministry admin reviewed your application and was not able
-                to approve it at this time.
+                An organization admin reviewed your application and was not
+                able to approve it at this time.
               </p>
               {application.rejectionReason && (
                 <Banner tone="info">
@@ -157,7 +157,7 @@ export default function AwaitingApprovalPage() {
                 </Banner>
               )}
               <p className="text-body-sm text-cream-muted">
-                If you have questions, reach out to the ministry directly.
+                If you have questions, reach out to the organization directly.
               </p>
             </header>
             <Button

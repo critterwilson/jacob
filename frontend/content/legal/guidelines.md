@@ -12,7 +12,7 @@ the report flow inside the app.
 ## The spirit of this place
 
 This is a Christian small-group app, built first for a Christian Jiu
-Jitsu ministry. The way we treat each other here should reflect that —
+Jitsu organization. The way we treat each other here should reflect that —
 warmly, without performance, the way you'd want to be treated by
 someone who knows your name.
 
@@ -51,7 +51,7 @@ removal, account suspension, or termination, depending on severity:
   the National Center for Missing & Exploited Children (NCMEC) and to
   law enforcement, as we are required to do by U.S. law. The account
   is removed immediately.
-- **Adult sexual content.** JACOB is a small-group ministry app and
+- **Adult sexual content.** JACOB is a small-group app and
   is not the place for it.
 - **Violent or graphic imagery,** including self-harm content posted
   to encourage rather than to seek help.
@@ -60,8 +60,8 @@ removal, account suspension, or termination, depending on severity:
 - **Commercial solicitation** that the group hasn't asked for.
   Mentioning your business when it's relevant is fine; turning a
   small group into a sales channel is not.
-- **Impersonation.** Pretending to be another person, ministry, or
-  organization in a way meant to deceive.
+- **Impersonation.** Pretending to be another person or organization
+  in a way meant to deceive.
 - **Privacy violations.** Posting someone else's private information
   (address, phone, photos shared in confidence) without their consent.
 - **Illegal activity.** Anything that would be illegal in the
