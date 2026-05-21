@@ -6,13 +6,26 @@ type Props = {
 };
 
 export function StickerBadge({ sticker, size = "md" }: Props) {
-  const cls =
-    size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm";
+  if (size === "sm") {
+    return (
+      <span
+        data-sticker={sticker.slug}
+        className="inline-flex items-center gap-1.5 text-xs text-cream-muted"
+        style={{ color: sticker.color }}
+      >
+        <span
+          aria-hidden="true"
+          className="inline-block h-1.5 w-1.5 rounded-full bg-current"
+        />
+        <span className="text-cream-muted">{sticker.name}</span>
+      </span>
+    );
+  }
 
   return (
     <span
       data-sticker={sticker.slug}
-      className={`inline-flex items-center rounded-full font-medium ${cls}`}
+      className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium"
       style={{
         backgroundColor: sticker.color + "26",
         color: sticker.color,

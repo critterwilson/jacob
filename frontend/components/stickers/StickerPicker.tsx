@@ -1,6 +1,5 @@
 "use client";
 
-import { StickerBadge } from "@/components/stickers/StickerBadge";
 import { useStickers } from "@/lib/hooks/useStickers";
 
 /** Slug used when the user submits without choosing a sticker. */
@@ -38,7 +37,7 @@ export function StickerPicker({ value, onChange, groupAudience }: Props) {
     return (
       <div
         aria-label="Loading stickers"
-        className="h-8 w-64 animate-pulse rounded bg-ink-overlay"
+        className="h-6 w-48 animate-pulse rounded bg-ink-overlay"
       />
     );
   }
@@ -47,7 +46,7 @@ export function StickerPicker({ value, onChange, groupAudience }: Props) {
     <div
       role="group"
       aria-label="Select stickers (up to 2)"
-      className="flex flex-wrap gap-2"
+      className="flex flex-wrap gap-1"
     >
       {visible.map((sticker) => {
         const selected = value.includes(sticker.slug);
@@ -59,11 +58,32 @@ export function StickerPicker({ value, onChange, groupAudience }: Props) {
             onClick={() => toggle(sticker.slug)}
             disabled={!selected && atMax}
             aria-pressed={selected}
-            className={`rounded-full ring-2 transition-all focus-visible:outline-none focus-visible:ring-offset-1 ${
-              selected ? "ring-current" : "ring-transparent"
-            } disabled:opacity-40`}
+            data-sticker={sticker.slug}
+            style={
+              selected
+                ? {
+                    color: sticker.color,
+                    borderColor: sticker.color,
+                    backgroundColor: sticker.color + "26",
+                  }
+                : undefined
+            }
+            className={
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs " +
+              "transition-colors duration-fast " +
+              "focus-visible:outline-none focus-visible:shadow-glow-gold " +
+              "disabled:opacity-40 " +
+              (selected
+                ? "font-medium"
+                : "border-line bg-transparent text-cream-muted hover:text-cream")
+            }
           >
-            <StickerBadge sticker={sticker} />
+            <span
+              aria-hidden="true"
+              className="inline-block h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: sticker.color }}
+            />
+            {sticker.name}
           </button>
         );
       })}
