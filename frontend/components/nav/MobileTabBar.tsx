@@ -10,19 +10,17 @@ const tabs = [
   { href: "/groups", label: "Chats", icon: ChatIcon },
   { href: "/feed", label: "Feed", icon: FeedIcon },
   { href: "/boards", label: "Boards", icon: BoardsIcon },
-  { href: "/settings", label: "You", icon: PersonIcon },
+  { href: "/grow", label: "Grow", icon: GrowIcon },
 ] as const;
 
 /**
  * Mobile-only bottom tab bar — the primary nav on phones.
  *
- * Five tabs covering the most-used destinations. "You" replaces what
- * used to be "Settings" — the route is still /settings but the page is
- * now a personal hub (profile, account, orgs, admin, info, sign out),
- * matching the avatar-tab convention used in most native social apps.
- * Library content (devotionals/reading-plans/discover) lives in the
- * drawer "Grow" section and on Home; the long-tail About/FAQ live in
- * the drawer "You" section.
+ * Five tabs covering the most-used destinations. The 5th slot is
+ * "Grow" — the spiritual-content section landing (devotionals, reading
+ * plans, discover groups, search). Profile / settings / sign-out live
+ * on `/settings` and are reachable in one tap via the avatar button in
+ * the mobile header (and in the drawer's "You" section).
  *
  * The bar is a flex sibling of `<main>` inside AppShell's inner column,
  * so it occupies its natural height and content scrolls above it.
@@ -138,7 +136,10 @@ function FeedIcon(_: IconProps) {
   );
 }
 
-function PersonIcon(_: IconProps) {
+function GrowIcon(_: IconProps) {
+  // Sprout / two leaves rising from a stem — picks up the "Grow"
+  // metaphor literally and reads at small sizes (5×5 / 20px square)
+  // without any extra detail.
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -149,11 +150,10 @@ function PersonIcon(_: IconProps) {
       strokeWidth={1.75}
       aria-hidden="true"
     >
-      <circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M4 21c0-4.418 3.582-8 8-8s8 3.582 8 8"
+        d="M12 21V11M12 11C12 7 9 5 5 5c0 4 2 7 7 7zM12 11c0-3 2-5 6-5 0 3-2 6-6 6z"
       />
     </svg>
   );
