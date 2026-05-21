@@ -93,6 +93,9 @@ class FakeFirestore:
     def collection(self, name: str) -> FakeCollection:
         return FakeCollection(self, [name])
 
+    def collection_group(self, name: str) -> FakeCollectionGroup:
+        return FakeCollectionGroup(self, name)
+
     def batch(self) -> FakeBatch:
         return FakeBatch(self)
 
@@ -130,10 +133,19 @@ class FakeFirestore:
 
 
 class FakeSnapshot:
-    def __init__(self, doc_id: str, data: dict[str, Any] | None) -> None:
+    def __init__(
+        self,
+        doc_id: str,
+        data: dict[str, Any] | None,
+        reference: FakeDocRef | None = None,
+    ) -> None:
         self.id = doc_id
         self._data = data
         self.exists = data is not None
+        # `reference` matches the real google-cloud-firestore Snapshot API
+        # — collection-group queries rely on `snap.reference.parent.parent`
+        # to find the containing doc.
+        self.reference = reference
 
     def to_dict(self) -> dict[str, Any] | None:
         return None if self._data is None else dict(self._data)
@@ -149,9 +161,13 @@ class FakeDocRef:
         self._path = "/".join(parts)
         self.id = parts[-1]
 
+    @property
+    def parent(self) -> FakeCollection:
+        return FakeCollection(self._fs, self._parts[:-1])
+
     def get(self) -> FakeSnapshot:
         data = self._fs._doc_get(self._path)
-        return FakeSnapshot(self.id, data)
+        return FakeSnapshot(self.id, data, reference=self)
 
     def set(
         self,
@@ -195,7 +211,11 @@ class FakeQuery:
     def stream(self) -> Any:
         for doc_id, data in self._fs._coll_iter(self._parts):
             if all(self._match(data, f, op, v) for f, op, v in self._filters):
-                yield FakeSnapshot(doc_id, data)
+                yield FakeSnapshot(
+                    doc_id,
+                    data,
+                    reference=FakeDocRef(self._fs, self._parts + [doc_id]),
+                )
 
     @staticmethod
     def _match(data: dict[str, Any], field: str, op: str, value: Any) -> bool:
@@ -210,6 +230,10 @@ class FakeQuery:
         v = cur
         if op == "==":
             return v == value
+        if op == "in":
+            # Real Firestore `in` matches when `v` is equal to any of the
+            # values in the list. A missing field never matches.
+            return v is not None and v in value
         if v is None:
             return False
         if op == "<":
@@ -229,6 +253,48 @@ class FakeCollection(FakeQuery):
 
     def document(self, doc_id: str) -> FakeDocRef:
         return FakeDocRef(self._fs, self._parts + [doc_id])
+
+    @property
+    def parent(self) -> FakeDocRef | None:
+        # The members collection at `groups/{gid}/members` has
+        # `parent == groups/{gid}`. Top-level collections have no parent.
+        if len(self._parts) <= 1:
+            return None
+        return FakeDocRef(self._fs, self._parts[:-1])
+
+
+class FakeCollectionGroup:
+    """Iterate every doc whose immediate parent collection is `name`.
+
+    Real Firestore `collection_group(x)` matches docs anywhere in the tree
+    whose containing collection segment equals `x`. For example,
+    `collection_group("members")` returns docs at `groups/{gid}/members/{uid}`
+    as well as any other path ending in `/members/{doc_id}`.
+    """
+
+    def __init__(self, fs: FakeFirestore, name: str) -> None:
+        self._fs = fs
+        self._name = name
+        self._filters: list[tuple[str, str, Any]] = []
+
+    def where(self, field: str, op: str, value: Any) -> FakeCollectionGroup:
+        clone = FakeCollectionGroup(self._fs, self._name)
+        clone._filters = self._filters + [(field, op, value)]
+        return clone
+
+    def stream(self) -> Any:
+        for path, data in self._fs.docs.items():
+            segments = path.split("/")
+            # Need at least `<collection>/<doc>`; the collection segment
+            # is the second-to-last (length-2 index from the end).
+            if len(segments) < 2 or segments[-2] != self._name:
+                continue
+            if all(FakeQuery._match(data, f, op, v) for f, op, v in self._filters):
+                yield FakeSnapshot(
+                    segments[-1],
+                    data,
+                    reference=FakeDocRef(self._fs, segments),
+                )
 
 
 class FakeBatch:

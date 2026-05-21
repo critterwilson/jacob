@@ -41,7 +41,7 @@ groups/{gid}/sermons/{sermonId}                 # T52 — sermon archive
 # Platform content
 stickers/{stickerId}
 daily_verse/{date}                              # T33 — daily Bible verse
-devotionals/{slug}                              # T51
+devotionals/{slug}                              # T51 — flat; optional groupId field scopes to a group
 reading_plans/{slug}                            # T51
 
 # Cross-group boards
@@ -578,6 +578,47 @@ the consumed code.
 * TTL: 60 minutes. Single-use. `consume_consent_token` marks
   `consumedAt` inside the verify transaction.
 
+## `devotionals/{slug}` (T51)
+
+Short scripture-paired reflections. Flat top-level collection, slug
+globally unique — backed by `/api/devotionals*`; default-deny rules
+keep every direct path closed.
+
+```json
+{
+  "slug": "psalm-23",
+  "title": "The Lord is my shepherd",
+  "scriptureRef": "Psalm 23",
+  "body": "Markdown body...",
+  "audioUrl": null,
+  "sourceAttribution": "Public domain.",
+  "publishedAt": "<serverTimestamp>",
+  "audience": "christian",
+  "groupId": null,
+  "createdBy": "<actor-uid>",
+  "schemaVersion": 1
+}
+```
+
+* `groupId` — **null** = platform-wide, authored by a `ministry_owner`
+  and visible to every signed-in user. **Set** = scoped to that group,
+  authored by a leader of the group, visible only to its members.
+  Mirrors how `groups/{gid}/sermons/{sermonId}` works for sermons, but
+  kept as one flat collection so platform + group entries can be merged
+  into a single feed with a single Firestore query per scope (no
+  per-group fan-out).
+* The merged feed `GET /api/devotionals` returns platform entries plus
+  every devotional whose `groupId` is in the caller's membership set,
+  joined with the group name for labelling.
+* The group-scoped surface `GET /api/groups/{gid}/devotionals` returns
+  only entries with `groupId == gid` and is gated on membership.
+* Mutations: platform-wide entries → `ministry_owner` or admin;
+  group-scoped entries → leader of that group or admin. The same role
+  rules apply to patch/delete (resolved against the doc's `groupId`,
+  not the request body).
+* Slugs are unique across the platform — a leader's choice of slug
+  collides with everyone else's. Pick narrow group-prefixed slugs.
+
 ## `feature_flags/{flagKey}` (T58, backend only)
 
 Self-evaluated server-side; clients call `GET /api/flags` and the
@@ -609,3 +650,5 @@ Defined in [firestore/firestore.indexes.json](../firestore/firestore.indexes.jso
 |--------------------|-------------------------------------------------------|-------------------------------------------|
 | `messages`         | `parentMessageId ASC`, `createdAt DESC`               | top-level feed (parentMessageId == null) and thread reads (parentMessageId == <id>) |
 | `moderation_queue` | `status ASC`, `createdAt ASC`                         | admin dashboard pending-queue listing     |
+| `devotionals`      | `groupId ASC`, `publishedAt DESC`                     | group-scoped + platform-wide listings; supports `where groupId in […]` for the merged feed |
+| `devotionals`      | `groupId ASC`, `audience ASC`, `publishedAt DESC`     | same listings with the optional audience filter applied |

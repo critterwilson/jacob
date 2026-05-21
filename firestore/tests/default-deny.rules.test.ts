@@ -697,9 +697,38 @@ describe("T51 default-deny — devotionals + reading_plans + plan_progress", () 
       await setDoc(doc(db, "devotionals", "psalm-23"), {
         title: "x",
         body: "y",
+        groupId: null,
       });
     });
     await assertFails(getDoc(doc(authed("alice"), "devotionals", "psalm-23")));
+  });
+
+  it("denies reading group-scoped devotionals even for group members", async () => {
+    // Group-scoped (`groupId` set) devotionals are still backend-mediated
+    // — membership is enforced by the API, not the rules. Verify the
+    // default-deny applies regardless of the doc's `groupId`.
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1", "members", "alice"), {
+        uid: "alice",
+        role: "leader",
+      });
+      await setDoc(doc(db, "devotionals", "g1-week-1"), {
+        title: "Group week 1",
+        body: "...",
+        groupId: "g1",
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "devotionals", "g1-week-1")));
+  });
+
+  it("denies writing group-scoped devotionals (backend-mediated only)", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "devotionals", "g1-week-1"), {
+        title: "x",
+        body: "y",
+        groupId: "g1",
+      }),
+    );
   });
 
   it("denies reading reading_plans/{slug}", async () => {

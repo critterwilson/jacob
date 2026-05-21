@@ -1,10 +1,21 @@
 """Devotionals + reading-plans router (T51).
 
-* `GET    /api/devotionals` — list (any signed-in)
-* `GET    /api/devotionals/{slug}` — detail
-* `POST   /api/devotionals` — create (ministry_owner only)
-* `PATCH  /api/devotionals/{slug}` — update (ministry_owner only)
-* `DELETE /api/devotionals/{slug}` — delete (ministry_owner only)
+Devotionals (post group-scoping):
+
+* `GET    /api/devotionals` — list, merged across platform + caller's groups
+* `GET    /api/devotionals/{slug}` — detail; group-scoped entries require
+  membership in the named group (admins bypass).
+* `POST   /api/devotionals` — create. Body's optional `groupId` decides
+  authorship gate: ministry_owner for platform-wide, group leader for
+  group-scoped. Admin can do either.
+* `PATCH  /api/devotionals/{slug}` — same role rules as create, applied
+  against the existing doc's `groupId`.
+* `DELETE /api/devotionals/{slug}` — same.
+* `GET    /api/groups/{gid}/devotionals` — list a single group's devotionals
+  (members only). Used by the per-group devotionals surface.
+
+Reading plans:
+
 * `GET    /api/reading-plans` — list (summary; days dropped)
 * `GET    /api/reading-plans/{slug}` — detail with day list
 * `POST   /api/reading-plans` — create (admin only)
@@ -23,10 +34,16 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
 
-from app.deps import get_current_user, require_admin, require_ministry_owner, require_not_banned
+from app.deps import (
+    MembershipContext,
+    get_current_user,
+    require_admin,
+    require_member,
+    require_not_banned,
+)
 from app.errors import APIError
 from app.limits import (
     DEVOTIONAL_LIST,
@@ -87,7 +104,7 @@ def _parse_date_str(s: str | None) -> datetime | None:
         return None
 
 
-def _doc_to_devotional(snap: Any) -> Devotional:
+def _doc_to_devotional(snap: Any, *, group_name: str | None = None) -> Devotional:
     data: dict[str, Any] = snap.to_dict() or {}
     return Devotional(
         slug=str(data.get("slug") or snap.id),
@@ -98,8 +115,78 @@ def _doc_to_devotional(snap: Any) -> Devotional:
         sourceAttribution=str(data.get("sourceAttribution", "")),
         publishedAt=_ts_to_str(data.get("publishedAt")),
         audience=data.get("audience", "christian"),
+        groupId=data.get("groupId"),
+        groupName=group_name,
         schemaVersion=int(data.get("schemaVersion", 1) or 1),
     )
+
+
+# Firestore's `in` operator caps at 30 values; chunk longer lists.
+_IN_CHUNK = 30
+
+
+def _user_group_ids(db: Any, uid: str) -> list[str]:
+    """Return every group ID the user is a member of.
+
+    Reuses the established `collection_group("members").where("uid","==",uid)`
+    pattern (see `users.recent_messages` / `users.my_orgs`). Cheap: one CG
+    query bounded by the user's membership count.
+    """
+    gids: list[str] = []
+    for snap in db.collection_group("members").where("uid", "==", uid).stream():
+        parent_group = snap.reference.parent.parent
+        if parent_group is not None:
+            gids.append(parent_group.id)
+    return gids
+
+
+def _is_group_leader(db: Any, gid: str, uid: str) -> bool:
+    """True iff the caller has a `members/{uid}` row with `role == "leader"`
+    under `groups/{gid}`. Used by the create/update/delete authorization
+    path because the body's `groupId` is not in the route, so the
+    `require_leader` dep (which reads `gid` from the path) cannot be used."""
+    group_snap = db.collection("groups").document(gid).get()
+    if not getattr(group_snap, "exists", False):
+        return False
+    member_snap = db.collection("groups").document(gid).collection("members").document(uid).get()
+    if not getattr(member_snap, "exists", False):
+        return False
+    role = (member_snap.to_dict() or {}).get("role")
+    return role == "leader"
+
+
+def _authorize_devotional_mutation(db: Any, user: CurrentUser, group_id: str | None) -> None:
+    """Raise 403 unless the caller can mutate a devotional with this scope.
+
+    Platform-wide (`group_id is None`): require `ministry_owner` or admin.
+    Group-scoped: require leadership of that group, or admin (admin bypass
+    matches the rest of the moderation surface — admins need to act on any
+    group's content).
+    """
+    if bool(user.claims.get("admin")) is True:
+        return
+    if group_id is None:
+        if user.claims.get("ministry_owner") is True:
+            return
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="forbidden",
+            message="Ministry owner privileges required",
+        )
+    if _is_group_leader(db, group_id, user.uid):
+        return
+    raise APIError(
+        status_code=status.HTTP_403_FORBIDDEN,
+        code="not_a_leader",
+        message="Only leaders of this group can author devotionals here",
+    )
+
+
+def _group_name(db: Any, gid: str) -> str | None:
+    snap = db.collection("groups").document(gid).get()
+    if not getattr(snap, "exists", False):
+        return None
+    return str((snap.to_dict() or {}).get("name") or "") or None
 
 
 def _doc_to_plan(snap: Any) -> ReadingPlan:
@@ -148,12 +235,55 @@ def list_devotionals(
     audience: Audience | None = Query(default=None),
     user: CurrentUser = Depends(get_current_user),
 ) -> DevotionalListResponse:
+    """Merged feed: platform-wide devotionals + devotionals authored in
+    groups the caller is a member of. Other groups' devotionals stay
+    invisible. One Firestore query per scope (platform = `groupId == None`,
+    group = `groupId in [...]`) rather than per-group fan-out.
+    """
     db = _db()
-    query: Any = db.collection("devotionals")
+    platform_query: Any = db.collection("devotionals").where("groupId", "==", None)
     if audience is not None:
-        query = query.where("audience", "==", audience)
-    snaps = list(query.stream())
-    devotionals = [_doc_to_devotional(s) for s in snaps]
+        platform_query = platform_query.where("audience", "==", audience)
+    platform_snaps = list(platform_query.stream())
+    devotionals: list[Devotional] = [_doc_to_devotional(s) for s in platform_snaps]
+
+    gids = _user_group_ids(db, user.uid)
+    if gids:
+        # Resolve group names once so we can label each merged entry.
+        # Misses (a deleted group) fall through with a null name — the
+        # devotional was authored before the group was archived and we
+        # don't want to drop it from the feed.
+        name_by_gid: dict[str, str | None] = {}
+        for chunk_start in range(0, len(gids), _IN_CHUNK):
+            chunk = gids[chunk_start : chunk_start + _IN_CHUNK]
+            q: Any = db.collection("devotionals").where("groupId", "in", chunk)
+            if audience is not None:
+                q = q.where("audience", "==", audience)
+            for snap in q.stream():
+                gid_val = (snap.to_dict() or {}).get("groupId")
+                gid = str(gid_val) if gid_val else ""
+                if gid and gid not in name_by_gid:
+                    name_by_gid[gid] = _group_name(db, gid)
+                devotionals.append(_doc_to_devotional(snap, group_name=name_by_gid.get(gid)))
+
+    devotionals.sort(key=lambda d: d.publishedAt or "", reverse=True)
+    return DevotionalListResponse(devotionals=devotionals)
+
+
+@router.get("/api/groups/{gid}/devotionals", response_model=DevotionalListResponse)
+@limiter.limit(DEVOTIONAL_LIST)
+def list_group_devotionals(
+    gid: str = Path(..., min_length=1),
+    request: Request = None,  # type: ignore[assignment]
+    response: Response = None,  # type: ignore[assignment]
+    membership: MembershipContext = Depends(require_member),
+) -> DevotionalListResponse:
+    """List devotionals authored within this group. Members only; the
+    `require_member` dep also 404s when the group doesn't exist."""
+    db = _db()
+    snaps = list(db.collection("devotionals").where("groupId", "==", gid).stream())
+    name = str(membership.group.get("name") or "") or None
+    devotionals = [_doc_to_devotional(s, group_name=name) for s in snaps]
     devotionals.sort(key=lambda d: d.publishedAt or "", reverse=True)
     return DevotionalListResponse(devotionals=devotionals)
 
@@ -173,6 +303,27 @@ def get_devotional(
             code="devotional_not_found",
             message=f"Devotional {slug!r} not found",
         )
+    data = snap.to_dict() or {}
+    group_id = data.get("groupId")
+    if group_id:
+        # Group-scoped: only members of that group (and admins) can read.
+        if bool(user.claims.get("admin")) is not True:
+            member_snap = (
+                db.collection("groups")
+                .document(str(group_id))
+                .collection("members")
+                .document(user.uid)
+                .get()
+            )
+            if not getattr(member_snap, "exists", False):
+                # Treat "not allowed to see" as a 404 so the slug existence
+                # isn't probeable by non-members.
+                raise APIError(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    code="devotional_not_found",
+                    message=f"Devotional {slug!r} not found",
+                )
+        return _doc_to_devotional(snap, group_name=_group_name(db, str(group_id)))
     return _doc_to_devotional(snap)
 
 
@@ -182,9 +333,12 @@ def create_devotional(
     request: Request,
     response: Response,
     body: DevotionalCreateRequest,
-    user: CurrentUser = Depends(require_ministry_owner),
+    user: CurrentUser = Depends(get_current_user),
+    _ban_check: CurrentUser = Depends(require_not_banned),
 ) -> Devotional:
     db = _db()
+    _authorize_devotional_mutation(db, user, body.groupId)
+
     ref = db.collection("devotionals").document(body.slug)
     if ref.get().exists:
         raise APIError(
@@ -203,12 +357,19 @@ def create_devotional(
             "sourceAttribution": body.sourceAttribution,
             "publishedAt": published_at,
             "audience": body.audience,
+            "groupId": body.groupId,
             "schemaVersion": 1,
             "createdBy": user.uid,
         }
     )
-    logger.info("devotional created slug=%s actor=%s", body.slug, user.uid)
-    return _doc_to_devotional(ref.get())
+    logger.info(
+        "devotional created slug=%s actor=%s scope=%s",
+        body.slug,
+        user.uid,
+        f"group:{body.groupId}" if body.groupId else "platform",
+    )
+    group_name = _group_name(db, body.groupId) if body.groupId else None
+    return _doc_to_devotional(ref.get(), group_name=group_name)
 
 
 @router.patch("/api/devotionals/{slug}", response_model=Devotional)
@@ -218,16 +379,21 @@ def update_devotional(
     request: Request,
     response: Response,
     body: DevotionalUpdateRequest,
-    user: CurrentUser = Depends(require_ministry_owner),
+    user: CurrentUser = Depends(get_current_user),
+    _ban_check: CurrentUser = Depends(require_not_banned),
 ) -> Devotional:
     db = _db()
     ref = db.collection("devotionals").document(slug)
-    if not ref.get().exists:
+    snap = ref.get()
+    if not snap.exists:
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="devotional_not_found",
             message=f"Devotional {slug!r} not found",
         )
+    existing_group_id = (snap.to_dict() or {}).get("groupId")
+    _authorize_devotional_mutation(db, user, existing_group_id)
+
     patch: dict[str, Any] = {}
     if body.title is not None:
         patch["title"] = body.title
@@ -248,7 +414,8 @@ def update_devotional(
     if patch:
         ref.update(patch)
     logger.info("devotional updated slug=%s actor=%s fields=%s", slug, user.uid, list(patch))
-    return _doc_to_devotional(ref.get())
+    group_name = _group_name(db, str(existing_group_id)) if existing_group_id else None
+    return _doc_to_devotional(ref.get(), group_name=group_name)
 
 
 @router.delete("/api/devotionals/{slug}", status_code=status.HTTP_204_NO_CONTENT)
@@ -257,16 +424,20 @@ def delete_devotional(
     slug: str,
     request: Request,
     response: Response,
-    user: CurrentUser = Depends(require_ministry_owner),
+    user: CurrentUser = Depends(get_current_user),
+    _ban_check: CurrentUser = Depends(require_not_banned),
 ) -> Response:
     db = _db()
     ref = db.collection("devotionals").document(slug)
-    if not ref.get().exists:
+    snap = ref.get()
+    if not snap.exists:
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="devotional_not_found",
             message=f"Devotional {slug!r} not found",
         )
+    existing_group_id = (snap.to_dict() or {}).get("groupId")
+    _authorize_devotional_mutation(db, user, existing_group_id)
     ref.delete()
     logger.info("devotional deleted slug=%s actor=%s", slug, user.uid)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

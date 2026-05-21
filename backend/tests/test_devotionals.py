@@ -23,7 +23,13 @@ from fastapi.testclient import TestClient
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.deps import get_current_user, require_admin, require_not_banned
+from app.deps import (
+    MembershipContext,
+    get_current_user,
+    require_admin,
+    require_member,
+    require_not_banned,
+)
 from app.errors import http_exception_handler, validation_exception_handler
 from app.middleware.rate_limit import limiter
 from app.models.user import CurrentUser
@@ -81,6 +87,7 @@ def _seed_devotional(
     audience: str = "christian",
     title: str = "T",
     published: datetime | None = None,
+    group_id: str | None = None,
 ) -> None:
     fs._doc_set(
         f"devotionals/{slug}",
@@ -93,9 +100,41 @@ def _seed_devotional(
             "sourceAttribution": "Public domain.",
             "publishedAt": published or datetime.now(UTC),
             "audience": audience,
+            "groupId": group_id,
             "schemaVersion": 1,
         },
     )
+
+
+def _seed_group(
+    fs: FakeFirestore,
+    *,
+    gid: str,
+    name: str = "Group",
+    leaders: tuple[str, ...] = (),
+    members: tuple[str, ...] = (),
+) -> None:
+    """Seed a group + its `members/{uid}` rows. Each leader uid is also
+    recorded as a member with role=leader; member uids get role=member."""
+    fs._doc_set(f"groups/{gid}", {"name": name, "isPrivate": False})
+    for uid in leaders:
+        fs._doc_set(
+            f"groups/{gid}/members/{uid}",
+            {"uid": uid, "role": "leader", "joinedAt": datetime.now(UTC)},
+        )
+    for uid in members:
+        fs._doc_set(
+            f"groups/{gid}/members/{uid}",
+            {"uid": uid, "role": "member", "joinedAt": datetime.now(UTC)},
+        )
+
+
+def _leader(uid: str) -> CurrentUser:
+    return CurrentUser(uid=uid, email=f"{uid}@example.com", claims={})
+
+
+def _admin(uid: str = "admin1") -> CurrentUser:
+    return CurrentUser(uid=uid, email=f"{uid}@example.com", claims={"admin": True})
 
 
 def _seed_plan(
@@ -795,3 +834,332 @@ def test_delete_devotional_404() -> None:
     with patch("app.routers.devotionals._db", return_value=fs):
         res = TestClient(_app(user=_ministry_owner())).delete("/api/devotionals/missing")
     assert res.status_code == 404
+
+
+# ── group-scoped devotionals (leader-authored, member-visible) ──────────────
+
+_GROUP_CREATE_BODY = {
+    "slug": "g1-week-1",
+    "title": "Group Week 1",
+    "scriptureRef": "Phil 4:6",
+    "body": "Rejoice always.",
+    "audience": "christian",
+    "groupId": "g1",
+}
+
+
+def test_leader_creates_devotional_for_own_group() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", leaders=("lead-1",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("lead-1"))).post(
+            "/api/devotionals", json=_GROUP_CREATE_BODY
+        )
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["groupId"] == "g1"
+    assert body["groupName"] == "Crossroads"
+    persisted = fs._doc_get("devotionals/g1-week-1")
+    assert persisted["groupId"] == "g1"
+    assert persisted["createdBy"] == "lead-1"
+
+
+def test_non_leader_cannot_create_for_group() -> None:
+    """A regular member (or non-member) cannot author a devotional in a
+    group they don't lead. This is the load-bearing test — group-scoping
+    is the whole point of the feature."""
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", members=("mem-1",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("mem-1"))).post(
+            "/api/devotionals", json=_GROUP_CREATE_BODY
+        )
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "not_a_leader"
+    # Confirm nothing got persisted.
+    assert fs._doc_get("devotionals/g1-week-1") is None
+
+
+def test_leader_of_other_group_cannot_create_here() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", leaders=("other-leader",))
+    _seed_group(fs, gid="g2", name="Other", leaders=("g2-leader",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("g2-leader"))).post(
+            "/api/devotionals", json=_GROUP_CREATE_BODY
+        )
+    assert res.status_code == 403
+
+
+def test_ministry_owner_cannot_create_for_group_they_dont_lead() -> None:
+    """Ministry-owner role does not implicitly grant leadership of every
+    group. They must be a leader of `g1` to author a g1-scoped devotional.
+    Admins are the only role that bypasses this."""
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", leaders=("other-leader",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).post(
+            "/api/devotionals", json=_GROUP_CREATE_BODY
+        )
+    assert res.status_code == 403
+
+
+def test_admin_can_create_group_scoped_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", leaders=("other",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_admin())).post("/api/devotionals", json=_GROUP_CREATE_BODY)
+    assert res.status_code == 201
+
+
+def test_create_platform_wide_when_groupid_omitted() -> None:
+    """Without groupId, the existing ministry-owner gate still applies."""
+    fs = FakeFirestore()
+    body = {**_CREATE_BODY, "slug": "platform-week-1"}
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=body)
+    assert res.status_code == 201
+    persisted = fs._doc_get("devotionals/platform-week-1")
+    assert persisted["groupId"] is None
+
+
+def test_create_platform_wide_rejected_for_group_leader_without_owner_claim() -> None:
+    """A group leader who is not a ministry_owner can't create platform-wide
+    devotionals."""
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("lead-1",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("lead-1"))).post(
+            "/api/devotionals", json=_CREATE_BODY  # no groupId
+        )
+    assert res.status_code == 403
+
+
+# ── merged list ─────────────────────────────────────────────────────────────
+
+
+def test_list_devotionals_merges_platform_and_my_groups() -> None:
+    """Returns platform-wide entries plus entries scoped to groups the
+    caller belongs to. Other groups' devotionals are excluded."""
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="platform-1", group_id=None, title="Platform 1")
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="G1 entry")
+    _seed_devotional(fs, slug="g2-1", group_id="g2", title="G2 entry")
+    _seed_devotional(fs, slug="g3-1", group_id="g3", title="G3 entry")
+    _seed_group(fs, gid="g1", name="Crossroads", members=("u-feed",))
+    _seed_group(fs, gid="g2", name="Other", members=("not-u",))
+    _seed_group(fs, gid="g3", name="Third", leaders=("u-feed",))
+
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("u-feed"))).get("/api/devotionals")
+
+    assert res.status_code == 200, res.text
+    slugs = sorted(d["slug"] for d in res.json()["devotionals"])
+    # platform-1 (always); g1-1 (member); g3-1 (leader); g2-1 excluded.
+    assert slugs == ["g1-1", "g3-1", "platform-1"]
+
+
+def test_list_devotionals_labels_group_entries_with_group_name() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="G1 entry")
+    _seed_devotional(fs, slug="platform-1", group_id=None, title="Platform")
+    _seed_group(fs, gid="g1", name="Crossroads", members=("u-feed",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("u-feed"))).get("/api/devotionals")
+    by_slug = {d["slug"]: d for d in res.json()["devotionals"]}
+    assert by_slug["g1-1"]["groupName"] == "Crossroads"
+    assert by_slug["g1-1"]["groupId"] == "g1"
+    assert by_slug["platform-1"]["groupName"] is None
+    assert by_slug["platform-1"]["groupId"] is None
+
+
+def test_list_devotionals_excludes_groups_user_left() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="g1-1", group_id="g1")
+    _seed_group(fs, gid="g1", name="X", leaders=("other-leader",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("u-not-member"))).get("/api/devotionals")
+    assert res.json()["devotionals"] == []
+
+
+def test_list_devotionals_audience_filter_applies_to_both_scopes() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="platform-c", group_id=None, audience="christian", title="Pc")
+    _seed_devotional(fs, slug="platform-g", group_id=None, audience="general", title="Pg")
+    _seed_devotional(fs, slug="g1-c", group_id="g1", audience="christian", title="G1c")
+    _seed_devotional(fs, slug="g1-g", group_id="g1", audience="general", title="G1g")
+    _seed_group(fs, gid="g1", name="X", members=("u-feed",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("u-feed"))).get("/api/devotionals?audience=general")
+    slugs = sorted(d["slug"] for d in res.json()["devotionals"])
+    assert slugs == ["g1-g", "platform-g"]
+
+
+# ── group-scoped list endpoint ──────────────────────────────────────────────
+
+
+def _membership(
+    *, uid: str = "mem-1", gid: str = "g1", role: str = "member", name: str = "Crossroads"
+) -> MembershipContext:
+    return MembershipContext(gid=gid, uid=uid, role=role, group={"name": name})
+
+
+def test_group_devotional_list_requires_membership() -> None:
+    """When `require_member` rejects (403), the list endpoint never runs."""
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="X", leaders=("lead-1",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1")
+
+    user = _leader("stranger")
+    app = _app(user=user)
+
+    def _forbid() -> MembershipContext:
+        from app.errors import APIError
+
+        raise APIError(
+            status_code=403,
+            code="not_a_member",
+            message="Not a member of this group",
+        )
+
+    app.dependency_overrides[require_member] = _forbid
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(app).get("/api/groups/g1/devotionals")
+    assert res.status_code == 403
+
+
+def test_group_devotional_list_returns_group_entries_only() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", members=("mem-1",))
+    _seed_devotional(fs, slug="platform-1", group_id=None)
+    _seed_devotional(fs, slug="g1-a", group_id="g1")
+    _seed_devotional(fs, slug="g1-b", group_id="g1")
+    _seed_devotional(fs, slug="g2-1", group_id="g2")
+
+    app = _app(user=_leader("mem-1"))
+    app.dependency_overrides[require_member] = lambda: _membership(uid="mem-1")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(app).get("/api/groups/g1/devotionals")
+    assert res.status_code == 200
+    slugs = sorted(d["slug"] for d in res.json()["devotionals"])
+    assert slugs == ["g1-a", "g1-b"]
+    # Every row carries the group name for the UI.
+    assert all(d["groupName"] == "Crossroads" for d in res.json()["devotionals"])
+
+
+# ── detail GET ──────────────────────────────────────────────────────────────
+
+
+def test_get_group_scoped_devotional_404s_for_non_members() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="X", leaders=("lead-1",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("stranger"))).get("/api/devotionals/g1-1")
+    # 404 (not 403) so non-members can't probe slug existence.
+    assert res.status_code == 404
+
+
+def test_get_group_scoped_devotional_allows_members() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", members=("mem-1",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="Pinned")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("mem-1"))).get("/api/devotionals/g1-1")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["title"] == "Pinned"
+    assert body["groupId"] == "g1"
+    assert body["groupName"] == "Crossroads"
+
+
+def test_get_group_scoped_devotional_allows_admin() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="X", leaders=("lead-1",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_admin())).get("/api/devotionals/g1-1")
+    assert res.status_code == 200
+
+
+# ── mutation authorization on existing docs ─────────────────────────────────
+
+
+def test_leader_can_edit_their_groups_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("lead-1",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="Old")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("lead-1"))).patch(
+            "/api/devotionals/g1-1", json={"title": "New"}
+        )
+    assert res.status_code == 200, res.text
+    assert fs._doc_get("devotionals/g1-1")["title"] == "New"
+
+
+def test_leader_cannot_edit_other_groups_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("lead-1",))
+    _seed_group(fs, gid="g2", leaders=("g2-leader",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="Old")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("g2-leader"))).patch(
+            "/api/devotionals/g1-1", json={"title": "Hijack"}
+        )
+    assert res.status_code == 403
+    assert fs._doc_get("devotionals/g1-1")["title"] == "Old"
+
+
+def test_leader_cannot_edit_platform_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("lead-1",))
+    _seed_devotional(fs, slug="platform-1", group_id=None, title="Old")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("lead-1"))).patch(
+            "/api/devotionals/platform-1", json={"title": "Hijack"}
+        )
+    assert res.status_code == 403
+
+
+def test_ministry_owner_cannot_edit_group_devotional_they_dont_lead() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("other-leader",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="Old")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_ministry_owner())).patch(
+            "/api/devotionals/g1-1", json={"title": "Hijack"}
+        )
+    assert res.status_code == 403
+
+
+def test_admin_can_edit_any_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="g1-1", group_id="g1", title="Old")
+    _seed_devotional(fs, slug="platform-1", group_id=None, title="Old")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_admin()))
+        r1 = client.patch("/api/devotionals/g1-1", json={"title": "New"})
+        r2 = client.patch("/api/devotionals/platform-1", json={"title": "New"})
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+
+
+def test_leader_can_delete_their_groups_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("lead-1",))
+    _seed_devotional(fs, slug="g1-1", group_id="g1")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("lead-1"))).delete("/api/devotionals/g1-1")
+    assert res.status_code == 204
+    assert fs._doc_get("devotionals/g1-1") is None
+
+
+def test_leader_cannot_delete_platform_devotional() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", leaders=("lead-1",))
+    _seed_devotional(fs, slug="platform-1", group_id=None)
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_leader("lead-1"))).delete("/api/devotionals/platform-1")
+    assert res.status_code == 403
+    # Devotional must still exist.
+    assert fs._doc_get("devotionals/platform-1") is not None
