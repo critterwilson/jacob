@@ -6,6 +6,7 @@ import { type ReactNode, useState } from "react";
 import { DeletionBanner } from "@/components/account/DeletionBanner";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 // The mobile search button dispatches this event; SearchBar (mounted by
@@ -174,6 +175,7 @@ export function AppShell({
     active: drawerOpen,
     onEscape: closeDrawer,
   });
+  useBodyScrollLock(drawerOpen);
 
   return (
     <div className="flex min-h-svh bg-ink text-cream">

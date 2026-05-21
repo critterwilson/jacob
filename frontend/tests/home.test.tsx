@@ -97,6 +97,10 @@ vi.mock("@/components/nav/PushPrompt", () => ({
   PushPrompt: () => null,
 }));
 
+vi.mock("@/components/nav/InstallPrompt", () => ({
+  InstallPrompt: () => null,
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { AppShell } from "@/components/nav/AppShell";

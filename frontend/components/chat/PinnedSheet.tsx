@@ -1,5 +1,6 @@
 "use client";
 
+import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import type { PinnedMessage } from "@/lib/hooks/usePinnedMessages";
 
@@ -22,6 +23,7 @@ export function PinnedSheet({
     active: true,
     onEscape: onClose,
   });
+  useBodyScrollLock(true);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">

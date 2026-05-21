@@ -3,14 +3,12 @@
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/nav/AppShell";
-import { InstallPrompt } from "@/components/nav/InstallPrompt";
-import { PushPrompt } from "@/components/nav/PushPrompt";
 import { SearchBar } from "@/components/search/SearchBar";
 import { useAuth } from "@/lib/auth-context";
 
 // Surfaces that need to fill the AppShell main area exactly (chat-style
-// layouts). For these we skip the in-page Install/Push banners so the
-// composer is never pushed below the visible viewport.
+// layouts). For these AppShell switches to a no-scroll flex layout so
+// the composer is never pushed below the visible viewport.
 function isFullHeightSurface(pathname: string | null): boolean {
   if (!pathname) return false;
   return (
@@ -52,12 +50,8 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
        * bundles that mount AppShell directly from dragging in the
        * SearchBar tree. */}
       <SearchBar />
-      {!fullHeight && user && (
-        <div className="mx-auto max-w-2xl px-4 pt-4 flex flex-col gap-2">
-          <PushPrompt uid={user.uid} />
-          <InstallPrompt />
-        </div>
-      )}
+      {/* Install + Push prompts moved into /home only so they don't
+       * eat vertical space on every authed page. See HomePage. */}
       {children}
     </AppShell>
   );
