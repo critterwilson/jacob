@@ -37,6 +37,45 @@ export type PlanProgress = {
   lastCompletedAt: string | null;
 };
 
+export type ActivePlanToday = {
+  plan: ReadingPlanSummary | null;
+  nextDay: ReadingPlanDay | null;
+  completedDays: number[];
+  streak: number;
+  lastCompletedAt: string | null;
+  allDaysComplete: boolean;
+};
+
+export function useReadingPlanToday(): {
+  data: ActivePlanToday | null;
+  loading: boolean;
+} {
+  const [data, setData] = useState<ActivePlanToday | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    apiGet<ActivePlanToday>("/api/users/me/reading-plan-today", {
+      signal: ctrl.signal,
+    })
+      .then((res) => {
+        setData(res);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.code === "aborted") return;
+        // No active plan / transport failure → empty state. The section
+        // already handles a null `plan` field, so a top-level null is
+        // the same surface.
+        setData(null);
+        setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, []);
+
+  return { data, loading };
+}
+
 export function useReadingPlans(): {
   plans: ReadingPlanSummary[];
   loading: boolean;

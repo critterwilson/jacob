@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 
+import { ContinueReadingPlan } from "@/components/home/ContinueReadingPlan";
 import { DailyVerse } from "@/components/home/DailyVerse";
+import { MinistryHighlights } from "@/components/home/MinistryHighlights";
 import { RecentActivity } from "@/components/home/RecentActivity";
+import { TodayDevotional } from "@/components/home/TodayDevotional";
 import { InstallPrompt } from "@/components/nav/InstallPrompt";
 import { PushPrompt } from "@/components/nav/PushPrompt";
 import { Banner, Heading, Link as UILink } from "@/components/ui";
+import { useAuth } from "@/lib/auth-context";
+import { useDevotionals } from "@/lib/hooks/useDevotionals";
+import { useGroups } from "@/lib/hooks/useGroups";
+import { useMaintenanceBanner } from "@/lib/hooks/useMaintenanceBanner";
+import { useMinistryFeed } from "@/lib/hooks/useMinistryFeed";
+import { useReadingPlanToday } from "@/lib/hooks/useReadingPlans";
+import { useRecentMessages } from "@/lib/hooks/useRecentMessages";
 
 // Button-shaped <Link> classes. Mirrors Button.tsx primary/secondary
 // at size=md so empty-state CTAs render as anchors (correct semantics
@@ -21,10 +31,6 @@ const ctaSecondary =
   "font-sans text-label font-medium text-cream bg-transparent " +
   "hover:bg-ink-raised hover:border-line-strong " +
   "transition-colors duration-fast focus:outline-none focus-visible:shadow-glow-gold";
-import { useAuth } from "@/lib/auth-context";
-import { useGroups } from "@/lib/hooks/useGroups";
-import { useMaintenanceBanner } from "@/lib/hooks/useMaintenanceBanner";
-import { useRecentMessages } from "@/lib/hooks/useRecentMessages";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -32,6 +38,11 @@ export default function HomePage() {
   const { messages: recentMessages, loading: recentLoading } =
     useRecentMessages(groups);
   const { maintenance } = useMaintenanceBanner();
+  const { data: planToday, loading: planLoading } = useReadingPlanToday();
+  const { devotionals, loading: devotionalsLoading } = useDevotionals();
+  const { posts: ministryPosts, loading: ministryLoading } = useMinistryFeed();
+
+  const topDevotional = devotionals[0] ?? null;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 space-y-10">
@@ -57,13 +68,51 @@ export default function HomePage() {
         Welcome{user?.displayName ? `, ${user.displayName}` : ""}
       </Heading>
 
-      <section>
+      {/* Section 1 — Today's verse. Anchors the page with scripture. */}
+      <section aria-labelledby="home-verse-heading">
+        <h2 id="home-verse-heading" className="sr-only">
+          Verse of the day
+        </h2>
         <DailyVerse />
       </section>
 
-      <section className="space-y-3">
+      {/* Section 2 — Continue reading plan. Sequential + has a streak,
+       *  so it's the highest-action surface on the page. */}
+      <section aria-labelledby="home-plan-heading">
+        <h2 id="home-plan-heading" className="sr-only">
+          Reading plan
+        </h2>
+        <ContinueReadingPlan data={planToday} loading={planLoading} />
+      </section>
+
+      {/* Section 3 — Today's devotional. */}
+      <section aria-labelledby="home-devotional-heading">
+        <h2 id="home-devotional-heading" className="sr-only">
+          Today&apos;s devotional
+        </h2>
+        <TodayDevotional
+          devotional={topDevotional}
+          loading={devotionalsLoading}
+        />
+      </section>
+
+      {/* Section 4 — Latest from the ministry feed. */}
+      <section className="space-y-3" aria-labelledby="home-ministry-heading">
         <div className="flex items-baseline justify-between">
-          <Heading level={2} size="sm">
+          <Heading level={2} size="sm" id="home-ministry-heading">
+            From your ministry
+          </Heading>
+          <UILink href="/feed" variant="muted" className="text-body-sm">
+            See all
+          </UILink>
+        </div>
+        <MinistryHighlights posts={ministryPosts} loading={ministryLoading} />
+      </section>
+
+      {/* Section 5 — Your groups (existing). */}
+      <section className="space-y-3" aria-labelledby="home-groups-heading">
+        <div className="flex items-baseline justify-between">
+          <Heading level={2} size="sm" id="home-groups-heading">
             Your groups
           </Heading>
           <UILink href="/groups" variant="muted" className="text-body-sm">
@@ -118,15 +167,18 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="space-y-3">
-        <Heading level={2} size="sm">
+      {/* Section 6 — Recent activity across groups (existing). */}
+      <section className="space-y-3" aria-labelledby="home-recent-heading">
+        <Heading level={2} size="sm" id="home-recent-heading">
           Recent in your groups
         </Heading>
         <RecentActivity messages={recentMessages} loading={recentLoading} />
       </section>
 
-      <section className="space-y-3">
-        <Heading level={2} size="sm">
+      {/* Section 7 — Browse (existing). Leaves a way out to the rest
+       * of the library when none of the above is what they want. */}
+      <section className="space-y-3" aria-labelledby="home-browse-heading">
+        <Heading level={2} size="sm" id="home-browse-heading">
           Browse
         </Heading>
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-3">
