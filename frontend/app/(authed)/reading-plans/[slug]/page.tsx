@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 
 import { Eyebrow, Heading, Link, cn } from "@/components/ui";
 import { usePlanProgress, useReadingPlan } from "@/lib/hooks/useReadingPlans";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 export default function ReadingPlanDetailPage() {
   const params = useParams();
@@ -13,6 +14,7 @@ export default function ReadingPlanDetailPage() {
   );
   const { plan, loading } = useReadingPlan(slug);
   const { progress } = usePlanProgress(slug);
+  const claims = useRoleClaims();
 
   if (loading) {
     return (
@@ -37,9 +39,23 @@ export default function ReadingPlanDetailPage() {
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">
-      <Link href="/reading-plans" variant="muted" className="text-caption">
-        ← Reading plans
-      </Link>
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/reading-plans" variant="muted" className="text-caption">
+          ← Reading plans
+        </Link>
+        {claims?.isAdmin && (
+          <NextLink
+            href={`/reading-plans/${plan.slug}/edit`}
+            className={
+              "rounded px-3 py-1 text-caption text-cream-muted border border-line " +
+              "transition-colors hover:border-gold hover:text-cream " +
+              "focus:outline-none focus-visible:shadow-glow-gold"
+            }
+          >
+            Edit
+          </NextLink>
+        )}
+      </div>
 
       <header className="space-y-2">
         <Eyebrow>Reading plan</Eyebrow>

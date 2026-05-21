@@ -174,6 +174,120 @@ def test_non_admin_cannot_create_board() -> None:
     assert res.status_code == 403
 
 
+# ── PATCH /api/admin/boards/{id} ───────────────────────────────────────
+
+
+def test_admin_edit_board_happy_path() -> None:
+    db = MagicMock()
+    boards_col = MagicMock()
+    db.collection.return_value = boards_col
+    snap = _board_doc(name="Prayer & Praise", description="Old description", audience="christian")
+    board_ref = MagicMock()
+    board_ref.get.return_value = snap
+    boards_col.document.return_value = board_ref
+
+    with (
+        patch("app.routers.boards._db", return_value=db),
+        patch("app.services.audit._db", return_value=MagicMock()),
+    ):
+        res = TestClient(_app(admin=True)).patch(
+            "/api/admin/boards/b1",
+            json={"name": "Updated Name", "description": "New desc"},
+        )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["boardId"] == "b1"
+    assert body["name"] == "Updated Name"
+    assert body["description"] == "New desc"
+    board_ref.update.assert_called_once()
+    call_payload = board_ref.update.call_args[0][0]
+    assert call_payload["name"] == "Updated Name"
+    assert call_payload["description"] == "New desc"
+    assert "slug" not in call_payload
+
+
+def test_admin_edit_board_audience_only() -> None:
+    db = MagicMock()
+    boards_col = MagicMock()
+    db.collection.return_value = boards_col
+    snap = _board_doc(audience="general")
+    board_ref = MagicMock()
+    board_ref.get.return_value = snap
+    boards_col.document.return_value = board_ref
+
+    with (
+        patch("app.routers.boards._db", return_value=db),
+        patch("app.services.audit._db", return_value=MagicMock()),
+    ):
+        res = TestClient(_app(admin=True)).patch(
+            "/api/admin/boards/b1",
+            json={"audience": "christian"},
+        )
+
+    assert res.status_code == 200
+    assert res.json()["audience"] == "christian"
+    call_payload = board_ref.update.call_args[0][0]
+    assert call_payload == {"audience": "christian"}
+
+
+def test_admin_edit_board_no_op_returns_current_data() -> None:
+    """Empty body is valid — returns current data without calling update."""
+    db = MagicMock()
+    boards_col = MagicMock()
+    db.collection.return_value = boards_col
+    snap = _board_doc()
+    board_ref = MagicMock()
+    board_ref.get.return_value = snap
+    boards_col.document.return_value = board_ref
+
+    with patch("app.routers.boards._db", return_value=db):
+        res = TestClient(_app(admin=True)).patch("/api/admin/boards/b1", json={})
+
+    assert res.status_code == 200
+    assert res.json()["name"] == "Prayer & Praise"
+    board_ref.update.assert_not_called()
+
+
+def test_admin_edit_board_missing_returns_404() -> None:
+    db = MagicMock()
+    boards_col = MagicMock()
+    db.collection.return_value = boards_col
+    snap = MagicMock()
+    snap.exists = False
+    board_ref = MagicMock()
+    board_ref.get.return_value = snap
+    boards_col.document.return_value = board_ref
+
+    with patch("app.routers.boards._db", return_value=db):
+        res = TestClient(_app(admin=True)).patch(
+            "/api/admin/boards/missing",
+            json={"name": "X"},
+        )
+
+    assert res.status_code == 404
+    assert res.json()["error"]["code"] == "board_not_found"
+
+
+def test_non_admin_cannot_edit_board() -> None:
+    res = TestClient(_app(admin=False)).patch(
+        "/api/admin/boards/b1",
+        json={"name": "X"},
+    )
+    assert res.status_code == 403
+
+
+def test_admin_edit_board_slug_rejected() -> None:
+    """Slug field is rejected by extra='forbid'."""
+    db = MagicMock()
+    with patch("app.routers.boards._db", return_value=db):
+        res = TestClient(_app(admin=True)).patch(
+            "/api/admin/boards/b1",
+            json={"slug": "new-slug"},
+        )
+    assert res.status_code == 422
+
+
 # ── DELETE /api/admin/boards/{id} ───────────────────────────────────────
 
 

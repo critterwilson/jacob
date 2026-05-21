@@ -47,11 +47,13 @@ DOMAIN_VERIFY: str = "10/hour"
 DOMAIN_BY_HOST: str = "120/minute"
 
 # T51 — devotionals + reading plans. Content list is small + heavily
-# cached client-side; mark-complete is per-user low-rate.
+# cached client-side; mark-complete is per-user low-rate. Admin CRUD
+# is low-volume; matches SERMON_MUTATION ceiling.
 DEVOTIONAL_LIST: str = "60/minute"
 DEVOTIONAL_MUTATION: str = "20/hour"
 PLAN_PROGRESS_READ: str = "60/minute"
 PLAN_PROGRESS_WRITE: str = "30/hour"
+PLAN_MUTATION: str = "20/hour"
 
 # T52 — sermon archive. Leaders add sermons; volume is low.
 SERMON_MUTATION: str = "20/hour"

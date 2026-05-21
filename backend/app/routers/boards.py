@@ -52,6 +52,7 @@ from app.models.board import (
     CreateBoardRequest,
     EditBoardPostRequest,
     EditBoardReplyRequest,
+    PatchBoardRequest,
     PinPostRequest,
     PinPostResponse,
 )
@@ -209,6 +210,68 @@ def archive_board(
     archived_at = datetime.now(UTC).isoformat()
     logger.info("board archived board_id=%s actor=%s", board_id, user.uid)
     return ArchiveBoardResponse(boardId=board_id, archivedAt=archived_at)
+
+
+# ── admin edit board metadata ────────────────────────────────────────────
+
+
+@router.patch(
+    "/api/admin/boards/{board_id}",
+    response_model=BoardResponse,
+)
+@limiter.limit(BOARD_ADMIN_MUTATION)
+def edit_board(
+    request: Request,
+    response: Response,
+    board_id: str,
+    body: PatchBoardRequest,
+    user: CurrentUser = Depends(require_admin),
+) -> BoardResponse:
+    """Update board name, description, and/or audience. Slug is immutable."""
+    db = _db()
+    board_ref = db.collection("boards").document(board_id)
+    snap = board_ref.get()
+    if not getattr(snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="board_not_found",
+            message="Board not found",
+        )
+    data = snap.to_dict() or {}
+
+    updates: dict[str, Any] = {}
+    if body.name is not None:
+        updates["name"] = body.name.strip()
+    if body.description is not None:
+        updates["description"] = body.description.strip()
+    if body.audience is not None:
+        updates["audience"] = body.audience
+
+    if updates:
+        board_ref.update(updates)
+        write_audit_log(
+            actor_uid=user.uid,
+            action="edit_board",
+            target_ref=f"boards/{board_id}",
+            payload={"fields": list(updates.keys())},
+        )
+        logger.info(
+            "board edited board_id=%s actor=%s fields=%s",
+            board_id,
+            user.uid,
+            list(updates.keys()),
+        )
+        data = {**data, **updates}
+
+    return BoardResponse(
+        boardId=board_id,
+        name=str(data.get("name", "")),
+        slug=str(data.get("slug", "")),
+        description=str(data.get("description", "")),
+        audience=data.get("audience", "general"),
+        archivedAt=_ts_to_str(data.get("archivedAt")),
+        postCount=int(data.get("postCount", 0)),
+    )
 
 
 # ── admin pin / unpin a post ─────────────────────────────────────────────
