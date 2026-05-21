@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { MinistryPostCard } from "@/components/ministry/MinistryPostCard";
-import { NewMinistryPostForm } from "@/components/ministry/NewMinistryPostForm";
-import { Banner, Eyebrow, Heading, Link } from "@/components/ui";
+import { Banner, Button, Eyebrow, Heading, Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useMinistryFeed } from "@/lib/hooks/useMinistryFeed";
 import { useMinistryOwner } from "@/lib/hooks/useMinistryOwner";
@@ -37,29 +36,32 @@ export default function MinistryFeedPage() {
       className="mx-auto max-w-2xl px-4 py-10 space-y-6"
       aria-labelledby="ministry-feed-heading"
     >
-      <header className="space-y-2">
-        <Eyebrow>Broadcast</Eyebrow>
-        <Heading id="ministry-feed-heading" level={1} size="md">
-          Ministry feed
-        </Heading>
-        <p className="text-body-sm text-cream-muted">
-          Sermons, devotionals, and announcements from the ministry team. Pinned
-          posts stay at the top.{" "}
-          <Link href="/settings/notifications" variant="muted" className="underline">
-            Manage notifications
-          </Link>
-          .
-        </p>
-      </header>
-
-      {isOwner === true && (
-        <section aria-label="Compose new ministry post" className="space-y-2">
-          <Heading level={2} size="sm">
-            New post
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <Eyebrow>Broadcast</Eyebrow>
+          <Heading id="ministry-feed-heading" level={1} size="md">
+            Ministry feed
           </Heading>
-          <NewMinistryPostForm />
-        </section>
-      )}
+          <p className="text-body-sm text-cream-muted">
+            Sermons, devotionals, and announcements from the ministry team.
+            Pinned posts stay at the top.{" "}
+            <Link href="/settings/notifications" variant="muted" className="underline">
+              Manage notifications
+            </Link>
+            .
+          </p>
+        </div>
+        {isOwner === true && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => router.push("/feed/new")}
+            aria-label="New post"
+          >
+            New post
+          </Button>
+        )}
+      </header>
 
       {error && <Banner tone="error">{error}</Banner>}
 
