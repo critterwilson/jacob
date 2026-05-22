@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useScrollDirection } from "@/lib/hooks/useScrollDirection";
 
@@ -20,17 +20,6 @@ type FloatingActionBarProps = {
   onClick?: () => void;
 };
 
-/** Walks up from `el` to the nearest scrollable ancestor (overflow auto|scroll). */
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node = el?.parentElement ?? null;
-  while (node) {
-    const overflowY = getComputedStyle(node).overflowY;
-    if (overflowY === "auto" || overflowY === "scroll") return node;
-    node = node.parentElement;
-  }
-  return null;
-}
-
 /**
  * A mobile-only, near-full-width primary action anchored just above the
  * bottom tab bar. It is a page's one `primary` CTA (docs/design-system.md
@@ -47,16 +36,16 @@ export function FloatingActionBar({
   href,
   onClick,
 }: FloatingActionBarProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [scrollTarget, setScrollTarget] = useState<
-    HTMLElement | Window | null
-  >(null);
+  const [scrollTarget, setScrollTarget] = useState<Window | null>(null);
 
-  // The bar is `position: fixed`, but its DOM parent is still the page
-  // content inside AppShell's scrolling <main>. Resolve that scroll
-  // container once mounted; fall back to the window if there isn't one.
+  // The bar's DOM ancestor — AppShell's <main> — carries `overflow-y: auto`,
+  // but on these pages <main> grows with its content rather than scrolling
+  // internally, so the document (window) is what actually scrolls. Track
+  // the window directly. An earlier `findScrollParent` walk bound the
+  // listener to that never-scrolling <main>, so the bar never reacted to
+  // scroll at all. `window` is client-only, hence the mount effect.
   useEffect(() => {
-    setScrollTarget(findScrollParent(ref.current) ?? window);
+    setScrollTarget(window);
   }, []);
 
   const { direction, atTop } = useScrollDirection(scrollTarget);
@@ -88,7 +77,6 @@ export function FloatingActionBar({
 
   return (
     <div
-      ref={ref}
       data-testid="floating-action-bar"
       aria-hidden={!visible}
       className={cn(
