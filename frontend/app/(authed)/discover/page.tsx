@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { DiscoverFilters } from "@/components/discover/DiscoverFilters";
 import { GroupCard } from "@/components/discover/GroupCard";
+import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useDiscoverGroups } from "@/lib/hooks/useDiscoverGroups";
 
@@ -65,13 +66,11 @@ export default function DiscoverPage() {
             </div>
           )}
           {state.nextCursor && (
-            <button
-              type="button"
-              onClick={() => void loadMore()}
-              className="mt-6 w-full rounded border border-line py-2 text-sm text-cream-muted hover:bg-ink-raised"
-            >
-              Load more
-            </button>
+            <div className="mt-6 flex justify-center">
+              <Button variant="secondary" onClick={() => void loadMore()}>
+                Load more
+              </Button>
+            </div>
           )}
         </>
       )}

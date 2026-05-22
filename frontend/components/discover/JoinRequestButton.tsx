@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -80,22 +81,22 @@ export function JoinRequestButton({ gid, joinMode, onJoined }: Props) {
       )}
       <div className="flex items-center gap-2">
         {joinMode === "request" && !showMessage ? (
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={() => setShowMessage(true)}
-            className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-soft"
           >
             Request to join
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={() => void submit()}
-            disabled={state === "pending"}
-            className="rounded bg-gold px-4 py-1.5 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
+            loading={state === "pending"}
           >
             {state === "pending" ? "…" : joinMode === "open" ? "Join" : "Send request"}
-          </button>
+          </Button>
         )}
       </div>
       {state === "error" && errorMsg && (

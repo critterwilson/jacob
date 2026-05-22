@@ -1,7 +1,7 @@
 "use client";
 
 import { OpenBook } from "@/components/motifs/OpenBook";
-import { Button, Card, Eyebrow, Heading, Link } from "@/components/ui";
+import { ButtonLink, Card, Eyebrow, Heading, Link } from "@/components/ui";
 import { useDevotionals } from "@/lib/hooks/useDevotionals";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
@@ -23,15 +23,9 @@ export default function DevotionalsIndexPage() {
           </p>
         </div>
         {claims?.isMinistryOwner && (
-          <Link
-            href="/devotionals/new"
-            variant="muted"
-            className="no-underline hover:no-underline"
-          >
-            <Button type="button" variant="primary" size="md">
-              Write devotional
-            </Button>
-          </Link>
+          <ButtonLink href="/devotionals/new" variant="primary">
+            Write devotional
+          </ButtonLink>
         )}
       </header>
 

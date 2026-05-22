@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { SermonForm } from "@/components/groups/SermonForm";
 import type { SermonFormValues } from "@/components/groups/SermonForm";
-import { Button, Eyebrow, Heading, Link } from "@/components/ui";
+import { Button, ButtonLink, Eyebrow, Heading, Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useGroupSermons } from "@/lib/hooks/useGroupSermons";
@@ -135,14 +135,14 @@ export default function SermonDetailPage() {
 
           <div className="flex flex-wrap gap-3">
             {safeSourceUrl && (
-              <a
+              <ButtonLink
                 href={safeSourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-11 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
+                variant="primary"
               >
                 Open source ↗
-              </a>
+              </ButtonLink>
             )}
             {/* T50 (Watch Together) is parked as of 2026-05-17 — video features
                 deferred by ministry owner. Button stays disabled. Re-enable when

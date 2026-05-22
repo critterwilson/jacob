@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
@@ -140,34 +141,37 @@ export default function MembersPage({ params }: Props) {
                 {isLeader && (
                   <>
                     {m.role === "member" && (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => promote(m.uid)}
                         disabled={pending !== null}
-                        className="rounded border border-line px-3 py-1 text-xs text-gold hover:bg-gold/15 disabled:opacity-50"
                       >
                         Promote
-                      </button>
+                      </Button>
                     )}
                     {m.role === "leader" && !isFounderRow && (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => demote(m.uid)}
                         disabled={pending !== null}
-                        className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
                       >
                         Demote
-                      </button>
+                      </Button>
                     )}
                     {m.role === "leader" && !isFounderRow && isFounder && (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => transferFounder(m.uid)}
                         disabled={pending !== null}
-                        className="rounded border border-parchment-amber/50 px-3 py-1 text-xs text-parchment-amber hover:bg-parchment-amber/15 disabled:opacity-50"
                       >
                         Make founder
-                      </button>
+                      </Button>
                     )}
                   </>
                 )}

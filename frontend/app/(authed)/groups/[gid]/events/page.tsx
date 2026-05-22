@@ -9,6 +9,7 @@ import {
   type RsvpStatus,
   useEvents,
 } from "@/lib/hooks/useEvents";
+import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 
@@ -76,13 +77,13 @@ export default function EventsListPage() {
           <h1 className="mt-2 text-2xl font-semibold">Events</h1>
         </div>
         {isLeader && (
-          <button
+          <Button
             type="button"
+            variant={showAdd ? "secondary" : "primary"}
             onClick={() => setShowAdd((s) => !s)}
-            className="rounded bg-gold px-3 py-1 text-sm text-ink"
           >
             {showAdd ? "Cancel" : "New event"}
-          </button>
+          </Button>
         )}
       </header>
 
@@ -155,14 +156,15 @@ export default function EventsListPage() {
             )}
           </div>
           <div className="flex items-center gap-2 pt-1">
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={submit}
+              loading={pending}
               disabled={pending || !title || !startsAt || !endsAt}
-              className="rounded bg-gold px-3 py-1 text-sm text-ink disabled:opacity-40"
             >
               {pending ? "Creating…" : "Create"}
-            </button>
+            </Button>
             {addError && (
               <span className="text-xs text-terracotta">{addError}</span>
             )}

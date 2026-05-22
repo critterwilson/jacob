@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Banner } from "@/components/ui";
+import { Banner, Button } from "@/components/ui";
 import { InviteMessagePanel } from "@/components/groups/InviteMessagePanel";
 import { ApiError, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -148,19 +148,21 @@ export function InviteList({ gid, groupName, invites }: Props) {
                   <td className="py-2">
                     {status === "active" && (
                       <div className="flex items-center gap-3">
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => setShareInvite(inv)}
-                          className="rounded-sm text-caption text-gold transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold"
                         >
                           Share
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           onClick={() => void revoke(inv.inviteId)}
-                          disabled={revoking === inv.inviteId}
-                          className="rounded-sm text-caption text-terracotta transition-colors duration-fast hover:opacity-80 focus:outline-none focus-visible:shadow-glow-gold disabled:opacity-50"
+                          loading={revoking === inv.inviteId}
                         >
                           {revoking === inv.inviteId ? "Revoking…" : "Revoke"}
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </td>

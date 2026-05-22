@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Button, ButtonLink } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
@@ -114,12 +115,13 @@ export default function GroupPage({ params }: Props) {
         {group.isPrivate && " · Private"}
       </p>
 
-      <Link
+      <ButtonLink
         href={`/groups/${gid}/chat`}
-        className="mb-6 inline-block rounded bg-gold px-4 py-2 font-medium text-ink"
+        variant="primary"
+        className="mb-6"
       >
         Open chat
-      </Link>
+      </ButtonLink>
 
       {/* Member sub-nav — the three sections every member of this group
        *  can use. Visually distinct from the leader "Manage" row below
@@ -214,14 +216,15 @@ export default function GroupPage({ params }: Props) {
             Share this code with people you want to invite. They can join at{" "}
             <span className="font-mono text-xs">/join?code={currentCode}</span>.
           </p>
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => void handleRotate()}
+            loading={rotating}
             disabled={rotating}
-            className="rounded border border-line px-3 py-1.5 text-sm hover:bg-ink-raised disabled:opacity-50"
           >
             {rotating ? "Rotating…" : "Generate new code"}
-          </button>
+          </Button>
           {rotateError && (
             <p role="alert" className="mt-2 text-sm text-terracotta">
               {rotateError}

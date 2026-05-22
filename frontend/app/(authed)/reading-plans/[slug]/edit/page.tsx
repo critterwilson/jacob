@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ReadingPlanForm } from "@/components/reading-plans/ReadingPlanForm";
-import { Eyebrow, Heading, Link } from "@/components/ui";
+import { Button, Eyebrow, Heading, Link } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import {
   type ReadingPlanCreatePayload,
@@ -134,32 +134,30 @@ export default function EditReadingPlanPage() {
           Deleting a plan is permanent and cannot be undone. User progress records
           are not removed.
         </p>
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={deleting}
-          className={
-            "rounded px-4 py-2 text-body-sm font-medium transition-colors " +
-            (confirmDelete
-              ? "bg-terracotta text-white hover:bg-terracotta/80"
-              : "border border-terracotta/60 text-terracotta hover:bg-terracotta/10")
-          }
-        >
-          {deleting
-            ? "Deleting…"
-            : confirmDelete
-              ? "Confirm delete"
-              : "Delete plan"}
-        </button>
-        {confirmDelete && !deleting && (
-          <button
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
             type="button"
-            onClick={() => setConfirmDelete(false)}
-            className="ml-3 text-caption text-cream-muted hover:text-cream"
+            variant="destructive"
+            onClick={handleDelete}
+            loading={deleting}
+            disabled={deleting}
           >
-            Cancel
-          </button>
-        )}
+            {deleting
+              ? "Deleting…"
+              : confirmDelete
+                ? "Confirm delete"
+                : "Delete plan"}
+          </Button>
+          {confirmDelete && !deleting && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setConfirmDelete(false)}
+            >
+              Cancel
+            </Button>
+          )}
+        </div>
       </section>
     </main>
   );
