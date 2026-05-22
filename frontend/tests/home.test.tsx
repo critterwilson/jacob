@@ -312,10 +312,10 @@ beforeEach(() => {
 describe("AppShell", () => {
   it("renders desktop nav links", () => {
     render(<AppShell><div /></AppShell>);
-    // "Chats" appears in the desktop sidebar drawer AND the mobile bottom
+    // "Groups" appears in the desktop sidebar drawer AND the mobile bottom
     // tab bar (rendered with md:hidden). About / FAQ only live in the
     // drawer's long-tail menu, so they remain unique.
-    expect(screen.getAllByRole("link", { name: "Chats" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Groups" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "FAQ" })).toBeInTheDocument();
   });
@@ -608,7 +608,7 @@ describe("HomePage", () => {
     expect(screen.getAllByText("Youth Group").length).toBeGreaterThan(0);
   });
 
-  it("renders all composed sections — verse, plan, devotional, ministry, groups, activity, browse", () => {
+  it("renders all composed sections — verse, plan, devotional, groups, activity, ministry, browse", () => {
     render(<HomePage />);
     // Verse (from DailyVerse mock)
     expect(screen.getByText(/For God so loved the world/i)).toBeInTheDocument();
@@ -625,6 +625,20 @@ describe("HomePage", () => {
     expect(screen.getByRole("link", { name: /Devotionals/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Reading plans/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Discover groups/ })).toBeInTheDocument();
+  });
+
+  it("places the user's groups above the organization section", () => {
+    render(<HomePage />);
+    const groupsHeading = screen.getByRole("heading", { name: "Your groups" });
+    const orgHeading = screen.getByRole("heading", {
+      name: "From your organization",
+    });
+    // Groups (and recent group activity) lead the surface; the org
+    // section follows. DOCUMENT_POSITION_FOLLOWING set => org comes after.
+    expect(
+      groupsHeading.compareDocumentPosition(orgHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("shows the no-plan empty state when the user has no progress", () => {

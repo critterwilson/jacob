@@ -1,9 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * Asserts the mobile bottom tab bar's five slots (Home / Chats / Feed /
+ * Asserts the mobile bottom tab bar's four slots (Home / Groups /
  * Boards / Grow) and the AppShell mobile-header "Account" shortcut that
- * replaces the now-removed You tab.
+ * replaces the now-removed You tab. The organization feed is not a tab;
+ * it lives in the drawer's Explore section.
  */
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -47,17 +48,24 @@ import { MobileTabBar } from "@/components/nav/MobileTabBar";
 import { AppShell } from "@/components/nav/AppShell";
 
 describe("MobileTabBar", () => {
-  it("renders the five primary destinations ending with Grow", () => {
+  it("renders the four primary destinations ending with Grow", () => {
     render(<MobileTabBar />);
     const tabs = screen.getAllByRole("link");
     expect(tabs.map((t) => t.textContent?.trim())).toEqual([
       "Home",
-      "Chats",
-      "Feed",
+      "Groups",
       "Boards",
       "Grow",
     ]);
-    expect(tabs[4]).toHaveAttribute("href", "/grow");
+    expect(tabs[1]).toHaveAttribute("href", "/groups");
+    expect(tabs[3]).toHaveAttribute("href", "/grow");
+  });
+
+  it("does not render an organization Feed tab", () => {
+    render(<MobileTabBar />);
+    expect(
+      screen.queryByRole("link", { name: /^feed$/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not render a You / Settings tab", () => {
