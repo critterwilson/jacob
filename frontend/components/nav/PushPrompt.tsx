@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+
+import { Button } from "@/components/ui";
 import { registerPushToken } from "@/lib/push";
 
 const SNOOZE_KEY = "jacob_push_prompt_snoozed_until";
@@ -56,9 +58,11 @@ export function PushPrompt({ uid }: Props) {
   };
 
   const iosNote =
-    typeof navigator !== "undefined" && /iphone|ipad/i.test(navigator.userAgent) ? (
+    typeof navigator !== "undefined" &&
+    /iphone|ipad/i.test(navigator.userAgent) ? (
       <p className="mt-1 text-xs text-cream-muted">
-        On iOS, push notifications require installing JACOB to your home screen (Safari → Share → Add to Home Screen).
+        On iOS, push notifications require installing JACOB to your home screen
+        (Safari → Share → Add to Home Screen).
       </p>
     ) : null;
 
@@ -80,12 +84,9 @@ export function PushPrompt({ uid }: Props) {
           {iosNote}
         </div>
         <div className="flex shrink-0 gap-2">
-          <button
-            onClick={snooze}
-            className="inline-flex h-9 items-center rounded border border-line px-3 text-xs text-cream transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={snooze}>
             Dismiss
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -101,23 +102,18 @@ export function PushPrompt({ uid }: Props) {
       <div className="flex-1">
         <p className="font-medium text-cream">Stay in the loop</p>
         <p className="text-cream-muted">
-          Get notified about mentions, replies, and announcements in your groups.
+          Get notified about mentions, replies, and announcements in your
+          groups.
         </p>
         {iosNote}
       </div>
       <div className="flex shrink-0 gap-2">
-        <button
-          onClick={enable}
-          className="inline-flex h-9 items-center rounded bg-gold px-3 text-xs font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
-        >
+        <Button type="button" variant="primary" size="sm" onClick={enable}>
           Enable
-        </button>
-        <button
-          onClick={snooze}
-          className="inline-flex h-9 items-center rounded border border-line px-3 text-xs text-cream transition-colors duration-fast hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
-        >
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={snooze}>
           Not now
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -205,6 +205,50 @@ These rules govern how primitives combine. Surface designs that violate them go 
 9. Loading: a single `Skeleton` primitive replaces the current mix of "Loading…" text and `animate-pulse` blocks. Skeleton blocks are `ink-raised`-tinted, not grey.
 10. Toasts: bottom-right on desktop, top-center on mobile. Auto-dismiss 5 s for success / info, manual-dismiss for errors. One toast at a time; queue the rest.
 
+### Button usage — the one standard
+
+JACOB has exactly one button primitive (`Button`) and one navigational-CTA primitive (`ButtonLink` — an anchor with identical styling). **Never hand-roll a button** from raw Tailwind, and never nest a `<Button>` inside a link. The rules below are the *single* standard; they apply to every surface — auth, onboarding, home, groups, chat, boards, feed, settings, admin, dialogs.
+
+**Variant — what each is for.**
+
+| Variant | Use |
+|---|---|
+| `primary` | The one dominant action of a view — form submit, dialog confirm, the main page CTA. Gold. |
+| `secondary` | Supporting actions beside or below the primary — Cancel, "Continue with Google", an alternate path. Bordered. |
+| `ghost` | Tertiary actions in dense UI where even a border is too loud — inline actions, "Skip", dismiss-in-passing. |
+| `destructive` | Actions that delete/remove data or revoke access — delete, remove, revoke, ban, block, archive, detach, release, withdraw. Terracotta. |
+
+- **Exactly one `primary` per view.** If two actions look equally important, one of them isn't — make it `secondary`. (This is rule 3 above, applied to buttons.)
+- The **confirm** button of a destructive flow is always `destructive`. The **trigger** that opens the confirm dialog is `destructive` only when it is the surface's main action (a Danger Zone); when it is one row action among many, the trigger is `ghost`/`secondary` and the dialog's confirm carries the terracotta.
+- "Reject" / "Decline" of a *pending* item (an application, a join request, a moderation queue item) is **`secondary`**, not `destructive`. `destructive` is for removing access or data that already exists — not routine triage. (Banning *is* destructive.)
+- Cancel/dismiss next to a primary in a form or dialog is `secondary`. `ghost` is reserved for genuinely tertiary actions.
+
+**Size.**
+
+| Size | Height | Use |
+|---|---|---|
+| `md` | 44 px | **Default — everything**, unless a rule below says otherwise: form submits, dialog actions, page-header CTAs, card CTAs. |
+| `lg` | 48 px | Auth / onboarding / landing only — sign-in, sign-up, forgot-password, verify-email, awaiting-approval, onboarding, the landing CTA. |
+| `sm` | 36 px | Inline actions inside a dense row — a table row, a list-item row, a chat message, inline-edit Save/Cancel. Below the 44 px touch floor; only valid when the parent row supplies padded hit area. |
+
+The admin console is **not** a fourth size system: admin table-row actions are `sm`; admin form submits, dialog actions, and page-level actions are `md`.
+
+**Placement.**
+
+- A form's action row is the last block of the form, after every field; a dialog's action row is the last block of the dialog.
+- Action-row markup is always the same: `<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">`, DOM order `[Cancel] [Submit]`.
+- One consistent result everywhere: on mobile the buttons stack with the **primary on top**; on `sm+` they sit in a **right-aligned row, Cancel left of the primary**.
+- A lone submit (no cancel) uses the same right-aligned row — bottom-right of the form/dialog.
+- Page-header CTAs sit top-right of the page header.
+
+**Mobile full-width.**
+
+- Form-submit and dialog-action buttons are `fullWidth="mobile"` — full-width below `sm`, auto-width inside the right-aligned row at `sm+`. This is what makes the stacked-mobile / row-desktop placement above work.
+- Auth / onboarding / landing buttons are `fullWidth` (all viewports): those surfaces are a fixed narrow column where stacked full-width CTAs are the established pattern. Paired with `lg`.
+- Inline-row actions, page-header CTAs, and chip-like controls are never full-width.
+
+**Navigational CTAs.** A link that should look like a button uses `ButtonLink` (same `variant` / `size` / `fullWidth` props; renders an `<a>`). Never hand-roll gold classes onto an `<a>`/`<Link>`.
+
 ## 10. Accessibility
 
 Quick reference for the contrast pairs we'll actually use. **Verify each pair with WebAIM Contrast Checker before merging tokens.**
