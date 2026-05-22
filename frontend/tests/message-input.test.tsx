@@ -102,6 +102,9 @@ describe("MessageInput", () => {
 
   it("uses selected stickers when provided", async () => {
     render(<MessageInput gid="g1" />);
+    // Sticker panel is collapsed by default to save space on mobile;
+    // tap the sticker icon to reveal the picker first.
+    await userEvent.click(screen.getByRole("button", { name: /stickers|pick stickers/i }));
     await userEvent.click(screen.getByRole("button", { name: "Prayer Request" }));
     await userEvent.type(screen.getByLabelText(/message body/i), "Please pray");
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
