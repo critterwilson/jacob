@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect } from "react";
 
 import { useAuth } from "@/lib/auth-context";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 const ADMIN_NAV_LINKS = [
   { href: "/admin/queue", label: "Moderation Queue" },
@@ -22,14 +23,15 @@ const ADMIN_NAV_LINKS = [
 
 const MODERATOR_NAV_LINKS = [{ href: "/admin/wellbeing", label: "Wellbeing" }];
 
-type AuthState = "loading" | "allowed" | "denied";
-
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
+  // useRoleClaims force-refreshes the ID token, so a freshly-granted
+  // admin/moderator role lets the user in without waiting for a re-login.
+  const claims = useRoleClaims();
   const router = useRouter();
   const pathname = usePathname();
-  const [authState, setAuthState] = useState<AuthState>("loading");
-  const [navLinks, setNavLinks] = useState(ADMIN_NAV_LINKS);
+
+  const allowed = claims !== null && (claims.isAdmin || claims.isModerator);
 
   useEffect(() => {
     if (loading) return;
@@ -37,28 +39,21 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       router.replace("/home");
       return;
     }
-    user.getIdTokenResult().then((result) => {
-      const isAdmin = result.claims.admin === true;
-      const isModerator = result.claims.moderator === true;
-      if (isAdmin) {
-        setNavLinks(ADMIN_NAV_LINKS);
-        setAuthState("allowed");
-      } else if (isModerator) {
-        setNavLinks(MODERATOR_NAV_LINKS);
-        setAuthState("allowed");
-      } else {
-        router.replace("/home");
-      }
-    });
-  }, [user, loading, router]);
+    // Claims resolved and the user holds neither role — bounce them out.
+    if (claims !== null && !claims.isAdmin && !claims.isModerator) {
+      router.replace("/home");
+    }
+  }, [user, loading, claims, router]);
 
-  if (authState === "loading") {
+  if (loading || claims === null || !allowed) {
     return (
       <div className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
       </div>
     );
   }
+
+  const navLinks = claims.isAdmin ? ADMIN_NAV_LINKS : MODERATOR_NAV_LINKS;
 
   return (
     <div className="flex min-h-svh">
