@@ -67,6 +67,15 @@ type Props = {
   ) => Record<string, number>;
   members?: Member[];
   readonly?: boolean;
+  /**
+   * When true, this message is a continuation of the previous message
+   * from the same author within a short window. The avatar + author
+   * name + top-line timestamp are hidden to tighten vertical rhythm
+   * and reduce the "wall of avatars" feel on mobile. Computed by
+   * MessageList; defaults to false so threaded uses (where every reply
+   * stands alone) render unchanged.
+   */
+  isContinuation?: boolean;
 };
 
 export function MessageItem({
@@ -84,6 +93,7 @@ export function MessageItem({
   mergeReactionCounts,
   members,
   readonly = false,
+  isContinuation = false,
 }: Props) {
   const { user } = useAuth();
   const resolvedUid = currentUserUid ?? user?.uid;
@@ -166,9 +176,14 @@ export function MessageItem({
   };
 
   const actionChip =
-    // 36 px chip, inside a chip-cluster that's only revealed on demand.
-    "inline-flex h-9 items-center rounded border border-line bg-ink px-3 text-body-sm text-cream-muted " +
-    "transition-colors duration-fast hover:bg-ink-overlay hover:text-cream " +
+    // 32 px chip — slightly tighter than the 36 px chips elsewhere so
+    // the full action cluster (Reply / Edit / Delete / Pin / Announce /
+    // react / report / wellbeing) fits on a single row at 390px without
+    // wrapping into the message body. The chips sit inside a hover-
+    // /tap-revealed pill so the floor is the cluster's own padded
+    // hit-area, not each chip individually.
+    "inline-flex h-8 items-center rounded-full px-2.5 text-caption text-cream-muted " +
+    "transition-colors duration-fast hover:bg-ink hover:text-cream " +
     "focus:outline-none focus-visible:shadow-glow-gold";
 
   // Touch devices have no hover state — the action row would be unreachable
@@ -197,26 +212,53 @@ export function MessageItem({
     <article
       data-message-id={message.id}
       onClick={handleSurfaceClick}
-      className="group relative flex gap-3 px-4 py-2 transition-colors duration-fast hover:bg-ink-raised"
+      className={cn(
+        "group relative flex gap-3 px-4 transition-colors duration-fast hover:bg-ink-raised",
+        // Continuation: tight top padding for grouped rhythm. Lead
+        // message in a group: normal top padding so the visual block
+        // is clearly separated from the previous sender.
+        isContinuation ? "pt-0.5 pb-1" : "pt-3 pb-1",
+      )}
     >
-      <Avatar
-        name={author.displayName}
-        photoURL={author.photoURL}
-        size="sm"
-        aria-hidden="true"
-        className="mt-1"
-      />
+      {isContinuation ? (
+        // Reserve the avatar gutter so message bodies stay aligned
+        // across the group. Hover surfaces the timestamp inline as a
+        // gentle in-place breadcrumb for "when exactly was this?".
+        <div
+          aria-hidden="true"
+          className="relative w-8 shrink-0 text-right text-caption text-cream-muted opacity-0 transition-opacity duration-fast group-hover:opacity-60"
+        >
+          <span className="absolute right-0 top-1 whitespace-nowrap">
+            {timestamp}
+          </span>
+        </div>
+      ) : (
+        <Avatar
+          name={author.displayName}
+          photoURL={author.photoURL}
+          size="sm"
+          aria-hidden="true"
+          className="mt-0.5"
+        />
+      )}
 
       <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-body-sm font-semibold text-cream">
-            {author.displayName}
+        {!isContinuation && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-body-sm font-semibold text-cream">
+              {author.displayName}
+            </span>
+            <time className="text-caption text-cream-muted">{timestamp}</time>
+            {message.editedAt && !isDeleted && (
+              <span className="text-caption text-cream-muted">(edited)</span>
+            )}
+          </div>
+        )}
+        {isContinuation && message.editedAt && !isDeleted && (
+          <span className="text-caption text-cream-muted opacity-0 transition-opacity duration-fast group-hover:opacity-100">
+            (edited)
           </span>
-          <time className="text-caption text-cream-muted">{timestamp}</time>
-          {message.editedAt && !isDeleted && (
-            <span className="text-caption text-cream-muted">(edited)</span>
-          )}
-        </div>
+        )}
 
         {isDeleted ? (
           <p className="text-body-sm italic text-cream-muted">[message removed]</p>
@@ -353,7 +395,10 @@ export function MessageItem({
         <div
           data-message-actions
           className={cn(
-            "absolute right-2 top-2 flex flex-wrap justify-end gap-1 transition-opacity duration-fast",
+            "absolute right-2 top-0 z-10 flex max-w-[calc(100%-1rem)] flex-wrap items-center justify-end gap-0.5 rounded-full border border-line bg-ink-raised/95 px-1 py-1 shadow-pop backdrop-blur-sm transition-opacity duration-fast",
+            // Lifted slightly above the message so the cluster reads as
+            // a floating toolbar rather than crowding the body.
+            "-translate-y-1/2",
             // Always rendered so action chips don't pop into existence; toggled
             // via opacity + pointer-events. Hover works on desktop; tapping the
             // message reveals on touch (no hover state).
