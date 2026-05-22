@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 
 import { ApiError, apiGet } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type AdminGroup = {
   gid: string;
@@ -55,14 +56,13 @@ export default function AdminGroupsPage() {
           placeholder="Search by group name…"
           className="flex-1 rounded border border-line bg-ink-raised px-3 py-2 text-sm focus:outline-none focus-visible:shadow-glow-gold"
         />
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={() => void searchGroups()}
-          disabled={loading}
-          className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
+          loading={loading}
         >
           {loading ? "Searching…" : "Search"}
-        </button>
+        </Button>
       </div>
       {error && (
         <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta">{error}</p>

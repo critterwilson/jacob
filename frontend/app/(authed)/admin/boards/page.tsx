@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type Board = {
   boardId: string;
@@ -238,14 +239,14 @@ export default function AdminBoardsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => void handleCreate()}
-            disabled={creating || !name.trim() || !slug.trim()}
-            className="rounded bg-gold px-3 py-1.5 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
+            loading={creating}
+            disabled={!name.trim() || !slug.trim()}
           >
             {creating ? "Creating…" : "Create board"}
-          </button>
+          </Button>
           {createError && (
             <p className="text-xs text-terracotta">{createError}</p>
           )}
@@ -333,22 +334,23 @@ export default function AdminBoardsPage() {
                         </div>
                       </div>
                       <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
+                        <Button
+                          size="sm"
+                          variant="primary"
                           onClick={() => void handleSaveEdit(board.boardId)}
-                          disabled={saving || !editDraft.name.trim()}
-                          className="rounded bg-gold px-3 py-1 text-xs text-ink hover:bg-gold-soft disabled:opacity-40"
+                          loading={saving}
+                          disabled={!editDraft.name.trim()}
                         >
                           {saving ? "Saving…" : "Save"}
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
                           onClick={cancelEdit}
                           disabled={saving}
-                          className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:text-cream disabled:opacity-40"
                         >
                           Cancel
-                        </button>
+                        </Button>
                         <span className="font-mono text-xs text-cream-muted/60">
                           slug: {board.slug}
                         </span>
@@ -382,21 +384,21 @@ export default function AdminBoardsPage() {
                             {archiveError[board.boardId]}
                           </span>
                         )}
-                        <button
-                          type="button"
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => startEdit(board)}
-                          className="rounded border border-line px-2 py-0.5 text-xs text-cream-muted hover:text-cream"
                         >
                           Edit
-                        </button>
-                        <button
-                          type="button"
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
                           onClick={() => void handleArchive(board.boardId)}
-                          disabled={archiving[board.boardId]}
-                          className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10 disabled:opacity-40"
+                          loading={archiving[board.boardId]}
                         >
                           {archiving[board.boardId] ? "Archiving…" : "Archive"}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

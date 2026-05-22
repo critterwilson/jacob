@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type AdminUser = {
   uid: string;
@@ -221,14 +222,13 @@ export default function AdminUsersPage() {
           placeholder="Search by display name…"
           className="flex-1 rounded border border-line bg-ink-raised px-3 py-2 text-sm focus:outline-none focus-visible:shadow-glow-gold"
         />
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={() => void searchUsers()}
-          disabled={loading}
-          className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
+          loading={loading}
         >
           {loading ? "Searching…" : "Search"}
-        </button>
+        </Button>
       </div>
       {error && (
         <p className="mb-4 rounded border border-terracotta/40 bg-ink-raised p-3 text-sm text-terracotta">
@@ -263,14 +263,14 @@ export default function AdminUsersPage() {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {/* Roles toggle */}
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="secondary"
                   onClick={() => toggleRolesPanel(u.uid)}
-                  className="rounded border border-line px-3 py-1.5 text-xs font-medium text-cream-muted hover:bg-ink-overlay"
                   aria-expanded={rolesOpen[u.uid] ?? false}
                 >
                   {rolesOpen[u.uid] ? "Hide roles" : "Manage roles"}
-                </button>
+                </Button>
 
                 {/* Ban controls */}
                 {banState[u.uid] === "loading" ? (
@@ -282,36 +282,36 @@ export default function AdminUsersPage() {
                     {banState[u.uid]}
                   </span>
                 ) : u.isBanned ? (
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     onClick={() => void unbanUser(u.uid)}
-                    className="rounded bg-ink-overlay px-3 py-1.5 text-xs font-medium text-cream hover:bg-ink-overlay/80"
                   >
                     Unban
-                  </button>
+                  </Button>
                 ) : (
                   <div className="flex gap-2">
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="destructive"
                       onClick={() => void banUser(u.uid, "24h")}
-                      className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                     >
                       Ban 24h
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
                       onClick={() => void banUser(u.uid, "7d")}
-                      className="rounded border border-terracotta/40 px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                     >
                       Ban 7d
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
                       onClick={() => void banUser(u.uid, "permanent")}
-                      className="rounded border border-terracotta/60 bg-ink-raised px-2 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                     >
                       Ban ∞
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -432,21 +432,13 @@ function RoleRow({
           {busy ? (
             <span className="text-xs text-cream-muted">Updating…</span>
           ) : active ? (
-            <button
-              type="button"
-              onClick={onRevoke}
-              className="rounded border border-terracotta/40 px-2.5 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay"
-            >
+            <Button size="sm" variant="destructive" onClick={onRevoke}>
               Revoke
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={onGrant}
-              className="rounded border border-gold/40 px-2.5 py-1 text-xs font-medium text-gold hover:bg-gold/10"
-            >
+            <Button size="sm" variant="secondary" onClick={onGrant}>
               Grant
-            </button>
+            </Button>
           )}
         </div>
       )}

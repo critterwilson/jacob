@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type Cohorts = {
   orgIds: string[];
@@ -237,22 +238,12 @@ export default function AdminFlagDetailPage() {
         </fieldset>
 
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving}
-            className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
-          >
+          <Button variant="primary" onClick={save} loading={saving}>
             {saving ? "Saving…" : "Save"}
-          </button>
-          <button
-            type="button"
-            onClick={remove}
-            disabled={saving}
-            className="rounded border border-terracotta/40 bg-ink-raised px-3 py-1 text-sm text-terracotta hover:bg-ink-overlay"
-          >
+          </Button>
+          <Button variant="destructive" onClick={remove} disabled={saving}>
             Delete
-          </button>
+          </Button>
         </div>
 
         {error && <p className="text-xs text-terracotta">{error}</p>}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type Incident = {
   incidentId: string;
@@ -147,14 +148,14 @@ export default function AdminIncidentsPage() {
             />
           </label>
           <div className="col-span-3 flex items-end">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={declare}
-              disabled={!title || !body || pending}
-              className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
+              loading={pending}
+              disabled={!title || !body}
             >
               {pending ? "Declaring…" : "Declare"}
-            </button>
+            </Button>
           </div>
         </div>
         {error && <p className="text-xs text-terracotta">{error}</p>}
@@ -210,13 +211,13 @@ export default function AdminIncidentsPage() {
                   </td>
                   <td className="text-right">
                     {!expired && (
-                      <button
-                        type="button"
+                      <Button
+                        size="sm"
+                        variant="destructive"
                         onClick={() => clearIncident(i.incidentId)}
-                        className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-ink-overlay"
                       >
                         Clear
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>

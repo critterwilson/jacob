@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type Appeal = {
   appealId: string;
@@ -184,14 +185,17 @@ export default function AdminAppealDetailPage() {
               {reasoning.length} / 50 chars minimum
             </span>
           </label>
-          <button
-            type="button"
-            onClick={decide}
-            disabled={submitting || reasoning.trim().length < 50}
-            className="mt-4 rounded bg-gold px-4 py-2 text-sm text-ink hover:bg-gold-soft disabled:opacity-50"
-          >
-            {submitting ? "Submitting…" : "Submit decision"}
-          </button>
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <Button
+              variant="primary"
+              onClick={decide}
+              loading={submitting}
+              disabled={reasoning.trim().length < 50}
+              fullWidth="mobile"
+            >
+              {submitting ? "Submitting…" : "Submit decision"}
+            </Button>
+          </div>
         </section>
       )}
     </div>
