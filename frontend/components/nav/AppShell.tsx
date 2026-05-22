@@ -25,10 +25,13 @@ function dispatchOpenSearch() {
 
 // Nav structure — the drawer/sidebar groups the same labels into sections
 // (Explore / Grow / You / Admin) so a flat 12-item list becomes a
-// navigable hierarchy. The five most-used Explore entries are also
-// surfaced as the mobile bottom tab bar (see MobileTabBar); the drawer
-// continues to list them so desktop (which has no tab bar) and any user
-// browsing the long tail still has one authoritative list.
+// navigable hierarchy. The mobile bottom tab bar (see MobileTabBar)
+// surfaces four destinations — Home, Groups, Boards (from Explore) and
+// Grow. The organization feed is deliberately drawer-only, not a tab:
+// groups are the daily reality, the org tier is mostly future structure.
+// The drawer continues to list every entry so desktop (which has no tab
+// bar) and any user browsing the long tail still has one authoritative
+// list.
 type NavLink = { href: string; label: string };
 type NavGroup = { label: string; links: NavLink[] };
 
@@ -36,9 +39,11 @@ const EXPLORE: NavGroup = {
   label: "Explore",
   links: [
     { href: "/home", label: "Home" },
-    { href: "/groups", label: "Chats" },
-    { href: "/feed", label: "Feed" },
+    { href: "/groups", label: "Groups" },
     { href: "/boards", label: "Boards" },
+    // Organization feed — still reachable here, but no longer a bottom
+    // tab. Listed last in Explore to mirror its demoted prominence.
+    { href: "/feed", label: "Feed" },
   ],
 };
 
@@ -349,10 +354,10 @@ export function AppShell({
           >
             <SearchIcon />
           </button>
-          {/* Profile shortcut — the bottom-tab 5th slot is "Grow", so
-           * this is the one-tap path to /settings (account, appeals,
-           * orgs, admin, info, sign out). Drawer YOU > Settings also
-           * works (two taps). */}
+          {/* Profile shortcut — the bottom tab bar (Home / Groups /
+           * Boards / Grow) has no account slot, so this is the one-tap
+           * path to /settings (account, appeals, orgs, admin, info,
+           * sign out). Drawer YOU > Settings also works (two taps). */}
           <Link
             href="/settings"
             aria-label="Account"

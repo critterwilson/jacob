@@ -7,8 +7,7 @@ import { cn } from "@/components/ui";
 
 const tabs = [
   { href: "/home", label: "Home", icon: HomeIcon },
-  { href: "/groups", label: "Chats", icon: ChatIcon },
-  { href: "/feed", label: "Feed", icon: FeedIcon },
+  { href: "/groups", label: "Groups", icon: GroupsIcon },
   { href: "/boards", label: "Boards", icon: BoardsIcon },
   { href: "/grow", label: "Grow", icon: GrowIcon },
 ] as const;
@@ -16,11 +15,16 @@ const tabs = [
 /**
  * Mobile-only bottom tab bar — the primary nav on phones.
  *
- * Five tabs covering the most-used destinations. The 5th slot is
- * "Grow" — the spiritual-content section landing (devotionals, reading
- * plans, discover groups, search). Profile / settings / sign-out live
- * on `/settings` and are reachable in one tap via the avatar button in
- * the mobile header (and in the drawer's "You" section).
+ * Four tabs covering the most-used destinations: Home, Groups, Boards,
+ * Grow. "Groups" is the user's group list, and group chat lives one tap
+ * inside each group — so the list and chat are one destination, not two
+ * tabs. The organization feed is intentionally NOT a tab: groups are the
+ * daily reality, the org tier is mostly future structure, so the feed is
+ * demoted to the drawer's Explore section (and the home surface's
+ * organization section) while groups take a primary slot. Profile /
+ * settings / sign-out live on `/settings` and are reachable in one tap
+ * via the avatar button in the mobile header (and the drawer's "You"
+ * section).
  *
  * The bar is a flex sibling of `<main>` inside AppShell's inner column,
  * so it occupies its natural height and content scrolls above it.
@@ -85,7 +89,11 @@ function HomeIcon(_: IconProps) {
   );
 }
 
-function ChatIcon(_: IconProps) {
+function GroupsIcon(_: IconProps) {
+  // Two figures — the "Groups" destination is the user's group list
+  // (group chat lives one tap inside each group). Replaces the former
+  // single speech-bubble "Chats" glyph now that the tab's identity is
+  // groups, not a generic chat surface.
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -96,7 +104,17 @@ function ChatIcon(_: IconProps) {
       strokeWidth={1.75}
       aria-hidden="true"
     >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v11H8l-4 4z" />
+      <circle cx="9" cy="8.5" r="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.5 19c0-3.04 2.46-5.5 5.5-5.5s5.5 2.46 5.5 5.5"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.5 6.1a3 3 0 0 1 0 5.8M16.8 14.2c2.45.62 4.2 2.6 4.2 4.8"
+      />
     </svg>
   );
 }
@@ -116,22 +134,6 @@ function BoardsIcon(_: IconProps) {
       <rect x="13" y="4" width="7" height="7" rx="1" strokeLinejoin="round" />
       <rect x="4" y="13" width="7" height="7" rx="1" strokeLinejoin="round" />
       <rect x="13" y="13" width="7" height="7" rx="1" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function FeedIcon(_: IconProps) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-5 w-5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10v4l11 5V5zM18 8a4 4 0 0 1 0 8" />
     </svg>
   );
 }

@@ -96,20 +96,9 @@ export default function HomePage() {
         />
       </section>
 
-      {/* Section 4 — Latest from the ministry feed. */}
-      <section className="space-y-3" aria-labelledby="home-ministry-heading">
-        <div className="flex items-baseline justify-between">
-          <Heading level={2} size="sm" id="home-ministry-heading">
-            From your organization
-          </Heading>
-          <UILink href="/feed" variant="muted" className="text-body-sm">
-            See all
-          </UILink>
-        </div>
-        <MinistryHighlights posts={ministryPosts} loading={ministryLoading} />
-      </section>
-
-      {/* Section 5 — Your groups (existing). */}
+      {/* Section 4 — Your groups. Groups are the daily reality of the
+       *  ministry, so they lead the surface ahead of organization
+       *  content. */}
       <section className="space-y-3" aria-labelledby="home-groups-heading">
         <div className="flex items-baseline justify-between">
           <Heading level={2} size="sm" id="home-groups-heading">
@@ -167,12 +156,27 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* Section 6 — Recent activity across groups (existing). */}
+      {/* Section 5 — Recent activity across the user's groups. */}
       <section className="space-y-3" aria-labelledby="home-recent-heading">
         <Heading level={2} size="sm" id="home-recent-heading">
           Recent in your groups
         </Heading>
         <RecentActivity messages={recentMessages} loading={recentLoading} />
+      </section>
+
+      {/* Section 6 — From your organization. The org tier is mostly
+       *  future structure for now, so it sits below the user's groups
+       *  and recent group activity. */}
+      <section className="space-y-3" aria-labelledby="home-ministry-heading">
+        <div className="flex items-baseline justify-between">
+          <Heading level={2} size="sm" id="home-ministry-heading">
+            From your organization
+          </Heading>
+          <UILink href="/feed" variant="muted" className="text-body-sm">
+            See all
+          </UILink>
+        </div>
+        <MinistryHighlights posts={ministryPosts} loading={ministryLoading} />
       </section>
 
       {/* Section 7 — Browse (existing). Leaves a way out to the rest
