@@ -71,11 +71,14 @@ afterEach(() => {
 describe("AdminLayout", () => {
   it("renders admin nav links once claim resolves", async () => {
     render(<AdminLayout>content</AdminLayout>);
+    // The layout renders both a mobile chip nav and a desktop sidebar
+    // (CSS hides one of them at a time; jsdom shows both). Assert that
+    // each label appears at least once.
     await waitFor(() =>
-      expect(screen.getByText("Moderation Queue")).toBeInTheDocument(),
+      expect(screen.getAllByText("Moderation Queue").length).toBeGreaterThan(0),
     );
-    expect(screen.getByText("Users")).toBeInTheDocument();
-    expect(screen.getByText("Groups")).toBeInTheDocument();
+    expect(screen.getAllByText("Users").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Groups").length).toBeGreaterThan(0);
   });
 });
 
