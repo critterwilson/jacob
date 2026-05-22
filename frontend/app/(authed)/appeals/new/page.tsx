@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -142,14 +143,18 @@ export default function NewAppealPage() {
         </span>
       </label>
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={submitting || body.trim().length < 50 || !subjectRef.trim()}
-        className="rounded bg-gold px-4 py-2 text-sm text-ink hover:bg-gold-soft disabled:opacity-50"
-      >
-        {submitting ? "Submitting…" : "Submit appeal"}
-      </button>
+      <div className="flex flex-col-reverse sm:flex-row sm:justify-end">
+        <Button
+          type="button"
+          variant="primary"
+          fullWidth="mobile"
+          onClick={submit}
+          loading={submitting}
+          disabled={submitting || body.trim().length < 50 || !subjectRef.trim()}
+        >
+          {submitting ? "Submitting…" : "Submit appeal"}
+        </Button>
+      </div>
     </main>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { SearchResultRow } from "@/components/search/SearchResultRow";
+import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useSearch } from "@/lib/hooks/useSearch";
 
@@ -68,12 +69,9 @@ function SearchInner() {
           maxLength={200}
           className="flex-1 rounded-md border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
         />
-        <button
-          type="submit"
-          className="rounded-md bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft"
-        >
+        <Button type="submit" variant="primary">
           Search
-        </button>
+        </Button>
       </form>
 
       {loading && (
@@ -108,25 +106,27 @@ function SearchInner() {
               className="flex items-center justify-between pt-2"
               aria-label="Pagination"
             >
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => onPageChange(Math.max(1, page - 1))}
                 disabled={page <= 1}
-                className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
               >
                 ← Previous
-              </button>
+              </Button>
               <span className="text-xs text-cream-muted">
                 Page {page} of {totalPages}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => onPageChange(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
-                className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
               >
                 Next →
-              </button>
+              </Button>
             </nav>
           )}
         </>

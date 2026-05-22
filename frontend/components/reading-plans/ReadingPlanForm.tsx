@@ -210,20 +210,16 @@ export function ReadingPlanForm({
                 <span className="text-caption font-medium text-cream">
                   Day {idx + 1}
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => removeDay(day._key)}
                   disabled={days.length <= 1}
                   aria-label={`Remove day ${idx + 1}`}
-                  className={
-                    "text-caption text-cream-muted transition-colors " +
-                    (days.length <= 1
-                      ? "opacity-30 cursor-not-allowed"
-                      : "hover:text-terracotta focus-visible:text-terracotta")
-                  }
                 >
                   Remove
-                </button>
+                </Button>
               </div>
 
               <div className="space-y-2">
@@ -269,16 +265,21 @@ export function ReadingPlanForm({
 
       {error && <Banner tone="error">{error}</Banner>}
 
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
         {onCancel && (
-          <Button type="button" variant="secondary" size="md" onClick={onCancel}>
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth="mobile"
+            onClick={onCancel}
+          >
             Cancel
           </Button>
         )}
         <Button
           type="submit"
           variant="primary"
-          size="md"
+          fullWidth="mobile"
           loading={pending}
           disabled={pending}
         >

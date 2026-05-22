@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { Button, ButtonLink } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useEvents, type EventUpdatePayload, type Rsvp, type RsvpStatus } from "@/lib/hooks/useEvents";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
@@ -131,25 +132,27 @@ export default function EventDetailPage() {
         </div>
         {isLeader && (
           <div className="flex shrink-0 gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => setShowEdit((s) => !s)}
-              className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
             >
               {showEdit ? "Cancel" : "Edit"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="destructive"
+              size="sm"
               onClick={async () => {
                 if (!confirm("Delete this event (and recurrence children)?")) return;
                 const ok = await deleteEvent(event.eventId);
                 if (ok) window.location.assign(`/groups/${gid}/events`);
                 else setActionInfo("Delete failed.");
               }}
-              className="rounded border border-terracotta/40 px-3 py-1 text-sm text-terracotta hover:bg-terracotta/10"
             >
               Delete
-            </button>
+            </Button>
           </div>
         )}
       </header>
@@ -199,14 +202,18 @@ export default function EventDetailPage() {
               />
             </label>
           </div>
-          <button
-            type="button"
-            onClick={submitEdit}
-            disabled={editPending || !editTitle}
-            className="rounded bg-gold px-3 py-1 text-sm text-ink disabled:opacity-40"
-          >
-            {editPending ? "Saving…" : "Save changes"}
-          </button>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="primary"
+              fullWidth="mobile"
+              onClick={submitEdit}
+              loading={editPending}
+              disabled={editPending || !editTitle}
+            >
+              {editPending ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
         </section>
       )}
 
@@ -244,8 +251,9 @@ export default function EventDetailPage() {
 
       {/* Member actions */}
       <section className="mt-4 flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={async () => {
             const ok = await checkIn(event.eventId);
             setActionInfo(
@@ -255,7 +263,6 @@ export default function EventDetailPage() {
             );
           }}
           disabled={!checkInOpen}
-          className="rounded bg-gold px-3 py-1 text-sm text-ink disabled:opacity-40"
           title={
             checkInOpen
               ? "I'm here"
@@ -263,13 +270,13 @@ export default function EventDetailPage() {
           }
         >
           {checkInOpen ? "I'm here" : "Check-in not open"}
-        </button>
-        <a
+        </Button>
+        <ButtonLink
           href={`${API}/api/groups/${encodeURIComponent(gid)}/events/${encodeURIComponent(event.eventId)}.ics`}
-          className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
+          variant="secondary"
         >
           Add to calendar
-        </a>
+        </ButtonLink>
       </section>
 
       {/* Leader: RSVP roster + attendance */}

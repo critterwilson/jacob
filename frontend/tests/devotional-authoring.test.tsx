@@ -265,7 +265,7 @@ describe("NewDevotionalPage", () => {
 // ── DevotionalsIndexPage CTA visibility ───────────────────────────────────────
 
 describe("DevotionalsIndexPage CTA", () => {
-  it("hides Write devotional button for non-ministry-owner", () => {
+  it("hides Write devotional link for non-ministry-owner", () => {
     mockUseRoleClaims.mockReturnValue({
       isAdmin: false,
       isModerator: false,
@@ -273,11 +273,11 @@ describe("DevotionalsIndexPage CTA", () => {
     });
     render(<DevotionalsIndexPage />);
     expect(
-      screen.queryByRole("button", { name: /write devotional/i }),
+      screen.queryByRole("link", { name: /write devotional/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows Write devotional button for ministry owner", () => {
+  it("shows Write devotional link for ministry owner", () => {
     mockUseRoleClaims.mockReturnValue({
       isAdmin: false,
       isModerator: false,
@@ -285,7 +285,7 @@ describe("DevotionalsIndexPage CTA", () => {
     });
     render(<DevotionalsIndexPage />);
     expect(
-      screen.getByRole("button", { name: /write devotional/i }),
+      screen.getByRole("link", { name: /write devotional/i }),
     ).toBeInTheDocument();
   });
 });

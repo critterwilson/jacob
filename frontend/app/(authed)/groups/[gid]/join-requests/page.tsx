@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
@@ -148,24 +149,26 @@ export default function JoinRequestsPage({ params }: Props) {
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   data-testid={`approve-${req.uid}`}
                   onClick={() => void review(req, "approve")}
                   disabled={pending !== null}
-                  className="rounded border border-gold/50 px-3 py-1.5 text-xs text-gold hover:bg-gold/15 disabled:opacity-50"
                 >
                   Approve
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   data-testid={`reject-${req.uid}`}
                   onClick={() => void review(req, "reject")}
                   disabled={pending !== null}
-                  className="rounded border border-line px-3 py-1.5 text-xs text-cream-muted hover:bg-ink-raised disabled:opacity-50"
                 >
                   Reject
-                </button>
+                </Button>
               </div>
             </li>
           ))}

@@ -1,9 +1,7 @@
 "use client";
 
-import NextLink from "next/link";
-
 import { OpenBook } from "@/components/motifs/OpenBook";
-import { Button, Card, Eyebrow, Heading, Link } from "@/components/ui";
+import { ButtonLink, Card, Eyebrow, Heading, Link } from "@/components/ui";
 import { useReadingPlans } from "@/lib/hooks/useReadingPlans";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
@@ -25,11 +23,9 @@ export default function ReadingPlansIndexPage() {
           </p>
         </div>
         {claims?.isAdmin && (
-          <NextLink href="/reading-plans/new" tabIndex={-1}>
-            <Button type="button" variant="primary" size="md">
-              New plan
-            </Button>
-          </NextLink>
+          <ButtonLink href="/reading-plans/new" variant="primary">
+            New plan
+          </ButtonLink>
         )}
       </header>
 

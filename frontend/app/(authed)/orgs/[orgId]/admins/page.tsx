@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui";
 import { ApiError, apiDelete, apiPost } from "@/lib/api";
 import { useOrgAdmins } from "@/lib/hooks/useOrgAdmins";
 
@@ -71,14 +72,16 @@ export default function OrgAdminsPage() {
             placeholder="user UID"
             className="flex-1 rounded border border-line px-2 py-1 text-sm font-mono"
           />
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={add}
+            loading={pending}
             disabled={!newUid || pending}
-            className="rounded bg-gold px-3 py-1 text-sm text-ink disabled:opacity-40"
           >
             Add
-          </button>
+          </Button>
         </div>
         {actionError && (
           <p className="mt-2 text-xs text-terracotta">{actionError}</p>
@@ -110,13 +113,14 @@ export default function OrgAdminsPage() {
                   {a.addedAt ? new Date(a.addedAt).toLocaleString() : "—"}
                 </td>
                 <td className="text-right">
-                  <button
+                  <Button
                     type="button"
+                    variant="destructive"
+                    size="sm"
                     onClick={() => remove(a.uid)}
-                    className="rounded border border-terracotta/40 px-2 py-0.5 text-xs text-terracotta hover:bg-terracotta/10"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Card, Eyebrow, Heading, Skeleton } from "@/components/ui";
+import { Button, ButtonLink, Card, Eyebrow, Heading, Skeleton } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import type { ActivePlanToday } from "@/lib/hooks/useReadingPlans";
 
@@ -36,16 +36,9 @@ export function ContinueReadingPlan({ data, loading }: Props) {
           through scripture with a daily reflection prompt.
         </p>
         <div>
-          <Link
-            href="/reading-plans"
-            className={
-              "inline-flex h-10 items-center justify-center rounded px-4 font-sans " +
-              "text-label font-medium bg-gold text-ink hover:bg-gold-soft active:bg-gold-deep " +
-              "transition-colors duration-fast focus:outline-none focus-visible:shadow-glow-gold"
-            }
-          >
+          <ButtonLink href="/reading-plans" variant="primary">
             Browse reading plans
-          </Link>
+          </ButtonLink>
         </div>
       </Card>
     );
@@ -141,16 +134,12 @@ export function ContinueReadingPlan({ data, loading }: Props) {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-1">
-        <Link
+        <ButtonLink
           href={`/reading-plans/${plan.slug}/day/${nextDay.dayNumber}`}
-          className={
-            "inline-flex h-10 items-center justify-center rounded px-4 font-sans " +
-            "text-label font-medium bg-gold text-ink hover:bg-gold-soft active:bg-gold-deep " +
-            "transition-colors duration-fast focus:outline-none focus-visible:shadow-glow-gold"
-          }
+          variant="primary"
         >
           Open day {nextDay.dayNumber}
-        </Link>
+        </ButtonLink>
         <Button
           variant="secondary"
           size="md"

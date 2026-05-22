@@ -233,6 +233,8 @@ JACOB has exactly one button primitive (`Button`) and one navigational-CTA primi
 
 The admin console is **not** a fourth size system: admin table-row actions are `sm`; admin form submits, dialog actions, and page-level actions are `md`.
 
+- **Repeated row actions** — a list/table where every row carries the same action set: actions are `sm`, the affirmative action is `secondary`, lesser actions `ghost`, destructive actions `destructive`. Never `primary` for a row action — that keeps gold reserved for the one page/form/dialog-level action so a list of N rows never shows N gold buttons.
+
 **Placement.**
 
 - A form's action row is the last block of the form, after every field; a dialog's action row is the last block of the dialog.

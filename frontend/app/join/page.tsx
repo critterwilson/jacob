@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -130,13 +131,16 @@ function JoinForm() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded bg-gold px-4 py-2 font-medium text-ink disabled:opacity-50"
-        >
-          {submitting ? "Joining…" : "Join group"}
-        </button>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end">
+          <Button
+            type="submit"
+            variant="primary"
+            fullWidth="mobile"
+            loading={submitting}
+          >
+            {submitting ? "Joining…" : "Join group"}
+          </Button>
+        </div>
       </form>
     </main>
   );
