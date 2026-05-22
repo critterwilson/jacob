@@ -63,6 +63,14 @@
   --duration-fast: 120ms;
   --duration-base: 180ms;
   --duration-slow: 280ms;
+
+  /* Layout — shared structural measurements.
+   * Height of the mobile bottom tab bar's content row (excludes the
+   * safe-area inset, which callers add separately). Consumed by
+   * MobileTabBar (the tab row's min-height) and FloatingActionBar
+   * (which anchors itself just above the bar). Single source of truth
+   * so the two never drift. */
+  --mobile-tab-bar-height: 3.5rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
