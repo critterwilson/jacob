@@ -9,7 +9,7 @@ import {
   type RsvpStatus,
   useEvents,
 } from "@/lib/hooks/useEvents";
-import { Button } from "@/components/ui";
+import { Button, FloatingActionBar } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 
@@ -76,16 +76,28 @@ export default function EventsListPage() {
           </Link>
           <h1 className="mt-2 text-2xl font-semibold">Events</h1>
         </div>
+        {/* While the form is closed the FloatingActionBar carries the
+         * primary action on mobile, so the header button is desktop-only.
+         * Once open it becomes "Cancel" — a non-primary action that must
+         * stay reachable on mobile too, so the desktop-only class drops. */}
         {isLeader && (
           <Button
             type="button"
             variant={showAdd ? "secondary" : "primary"}
             onClick={() => setShowAdd((s) => !s)}
+            className={showAdd ? undefined : "hidden md:inline-flex"}
           >
             {showAdd ? "Cancel" : "New event"}
           </Button>
         )}
       </header>
+
+      {isLeader && !showAdd && (
+        <FloatingActionBar
+          label="New event"
+          onClick={() => setShowAdd(true)}
+        />
+      )}
 
       {isLeader && showAdd && (
         <section className="space-y-2 rounded border border-line bg-ink-raised p-4">

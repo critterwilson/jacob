@@ -1,10 +1,16 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import NextLink from "next/link";
 
 import { OpenBook } from "@/components/motifs/OpenBook";
-import { Card, Eyebrow, Heading, Link } from "@/components/ui";
+import {
+  ButtonLink,
+  Card,
+  Eyebrow,
+  FloatingActionBar,
+  Heading,
+  Link,
+} from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupDevotionals } from "@/lib/hooks/useDevotionals";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
@@ -41,13 +47,15 @@ export default function GroupDevotionalsPage() {
             </p>
           </div>
         </div>
+        {/* Desktop CTA; mobile uses the FloatingActionBar below. */}
         {isLeader && (
-          <NextLink
+          <ButtonLink
             href={`/groups/${gid}/devotionals/new`}
-            className="inline-flex h-11 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
+            variant="primary"
+            className="hidden md:inline-flex"
           >
             Write devotional
-          </NextLink>
+          </ButtonLink>
         )}
       </header>
 
@@ -89,6 +97,13 @@ export default function GroupDevotionalsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {isLeader && (
+        <FloatingActionBar
+          label="Write devotional"
+          href={`/groups/${gid}/devotionals/new`}
+        />
       )}
     </main>
   );

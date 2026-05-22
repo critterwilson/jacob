@@ -108,9 +108,12 @@ describe("GroupDevotionalsPage CTA visibility", () => {
   it("shows Write devotional for leaders, linking to /new", () => {
     mockMembership.mockReturnValue({ isLeader: true, loading: false });
     render(<GroupDevotionalsPage />);
-    const cta = screen.getByRole("link", { name: /write devotional/i });
-    expect(cta).toBeInTheDocument();
-    expect(cta).toHaveAttribute("href", "/groups/g1/devotionals/new");
+    // Desktop header CTA + mobile-only FloatingActionBar.
+    const ctas = screen.getAllByRole("link", { name: /write devotional/i });
+    expect(ctas.length).toBeGreaterThan(0);
+    ctas.forEach((cta) =>
+      expect(cta).toHaveAttribute("href", "/groups/g1/devotionals/new"),
+    );
   });
 
   it("renders an empty-state when the group has no devotionals", () => {

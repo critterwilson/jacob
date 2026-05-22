@@ -132,23 +132,25 @@ describe("MinistryFeedPage read view", () => {
     expect(badge?.textContent ?? "").toMatch(/Pinned/);
   });
 
-  it("hides the New post button when the user is not a ministry owner", () => {
+  it("hides the New post CTA when the user is not a ministry owner", () => {
     mockUseMinistryOwner.mockReturnValue(false);
     render(<MinistryFeedPage />);
     expect(
-      screen.queryByRole("button", { name: /new post/i }),
+      screen.queryByRole("link", { name: /new post/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("form", { name: /new organization post/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows the New post button (not the inline form) when the user IS a ministry owner", () => {
+  it("shows the New post CTA (not the inline form) when the user IS a ministry owner", () => {
     mockUseMinistryOwner.mockReturnValue(true);
     render(<MinistryFeedPage />);
-    expect(
-      screen.getByRole("button", { name: /new post/i }),
-    ).toBeInTheDocument();
+    // Two CTAs render: the desktop header link and the mobile-only
+    // FloatingActionBar — both navigate to /feed/new.
+    const ctas = screen.getAllByRole("link", { name: /new post/i });
+    expect(ctas.length).toBeGreaterThan(0);
+    ctas.forEach((cta) => expect(cta).toHaveAttribute("href", "/feed/new"));
     expect(
       screen.queryByRole("form", { name: /new organization post/i }),
     ).not.toBeInTheDocument();

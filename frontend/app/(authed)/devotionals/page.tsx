@@ -1,7 +1,14 @@
 "use client";
 
 import { OpenBook } from "@/components/motifs/OpenBook";
-import { ButtonLink, Card, Eyebrow, Heading, Link } from "@/components/ui";
+import {
+  ButtonLink,
+  Card,
+  Eyebrow,
+  FloatingActionBar,
+  Heading,
+  Link,
+} from "@/components/ui";
 import { useDevotionals } from "@/lib/hooks/useDevotionals";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
@@ -22,8 +29,13 @@ export default function DevotionalsIndexPage() {
             Short reflections paired with scripture. Refreshed regularly.
           </p>
         </div>
+        {/* Desktop CTA; mobile uses the FloatingActionBar below. */}
         {claims?.isMinistryOwner && (
-          <ButtonLink href="/devotionals/new" variant="primary">
+          <ButtonLink
+            href="/devotionals/new"
+            variant="primary"
+            className="hidden md:inline-flex"
+          >
             Write devotional
           </ButtonLink>
         )}
@@ -72,6 +84,10 @@ export default function DevotionalsIndexPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {claims?.isMinistryOwner && (
+        <FloatingActionBar label="Write devotional" href="/devotionals/new" />
       )}
     </main>
   );

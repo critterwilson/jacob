@@ -284,8 +284,11 @@ describe("DevotionalsIndexPage CTA", () => {
       isMinistryOwner: true,
     });
     render(<DevotionalsIndexPage />);
-    expect(
-      screen.getByRole("link", { name: /write devotional/i }),
-    ).toBeInTheDocument();
+    // Desktop header CTA + mobile-only FloatingActionBar.
+    const ctas = screen.getAllByRole("link", { name: /write devotional/i });
+    expect(ctas.length).toBeGreaterThan(0);
+    ctas.forEach((cta) =>
+      expect(cta).toHaveAttribute("href", "/devotionals/new"),
+    );
   });
 });

@@ -7,8 +7,10 @@ import { useMemo, useState } from "react";
 import { OpenBook } from "@/components/motifs/OpenBook";
 import {
   Banner,
+  ButtonLink,
   Card,
   Eyebrow,
+  FloatingActionBar,
   Heading,
   Link,
   Select,
@@ -57,13 +59,15 @@ export default function SermonsListPage() {
             </Heading>
           </div>
         </div>
+        {/* Desktop CTA; mobile uses the FloatingActionBar below. */}
         {isLeader && (
-          <NextLink
+          <ButtonLink
             href={`/groups/${gid}/sermons/new`}
-            className="inline-flex h-11 items-center justify-center rounded bg-gold px-4 font-sans text-label font-medium text-ink transition-colors duration-fast hover:bg-gold-soft active:bg-gold-deep focus:outline-none focus-visible:shadow-glow-gold"
+            variant="primary"
+            className="hidden md:inline-flex"
           >
             Add sermon
-          </NextLink>
+          </ButtonLink>
         )}
       </header>
 
@@ -96,6 +100,13 @@ export default function SermonsListPage() {
             <SermonRow key={sermon.sermonId} gid={gid} sermon={sermon} />
           ))}
         </ul>
+      )}
+
+      {isLeader && (
+        <FloatingActionBar
+          label="Add sermon"
+          href={`/groups/${gid}/sermons/new`}
+        />
       )}
     </main>
   );
