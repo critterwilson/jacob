@@ -1,7 +1,14 @@
 "use client";
 
 import { OpenBook } from "@/components/motifs/OpenBook";
-import { ButtonLink, Card, Eyebrow, Heading, Link } from "@/components/ui";
+import {
+  ButtonLink,
+  Card,
+  Eyebrow,
+  FloatingActionBar,
+  Heading,
+  Link,
+} from "@/components/ui";
 import { useReadingPlans } from "@/lib/hooks/useReadingPlans";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
@@ -22,8 +29,13 @@ export default function ReadingPlansIndexPage() {
             Multi-day scripture journeys with a daily reflection prompt.
           </p>
         </div>
+        {/* Desktop CTA; mobile uses the FloatingActionBar below. */}
         {claims?.isAdmin && (
-          <ButtonLink href="/reading-plans/new" variant="primary">
+          <ButtonLink
+            href="/reading-plans/new"
+            variant="primary"
+            className="hidden md:inline-flex"
+          >
             New plan
           </ButtonLink>
         )}
@@ -55,6 +67,10 @@ export default function ReadingPlansIndexPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {claims?.isAdmin && (
+        <FloatingActionBar label="New plan" href="/reading-plans/new" />
       )}
     </main>
   );

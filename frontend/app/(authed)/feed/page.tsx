@@ -4,7 +4,14 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { MinistryPostCard } from "@/components/ministry/MinistryPostCard";
-import { Banner, Button, Eyebrow, Heading, Link } from "@/components/ui";
+import {
+  Banner,
+  ButtonLink,
+  Eyebrow,
+  FloatingActionBar,
+  Heading,
+  Link,
+} from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useMinistryFeed } from "@/lib/hooks/useMinistryFeed";
 import { useMinistryOwner } from "@/lib/hooks/useMinistryOwner";
@@ -51,15 +58,17 @@ export default function MinistryFeedPage() {
             .
           </p>
         </div>
+        {/* Desktop CTA. On mobile the FloatingActionBar below carries
+         * this action — see docs/design-system.md §9 (one primary). */}
         {isOwner === true && (
-          <Button
+          <ButtonLink
+            href="/feed/new"
             variant="primary"
-            size="sm"
-            onClick={() => router.push("/feed/new")}
             aria-label="New post"
+            className="hidden md:inline-flex"
           >
             New post
-          </Button>
+          </ButtonLink>
         )}
       </header>
 
@@ -79,6 +88,10 @@ export default function MinistryFeedPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {isOwner === true && (
+        <FloatingActionBar label="New post" href="/feed/new" />
       )}
     </main>
   );
