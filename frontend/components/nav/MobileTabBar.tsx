@@ -54,7 +54,9 @@ export function MobileTabBar() {
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "group flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 px-1 pt-2 pb-2",
+              // min-height is the shared --mobile-tab-bar-height token so
+              // FloatingActionBar can anchor itself just above the bar.
+              "group flex min-h-[var(--mobile-tab-bar-height)] flex-1 flex-col items-center justify-center gap-0.5 px-1 pt-2 pb-2",
               "text-eyebrow uppercase no-underline transition-colors duration-fast",
               "focus:outline-none focus-visible:bg-ink-raised",
               active

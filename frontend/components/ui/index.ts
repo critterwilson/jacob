@@ -18,6 +18,7 @@ export {
 export { ButtonLink } from "./ButtonLink";
 export { Card, type CardPadding, type CardSurface } from "./Card";
 export { Eyebrow } from "./Eyebrow";
+export { FloatingActionBar } from "./FloatingActionBar";
 export { Field } from "./Field";
 export { Heading, type HeadingLevel, type HeadingSize } from "./Heading";
 export { Input } from "./Input";
