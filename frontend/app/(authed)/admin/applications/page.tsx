@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type ApplicationStatus = "pending" | "approved" | "rejected";
 
@@ -326,14 +327,14 @@ export default function AdminApplicationsPage() {
                   )}
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="secondary"
                       onClick={() => void approve(app)}
-                      disabled={state === "loading"}
-                      className="rounded bg-gold-soft px-3 py-1 text-sm font-medium text-ink hover:bg-gold disabled:opacity-50"
+                      loading={state === "loading"}
                     >
                       Approve
-                    </button>
+                    </Button>
                     <input
                       type="text"
                       placeholder="Rejection reason"
@@ -346,14 +347,14 @@ export default function AdminApplicationsPage() {
                         }))
                       }
                     />
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="secondary"
                       onClick={() => void reject(app)}
-                      disabled={state === "loading"}
-                      className="rounded border border-terracotta px-3 py-1 text-sm font-medium text-terracotta hover:bg-terracotta/10 disabled:opacity-50"
+                      loading={state === "loading"}
                     >
                       Reject
-                    </button>
+                    </Button>
                   </div>
 
                   {state && state !== "loading" && state !== "done" && (
@@ -369,14 +370,15 @@ export default function AdminApplicationsPage() {
       </ul>
 
       {nextCursor && (
-        <button
-          type="button"
-          onClick={() => void load(nextCursor)}
-          disabled={loading}
-          className="mt-6 rounded border border-line px-4 py-2 text-sm hover:bg-ink-overlay disabled:opacity-50"
-        >
-          {loading ? "Loading…" : "Load more"}
-        </button>
+        <div className="mt-6 flex justify-center">
+          <Button
+            variant="secondary"
+            onClick={() => void load(nextCursor)}
+            loading={loading}
+          >
+            {loading ? "Loading…" : "Load more"}
+          </Button>
+        </div>
       )}
     </div>
   );

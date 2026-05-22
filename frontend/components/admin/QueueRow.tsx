@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui";
+
 export type QueueItem = {
   itemId: string;
   resourceRef: string;
@@ -117,40 +119,40 @@ export function QueueRow({
       ) : (
         item.status === "pending" && (
           <div className="flex flex-wrap gap-2 pl-7">
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={() => onApprove(item.itemId)}
-              className="rounded bg-sage px-3 py-1.5 text-xs font-medium text-ink hover:bg-sage/90"
             >
               Approve
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => onReject(item.itemId)}
-              className="rounded bg-ink-overlay px-3 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay/80"
             >
               Reject
-            </button>
+            </Button>
             {item.uploaderUid && onRejectAndBan && (
               <>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="destructive"
                   onClick={() =>
                     onRejectAndBan(item.itemId, item.uploaderUid!, "24h")
                   }
-                  className="rounded border border-terracotta/40 px-3 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                 >
                   Reject + Ban 24h
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
                   onClick={() =>
                     onRejectAndBan(item.itemId, item.uploaderUid!, "7d")
                   }
-                  className="rounded border border-terracotta/40 px-3 py-1.5 text-xs font-medium text-terracotta hover:bg-ink-overlay"
                 >
                   Reject + Ban 7d
-                </button>
+                </Button>
               </>
             )}
           </div>

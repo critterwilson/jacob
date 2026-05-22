@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type NcmecCase = {
   caseId: string;
@@ -158,20 +159,20 @@ export default function AdminNcmecPage() {
                   : "—"}
               </p>
               <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="secondary"
                   onClick={() => submit(c.caseId)}
-                  className="rounded bg-terracotta px-3 py-1 text-sm text-cream hover:bg-terracotta/90"
                 >
                   Submit (legal action)
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
                   onClick={() => withdraw(c.caseId)}
-                  className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-overlay"
                 >
                   Withdraw (false positive)
-                </button>
+                </Button>
                 {actionState[c.caseId] && (
                   <span className="self-center text-xs text-cream-muted">
                     {actionState[c.caseId]}

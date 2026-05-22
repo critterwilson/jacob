@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 import {
   type QueueReason,
   type QueueSort,
@@ -274,14 +275,15 @@ export default function ModerationQueuePage() {
       </ul>
 
       {nextCursor && (
-        <button
-          type="button"
-          onClick={() => void loadItems(nextCursor)}
-          disabled={loading}
-          className="mt-6 rounded border border-line px-4 py-2 text-sm hover:bg-ink-overlay disabled:opacity-50"
-        >
-          {loading ? "Loading…" : "Load more"}
-        </button>
+        <div className="mt-6 flex justify-center">
+          <Button
+            variant="secondary"
+            onClick={() => void loadItems(nextCursor)}
+            loading={loading}
+          >
+            {loading ? "Loading…" : "Load more"}
+          </Button>
+        </div>
       )}
     </div>
   );

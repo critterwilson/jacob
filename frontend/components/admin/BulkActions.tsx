@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui";
+
 type Props = {
   selectedCount: number;
   onBulkApprove: () => void;
@@ -28,37 +30,38 @@ export function BulkActions({
       <span className="text-sm font-medium text-cream">
         {selectedCount} selected
       </span>
-      <button
-        type="button"
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={onBulkApprove}
         disabled={disabled}
-        className="rounded bg-sage px-3 py-1 text-xs font-medium text-ink hover:bg-sage/90 disabled:opacity-50"
       >
         Approve all
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={onBulkReject}
         disabled={disabled}
-        className="rounded bg-ink-overlay px-3 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay/80 disabled:opacity-50"
       >
         Reject all
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        size="sm"
+        variant="destructive"
         onClick={onBulkRejectAndBan}
         disabled={disabled}
-        className="rounded border border-terracotta/60 bg-ink-raised px-3 py-1 text-xs font-medium text-terracotta hover:bg-ink-overlay disabled:opacity-50"
       >
         Reject + Ban reporter(s)
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
         onClick={onClear}
-        className="ml-auto text-xs text-cream-muted hover:text-cream"
+        className="ml-auto"
       >
         Clear
-      </button>
+      </Button>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type Cohorts = {
   orgIds: string[];
@@ -196,14 +197,14 @@ export default function AdminFlagsPage() {
               className="w-full rounded border border-line bg-ink-raised px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
             />
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={createFlag}
-            disabled={!newKey || createPending}
-            className="rounded bg-gold px-3 py-1 text-sm text-ink hover:bg-gold-soft disabled:opacity-40"
+            loading={createPending}
+            disabled={!newKey}
           >
             {createPending ? "Creating…" : "Create at 0%"}
-          </button>
+          </Button>
         </div>
         {createError && (
           <p className="mt-2 text-xs text-terracotta">{createError}</p>

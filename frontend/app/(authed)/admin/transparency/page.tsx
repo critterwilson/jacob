@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { Button } from "@/components/ui";
 
 type Payload = Record<string, unknown>;
 
@@ -94,13 +95,9 @@ export default function AdminTransparencyPage() {
             .
           </p>
         </div>
-        <button
-          type="button"
-          onClick={generate}
-          className="rounded bg-gold px-3 py-1.5 text-sm text-ink hover:bg-gold-soft"
-        >
+        <Button variant="primary" onClick={generate}>
           Generate draft
-        </button>
+        </Button>
       </header>
 
       {error && (
@@ -135,13 +132,13 @@ export default function AdminTransparencyPage() {
                   </p>
                 </div>
                 {!r.publishedAt && (
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     onClick={() => publish(r.reportId)}
-                    className="rounded bg-sage px-3 py-1 text-sm text-ink hover:bg-sage/90"
                   >
                     Publish
-                  </button>
+                  </Button>
                 )}
                 {actionState[r.reportId] && (
                   <span className="self-center text-xs text-cream-muted">
