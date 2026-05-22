@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import {
   Banner,
   Button,
+  ButtonLink,
   Card,
   Eyebrow,
   Heading,
@@ -216,6 +217,14 @@ export default function DesignSystemShowcase() {
           <Button loading>Saving</Button>
           <Button disabled>Disabled</Button>
         </Tile>
+        <Tile label="ButtonLink · navigational CTA">
+          <ButtonLink href="/design" variant="primary">
+            Open reading plan
+          </ButtonLink>
+          <ButtonLink href="/design" variant="secondary">
+            See all groups
+          </ButtonLink>
+        </Tile>
       </Section>
 
       {/* Forms */}
@@ -264,8 +273,8 @@ export default function DesignSystemShowcase() {
               Raised
             </Heading>
             <p className="text-body text-cream-muted">
-              Default card surface. Use for content blocks and panels that sit on
-              the page.
+              Default card surface. Use for content blocks and panels that sit
+              on the page.
             </p>
           </Card>
           <Card surface="overlay">
@@ -282,8 +291,8 @@ export default function DesignSystemShowcase() {
               Interactive
             </Heading>
             <p className="text-body text-cream-muted">
-              Hover state for entire-card click targets — e.g. a group row in the
-              home list.
+              Hover state for entire-card click targets — e.g. a group row in
+              the home list.
             </p>
           </Card>
         </div>
@@ -306,7 +315,8 @@ export default function DesignSystemShowcase() {
             JACOB will be undergoing scheduled maintenance on Thursday at 9 PM.
           </Banner>
           <Banner tone="error" title="Couldn&rsquo;t save">
-            We weren&rsquo;t able to update the group description. Try again in a moment.
+            We weren&rsquo;t able to update the group description. Try again in
+            a moment.
           </Banner>
         </div>
       </Section>

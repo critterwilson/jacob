@@ -5,14 +5,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { cn } from "@/components/ui";
+import { Button, cn } from "@/components/ui";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useDelayedUnmount } from "@/lib/hooks/useDelayedUnmount";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { useWellbeingFlag } from "@/lib/hooks/useWellbeingFlag";
 
 const formSchema = z.object({
-  note: z.string().min(10, "Please add a bit more detail (at least 10 characters)").max(2000),
+  note: z
+    .string()
+    .min(10, "Please add a bit more detail (at least 10 characters)")
+    .max(2000),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -35,7 +38,10 @@ export function WellbeingFlagDialog({
   groupId,
 }: Props) {
   const noteId = useId();
-  const trapRef = useFocusTrap<HTMLDivElement>({ active: open, onEscape: onClose });
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    active: open,
+    onEscape: onClose,
+  });
   const { submit, submitting, error } = useWellbeingFlag();
   const [submitted, setSubmitted] = useState(false);
 
@@ -96,24 +102,27 @@ export function WellbeingFlagDialog({
         className={cn(
           "relative w-full max-w-md rounded-lg bg-ink-raised p-6 shadow-pop outline-none",
           "transition-all duration-base",
-          state === "open" ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+          state === "open"
+            ? "translate-y-0 opacity-100"
+            : "translate-y-2 opacity-0",
         )}
       >
         {submitted ? (
           <div className="space-y-4" data-testid="wellbeing-flag-success">
             <p className="text-body-sm text-cream">
-              Thank you. A moderator will reach out within a few days. If this is an emergency
-              — someone in immediate danger — please call 911 or 988 (Suicide &amp; Crisis
-              Lifeline).
+              Thank you. A moderator will reach out within a few days. If this
+              is an emergency — someone in immediate danger — please call 911 or
+              988 (Suicide &amp; Crisis Lifeline).
             </p>
-            <div className="flex justify-end">
-              <button
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end">
+              <Button
                 type="button"
+                variant="primary"
+                fullWidth="mobile"
                 onClick={onClose}
-                className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -127,9 +136,10 @@ export function WellbeingFlagDialog({
             </h2>
 
             <p className="mb-4 text-sm text-cream-muted">
-              This goes only to the moderators (you and the organization leadership). The person
-              you&apos;re flagging will not be told. You&apos;re not getting them in trouble;
-              you&apos;re letting people who care reach out.
+              This goes only to the moderators (you and the organization
+              leadership). The person you&apos;re flagging will not be told.
+              You&apos;re not getting them in trouble; you&apos;re letting
+              people who care reach out.
             </p>
 
             <form
@@ -155,7 +165,9 @@ export function WellbeingFlagDialog({
                   className="w-full rounded border border-line bg-ink-overlay px-2 py-1 text-sm text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
                 />
                 {errors.note && (
-                  <p className="mt-1 text-xs text-terracotta">{errors.note.message}</p>
+                  <p className="mt-1 text-xs text-terracotta">
+                    {errors.note.message}
+                  </p>
                 )}
               </div>
 
@@ -168,21 +180,23 @@ export function WellbeingFlagDialog({
                 </p>
               )}
 
-              <div className="flex justify-end gap-2">
-                <button
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                <Button
                   type="button"
+                  variant="secondary"
+                  fullWidth="mobile"
                   onClick={onClose}
-                  className="rounded border border-line px-4 py-2 text-sm text-cream hover:bg-ink-overlay"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={submitting}
-                  className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
+                  variant="primary"
+                  fullWidth="mobile"
+                  loading={submitting}
                 >
                   {submitting ? "Sending…" : "Send to moderators"}
-                </button>
+                </Button>
               </div>
             </form>
           </>

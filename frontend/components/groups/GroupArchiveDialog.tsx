@@ -103,7 +103,9 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
             className={cn(
               "relative w-full max-w-md rounded-2xl border border-line bg-ink-overlay p-6 shadow-pop",
               "transition-all duration-base",
-              state === "open" ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+              state === "open"
+                ? "translate-y-0 opacity-100"
+                : "translate-y-2 opacity-0",
             )}
           >
             <h2
@@ -144,11 +146,11 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
               </div>
             )}
 
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
               <Button
                 type="button"
                 variant="secondary"
-                size="md"
+                fullWidth="mobile"
                 onClick={closeDialog}
               >
                 Cancel
@@ -156,10 +158,9 @@ export function GroupArchiveDialog({ gid, isArchived, onDone }: Props) {
               <Button
                 type="button"
                 variant={isArchived ? "primary" : "destructive"}
-                size="md"
+                fullWidth="mobile"
                 onClick={() => void handleConfirm()}
                 loading={loading}
-                disabled={loading}
               >
                 {loading ? "…" : isArchived ? "Unarchive" : "Archive"}
               </Button>

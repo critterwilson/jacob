@@ -4,12 +4,15 @@ import { cn } from "./cn";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 export type ButtonSize = "sm" | "md" | "lg";
+// `true` is full-width on every viewport; `"mobile"` is full-width below the
+// `sm` breakpoint and auto-width above it (the form/dialog action-row rule).
+export type ButtonWidth = boolean | "mobile";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
-  fullWidth?: boolean;
+  fullWidth?: ButtonWidth;
 };
 
 const base =
@@ -46,6 +49,30 @@ const sizes: Record<ButtonSize, string> = {
   lg: "h-12 px-6 text-body gap-2",
 };
 
+const widthClass = (fullWidth: ButtonWidth): string | false => {
+  if (fullWidth === "mobile") return "w-full sm:w-auto";
+  return fullWidth === true && "w-full";
+};
+
+/**
+ * Shared class composition for `Button` and `ButtonLink` so a button and a
+ * button-styled link are pixel-identical. See docs/design-system.md §9.
+ */
+export function buttonClasses(
+  variant: ButtonVariant,
+  size: ButtonSize,
+  fullWidth: ButtonWidth,
+  className?: string,
+): string {
+  return cn(
+    base,
+    variants[variant],
+    sizes[size],
+    widthClass(fullWidth),
+    className,
+  );
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   function Button(
     {
@@ -67,13 +94,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         type={type}
         disabled={disabled || loading}
         aria-busy={loading || undefined}
-        className={cn(
-          base,
-          variants[variant],
-          sizes[size],
-          fullWidth && "w-full",
-          className,
-        )}
+        className={buttonClasses(variant, size, fullWidth, className)}
         {...rest}
       >
         {children}

@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { cn } from "@/components/ui";
+import { Button, cn } from "@/components/ui";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useDelayedUnmount } from "@/lib/hooks/useDelayedUnmount";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
@@ -123,7 +123,9 @@ export function ReportDialog({
         className={cn(
           "relative w-full max-w-md rounded-lg bg-ink-raised p-6 shadow-pop outline-none",
           "transition-all duration-base",
-          state === "open" ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+          state === "open"
+            ? "translate-y-0 opacity-100"
+            : "translate-y-2 opacity-0",
         )}
       >
         <h2 id="report-dialog-title" className="mb-1 text-lg font-semibold">
@@ -140,14 +142,15 @@ export function ReportDialog({
                 ? "Thanks — we already have this report on file."
                 : "Thanks — your report has been sent for review."}
             </p>
-            <div className="flex justify-end">
-              <button
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end">
+              <Button
                 type="button"
+                variant="primary"
+                fullWidth="mobile"
                 onClick={onClose}
-                className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -213,21 +216,23 @@ export function ReportDialog({
               </p>
             )}
 
-            <div className="flex justify-end gap-2">
-              <button
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <Button
                 type="button"
+                variant="secondary"
+                fullWidth="mobile"
                 onClick={onClose}
-                className="rounded border border-line px-4 py-2 text-sm text-cream hover:bg-ink-overlay"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={submitting}
-                className="rounded bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-soft disabled:opacity-50"
+                variant="primary"
+                fullWidth="mobile"
+                loading={submitting}
               >
                 {submitting ? "Sending…" : "Submit report"}
-              </button>
+              </Button>
             </div>
           </form>
         )}

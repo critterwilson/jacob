@@ -8,7 +8,14 @@
  */
 export { Avatar, type AvatarSize } from "./Avatar";
 export { Banner, type BannerTone } from "./Banner";
-export { Button, type ButtonSize, type ButtonVariant } from "./Button";
+export {
+  Button,
+  buttonClasses,
+  type ButtonSize,
+  type ButtonVariant,
+  type ButtonWidth,
+} from "./Button";
+export { ButtonLink } from "./ButtonLink";
 export { Card, type CardPadding, type CardSurface } from "./Card";
 export { Eyebrow } from "./Eyebrow";
 export { Field } from "./Field";
