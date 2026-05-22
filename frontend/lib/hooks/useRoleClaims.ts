@@ -24,6 +24,14 @@ const EMPTY: RoleClaims = {
  * Returns `null` while loading (so callers can render nothing during the
  * first paint and avoid a flash of admin links) and a `RoleClaims`
  * record once resolved.
+ *
+ * The ID token is **force-refreshed** on mount and again on window focus.
+ * A role granted server-side (admin / moderator / ministry_owner) only
+ * lands in the user's ID token on its next rotation — up to ~1h away —
+ * so without a forced read a freshly-promoted user would not see their
+ * role-gated UI (Admin nav, create-flow gates, …) until then or until a
+ * re-login. Firebase coalesces concurrent refreshes and caches the
+ * result, so a force-read on mount + focus stays cheap.
  */
 export function useRoleClaims(): RoleClaims | null {
   const { user, loading } = useAuth();
@@ -39,22 +47,33 @@ export function useRoleClaims(): RoleClaims | null {
       return;
     }
     let cancelled = false;
-    user
-      .getIdTokenResult()
-      .then((result) => {
-        if (cancelled) return;
-        setClaims({
-          isAdmin: result.claims.admin === true,
-          isModerator: result.claims.moderator === true,
-          isMinistryOwner: result.claims.ministry_owner === true,
+
+    const read = (forceRefresh: boolean) => {
+      user
+        .getIdTokenResult(forceRefresh)
+        .then((result) => {
+          if (cancelled) return;
+          setClaims({
+            isAdmin: result.claims.admin === true,
+            isModerator: result.claims.moderator === true,
+            isMinistryOwner: result.claims.ministry_owner === true,
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setClaims(EMPTY);
         });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setClaims(EMPTY);
-      });
+    };
+
+    // Force a refresh so a just-granted role is reflected promptly, and
+    // again whenever the user returns to the tab.
+    read(true);
+    const onFocus = () => read(true);
+    window.addEventListener("focus", onFocus);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("focus", onFocus);
     };
   }, [user, loading]);
 

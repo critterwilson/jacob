@@ -1,42 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { useAuth } from "@/lib/auth-context";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 /**
  * Resolves the `ministry_owner` Firebase custom claim for the signed-in
  * user. Returns `null` while loading (so compose UI can render
- * skeleton/nothing) and `true` / `false` once resolved. Refreshes on the
- * current user changing.
+ * skeleton/nothing) and `true` / `false` once resolved.
  *
- * Mirrors the admin claim check in `frontend/app/admin/layout.tsx`.
+ * Thin wrapper over `useRoleClaims` so the token-refresh behaviour
+ * (force-refresh on mount and on window focus) is shared — a freshly
+ * granted `ministry_owner` role is reflected without a re-login.
  */
 export function useMinistryOwner(): boolean | null {
-  const { user, loading } = useAuth();
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      setIsOwner(false);
-      return;
-    }
-    let cancelled = false;
-    user
-      .getIdTokenResult()
-      .then((result) => {
-        if (cancelled) return;
-        setIsOwner(result.claims.ministry_owner === true);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsOwner(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, loading]);
-
-  return isOwner;
+  const claims = useRoleClaims();
+  return claims === null ? null : claims.isMinistryOwner;
 }
