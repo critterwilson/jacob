@@ -1,8 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * Tests for /admin/boards — admin-gating, board list rendering,
- * create and archive actions calling the right endpoints.
+ * Tests for /admin/boards (the list page) — admin-gating, board list
+ * rendering, archive and inline-edit calling the right endpoints. The
+ * create flow lives at /admin/boards/new and is covered by
+ * admin-boards-new.test.tsx.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -16,6 +18,11 @@ vi.mock("@/lib/firebase", () => ({
 const mockUseAuth = vi.fn();
 vi.mock("@/lib/auth-context", () => ({
   useAuth: () => mockUseAuth(),
+}));
+
+const mockUseRoleClaims = vi.fn();
+vi.mock("@/lib/hooks/useRoleClaims", () => ({
+  useRoleClaims: () => mockUseRoleClaims(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -59,13 +66,11 @@ import {
   apiDelete as apiDeleteExport,
   apiGet as apiGetExport,
   apiPatch as apiPatchExport,
-  apiPost as apiPostExport,
 } from "@/lib/api";
 import AdminBoardsPage from "@/app/(authed)/admin/boards/page";
 import AdminLayout from "@/app/(authed)/admin/layout";
 
 const apiGet = apiGetExport as unknown as ReturnType<typeof vi.fn>;
-const apiPost = apiPostExport as unknown as ReturnType<typeof vi.fn>;
 const apiDelete = apiDeleteExport as unknown as ReturnType<typeof vi.fn>;
 const apiPatch = apiPatchExport as unknown as ReturnType<typeof vi.fn>;
 
@@ -99,8 +104,8 @@ const fakeBoards = [
 
 beforeEach(() => {
   mockUseAuth.mockReturnValue({ user: adminUser, loading: false });
+  mockUseRoleClaims.mockReturnValue({ isAdmin: true, isModerator: false });
   apiGet.mockReset();
-  apiPost.mockReset();
   apiDelete.mockReset();
   apiPatch.mockReset();
   vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -111,33 +116,57 @@ beforeEach(() => {
 describe("AdminLayout", () => {
   it("shows Boards nav link for admin users", async () => {
     render(<AdminLayout><div>content</div></AdminLayout>);
-    await waitFor(() => expect(screen.getByText("Boards")).toBeInTheDocument());
-    expect(screen.getByRole("link", { name: "Boards" })).toHaveAttribute(
-      "href",
-      "/admin/boards",
+    // Layout renders both a mobile chip nav and a desktop sidebar; both
+    // contain a Boards link. We only care that one exists and points at
+    // the right URL.
+    await waitFor(() =>
+      expect(screen.getAllByRole("link", { name: "Boards" }).length).toBeGreaterThan(0),
     );
+    for (const link of screen.getAllByRole("link", { name: "Boards" })) {
+      expect(link).toHaveAttribute("href", "/admin/boards");
+    }
   });
 });
 
 // ── page renders board list ────────────────────────────────────────────
 
 describe("AdminBoardsPage list", () => {
-  it("fetches from GET /api/boards and renders rows", async () => {
+  it("fetches from GET /api/boards and renders cards", async () => {
     apiGet.mockResolvedValue({ boards: fakeBoards });
     render(<AdminBoardsPage />);
 
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith("/api/boards"));
     expect(await screen.findByText("Prayer & Praise")).toBeInTheDocument();
-    expect(screen.getByText("prayer-praise")).toBeInTheDocument();
+    expect(screen.getByText("/boards/prayer-praise")).toBeInTheDocument();
     expect(screen.getByText("Announcements")).toBeInTheDocument();
     expect(screen.getByText("christian")).toBeInTheDocument();
-    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.getByText(/7 posts/)).toBeInTheDocument();
   });
 
   it("shows empty state when no boards returned", async () => {
     apiGet.mockResolvedValue({ boards: [] });
     render(<AdminBoardsPage />);
     expect(await screen.findByText(/no boards yet/i)).toBeInTheDocument();
+  });
+
+  it("hides archived boards from the list", async () => {
+    apiGet.mockResolvedValue({
+      boards: [
+        ...fakeBoards,
+        {
+          boardId: "old",
+          name: "Old Board",
+          slug: "old",
+          description: "",
+          audience: "general",
+          archivedAt: "2026-01-01T00:00:00Z",
+          postCount: 0,
+        },
+      ],
+    });
+    render(<AdminBoardsPage />);
+    await screen.findByText("Prayer & Praise");
+    expect(screen.queryByText("Old Board")).not.toBeInTheDocument();
   });
 
   it("shows error message on fetch failure", async () => {
@@ -147,88 +176,29 @@ describe("AdminBoardsPage list", () => {
     expect(await screen.findByText(/server exploded/i)).toBeInTheDocument();
   });
 
-  it("renders an Edit button per row", async () => {
+  it("renders an Edit button per card", async () => {
     apiGet.mockResolvedValue({ boards: fakeBoards });
     render(<AdminBoardsPage />);
     await screen.findByText("Prayer & Praise");
     expect(screen.getAllByRole("button", { name: /^edit$/i })).toHaveLength(2);
   });
-});
 
-// ── create board ───────────────────────────────────────────────────────
-
-describe("AdminBoardsPage create", () => {
-  it("calls POST /api/admin/boards with form values", async () => {
-    apiGet.mockResolvedValue({ boards: [] });
-    apiPost.mockResolvedValue({
-      boardId: "new-board",
-      name: "New Board",
-      slug: "new-board",
-      description: "A new one",
-      audience: "general",
-      archivedAt: null,
-      postCount: 0,
-    });
-
-    const ue = userEvent.setup();
+  it("exposes a New board link in the header on desktop", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
     render(<AdminBoardsPage />);
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
-
-    await ue.type(screen.getByLabelText(/^name$/i), "New Board");
-    await ue.clear(screen.getByLabelText(/^slug/i));
-    await ue.type(screen.getByLabelText(/^slug/i), "new-board");
-    await ue.type(screen.getByLabelText(/description/i), "A new one");
-    await ue.click(screen.getByRole("button", { name: /create board/i }));
-
-    await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
-    const [path, payload] = apiPost.mock.calls[0];
-    expect(path).toBe("/api/admin/boards");
-    expect(payload).toMatchObject({
-      name: "New Board",
-      slug: "new-board",
-      description: "A new one",
-      audience: "general",
-    });
-  });
-
-  it("auto-derives slug from name", async () => {
-    apiGet.mockResolvedValue({ boards: [] });
-    const ue = userEvent.setup();
-    render(<AdminBoardsPage />);
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
-
-    await ue.type(screen.getByLabelText(/^name$/i), "Prayer & Praise");
-    const slugInput = screen.getByLabelText(/^slug/i) as HTMLInputElement;
-    expect(slugInput.value).toBe("prayer-praise");
-  });
-
-  it("disables Create button when name or slug is empty", async () => {
-    apiGet.mockResolvedValue({ boards: [] });
-    render(<AdminBoardsPage />);
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
-    expect(screen.getByRole("button", { name: /create board/i })).toBeDisabled();
-  });
-
-  it("shows create error on 409 conflict", async () => {
-    apiGet.mockResolvedValue({ boards: [] });
-    const { ApiError } = await import("@/lib/api");
-    apiPost.mockRejectedValue(new ApiError(409, "slug_conflict", "Slug already exists"));
-
-    const ue = userEvent.setup();
-    render(<AdminBoardsPage />);
-    await waitFor(() => expect(apiGet).toHaveBeenCalled());
-
-    await ue.type(screen.getByLabelText(/^name$/i), "Dupe");
-    await ue.click(screen.getByRole("button", { name: /create board/i }));
-
-    expect(await screen.findByText(/slug already exists/i)).toBeInTheDocument();
+    await screen.findByText("Prayer & Praise");
+    const newLinks = screen.getAllByRole("link", { name: /new board/i });
+    expect(newLinks.length).toBeGreaterThan(0);
+    for (const link of newLinks) {
+      expect(link).toHaveAttribute("href", "/admin/boards/new");
+    }
   });
 });
 
 // ── archive board ──────────────────────────────────────────────────────
 
 describe("AdminBoardsPage archive", () => {
-  it("calls DELETE /api/admin/boards/:id and removes row", async () => {
+  it("calls DELETE /api/admin/boards/:id and removes card", async () => {
     apiGet.mockResolvedValue({ boards: fakeBoards });
     apiDelete.mockResolvedValue(undefined);
 
@@ -288,13 +258,13 @@ describe("AdminBoardsPage edit", () => {
     const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
     await ue.click(firstEditBtn);
 
-    const nameInput = screen.getByRole("textbox", { name: /edit name/i }) as HTMLInputElement;
+    const nameInput = screen.getByRole("textbox", { name: /^name$/i }) as HTMLInputElement;
     expect(nameInput.value).toBe("Prayer & Praise");
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
   });
 
-  it("calls PATCH with updated values and closes edit row", async () => {
+  it("calls PATCH with updated values and closes edit card", async () => {
     apiGet.mockResolvedValue({ boards: fakeBoards });
     apiPatch.mockResolvedValue({
       ...fakeBoards[0],
@@ -309,11 +279,11 @@ describe("AdminBoardsPage edit", () => {
     const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
     await ue.click(firstEditBtn);
 
-    const nameInput = screen.getByRole("textbox", { name: /edit name/i });
+    const nameInput = screen.getByRole("textbox", { name: /^name$/i });
     await ue.clear(nameInput);
     await ue.type(nameInput, "Renamed Board");
 
-    await ue.click(screen.getByRole("button", { name: /^save$/i }));
+    await ue.click(screen.getByRole("button", { name: /save changes/i }));
 
     await waitFor(() =>
       expect(apiPatch).toHaveBeenCalledWith(
@@ -322,10 +292,12 @@ describe("AdminBoardsPage edit", () => {
       ),
     );
     expect(await screen.findByText("Renamed Board")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /save changes/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows error banner on PATCH failure and keeps edit row open", async () => {
+  it("shows error banner on PATCH failure and keeps edit card open", async () => {
     apiGet.mockResolvedValue({ boards: fakeBoards });
     const { ApiError } = await import("@/lib/api");
     apiPatch.mockRejectedValue(new ApiError(500, "server_error", "Save failed"));
@@ -336,13 +308,13 @@ describe("AdminBoardsPage edit", () => {
 
     const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
     await ue.click(firstEditBtn);
-    await ue.click(screen.getByRole("button", { name: /^save$/i }));
+    await ue.click(screen.getByRole("button", { name: /save changes/i }));
 
     expect(await screen.findByText(/save failed/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
   });
 
-  it("Cancel closes edit row without calling PATCH", async () => {
+  it("Cancel closes edit card without calling PATCH", async () => {
     apiGet.mockResolvedValue({ boards: fakeBoards });
     const ue = userEvent.setup();
     render(<AdminBoardsPage />);
@@ -353,7 +325,21 @@ describe("AdminBoardsPage edit", () => {
     await ue.click(screen.getByRole("button", { name: /^cancel$/i }));
 
     expect(apiPatch).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /save changes/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Prayer & Praise")).toBeInTheDocument();
+  });
+
+  it("edit form does not allow changing the slug", async () => {
+    apiGet.mockResolvedValue({ boards: fakeBoards });
+    const ue = userEvent.setup();
+    render(<AdminBoardsPage />);
+    await screen.findByText("Prayer & Praise");
+
+    const [firstEditBtn] = screen.getAllByRole("button", { name: /^edit$/i });
+    await ue.click(firstEditBtn);
+
+    expect(screen.queryByRole("textbox", { name: /url slug/i })).not.toBeInTheDocument();
   });
 });

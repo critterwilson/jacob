@@ -2,9 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import {
+  BoardForm,
+  type BoardSubmitValues,
+} from "@/components/admin/boards/BoardForm";
+import {
+  Banner,
+  ButtonLink,
+  Button,
+  Card,
+  Eyebrow,
+  FloatingActionBar,
+  Heading,
+  Link,
+} from "@/components/ui";
+import { ApiError, apiDelete, apiGet, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Button } from "@/components/ui";
 
 type Board = {
   boardId: string;
@@ -20,67 +33,37 @@ type BoardListResponse = {
   boards: Board[];
 };
 
-function toSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 function errorMsg(e: unknown, fallback: string): string {
   if (e instanceof ApiError) return e.message || `HTTP ${e.status}`;
   if (e instanceof Error) return e.message;
   return fallback;
 }
 
-type EditDraft = {
-  name: string;
-  description: string;
-  audience: "christian" | "general";
-};
-
 export default function AdminBoardsPage() {
   const { user } = useAuth();
 
   const [boards, setBoards] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Create form
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [description, setDescription] = useState("");
-  const [audience, setAudience] = useState<"christian" | "general">("general");
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-
-  // Per-board action state
-  const [archiving, setArchiving] = useState<Record<string, boolean>>({});
-  const [archiveError, setArchiveError] = useState<Record<string, string>>({});
-
-  // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<EditDraft>({
-    name: "",
-    description: "",
-    audience: "general",
-  });
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const [archiving, setArchiving] = useState<Record<string, boolean>>({});
+  const [archiveError, setArchiveError] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const data = await apiGet<BoardListResponse>("/api/boards");
-      setBoards(data.boards);
+      // Drop archived boards — there's no unarchive flow, so they'd be inert
+      // rows. Parity with the public `useBoards` hook.
+      setBoards(data.boards.filter((b) => b.archivedAt == null));
     } catch (e) {
-      setError(errorMsg(e, "Failed to load boards"));
+      setLoadError(errorMsg(e, "Failed to load boards"));
     } finally {
       setLoading(false);
     }
@@ -90,56 +73,8 @@ export default function AdminBoardsPage() {
     void load();
   }, [load]);
 
-  // Keep slug in sync with name unless the user has edited it manually.
-  useEffect(() => {
-    if (!slugTouched) setSlug(toSlug(name));
-  }, [name, slugTouched]);
-
-  const handleCreate = async () => {
-    if (!user || !name.trim() || !slug.trim()) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const board = await apiPost<Board>("/api/admin/boards", {
-        name: name.trim(),
-        slug: slug.trim(),
-        description: description.trim(),
-        audience,
-      });
-      setBoards((prev) => [...prev, board]);
-      setName("");
-      setSlug("");
-      setSlugTouched(false);
-      setDescription("");
-      setAudience("general");
-    } catch (e) {
-      setCreateError(errorMsg(e, "Failed to create board"));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleArchive = async (boardId: string) => {
-    if (!confirm("Archive this board? Members will no longer be able to post.")) return;
-    setArchiving((s) => ({ ...s, [boardId]: true }));
-    setArchiveError((s) => ({ ...s, [boardId]: "" }));
-    try {
-      await apiDelete(`/api/admin/boards/${boardId}`);
-      setBoards((prev) => prev.filter((b) => b.boardId !== boardId));
-    } catch (e) {
-      setArchiveError((s) => ({ ...s, [boardId]: errorMsg(e, "Failed to archive") }));
-    } finally {
-      setArchiving((s) => ({ ...s, [boardId]: false }));
-    }
-  };
-
   const startEdit = (board: Board) => {
     setEditingId(board.boardId);
-    setEditDraft({
-      name: board.name,
-      description: board.description,
-      audience: board.audience,
-    });
     setEditError(null);
   };
 
@@ -148,15 +83,18 @@ export default function AdminBoardsPage() {
     setEditError(null);
   };
 
-  const handleSaveEdit = async (boardId: string) => {
+  const handleSaveEdit = async (
+    boardId: string,
+    payload: BoardSubmitValues,
+  ) => {
+    if (payload.mode !== "edit") return;
     setSaving(true);
     setEditError(null);
     try {
-      const updated = await apiPatch<Board>(`/api/admin/boards/${boardId}`, {
-        name: editDraft.name.trim(),
-        description: editDraft.description.trim(),
-        audience: editDraft.audience,
-      });
+      const updated = await apiPatch<Board>(
+        `/api/admin/boards/${boardId}`,
+        payload.values,
+      );
       setBoards((prev) =>
         prev.map((b) => (b.boardId === boardId ? { ...b, ...updated } : b)),
       );
@@ -168,246 +106,170 @@ export default function AdminBoardsPage() {
     }
   };
 
+  const handleArchive = async (boardId: string) => {
+    if (
+      !confirm("Archive this board? Members will no longer be able to post.")
+    ) {
+      return;
+    }
+    setArchiving((s) => ({ ...s, [boardId]: true }));
+    setArchiveError((s) => ({ ...s, [boardId]: "" }));
+    try {
+      await apiDelete(`/api/admin/boards/${boardId}`);
+      setBoards((prev) => prev.filter((b) => b.boardId !== boardId));
+    } catch (e) {
+      setArchiveError((s) => ({
+        ...s,
+        [boardId]: errorMsg(e, "Failed to archive"),
+      }));
+    } finally {
+      setArchiving((s) => ({ ...s, [boardId]: false }));
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Boards</h1>
-        <p className="mt-1 text-sm text-cream-muted">
-          Manage cross-group boards. Create, edit, or archive boards.
-        </p>
+    <main className="mx-auto w-full max-w-3xl space-y-6">
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <Eyebrow>Admin</Eyebrow>
+          <Heading level={1} size="md">
+            Boards
+          </Heading>
+          <p className="text-body-sm text-cream-muted">
+            Cross-group forums anyone in JACOB can read and post to.
+          </p>
+        </div>
+        {/* Mobile gets the FloatingActionBar below; this CTA covers desktop. */}
+        <ButtonLink
+          href="/admin/boards/new"
+          variant="primary"
+          className="hidden shrink-0 md:inline-flex"
+        >
+          New board
+        </ButtonLink>
       </header>
 
-      {/* Create form */}
-      <section className="rounded border border-line bg-ink-raised p-4 space-y-3">
-        <h2 className="text-eyebrow uppercase tracking-wider text-cream-muted">
-          Create board
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="board-name" className="block text-xs text-cream-muted mb-1">
-              Name
-            </label>
-            <input
-              id="board-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Prayer & Praise"
-              className="w-full rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
-            />
-          </div>
-          <div>
-            <label htmlFor="board-slug" className="block text-xs text-cream-muted mb-1">
-              Slug <span className="text-cream-muted/60">(lowercase kebab, permanent)</span>
-            </label>
-            <input
-              id="board-slug"
-              value={slug}
-              onChange={(e) => {
-                setSlugTouched(true);
-                setSlug(e.target.value);
-              }}
-              placeholder="prayer-praise"
-              className="w-full rounded border border-line bg-ink px-2 py-1 font-mono text-sm focus:outline-none focus-visible:shadow-glow-gold"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="board-description" className="block text-xs text-cream-muted mb-1">
-              Description
-            </label>
-            <input
-              id="board-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Cross-group prayer requests and praise reports"
-              maxLength={500}
-              className="w-full rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
-            />
-          </div>
-          <div>
-            <label htmlFor="board-audience" className="block text-xs text-cream-muted mb-1">
-              Audience
-            </label>
-            <select
-              id="board-audience"
-              value={audience}
-              onChange={(e) => setAudience(e.target.value as "christian" | "general")}
-              className="rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
-            >
-              <option value="general">General</option>
-              <option value="christian">Christian</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            onClick={() => void handleCreate()}
-            loading={creating}
-            disabled={!name.trim() || !slug.trim()}
-          >
-            {creating ? "Creating…" : "Create board"}
-          </Button>
-          {createError && (
-            <p className="text-xs text-terracotta">{createError}</p>
-          )}
-        </div>
-      </section>
-
-      {/* Board list */}
-      {error && (
-        <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
-          {error}
-        </div>
-      )}
+      {loadError && <Banner tone="error">{loadError}</Banner>}
 
       {loading ? (
-        <p className="text-sm text-cream-muted">Loading…</p>
+        <p className="text-body-sm text-cream-muted">Loading…</p>
       ) : boards.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-line bg-ink-raised p-8 text-center text-sm text-cream-muted">
-          No boards yet. Create one above.
-        </p>
+        <Card
+          surface="raised"
+          padding="lg"
+          className="border-dashed text-center"
+        >
+          <p className="text-body text-cream">No boards yet.</p>
+          <p className="mt-1 text-body-sm text-cream-muted">
+            Boards are cross-group forums. Create your first to give people a
+            place to talk outside any one group.
+          </p>
+          <ButtonLink
+            href="/admin/boards/new"
+            variant="primary"
+            className="mt-5"
+          >
+            Create a board
+          </ButtonLink>
+        </Card>
       ) : (
-        <div className="space-y-3">
-          {editError && (
-            <div className="rounded border border-terracotta/40 bg-ink-raised px-4 py-2 text-sm text-terracotta">
-              {editError}
-            </div>
-          )}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-eyebrow uppercase tracking-wider text-cream-muted">
-                <th className="py-2 pr-4">Name / Slug</th>
-                <th className="pr-4">Audience</th>
-                <th className="pr-4">Posts</th>
-                <th className="pr-4">Description</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {boards.map((board) =>
-                editingId === board.boardId ? (
-                  <tr key={board.boardId} className="border-b border-line bg-ink-raised">
-                    <td colSpan={5} className="py-3 px-2">
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <div>
-                          <label className="block text-xs text-cream-muted mb-1">Name</label>
-                          <input
-                            aria-label="Edit name"
-                            value={editDraft.name}
-                            onChange={(e) =>
-                              setEditDraft((d) => ({ ...d, name: e.target.value }))
-                            }
-                            maxLength={80}
-                            className="w-full rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-cream-muted mb-1">
-                            Description
-                          </label>
-                          <input
-                            aria-label="Edit description"
-                            value={editDraft.description}
-                            onChange={(e) =>
-                              setEditDraft((d) => ({ ...d, description: e.target.value }))
-                            }
-                            maxLength={500}
-                            className="w-full rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-cream-muted mb-1">Audience</label>
-                          <select
-                            aria-label="Edit audience"
-                            value={editDraft.audience}
-                            onChange={(e) =>
-                              setEditDraft((d) => ({
-                                ...d,
-                                audience: e.target.value as "christian" | "general",
-                              }))
-                            }
-                            className="rounded border border-line bg-ink px-2 py-1 text-sm focus:outline-none focus-visible:shadow-glow-gold"
-                          >
-                            <option value="general">General</option>
-                            <option value="christian">Christian</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => void handleSaveEdit(board.boardId)}
-                          loading={saving}
-                          disabled={!editDraft.name.trim()}
-                        >
-                          {saving ? "Saving…" : "Save"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={cancelEdit}
-                          disabled={saving}
-                        >
-                          Cancel
-                        </Button>
-                        <span className="font-mono text-xs text-cream-muted/60">
-                          slug: {board.slug}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={board.boardId} className="border-b border-line">
-                    <td className="py-2 pr-4">
-                      <a
+        <ul className="space-y-3">
+          {boards.map((board) => (
+            <li key={board.boardId}>
+              {editingId === board.boardId ? (
+                <Card surface="raised" padding="md" className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <Eyebrow>Editing</Eyebrow>
+                    <span className="font-mono text-caption text-cream-muted">
+                      {board.slug}
+                    </span>
+                  </div>
+                  <BoardForm
+                    mode="edit"
+                    initial={{
+                      name: board.name,
+                      slug: board.slug,
+                      description: board.description,
+                      audience: board.audience,
+                    }}
+                    pending={saving}
+                    error={editError}
+                    onSubmit={(payload) =>
+                      void handleSaveEdit(board.boardId, payload)
+                    }
+                    onCancel={cancelEdit}
+                  />
+                </Card>
+              ) : (
+                <Card surface="raised" padding="md" className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <Link
                         href={`/boards/${board.boardId}`}
-                        className="font-medium text-gold-soft hover:underline"
+                        variant="default"
+                        className="block truncate font-display text-display-sm text-cream no-underline hover:no-underline"
                       >
                         {board.name}
-                      </a>
-                      <p className="font-mono text-xs text-cream-muted">{board.slug}</p>
-                    </td>
-                    <td className="pr-4">
-                      <span className="inline-flex rounded bg-ink-overlay px-2 py-0.5 text-xs text-cream-muted">
-                        {board.audience}
-                      </span>
-                    </td>
-                    <td className="pr-4 text-cream-muted">{board.postCount}</td>
-                    <td className="pr-4 text-xs text-cream-muted">
-                      {board.description || <span className="italic">—</span>}
-                    </td>
-                    <td className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {archiveError[board.boardId] && (
-                          <span className="text-xs text-terracotta">
-                            {archiveError[board.boardId]}
-                          </span>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => startEdit(board)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => void handleArchive(board.boardId)}
-                          loading={archiving[board.boardId]}
-                        >
-                          {archiving[board.boardId] ? "Archiving…" : "Archive"}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ),
+                      </Link>
+                      <p className="truncate font-mono text-caption text-cream-muted">
+                        /boards/{board.slug}
+                      </p>
+                    </div>
+                    <span className="inline-flex shrink-0 items-center rounded-sm bg-ink-overlay px-2 py-0.5 text-caption text-cream-muted">
+                      {board.audience}
+                    </span>
+                  </div>
+
+                  {board.description ? (
+                    <p className="text-body-sm text-cream">
+                      {board.description}
+                    </p>
+                  ) : (
+                    <p className="text-body-sm italic text-cream-muted">
+                      No description.
+                    </p>
+                  )}
+
+                  <p className="text-caption text-cream-muted">
+                    {board.postCount === 1
+                      ? "1 post"
+                      : `${board.postCount} posts`}
+                  </p>
+
+                  {archiveError[board.boardId] && (
+                    <p
+                      role="alert"
+                      className="text-body-sm text-terracotta"
+                    >
+                      {archiveError[board.boardId]}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => startEdit(board)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => void handleArchive(board.boardId)}
+                      loading={archiving[board.boardId]}
+                    >
+                      {archiving[board.boardId] ? "Archiving…" : "Archive"}
+                    </Button>
+                  </div>
+                </Card>
               )}
-            </tbody>
-          </table>
-        </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+
+      <FloatingActionBar label="New board" href="/admin/boards/new" />
+    </main>
   );
 }

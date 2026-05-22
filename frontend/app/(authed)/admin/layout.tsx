@@ -56,8 +56,36 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const navLinks = claims.isAdmin ? ADMIN_NAV_LINKS : MODERATOR_NAV_LINKS;
 
   return (
-    <div className="flex min-h-svh">
-      <nav className="w-48 shrink-0 border-r border-line bg-ink-raised p-4">
+    <div className="flex min-h-svh flex-col md:flex-row">
+      {/* Mobile: horizontal scrolling chip nav. Sticky so it stays
+       * visible while the admin scrolls long lists. */}
+      <nav
+        aria-label="Admin sections"
+        className="sticky top-0 z-10 border-b border-line bg-ink-raised px-4 py-2 md:hidden"
+      >
+        <ul className="flex gap-1 overflow-x-auto">
+          {navLinks.map(({ href, label }) => {
+            const active = pathname.startsWith(href);
+            return (
+              <li key={href} className="shrink-0">
+                <Link
+                  href={href}
+                  className={`inline-flex h-9 items-center rounded-full px-3 text-sm whitespace-nowrap ${
+                    active
+                      ? "bg-ink-overlay font-medium text-gold-soft"
+                      : "text-cream hover:bg-ink-overlay"
+                  }`}
+                >
+                  {label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {/* Desktop: fixed-width sidebar. */}
+      <nav className="hidden w-48 shrink-0 border-r border-line bg-ink-raised p-4 md:block">
         <p className="mb-4 text-eyebrow uppercase tracking-wider text-cream-muted">
           Admin
         </p>
@@ -83,7 +111,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </Link>
         </div>
       </nav>
-      <main className="flex-1 p-8">{children}</main>
+      <main className="flex-1 p-4 md:p-8">{children}</main>
     </div>
   );
 }
