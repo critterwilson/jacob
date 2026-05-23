@@ -102,7 +102,10 @@ resource "google_cloud_scheduler_job" "firestore_export" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_export_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_export_run_invoker,
+    google_cloud_run_v2_job.firestore_export,
+  ]
 }
 
 resource "google_cloud_scheduler_job" "finalize_deletions" {
@@ -131,7 +134,10 @@ resource "google_cloud_scheduler_job" "finalize_deletions" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_deletions_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_deletions_run_invoker,
+    google_cloud_run_v2_job.finalize_deletions,
+  ]
 }
 
 # ── firestore-to-bigquery (T29, 04:30 UTC) ───────────────────────────────────
@@ -172,7 +178,10 @@ resource "google_cloud_scheduler_job" "firestore_to_bigquery" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_analytics_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_analytics_run_invoker,
+    google_cloud_run_v2_job.firestore_to_bigquery,
+  ]
 }
 
 # ── daily-verse (T33, 07:00 UTC) ─────────────────────────────────────────────
@@ -231,7 +240,10 @@ resource "google_cloud_scheduler_job" "daily_verse" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_daily_verse_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_daily_verse_run_invoker,
+    google_cloud_run_v2_job.daily_verse,
+  ]
 }
 
 # ── weekly-digest (T35, Sundays 16:00 UTC) ───────────────────────────────────
@@ -290,7 +302,10 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_weekly_digest_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_weekly_digest_run_invoker,
+    google_cloud_run_v2_job.weekly_digest,
+  ]
 }
 
 # ── process-export-jobs (T38, every 5 minutes) ───────────────────────────────
@@ -353,7 +368,10 @@ resource "google_cloud_scheduler_job" "process_export_jobs" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_exports_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_exports_run_invoker,
+    google_cloud_run_v2_job.process_export_jobs,
+  ]
 }
 
 # ── cleanup-stale-devices (T34, daily 05:00 UTC) ─────────────────────────────
@@ -412,5 +430,8 @@ resource "google_cloud_scheduler_job" "cleanup_stale_devices" {
     }
   }
 
-  depends_on = [google_project_iam_member.scheduler_cleanup_devices_run_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_cleanup_devices_run_invoker,
+    google_cloud_run_v2_job.cleanup_stale_devices,
+  ]
 }

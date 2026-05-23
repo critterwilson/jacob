@@ -31,28 +31,23 @@ this explicit.
 
 ## Initial deployment
 
-1. Apply Terraform to create the BigQuery dataset and SA:
-   ```sh
-   terraform apply -var-file=terraform.staging.tfvars -target=google_bigquery_dataset.jacob_analytics
-   terraform apply -var-file=terraform.staging.tfvars -target=google_bigquery_table.messages_raw_external
-   terraform apply -var-file=terraform.staging.tfvars -target=google_service_account.jacob_analytics
-   ```
-
-2. Deploy the Cloud Run Job:
-   ```sh
-   gcloud run jobs deploy firestore-to-bigquery \
-     --image us-central1-docker.pkg.dev/${PROJECT}/jacob-images/firestore-to-bigquery:latest \
-     --region us-central1 \
-     --service-account jacob-analytics@${PROJECT}.iam.gserviceaccount.com \
-     --set-env-vars BQ_ANALYTICS_DATASET=jacob_analytics,BQ_BACKUPS_BUCKET=jacob-backups-${ENV}
-   ```
-
-3. Apply the SQL views (substitute `${project}`):
+1. Apply Terraform — `infra/cloud-run-jobs.tf` defines the
+   `firestore-to-bigquery` Cloud Run Job and `infra/scheduler.tf` defines
+   the daily Cloud Scheduler trigger; both are created by a single
+   `terraform apply -var-file=terraform.${ENV}.tfvars`. The job runs from
+   the shared `jacob-backend` image — no separate image build is needed.
+2. Apply the SQL views (substitute `${project}`):
    ```sh
    sed "s/\${project}/${PROJECT}/g" infra/bigquery/views.sql | bq query --use_legacy_sql=false
    ```
 
-4. Set `JACOB_ANALYTICS_ENABLED=true` on the backend Cloud Run service.
+3. Set `JACOB_ANALYTICS_ENABLED=true` on the backend Cloud Run service.
+
+4. Confirm the scheduler is live:
+   ```sh
+   gcloud scheduler jobs list --project ${PROJECT} --location us-central1 \
+     | grep firestore-to-bigquery-daily
+   ```
 
 ---
 
