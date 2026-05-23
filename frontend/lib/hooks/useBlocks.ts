@@ -5,7 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 
-type BlocksResponse = { blockedUids: string[] };
+export type BlockedUserEntry = {
+  uid: string;
+  displayName: string;
+  photoURL: string | null;
+};
+
+type BlocksResponse = { blockedUsers: BlockedUserEntry[] };
 
 /**
  * Subscribe to the current user's block set.
@@ -22,12 +28,14 @@ type BlocksResponse = { blockedUids: string[] };
 export function useBlocks() {
   const { user } = useAuth();
   const [blockedSet, setBlockedSet] = useState<Set<string>>(new Set());
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
     if (!user) {
       setBlockedSet(new Set());
+      setBlockedUsers([]);
       setLoading(false);
       return;
     }
@@ -39,7 +47,8 @@ export function useBlocks() {
         signal: ctl.signal,
       });
       if (ctl.signal.aborted) return;
-      setBlockedSet(new Set(res.blockedUids));
+      setBlockedSet(new Set(res.blockedUsers.map((u) => u.uid)));
+      setBlockedUsers(res.blockedUsers);
       setLoading(false);
     } catch (err) {
       if (ctl.signal.aborted) return;
@@ -47,6 +56,7 @@ export function useBlocks() {
         console.warn("blocks_load_failed", err.code, err.status);
       }
       setBlockedSet(new Set());
+      setBlockedUsers([]);
       setLoading(false);
     }
   }, [user]);
@@ -60,20 +70,27 @@ export function useBlocks() {
     async (otherUid: string) => {
       if (!user || otherUid === user.uid) return;
       setBlockedSet((prev) => new Set(prev).add(otherUid));
+      setBlockedUsers((prev) => [
+        ...prev,
+        { uid: otherUid, displayName: otherUid, photoURL: null },
+      ]);
       try {
         await apiPost(`/api/users/me/blocks/${encodeURIComponent(otherUid)}`, {});
+        // Refresh so we get the real displayName/photoURL from the server.
+        await refresh();
       } catch (err) {
         setBlockedSet((prev) => {
           const next = new Set(prev);
           next.delete(otherUid);
           return next;
         });
+        setBlockedUsers((prev) => prev.filter((u) => u.uid !== otherUid));
         if (err instanceof ApiError) {
           console.warn("block_failed", err.code, err.status);
         }
       }
     },
-    [user],
+    [user, refresh],
   );
 
   const unblock = useCallback(
@@ -84,16 +101,18 @@ export function useBlocks() {
         next.delete(otherUid);
         return next;
       });
+      setBlockedUsers((prev) => prev.filter((u) => u.uid !== otherUid));
       try {
         await apiDelete(`/api/users/me/blocks/${encodeURIComponent(otherUid)}`);
       } catch (err) {
         setBlockedSet((prev) => new Set(prev).add(otherUid));
+        await refresh();
         if (err instanceof ApiError) {
           console.warn("unblock_failed", err.code, err.status);
         }
       }
     },
-    [user],
+    [user, refresh],
   );
 
   const isBlocked = useCallback(
@@ -101,7 +120,7 @@ export function useBlocks() {
     [blockedSet],
   );
 
-  const blockedList = useMemo(() => Array.from(blockedSet), [blockedSet]);
+  const blockedList = useMemo(() => blockedUsers, [blockedUsers]);
 
   return {
     blockedSet,

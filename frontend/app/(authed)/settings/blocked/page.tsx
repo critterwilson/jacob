@@ -1,16 +1,9 @@
 "use client";
 
-import { Button, Heading, Link } from "@/components/ui";
+import { Avatar, Button, Heading, Link } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useBlocks } from "@/lib/hooks/useBlocks";
 
-/**
- * /settings/blocked — list every user the viewer has blocked, with an
- * inline unblock control. The list is realtime — unblocking removes the
- * row immediately. Names aren't resolved here (we'd need to fetch each
- * user doc) — Phase 3 adds the displayName cache; today the row shows
- * the uid, which is sufficient for the rare unblock-by-mistake case.
- */
 export default function BlockedSettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const { blockedList, unblock, loading } = useBlocks();
@@ -51,17 +44,26 @@ export default function BlockedSettingsPage() {
         </p>
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-ink-raised shadow-raise">
-          {blockedList.map((uid) => (
+          {blockedList.map((entry) => (
             <li
-              key={uid}
-              className="flex items-center justify-between px-4 py-3"
+              key={entry.uid}
+              className="flex items-center justify-between gap-3 px-4 py-3"
             >
-              <code className="font-mono text-caption text-cream">{uid}</code>
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar
+                  name={entry.displayName}
+                  photoURL={entry.photoURL}
+                  size="sm"
+                />
+                <span className="truncate text-body-sm text-cream">
+                  {entry.displayName}
+                </span>
+              </div>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => void unblock(uid)}
+                onClick={() => void unblock(entry.uid)}
               >
                 Unblock
               </Button>
