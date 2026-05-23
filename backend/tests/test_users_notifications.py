@@ -66,6 +66,7 @@ def test_get_notification_prefs_returns_defaults_when_no_doc() -> None:
         "announcements": True,
         "digest": True,
         "ministryFeed": False,
+        "groupMessages": True,
         "schemaVersion": 1,
     }
 
@@ -113,6 +114,7 @@ def test_put_notification_prefs_overwrites_doc() -> None:
             "announcements": False,
             "digest": False,
             "ministryFeed": False,
+            "groupMessages": True,
             "schemaVersion": 1,
         }
     )

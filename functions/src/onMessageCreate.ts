@@ -34,6 +34,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 
 import { type Policy, runTextModeration } from "./services/textModeration";
 import { fanOutMentions } from "./services/mentionFanout";
+import { fanOutGroupMessage } from "./services/groupMessageFanout";
 import { claimEventOnce } from "./services/eventMarkers";
 
 if (!getApps().length) {
@@ -262,6 +263,44 @@ export const onMessageCreate = onDocumentCreated(
         });
       } catch (err) {
         logger.error("mention_fanout_failed", {
+          gid,
+          mid,
+          eventId: event.id,
+          error: (err as Error).message,
+        });
+      }
+    }
+
+    // group_message fan-out — generic push for every group member on a
+    // top-level chat message. Thread replies are handled by
+    // `onMessageWrite.ts`; announcements/board posts/ministry posts
+    // each have their own dedicated trigger. Skip when:
+    //   • parentMessageId is set (this is a thread reply)
+    //   • there is no authorUid (shouldn't happen, but defensive)
+    // The fan-out itself excludes the author, anyone already getting a
+    // mention notification for this same write, anyone who blocked the
+    // author, and anyone who muted this group.
+    // Failure-mode: log + swallow so a fan-out hiccup doesn't kill the
+    // moderation/mention work that already succeeded above.
+    const parentMessageId = (data.parentMessageId as string | undefined) ?? null;
+    if (!parentMessageId && authorUid) {
+      try {
+        const written = await fanOutGroupMessage(db, {
+          gid,
+          mid,
+          authorUid,
+          body,
+          alreadyNotifiedUids: mentions,
+          eventId: event.id,
+        });
+        logger.info("group_message_fanout_complete", {
+          gid,
+          mid,
+          eventId: event.id,
+          written,
+        });
+      } catch (err) {
+        logger.error("group_message_fanout_failed", {
           gid,
           mid,
           eventId: event.id,

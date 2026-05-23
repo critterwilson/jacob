@@ -56,6 +56,7 @@ describe("kindToPrefKey", () => {
     expect(kindToPrefKey("mention")).toBe("mentions");
     expect(kindToPrefKey("board_mention")).toBe("mentions");
     expect(kindToPrefKey("reply")).toBe("replies");
+    expect(kindToPrefKey("group_message")).toBe("groupMessages");
   });
 
   it("returns null for unknown kinds", () => {
@@ -81,6 +82,16 @@ describe("buildPayload", () => {
     const p = buildPayload({ kind: "reply", body: "agreed!", groupId: "g1" }, "alice");
     expect(p.title).toMatch(/reply/i);
     expect(p.collapseKey).toBe("groupId:g1");
+  });
+
+  it("group_message payload collapses per-group", () => {
+    const p = buildPayload(
+      { kind: "group_message", body: "Hello", groupId: "g1" },
+      "alice",
+    );
+    expect(p.title).toMatch(/new message/i);
+    expect(p.body).toBe("Hello");
+    expect(p.collapseKey).toBe("group_message:g1");
   });
 
   it("truncates body at 100 chars", () => {

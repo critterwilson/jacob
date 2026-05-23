@@ -34,6 +34,7 @@ const STORED = {
   announcements: true,
   digest: false,
   ministryFeed: false,
+  groupMessages: true,
   schemaVersion: 1,
 };
 

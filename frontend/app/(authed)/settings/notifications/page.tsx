@@ -32,6 +32,11 @@ const LABELS: Record<PrefKey, { title: string; description: string }> = {
     description:
       "When your organization shares a new sermon, devotional, or announcement.",
   },
+  groupMessages: {
+    title: "Group messages",
+    description:
+      "When someone sends a message in one of your groups. Silence a single chatty group from its page instead.",
+  },
 };
 
 export default function NotificationsPage() {

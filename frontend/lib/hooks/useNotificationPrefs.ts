@@ -14,6 +14,9 @@ export type NotificationPrefs = {
   announcements: boolean;
   digest: boolean;
   ministryFeed: boolean;
+  // ADR 0014 — global on/off for the generic group_message push fan-out.
+  // Per-group silencing lives on `users/{uid}/mutedGroups/{gid}`.
+  groupMessages: boolean;
   schemaVersion: number;
 };
 
@@ -23,6 +26,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   announcements: true,
   digest: true,
   ministryFeed: false,
+  groupMessages: true,
   schemaVersion: 1,
 };
 

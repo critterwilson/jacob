@@ -124,6 +124,10 @@ class NotificationPrefs(BaseModel):
     # ADR 0011 — central ministry feed. Default off (opt-in) so new
     # users aren't surprised by a brand-new push channel.
     ministryFeed: bool = False
+    # ADR 0014 — generic per-group-message push. Default on so the app
+    # behaves like every other chat app on a fresh install. Granular
+    # silencing lives on `users/{uid}/mutedGroups/{gid}`.
+    groupMessages: bool = True
     schemaVersion: int = 1
 
 
@@ -193,3 +197,20 @@ class MuteResponse(BaseModel):
 class BlockResponse(BaseModel):
     uid: str
     blockedAt: datetime
+
+
+# ── group mutes (per-group push silencing) ─────────────────────────────────
+
+
+class MutedGroupEntry(BaseModel):
+    groupId: str
+    mutedAt: datetime
+
+
+class MutedGroupsResponse(BaseModel):
+    mutedGroups: list[MutedGroupEntry]
+
+
+class MutedGroupResponse(BaseModel):
+    groupId: str
+    mutedAt: datetime

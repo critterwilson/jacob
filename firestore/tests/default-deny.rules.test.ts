@@ -120,6 +120,24 @@ describe("M6 default-deny — users", () => {
     );
   });
 
+  it("denies reading and writing users/{uid}/mutedGroups/{gid} (ADR 0014)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "users", "alice", "mutedGroups", "g1"), {
+        groupId: "g1",
+        mutedAt: Timestamp.now(),
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "users", "alice", "mutedGroups", "g1")),
+    );
+    await assertFails(
+      setDoc(doc(authed("alice"), "users", "alice", "mutedGroups", "g2"), {
+        groupId: "g2",
+        mutedAt: serverTimestamp(),
+      }),
+    );
+  });
+
   it("denies reading users/{uid}/devices/{deviceId}", async () => {
     await assertFails(
       getDoc(doc(authed("alice"), "users", "alice", "devices", "d1")),

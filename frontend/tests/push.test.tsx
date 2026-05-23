@@ -137,10 +137,10 @@ describe("PushPrompt", () => {
 });
 
 describe("NotificationsPage", () => {
-  it("renders five toggles (mentions, replies, announcements, digest, ministry feed)", async () => {
+  it("renders six toggles (mentions, replies, announcements, digest, ministry feed, group messages)", async () => {
     render(<NotificationsPage />);
     const switches = await screen.findAllByRole("switch");
-    expect(switches).toHaveLength(5);
+    expect(switches).toHaveLength(6);
   });
 
   it("toggles are labelled correctly", async () => {
@@ -155,5 +155,6 @@ describe("NotificationsPage", () => {
     expect(
       screen.getByLabelText("Posts from your organization"),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Group messages")).toBeInTheDocument();
   });
 });
