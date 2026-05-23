@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/nav/AppShell";
+import { FirstRunTutorial } from "@/components/onboarding/FirstRunTutorial";
 import { SearchBar } from "@/components/search/SearchBar";
 import { useAuth } from "@/lib/auth-context";
 
@@ -50,6 +51,9 @@ export default function AuthedLayout({ children }: { children: ReactNode }) {
        * bundles that mount AppShell directly from dragging in the
        * SearchBar tree. */}
       <SearchBar />
+      {/* First-run welcome overlay. Self-gated by localStorage — renders
+       * nothing once a user has dismissed it. Re-openable from /faq. */}
+      <FirstRunTutorial />
       {/* Install + Push prompts moved into /home only so they don't
        * eat vertical space on every authed page. See HomePage. */}
       {children}

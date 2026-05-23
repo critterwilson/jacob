@@ -1,3 +1,4 @@
+import { FaqTutorialLauncher } from "@/components/onboarding/FaqTutorialLauncher";
 import { Heading, Link } from "@/components/ui";
 
 const faqs = [
@@ -29,6 +30,25 @@ export default function FaqPage() {
       <Heading level={1} size="lg">
         Frequently Asked Questions
       </Heading>
+
+      <section
+        aria-labelledby="faq-tour-heading"
+        className="rounded-lg border border-line bg-ink-raised p-4"
+      >
+        <h2
+          id="faq-tour-heading"
+          className="font-display text-display-sm text-cream"
+        >
+          New to JACOB?
+        </h2>
+        <p className="mt-1 text-body-sm text-cream-muted">
+          Take a quick walkthrough of how groups, scripture, and the rest of
+          the app fit together.
+        </p>
+        <div className="mt-3">
+          <FaqTutorialLauncher />
+        </div>
+      </section>
 
       <dl className="space-y-6">
         {faqs.map(({ q, a }) => (
