@@ -72,10 +72,51 @@ describe("buildPayload", () => {
     expect(p.collapseKey).toBe("announcement:g1");
   });
 
-  it("mention payload", () => {
-    const p = buildPayload({ kind: "mention", body: "hey @you", groupId: "g1" }, "alice");
+  it("mention payload collapses per-message", () => {
+    const p = buildPayload(
+      { kind: "mention", body: "hey @you", groupId: "g1", messageRef: "groups/g1/messages/m1" },
+      "alice",
+    );
     expect(p.title).toMatch(/mention/i);
-    expect(p.collapseKey).toContain("mentionTarget:alice");
+    expect(p.collapseKey).toBe("m:m1");
+  });
+
+  it("board_mention payload collapses per-post", () => {
+    const p = buildPayload(
+      { kind: "board_mention", body: "hey @you", messageRef: "boards/b1/posts/p1" },
+      "alice",
+    );
+    expect(p.title).toMatch(/mention/i);
+    expect(p.collapseKey).toBe("m:p1");
+  });
+
+  // APNs caps apns-collapse-id at 64 bytes; FCM maps `collapseKey` onto
+  // it and fails the whole send when it overflows (see PR #329 fallout —
+  // every mention push errored with `messaging/invalid-argument`).
+  // Worst-case inputs: 28-byte Firebase UID + 20-byte Firestore auto-IDs.
+  it("collapseKey stays under APNs 64-byte limit for every kind", () => {
+    const uid28 = "a".repeat(28);
+    const gid20 = "b".repeat(20);
+    const mid20 = "c".repeat(20);
+    const kinds = [
+      "announcement",
+      "mention",
+      "board_mention",
+      "reply",
+      "digest_send",
+      "ministry_post",
+      "group_message",
+    ] as const;
+    for (const kind of kinds) {
+      const p = buildPayload(
+        { kind, body: "x", groupId: gid20, messageRef: `groups/${gid20}/messages/${mid20}` },
+        uid28,
+      );
+      expect(
+        Buffer.byteLength(p.collapseKey, "utf8"),
+        `collapseKey for kind=${kind} exceeds 64 bytes: ${p.collapseKey}`,
+      ).toBeLessThanOrEqual(64);
+    }
   });
 
   it("reply payload", () => {
