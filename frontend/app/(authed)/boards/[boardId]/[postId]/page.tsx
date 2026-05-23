@@ -58,7 +58,7 @@ export default function BoardPostPage() {
 
       <div className="space-y-3">
         <Heading level={2} size="sm">
-          Replies
+          Discussion
         </Heading>
         <ReplyList replies={replies} />
       </div>

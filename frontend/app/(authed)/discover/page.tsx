@@ -57,7 +57,11 @@ export default function DiscoverPage() {
       {state.status === "ok" && (
         <>
           {state.groups.length === 0 ? (
-            <p className="py-12 text-center text-cream-muted">No groups found.</p>
+            <p className="py-12 text-center text-body-sm text-cream-muted">
+              {audience || q
+                ? "No groups match these filters. Try clearing them to see all public groups."
+                : "No public groups yet — check back soon."}
+            </p>
           ) : (
             <div className="space-y-4">
               {state.groups.map((g) => (
@@ -68,7 +72,7 @@ export default function DiscoverPage() {
           {state.nextCursor && (
             <div className="mt-6 flex justify-center">
               <Button variant="secondary" onClick={() => void loadMore()}>
-                Load more
+                Show more groups
               </Button>
             </div>
           )}

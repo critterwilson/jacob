@@ -64,7 +64,7 @@ function SearchInner() {
           type="search"
           value={q}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
-          placeholder="Find a message…"
+          placeholder="Search messages in your groups…"
           aria-label="Search query"
           maxLength={200}
           className="flex-1 rounded-md border border-line bg-ink-raised px-3 py-2 text-sm text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
@@ -73,6 +73,15 @@ function SearchInner() {
           Search
         </Button>
       </form>
+
+      {/* Pre-search hint — without it, the page is blank until the first
+       * query and new users don't know what's searchable. */}
+      {!loading && !error && !data && !q.trim() && (
+        <p className="text-body-sm text-cream-muted">
+          Search across messages from every group you belong to. Try a name,
+          a phrase, or a verse reference.
+        </p>
+      )}
 
       {loading && (
         <p className="text-sm text-cream-muted" role="status">

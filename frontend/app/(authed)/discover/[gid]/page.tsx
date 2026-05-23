@@ -65,7 +65,7 @@ export default function ReadOnlyGroupPage({ params }: Props) {
           </Link>
           <h1 className="mt-0.5 text-base font-semibold">{group.name}</h1>
           <p className="text-xs text-cream-muted">
-            Read-only ·{" "}
+            Preview ·{" "}
             <span className="font-medium text-gold">
               {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
             </span>
@@ -77,9 +77,10 @@ export default function ReadOnlyGroupPage({ params }: Props) {
         />
       </header>
 
-      {/* Read-only notice */}
+      {/* Preview notice */}
       <div className="shrink-0 border-b border-parchment-amber/30 bg-parchment-amber/15 px-4 py-2 text-xs text-parchment-amber">
-        You&apos;re viewing this group in read-only mode. Join to participate.
+        You&apos;re previewing this group — join to read and post messages with
+        the rest of the group.
       </div>
 
       {/* Feed — readonly so no input, picker, reply, edit, delete */}
