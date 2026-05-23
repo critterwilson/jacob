@@ -81,7 +81,7 @@ export default function OrgDashboardPage() {
           <Stat label="Members" value={dashboard.memberCount} />
           <Stat label="Archived" value={dashboard.archivedGroupCount} />
           <Stat
-            label="Pending mod"
+            label="Awaiting review"
             value={dashboard.pendingModerationCount}
             highlight={dashboard.pendingModerationCount > 0}
           />
@@ -93,8 +93,6 @@ export default function OrgDashboardPage() {
           About this org
         </h2>
         <dl className="mt-2 grid grid-cols-2 gap-y-1">
-          <dt className="text-cream-muted">Slug</dt>
-          <dd className="font-mono text-xs">{org.slug}</dd>
           <dt className="text-cream-muted">Audience</dt>
           <dd>{org.audience}</dd>
           <dt className="text-cream-muted">Created</dt>
@@ -103,13 +101,22 @@ export default function OrgDashboardPage() {
               ? new Date(org.createdAt).toLocaleDateString()
               : "—"}
           </dd>
-          {org.customSubdomain && (
-            <>
-              <dt className="text-cream-muted">Subdomain</dt>
-              <dd className="font-mono text-xs">{org.customSubdomain}.jacob.app</dd>
-            </>
-          )}
         </dl>
+        <details className="mt-3 text-xs">
+          <summary className="cursor-pointer text-cream-muted hover:text-cream">
+            Show technical details
+          </summary>
+          <dl className="mt-2 grid grid-cols-2 gap-y-1">
+            <dt className="text-cream-muted">Slug</dt>
+            <dd className="font-mono">{org.slug}</dd>
+            {org.customSubdomain && (
+              <>
+                <dt className="text-cream-muted">Subdomain</dt>
+                <dd className="font-mono">{org.customSubdomain}.jacob.app</dd>
+              </>
+            )}
+          </dl>
+        </details>
       </section>
     </div>
   );

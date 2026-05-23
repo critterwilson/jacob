@@ -127,7 +127,7 @@ function ItemCard({
           </div>
 
           <div className="text-sm text-cream">
-            <span className="font-medium">Concerning:</span>{" "}
+            <span className="font-medium">About:</span>{" "}
             <code className="text-xs text-cream-muted">{item.subjectUid ?? "—"}</code>
             {item.groupId && item.messageId && (
               <>

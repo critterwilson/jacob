@@ -149,6 +149,11 @@ describe("NotificationsPage", () => {
     expect(screen.getByLabelText("Mentions")).toBeInTheDocument();
     expect(screen.getByLabelText("Replies")).toBeInTheDocument();
     expect(screen.getByLabelText("Announcements")).toBeInTheDocument();
-    expect(screen.getByLabelText("Weekly digest email")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Weekly activity summary"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Posts from your organization"),
+    ).toBeInTheDocument();
   });
 });

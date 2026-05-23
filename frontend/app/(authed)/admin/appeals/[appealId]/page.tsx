@@ -149,9 +149,9 @@ export default function AdminAppealDetailPage() {
         <section className="rounded border border-line bg-ink-raised p-4 text-sm">
           <h2 className="mb-3 font-medium">Decide</h2>
           <p className="mb-3 text-xs text-parchment-amber">
-            ⚠️ If you took the original moderation action, the API will reject
-            this with <code>self_review_required</code>. Escalate to another
-            admin.
+            ⚠️ If you made the original decision on this content, ask another
+            admin to handle this appeal — JACOB won&apos;t let the same person
+            review their own action.
           </p>
           <label className="block">
             <span className="text-xs font-medium text-cream">Outcome</span>
@@ -163,16 +163,17 @@ export default function AdminAppealDetailPage() {
               className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             >
               <option value="upheld">
-                upheld — original action stands
+                Upheld — original action stands
               </option>
               <option value="reversed">
-                reversed — undo the moderation action
+                Reversed — undo the moderation action
               </option>
             </select>
           </label>
           <label className="mt-3 block">
-            <span className="text-xs font-medium text-cream">
-              Reasoning (≥ 50 chars; recorded in audit log)
+            <span className="text-xs font-medium text-cream">Reasoning</span>
+            <span className="mt-0.5 block text-caption text-cream-muted">
+              Required (at least 50 characters). Saved in the audit log.
             </span>
             <textarea
               value={reasoning}
