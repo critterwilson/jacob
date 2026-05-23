@@ -1,0 +1,25 @@
+# Build context for backend/Dockerfile is the repo root (so the image can
+# bundle infra/scheduled/ alongside backend/app/ — see infra/cloud-run-jobs.tf
+# for why). Without this file, every `docker build .` would upload the
+# entire monorepo (node_modules, .next, .terraform, .git, .claude, …) which
+# is hundreds of MB. Keep it tight.
+
+# Exclude everything…
+**
+
+# …then allow only what the backend image actually consumes.
+!backend/pyproject.toml
+!backend/app
+!backend/app/**
+!infra/scheduled
+!infra/scheduled/**
+
+# Strip test fixtures from the image (they're harmless but unnecessary).
+infra/scheduled/test_*.py
+
+# Strip caches that occasionally land inside allowed paths.
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

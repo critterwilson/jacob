@@ -60,8 +60,10 @@ runtime SAs at deploy time.
 
 ## Cloud Scheduler jobs (M4, T29, T33, T34, T35, T38)
 
-`scheduler.tf` defines all scheduled Cloud Run Jobs. Each has a dedicated OIDC
-SA with `roles/run.invoker` scoped to that job only (IAM condition).
+`scheduler.tf` defines the Cloud Scheduler trigger for each scheduled task;
+`cloud-run-jobs.tf` defines the underlying `google_cloud_run_v2_job` that
+each scheduler entry invokes. Each scheduler job has a dedicated OIDC SA
+with `roles/run.invoker` scoped to that job only (IAM condition).
 
 | Scheduler job name              | Schedule (UTC)  | Cloud Run Job               | Task |
 |---------------------------------|-----------------|-----------------------------|------|
@@ -73,14 +75,28 @@ SA with `roles/run.invoker` scoped to that job only (IAM condition).
 | `weekly-digest`                 | Sundays 16:00   | `weekly-digest`             | T35  |
 | `process-export-jobs-5min`      | every 5 min     | `process-export-jobs`       | T38  |
 
-**Cloud Run Jobs (not Services)** must be created out-of-band before the
-Scheduler resource can succeed: the scheduler URI references
-`/jobs/<name>:run`. Initial deploy:
+Every Cloud Run Job runs from the `jacob-backend` container image — the
+Dockerfile bundles `infra/scheduled/*.py` next to the API code, and each
+job picks its entrypoint via `containers.command`. The deploy workflow
+(`.github/workflows/deploy.yml`) runs `gcloud run jobs update <name>
+--image=<SHA>` for each of the seven jobs after the API service deploy,
+so a single `git push` to `main` rolls the new SHA across the service
+and every scheduled task. Image drift is excluded from Terraform state
+(`lifecycle.ignore_changes`); Terraform owns the shape, gcloud owns the SHA.
+
+Bootstrap on a fresh project:
 
 ```sh
-gcloud run jobs deploy firestore-export \
-  --image us-central1-docker.pkg.dev/${PROJECT}/jacob-images/firestore-export:latest \
-  --region us-central1 --service-account jacob-backup@${PROJECT}.iam.gserviceaccount.com
+cd infra
+terraform init -backend-config="bucket=jacob-tf-state-${ENV}"
+terraform apply -var-file=terraform.${ENV}.tfvars
+```
+
+Then verify:
+
+```sh
+gcloud run jobs list --project ${PROJECT} --region us-central1
+gcloud scheduler jobs list --project ${PROJECT} --location us-central1
 ```
 
 (see `infra/scheduled/` for each job's source code).

@@ -59,9 +59,14 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build image
+        # Build context is the repo root (not backend/) so the image can
+        # bundle infra/scheduled/ next to backend/app/ — every Cloud Run
+        # Job defined in infra/cloud-run-jobs.tf launches a script under
+        # /app/scheduled/ from this same image. .dockerignore keeps the
+        # context tight despite the wider root.
         run: |
           IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jacob-images/jacob-backend:${{ github.sha }}"
-          docker build -t "$IMAGE" -f backend/Dockerfile backend/
+          docker build -t "$IMAGE" -f backend/Dockerfile .
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - name: Scan image with Trivy (fail on HIGH/CRITICAL)
@@ -136,6 +141,28 @@ jobs:
             --allow-unauthenticated \
             --update-env-vars "^@^ENVIRONMENT=${{ needs.setup.outputs.target }}@CORS_ALLOWED_ORIGINS=${{ steps.cors.outputs.origins }}@JACOB_ALLOW_EMULATOR_TOKENS=${{ steps.emu.outputs.flag }}@FIREBASE_DATABASE_URL=${{ steps.rtdb.outputs.url }}" \
             --project "${{ secrets.GCP_PROJECT_ID }}"
+
+      - name: Roll new image onto scheduled Cloud Run Jobs
+        # Cloud Run Jobs are defined declaratively in infra/cloud-run-jobs.tf,
+        # but Terraform ignores image drift (see lifecycle.ignore_changes)
+        # so every push to main rolls the latest SHA onto each job here.
+        # Jobs that don't exist yet (terraform apply hasn't run for this
+        # environment) are skipped with a warning rather than failing the
+        # whole deploy — the API service deploy above is the load-bearing
+        # step, and scheduled jobs are independently created/destroyed.
+        run: |
+          IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jacob-images/jacob-backend:${{ github.sha }}"
+          for job in firestore-export finalize-deletions firestore-to-bigquery cleanup-stale-devices daily-verse weekly-digest process-export-jobs; do
+            if gcloud run jobs describe "$job" --region us-central1 --project "${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+              echo "Updating $job → $IMAGE"
+              gcloud run jobs update "$job" \
+                --image "$IMAGE" \
+                --region us-central1 \
+                --project "${{ secrets.GCP_PROJECT_ID }}"
+            else
+              echo "::warning::Cloud Run Job '$job' not found in ${{ secrets.GCP_PROJECT_ID }} — run \`terraform apply\` against infra/cloud-run-jobs.tf to create it."
+            fi
+          done
 
   # ── Functions + Firestore rules: firebase deploy ──────────────────────────
   # Deploys Cloud Functions (TypeScript) and Firestore security rules + indexes.
