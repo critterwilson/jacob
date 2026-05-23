@@ -6,6 +6,7 @@ import { Banner, Button } from "@/components/ui";
 import { InviteMessagePanel } from "@/components/groups/InviteMessagePanel";
 import { ApiError, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { getInviteUrl } from "@/lib/inviteUrl";
 import type { Invite } from "@/lib/hooks/useInvites";
 
 type Status = "active" | "expired" | "revoked" | "used_up";
@@ -104,7 +105,7 @@ export function InviteList({ gid, groupName, invites }: Props) {
       {shareInvite && (
         <InviteMessagePanel
           groupName={groupName}
-          inviteUrl={shareInvite.url}
+          inviteUrl={getInviteUrl(shareInvite.code)}
           onClose={() => setShareInvite(null)}
         />
       )}
