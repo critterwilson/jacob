@@ -134,7 +134,6 @@ export default function MembersPage({ params }: Props) {
                     subjectUid={m.uid}
                     subjectName={m.displayName}
                     groupId={gid}
-                    className="rounded border border-line px-3 py-1 text-xs text-cream-muted hover:bg-ink-raised"
                   />
                 )}
                 {isLeader && (

@@ -36,26 +36,61 @@ def _disable_limits() -> None:
     limiter.enabled = True
 
 
-def _list_db(ids: list[str]) -> MagicMock:
+def _list_db(
+    ids: list[str],
+    profiles: dict[str, dict] | None = None,
+) -> MagicMock:
     db = MagicMock()
     col = MagicMock()
     snaps = [MagicMock(id=i) for i in ids]
     col.stream.return_value = iter(snaps)
     db.collection.return_value.document.return_value.collection.return_value = col
+    # Mock get_all for the bulk profile enrichment step.
+    profile_data = profiles or {}
+    user_doc_mocks = []
+    for uid in ids:
+        doc = MagicMock()
+        doc.id = uid
+        doc.exists = uid in profile_data
+        doc.to_dict.return_value = profile_data.get(uid, {})
+        user_doc_mocks.append(doc)
+    db.get_all.return_value = user_doc_mocks
     return db
 
 
 # ── mutes / blocks reads ──────────────────────────────────────────────────
 
 
-def test_list_mutes_returns_uid_list() -> None:
-    db = _list_db(["bob", "carol"])
+def test_list_mutes_returns_enriched_users() -> None:
+    db = _list_db(
+        ["bob", "carol"],
+        {
+            "bob": {"displayName": "Bob Smith"},
+            "carol": {"displayName": "Carol Jones", "photoURL": "https://example.com/carol.jpg"},
+        },
+    )
     user = CurrentUser(uid="alice", claims={})
     with patch("app.routers.users.get_firestore", return_value=db):
         client = TestClient(_app(user))
         res = client.get("/api/users/me/mutes")
     assert res.status_code == 200
-    assert res.json() == {"mutedUids": ["bob", "carol"]}
+    data = res.json()
+    uids = [u["uid"] for u in data["mutedUsers"]]
+    assert uids == ["bob", "carol"]
+    assert data["mutedUsers"][0]["displayName"] == "Bob Smith"
+    assert data["mutedUsers"][1]["photoURL"] == "https://example.com/carol.jpg"
+
+
+def test_list_mutes_falls_back_to_uid_when_profile_missing() -> None:
+    db = _list_db(["ghost"])
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get("/api/users/me/mutes")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["mutedUsers"][0]["uid"] == "ghost"
+    assert data["mutedUsers"][0]["displayName"] == "ghost"
 
 
 def test_list_mutes_empty_when_no_docs() -> None:
@@ -64,7 +99,7 @@ def test_list_mutes_empty_when_no_docs() -> None:
     with patch("app.routers.users.get_firestore", return_value=db):
         client = TestClient(_app(user))
         res = client.get("/api/users/me/mutes")
-    assert res.json() == {"mutedUids": []}
+    assert res.json() == {"mutedUsers": []}
 
 
 def test_list_mutes_requires_auth() -> None:
@@ -73,14 +108,36 @@ def test_list_mutes_requires_auth() -> None:
     assert res.status_code == 401
 
 
-def test_list_blocks_returns_uid_list() -> None:
-    db = _list_db(["bob", "dave"])
+def test_list_blocks_returns_enriched_users() -> None:
+    db = _list_db(
+        ["bob", "dave"],
+        {
+            "bob": {"displayName": "Bob Smith"},
+            "dave": {"displayName": "Dave Lee", "photoURL": "https://example.com/dave.jpg"},
+        },
+    )
     user = CurrentUser(uid="alice", claims={})
     with patch("app.routers.users.get_firestore", return_value=db):
         client = TestClient(_app(user))
         res = client.get("/api/users/me/blocks")
     assert res.status_code == 200
-    assert res.json() == {"blockedUids": ["bob", "dave"]}
+    data = res.json()
+    uids = [u["uid"] for u in data["blockedUsers"]]
+    assert uids == ["bob", "dave"]
+    assert data["blockedUsers"][0]["displayName"] == "Bob Smith"
+    assert data["blockedUsers"][1]["photoURL"] == "https://example.com/dave.jpg"
+
+
+def test_list_blocks_falls_back_to_uid_when_profile_missing() -> None:
+    db = _list_db(["ghost"])
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get("/api/users/me/blocks")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["blockedUsers"][0]["uid"] == "ghost"
+    assert data["blockedUsers"][0]["displayName"] == "ghost"
 
 
 def test_list_blocks_requires_auth() -> None:

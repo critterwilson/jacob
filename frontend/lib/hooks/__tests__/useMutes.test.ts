@@ -49,8 +49,13 @@ afterEach(() => {
 });
 
 describe("useMutes", () => {
-  it("returns the muted set from the GET response", async () => {
-    mockApiGet.mockResolvedValueOnce({ mutedUids: ["bob", "carol"] });
+  it("returns the muted set from the enriched GET response", async () => {
+    mockApiGet.mockResolvedValueOnce({
+      mutedUsers: [
+        { uid: "bob", displayName: "Bob Smith", photoURL: null },
+        { uid: "carol", displayName: "Carol Jones", photoURL: null },
+      ],
+    });
     const { result } = renderHook(() => useMutes());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.isMuted("bob")).toBe(true);
@@ -58,7 +63,7 @@ describe("useMutes", () => {
   });
 
   it("mute() optimistically adds and POSTs", async () => {
-    mockApiGet.mockResolvedValueOnce({ mutedUids: [] });
+    mockApiGet.mockResolvedValueOnce({ mutedUsers: [] });
     mockApiPost.mockResolvedValueOnce({ uid: "bob", mutedAt: "2026-05-01T00:00:00Z" });
     const { result } = renderHook(() => useMutes());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -71,7 +76,9 @@ describe("useMutes", () => {
   });
 
   it("unmute() optimistically removes and DELETEs", async () => {
-    mockApiGet.mockResolvedValueOnce({ mutedUids: ["bob"] });
+    mockApiGet.mockResolvedValueOnce({
+      mutedUsers: [{ uid: "bob", displayName: "Bob", photoURL: null }],
+    });
     mockApiDelete.mockResolvedValueOnce(undefined);
     const { result } = renderHook(() => useMutes());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -84,7 +91,7 @@ describe("useMutes", () => {
   });
 
   it("does not mute self", async () => {
-    mockApiGet.mockResolvedValueOnce({ mutedUids: [] });
+    mockApiGet.mockResolvedValueOnce({ mutedUsers: [] });
     const { result } = renderHook(() => useMutes());
     await waitFor(() => expect(result.current.loading).toBe(false));
 

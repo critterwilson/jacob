@@ -165,12 +165,24 @@ class NotificationsListResponse(BaseModel):
 # ── mutes / blocks ──────────────────────────────────────────────────────────
 
 
+class MutedUserEntry(BaseModel):
+    uid: str
+    displayName: str
+    photoURL: str | None = None
+
+
+class BlockedUserEntry(BaseModel):
+    uid: str
+    displayName: str
+    photoURL: str | None = None
+
+
 class MutesResponse(BaseModel):
-    mutedUids: list[str]
+    mutedUsers: list[MutedUserEntry]
 
 
 class BlocksResponse(BaseModel):
-    blockedUids: list[str]
+    blockedUsers: list[BlockedUserEntry]
 
 
 class MuteResponse(BaseModel):

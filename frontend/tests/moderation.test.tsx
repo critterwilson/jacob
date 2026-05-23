@@ -5,10 +5,11 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
+import { BlockButton } from "@/components/moderation/BlockButton";
+import { MuteButton } from "@/components/moderation/MuteButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
 import { ReportDialog } from "@/components/moderation/ReportDialog";
-import { MuteButton } from "@/components/moderation/MuteButton";
-import { BlockButton } from "@/components/moderation/BlockButton";
+import { WellbeingFlagButton } from "@/components/moderation/WellbeingFlagButton";
 
 vi.mock("@/lib/auth-context", () => ({
   useAuth: () => ({
@@ -46,11 +47,16 @@ vi.mock("@/lib/hooks/useBlocks", () => ({
   useBlocks: () => ({
     isBlocked: (uid: string) => uid === "blocked-uid",
     blockedSet: new Set(["blocked-uid"]),
-    blockedList: ["blocked-uid"],
+    blockedList: [{ uid: "blocked-uid", displayName: "Blocked User", photoURL: null }],
     block: blockFn,
     unblock: unblockFn,
     loading: false,
   }),
+}));
+
+vi.mock("@/components/moderation/WellbeingFlagDialog", () => ({
+  WellbeingFlagDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Wellbeing flag dialog" /> : null,
 }));
 
 const fetchMock = vi.fn();
@@ -236,5 +242,46 @@ describe("BlockButton", () => {
   it("hides the button entirely when otherUid equals current user", () => {
     const { container } = render(<BlockButton otherUid="user-123" />);
     expect(container.firstChild).toBeNull();
+  });
+});
+
+// ── WellbeingFlagButton ──────────────────────────────────────────────────────
+
+describe("WellbeingFlagButton", () => {
+  it("renders 'Flag concern' label with ghost Button styling", () => {
+    render(<WellbeingFlagButton subjectUid="bob" subjectName="Bob" groupId="grp-1" />);
+    const btn = screen.getByTestId("wellbeing-flag-button");
+    expect(btn).toBeInTheDocument();
+    expect(btn).toHaveTextContent("Flag concern");
+    // Uses Button component — no inline className override applied
+    expect(btn).not.toHaveAttribute("class", expect.stringContaining("border-line"));
+  });
+
+  it("renders nothing when viewer is the subject", () => {
+    const { container } = render(
+      <WellbeingFlagButton subjectUid="user-123" subjectName="Me" groupId="grp-1" />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("opens the flag dialog when clicked", async () => {
+    const user = userEvent.setup();
+    render(<WellbeingFlagButton subjectUid="bob" subjectName="Bob" groupId="grp-1" />);
+    await user.click(screen.getByTestId("wellbeing-flag-button"));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("falls back to bare button when className escape hatch is provided", () => {
+    render(
+      <WellbeingFlagButton
+        subjectUid="bob"
+        subjectName="Bob"
+        groupId="grp-1"
+        className="my-chip-style"
+      />,
+    );
+    const btn = screen.getByTestId("wellbeing-flag-button");
+    expect(btn.tagName).toBe("BUTTON");
+    expect(btn).toHaveClass("my-chip-style");
   });
 });

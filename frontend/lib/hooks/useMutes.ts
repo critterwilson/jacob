@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 
-type MutesResponse = { mutedUids: string[] };
+type MutedUserEntry = { uid: string; displayName: string; photoURL: string | null };
+type MutesResponse = { mutedUsers: MutedUserEntry[] };
 
 /**
  * Subscribe to the current user's mute set.
@@ -37,7 +38,7 @@ export function useMutes() {
         signal: ctl.signal,
       });
       if (ctl.signal.aborted) return;
-      setMutedSet(new Set(res.mutedUids));
+      setMutedSet(new Set(res.mutedUsers.map((u) => u.uid)));
       setLoading(false);
     } catch (err) {
       if (ctl.signal.aborted) return;

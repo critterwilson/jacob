@@ -47,12 +47,14 @@ from app.models.messages import RecentMessage, RecentMessagesResponse
 from app.models.orgs import MyOrgsResponse, OrgSummary
 from app.models.user import CurrentUser
 from app.models.users import (
+    BlockedUserEntry,
     BlockResponse,
     BlocksResponse,
     BootstrapClaims,
     BootstrapResponse,
     CreateProfileRequest,
     DeviceResponse,
+    MutedUserEntry,
     MuteResponse,
     MutesResponse,
     Notification,
@@ -565,7 +567,25 @@ def list_mutes(
 ) -> MutesResponse:
     db = get_firestore()
     col = db.collection("users").document(user.uid).collection("mutes")
-    return MutesResponse(mutedUids=[snap.id for snap in col.stream()])
+    snaps = list(col.stream())
+    if not snaps:
+        return MutesResponse(mutedUsers=[])
+    user_refs = [db.collection("users").document(s.id) for s in snaps]
+    user_docs = list(db.get_all(user_refs))
+    profiles: dict[str, dict[str, Any]] = {}
+    for doc in user_docs:
+        if getattr(doc, "exists", False):
+            profiles[doc.id] = doc.to_dict() or {}
+    return MutesResponse(
+        mutedUsers=[
+            MutedUserEntry(
+                uid=s.id,
+                displayName=str(profiles.get(s.id, {}).get("displayName") or s.id),
+                photoURL=profiles.get(s.id, {}).get("photoURL"),
+            )
+            for s in snaps
+        ]
+    )
 
 
 @router.post(
@@ -616,7 +636,25 @@ def list_blocks(
 ) -> BlocksResponse:
     db = get_firestore()
     col = db.collection("users").document(user.uid).collection("blocks")
-    return BlocksResponse(blockedUids=[snap.id for snap in col.stream()])
+    snaps = list(col.stream())
+    if not snaps:
+        return BlocksResponse(blockedUsers=[])
+    user_refs = [db.collection("users").document(s.id) for s in snaps]
+    user_docs = list(db.get_all(user_refs))
+    profiles: dict[str, dict[str, Any]] = {}
+    for doc in user_docs:
+        if getattr(doc, "exists", False):
+            profiles[doc.id] = doc.to_dict() or {}
+    return BlocksResponse(
+        blockedUsers=[
+            BlockedUserEntry(
+                uid=s.id,
+                displayName=str(profiles.get(s.id, {}).get("displayName") or s.id),
+                photoURL=profiles.get(s.id, {}).get("photoURL"),
+            )
+            for s in snaps
+        ]
+    )
 
 
 @router.post(
@@ -901,7 +939,7 @@ def recent_messages(
                 accumulated.extend(chunk)
 
     accumulated.sort(
-        key=lambda m: (m.createdAt or datetime.min.replace(tzinfo=UTC)),
+        key=lambda m: m.createdAt or datetime.min.replace(tzinfo=UTC),
         reverse=True,
     )
     return RecentMessagesResponse(messages=accumulated[:_RECENT_FEED_LIMIT])
