@@ -13,7 +13,7 @@ dependencies = [
     "sendgrid>=6.11",
     "sentry-sdk[fastapi]>=2.58.0",
     "slowapi>=0.1.9",
-    "uvicorn[standard]>=0.32",
+    "uvicorn[standard]>=0.47.0",
     # T55 — DNS TXT verification for vanity-domain claims.
     "dnspython>=2.6",
     # T53 — SSRF-guarded HTTP fetch for the unfurl service.
