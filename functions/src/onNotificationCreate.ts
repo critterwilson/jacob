@@ -96,10 +96,16 @@ export function buildPayload(
       return { title: "📢 Announcement", body, collapseKey: `announcement:${gid}` };
     case "mention":
     case "board_mention":
+      // `m:${msgId}` — msgId (a Firestore auto-id, or postId for
+      // board_mention) is unique per message, so per-message collapse
+      // is already correct without including recipient/group. The
+      // previous `mentionTarget:${uid}:${gid}:${msgId}` form was ~85
+      // bytes for real-length ids and exceeded APNs' 64-byte
+      // `apns-collapse-id` limit, making every mention push fail.
       return {
         title: "💬 You were mentioned",
         body,
-        collapseKey: `mentionTarget:${recipientUid}:${gid}:${msgId}`,
+        collapseKey: `m:${msgId}`,
       };
     case "reply":
       return { title: "↩️ New reply to your message", body, collapseKey: `groupId:${gid}` };
