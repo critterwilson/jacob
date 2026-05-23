@@ -73,11 +73,10 @@ export default function SermonsListPage() {
 
       <div className="flex items-center gap-3">
         <Select
-          label="Preacher"
-          hideLabel
+          label="Filter by preacher"
           value={preacherFilter}
           onChange={(e) => setPreacherFilter(e.target.value)}
-          className="w-48"
+          className="w-56"
         >
           <option value="">All preachers</option>
           {preachers.map((p) => (
@@ -93,7 +92,11 @@ export default function SermonsListPage() {
       ) : error ? (
         <Banner tone="error">{error.message}</Banner>
       ) : filtered.length === 0 ? (
-        <p className="text-body-sm text-cream-muted">No sermons yet.</p>
+        <p className="text-body-sm text-cream-muted">
+          {isLeader
+            ? "No sermons yet. Use Add sermon above to add the first one."
+            : "No sermons yet — check back soon."}
+        </p>
       ) : (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {filtered.map((sermon) => (

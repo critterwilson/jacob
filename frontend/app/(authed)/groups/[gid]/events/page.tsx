@@ -140,7 +140,7 @@ export default function EventsListPage() {
             placeholder="Location (optional)"
             className="w-full rounded border border-line px-2 py-1 text-sm"
           />
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <label className="text-xs text-cream-muted">Repeat</label>
             <select
               value={recurKind}
@@ -149,13 +149,15 @@ export default function EventsListPage() {
               }
               className="rounded border border-line px-2 py-1 text-sm"
             >
-              <option value="none">none</option>
-              <option value="weekly">weekly</option>
-              <option value="biweekly">biweekly</option>
+              <option value="none">Don&apos;t repeat</option>
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Every two weeks</option>
             </select>
             {recurKind !== "none" && (
               <>
-                <label className="ml-2 text-xs text-cream-muted">Count</label>
+                <label className="ml-2 text-xs text-cream-muted">
+                  Number of times
+                </label>
                 <input
                   type="number"
                   min={1}
@@ -189,7 +191,11 @@ export default function EventsListPage() {
       ) : error ? (
         <p className="text-sm text-terracotta">{error.message}</p>
       ) : events.length === 0 ? (
-        <p className="text-sm text-cream-muted">No events scheduled.</p>
+        <p className="text-sm text-cream-muted">
+          {isLeader
+            ? "No events scheduled. Use New event to add the first one."
+            : "No events scheduled yet."}
+        </p>
       ) : (
         <ul className="space-y-3">
           {events.map((event) => (
@@ -210,19 +216,25 @@ export default function EventsListPage() {
               {event.location && (
                 <p className="text-xs text-cream-muted">📍 {event.location}</p>
               )}
-              <div className="mt-2 flex gap-2 text-xs">
-                {(["going", "maybe", "no"] as RsvpStatus[]).map((s) => (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {(
+                  [
+                    { value: "going", label: "Going" },
+                    { value: "maybe", label: "Maybe" },
+                    { value: "no", label: "Can't" },
+                  ] as { value: RsvpStatus; label: string }[]
+                ).map(({ value, label }) => (
                   <button
-                    key={s}
+                    key={value}
                     type="button"
-                    onClick={() => rsvp(event.eventId, s)}
-                    className="rounded border border-line px-2 py-0.5 hover:bg-ink-raised"
+                    onClick={() => rsvp(event.eventId, value)}
+                    className="rounded border border-line px-3 py-1 font-medium text-cream hover:bg-ink-overlay focus:outline-none focus-visible:shadow-glow-gold"
                   >
-                    {s}
+                    {label}
                   </button>
                 ))}
                 <span className="text-cream-muted">
-                  ({event.rsvpGoing} going)
+                  {event.rsvpGoing} going
                 </span>
               </div>
             </li>

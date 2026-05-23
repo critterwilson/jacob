@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-import { Button, ButtonLink } from "@/components/ui";
-import { ApiError, apiPost } from "@/lib/api";
+import { ButtonLink } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
@@ -31,42 +30,12 @@ export default function GroupPage({ params }: Props) {
   // The previous `createdBy === user.uid` heuristic missed them.
   const { isLeader } = useGroupMembership(user?.uid, gid);
   const { pendingCount } = useJoinRequests(isLeader ? gid : undefined);
-  const [rotateError, setRotateError] = useState<string | null>(null);
-  const [rotating, setRotating] = useState(false);
-  const [currentCode, setCurrentCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/sign-in");
     }
   }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (group) {
-      setCurrentCode(group.inviteCode);
-    }
-  }, [group]);
-
-  const handleRotate = async () => {
-    if (!user) return;
-    setRotateError(null);
-    setRotating(true);
-    try {
-      const { inviteCode } = await apiPost<{ inviteCode: string }>(
-        `/api/groups/${gid}/invite/rotate`,
-        undefined,
-      );
-      setCurrentCode(inviteCode);
-    } catch (e) {
-      setRotateError(
-        e instanceof ApiError
-          ? e.message || "Failed to rotate code."
-          : "Something went wrong.",
-      );
-    } finally {
-      setRotating(false);
-    }
-  };
 
   if (authLoading || groupLoading) {
     return (
@@ -208,30 +177,6 @@ export default function GroupPage({ params }: Props) {
         </section>
       )}
 
-      {isLeader && (
-        <section className="mt-8 rounded border border-line p-4">
-          <h2 className="mb-3 text-sm font-semibold text-cream-muted">Invite code</h2>
-          <p className="mb-3 font-mono text-lg tracking-widest">{currentCode}</p>
-          <p className="mb-3 text-sm text-cream-muted">
-            Share this code with people you want to invite. They can join at{" "}
-            <span className="font-mono text-xs">/join?code={currentCode}</span>.
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void handleRotate()}
-            loading={rotating}
-            disabled={rotating}
-          >
-            {rotating ? "Rotating…" : "Generate new code"}
-          </Button>
-          {rotateError && (
-            <p role="alert" className="mt-2 text-sm text-terracotta">
-              {rotateError}
-            </p>
-          )}
-        </section>
-      )}
     </main>
   );
 }

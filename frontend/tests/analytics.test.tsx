@@ -129,7 +129,7 @@ describe("AnalyticsPage", () => {
 
     await waitFor(() => screen.getByRole("group"));
 
-    const btn30d = screen.getByRole("button", { name: "30d" });
+    const btn30d = screen.getByRole("button", { name: "Last 30 days" });
     await user.click(btn30d);
 
     expect(btn30d).toHaveAttribute("aria-pressed", "true");
@@ -153,7 +153,7 @@ describe("AnalyticsPage", () => {
     render(<AnalyticsPage params={{ gid: "g1" }} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Quiet week/)).toBeInTheDocument();
+      expect(screen.getByText(/No messages yet in this period/)).toBeInTheDocument();
     });
   });
 });

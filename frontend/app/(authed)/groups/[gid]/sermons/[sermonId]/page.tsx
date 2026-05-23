@@ -5,7 +5,13 @@ import { useMemo, useState } from "react";
 
 import { SermonForm } from "@/components/groups/SermonForm";
 import type { SermonFormValues } from "@/components/groups/SermonForm";
-import { Button, ButtonLink, Eyebrow, Heading, Link } from "@/components/ui";
+import {
+  Button,
+  ButtonLink,
+  Eyebrow,
+  Heading,
+  Link,
+} from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useGroupSermons } from "@/lib/hooks/useGroupSermons";
@@ -141,21 +147,9 @@ export default function SermonDetailPage() {
                 rel="noopener noreferrer"
                 variant="primary"
               >
-                Open source ↗
+                Watch / Listen ↗
               </ButtonLink>
             )}
-            {/* T50 (Watch Together) is parked as of 2026-05-17 — video features
-                deferred by ministry owner. Button stays disabled. Re-enable when
-                T50 is revived (see docs/follow-ups/phase-3-parked.md § T50). */}
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              disabled
-              title="Watch Together — not available right now"
-            >
-              Watch with the group (not available)
-            </Button>
             {isLeader && (
               <>
                 <Button

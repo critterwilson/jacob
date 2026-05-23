@@ -66,6 +66,9 @@ export default function JoinRequestsPage({ params }: Props) {
   const requests =
     state.status === "ok" ? state.requests.filter((r: PendingRequest) => r.status === "pending") : [];
 
+  const memberCapReached =
+    !!group?.memberCap && group.memberCount >= group.memberCap;
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-6 flex items-baseline justify-between">
@@ -77,14 +80,15 @@ export default function JoinRequestsPage({ params }: Props) {
         </Link>
       </div>
 
-      {atCap && (
+      {(atCap || memberCapReached) && (
         <p
           role="alert"
           data-testid="at-cap-error"
           className="mb-4 rounded bg-terracotta/10 p-3 text-sm text-terracotta"
         >
-          This group is at its member limit. Remove a member before approving new
-          requests.
+          This group is at its member limit ({group?.memberCount}
+          {group?.memberCap ? ` / ${group.memberCap}` : ""}). Remove a member,
+          or raise the cap in group settings, before approving new requests.
         </p>
       )}
 
