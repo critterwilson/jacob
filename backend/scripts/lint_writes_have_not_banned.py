@@ -33,6 +33,7 @@ ALLOWED_DEPS = {
     "require_leader",  # composes require_not_banned (deps.py)
     "require_admin",  # admins bypass ban — intentional
     "require_ministry_owner",  # composes require_not_banned (ADR 0011)
+    "require_ministry_owner_or_admin",  # composes require_not_banned (ADR 0015)
     "require_moderator_or_admin",  # moderators/admins bypass ban — intentional
 }
 NOQA_MARKER = "# noqa: not-banned"

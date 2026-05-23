@@ -87,13 +87,6 @@ type BootstrapBody = {
 };
 
 let nextBootstrap: BootstrapBody = { hasProfile: false, profile: null };
-let nextApplication: Reply = {
-  ok: false,
-  status: 404,
-  json: async () => ({
-    error: { code: "application_not_found", message: "no app" },
-  }),
-};
 const fetchMock: Mock = vi.fn();
 const handlers: Array<{
   match: (url: string, method: string) => boolean;
@@ -134,19 +127,9 @@ beforeEach(() => {
         json: async () => nextBootstrap,
       };
     }
-    if (url.includes("/api/v1/applications/me") && method === "GET") {
-      return nextApplication;
-    }
     throw new Error(`unexpected fetch in test: ${method} ${url}`);
   });
   nextBootstrap = { hasProfile: false, profile: null };
-  nextApplication = {
-    ok: false,
-    status: 404,
-    json: async () => ({
-      error: { code: "application_not_found", message: "no app" },
-    }),
-  };
   mockReplace.mockClear();
   mockPush.mockClear();
   onboardingSearchParamsGet.mockReset();
@@ -185,7 +168,7 @@ describe("OnboardingPage redirect logic", () => {
     });
   });
 
-  it("redirects to /groups when user already has a profile", async () => {
+  it("redirects to /home when user already has a profile", async () => {
     mockAuthState({ uid: "uid-1", email: "user@example.com" });
     nextBootstrap = {
       hasProfile: true,
@@ -209,46 +192,6 @@ describe("OnboardingPage redirect logic", () => {
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/home");
-    });
-  });
-
-  it("redirects to /awaiting-approval when application is already pending", async () => {
-    mockAuthState({ uid: "uid-1", email: "user@example.com" });
-    nextBootstrap = { hasProfile: false, profile: null };
-    nextApplication = {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uid: "uid-1",
-        email: "user@example.com",
-        displayName: "Alice",
-        photoURL: null,
-        dob: ADULT_DOB,
-        age: 35,
-        isMinor: false,
-        phone: null,
-        location: null,
-        faithBackground: null,
-        status: "pending",
-        createdAt: null,
-        submittedAt: null,
-        decidedAt: null,
-        decidedBy: null,
-        parentalConsentObtained: null,
-        parentalConsentNotes: "",
-        rejectionReason: "",
-        grandfathered: false,
-      }),
-    };
-
-    render(
-      <AuthProvider>
-        <OnboardingPage />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/awaiting-approval");
     });
   });
 
@@ -280,104 +223,6 @@ describe("OnboardingPage redirect logic", () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/join?code=ABCD1234");
     });
-  });
-
-  it("forwards `?next=` onto /awaiting-approval for pending applicants", async () => {
-    onboardingSearchParamsGet.mockImplementation((k) =>
-      k === "next" ? "/join?code=ABCD1234" : null,
-    );
-    mockAuthState({ uid: "uid-1", email: "user@example.com" });
-    nextBootstrap = { hasProfile: false, profile: null };
-    nextApplication = {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uid: "uid-1",
-        email: "user@example.com",
-        displayName: "Alice",
-        photoURL: null,
-        dob: ADULT_DOB,
-        age: 35,
-        isMinor: false,
-        phone: null,
-        location: null,
-        faithBackground: null,
-        status: "pending",
-        createdAt: null,
-        submittedAt: null,
-        decidedAt: null,
-        decidedBy: null,
-        parentalConsentObtained: null,
-        parentalConsentNotes: "",
-        rejectionReason: "",
-        grandfathered: false,
-      }),
-    };
-
-    render(
-      <AuthProvider>
-        <OnboardingPage />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith(
-        `/awaiting-approval?next=${encodeURIComponent("/join?code=ABCD1234")}`,
-      );
-    });
-  });
-
-  it("does NOT redirect to /awaiting-approval when application is approved (redirect loop regression)", async () => {
-    // Regression: before this fix, an approved user without the
-    // jacob-has-profile cookie (e.g. fresh session or cross-origin staging)
-    // would land on /onboarding via middleware, which then unconditionally
-    // sent them back to /awaiting-approval, which sent them to /home, which
-    // sent them back to /onboarding — an infinite loop.
-    //
-    // Fix: only redirect to /awaiting-approval for pending/rejected; approved
-    // users hold on the loading screen until bootstrap sets the cookie.
-    mockAuthState({ uid: "uid-1", email: "user@example.com" });
-    nextBootstrap = { hasProfile: false, profile: null };
-    nextApplication = {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uid: "uid-1",
-        email: "user@example.com",
-        displayName: "Alice",
-        photoURL: null,
-        dob: ADULT_DOB,
-        age: 35,
-        isMinor: false,
-        phone: null,
-        location: null,
-        faithBackground: null,
-        status: "approved",
-        createdAt: null,
-        submittedAt: null,
-        decidedAt: null,
-        decidedBy: null,
-        parentalConsentObtained: null,
-        parentalConsentNotes: "",
-        rejectionReason: "",
-        grandfathered: false,
-      }),
-    };
-
-    render(
-      <AuthProvider>
-        <OnboardingPage />
-      </AuthProvider>,
-    );
-
-    // Give the effects time to settle.
-    await waitFor(() => {
-      expect(mockReplace).not.toHaveBeenCalledWith("/awaiting-approval");
-    });
-    // Should show a loading screen, not the "Apply to join" form.
-    expect(
-      screen.queryByRole("form", { name: /complete your profile/i }),
-    ).not.toBeInTheDocument();
   });
 
   it("renders the profile form when user has no profile and no application", async () => {
@@ -455,16 +300,16 @@ describe("ProfileForm validation", () => {
     renderForm();
 
     await advanceToStep2(user);
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     expect(
       await screen.findByText(/must agree to the community guidelines/i),
     ).toBeInTheDocument();
   });
 
-  it("posts to /api/applications/me and navigates to /awaiting-approval on valid submission", async () => {
+  it("posts to /api/users/me and navigates to /home on valid submission", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
+      (url, method) => url.includes("/api/v1/users/me") && method === "POST",
       () => ({
         ok: true,
         status: 201,
@@ -488,12 +333,12 @@ describe("ProfileForm validation", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
         (c) =>
-          String(c[0]).includes("/api/v1/applications/me") &&
+          String(c[0]).includes("/api/v1/users/me") &&
           (c[1] as RequestInit | undefined)?.method === "POST",
       );
       expect(calls.length).toBeGreaterThan(0);
@@ -502,12 +347,12 @@ describe("ProfileForm validation", () => {
       // No invite stashed → no inviteCode on the wire.
       expect(body.inviteCode).toBeUndefined();
     });
-    expect(mockPush).toHaveBeenCalledWith("/awaiting-approval");
+    expect(mockPush).toHaveBeenCalledWith("/home");
   });
 
   it("includes the stashed invite code in the application submit", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
+      (url, method) => url.includes("/api/v1/users/me") && method === "POST",
       () => ({
         ok: true,
         status: 201,
@@ -532,12 +377,12 @@ describe("ProfileForm validation", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(
         (c) =>
-          String(c[0]).includes("/api/v1/applications/me") &&
+          String(c[0]).includes("/api/v1/users/me") &&
           (c[1] as RequestInit | undefined)?.method === "POST",
       );
       expect(calls.length).toBeGreaterThan(0);
@@ -553,7 +398,7 @@ describe("ProfileForm validation", () => {
 
   it("shows error code and message when an ApiError is returned", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
+      (url, method) => url.includes("/api/v1/users/me") && method === "POST",
       () => ({
         ok: false,
         status: 500,
@@ -569,7 +414,7 @@ describe("ProfileForm validation", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/internal_error — boom/i)).toBeInTheDocument();
@@ -578,7 +423,7 @@ describe("ProfileForm validation", () => {
 
   it("surfaces network_error code in the toast when fetch throws", async () => {
     pushHandler(
-      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
+      (url, method) => url.includes("/api/v1/users/me") && method === "POST",
       () => {
         throw new TypeError("Failed to fetch");
       },
@@ -591,7 +436,7 @@ describe("ProfileForm validation", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/network_error/i)).toBeInTheDocument();
@@ -631,7 +476,7 @@ describe("Under-13 path", () => {
     // the form must show the confirmation banner — NOT silently call deleteUser.
     pushHandler(
       (url, method) =>
-        url.includes("/api/v1/applications/me") && method === "POST",
+        url.includes("/api/v1/users/me") && method === "POST",
       () => ({
         ok: false,
         status: 422,
@@ -652,7 +497,7 @@ describe("Under-13 path", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
       expect(
@@ -666,7 +511,7 @@ describe("Under-13 path", () => {
   it("calls deleteUser and redirects to /sign-in only after user clicks Continue", async () => {
     pushHandler(
       (url, method) =>
-        url.includes("/api/v1/applications/me") && method === "POST",
+        url.includes("/api/v1/users/me") && method === "POST",
       () => ({
         ok: false,
         status: 422,
@@ -692,7 +537,7 @@ describe("Under-13 path", () => {
     await user.click(
       screen.getByRole("checkbox", { name: /community guidelines/i }),
     );
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() =>
       screen.getByText(/JACOB requires you to be at least 13/i),

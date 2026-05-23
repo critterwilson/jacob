@@ -17,6 +17,7 @@ import { useMaintenanceBanner } from "@/lib/hooks/useMaintenanceBanner";
 import { useMinistryFeed } from "@/lib/hooks/useMinistryFeed";
 import { useReadingPlanToday } from "@/lib/hooks/useReadingPlans";
 import { useRecentMessages } from "@/lib/hooks/useRecentMessages";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 // Button-shaped <Link> classes. Mirrors Button.tsx primary/secondary
 // at size=md so empty-state CTAs render as anchors (correct semantics
@@ -34,6 +35,17 @@ const ctaSecondary =
 
 export default function HomePage() {
   const { user } = useAuth();
+  const claims = useRoleClaims();
+  // ADR 0015: only owners/admins can create groups directly. Everyone
+  // else applies via the leader-application flow.
+  const canCreateDirectly =
+    !!claims && (claims.isAdmin || claims.isMinistryOwner);
+  const createGroupHref = canCreateDirectly
+    ? "/groups/new"
+    : "/leader-application";
+  const createGroupLabel = canCreateDirectly
+    ? "Create a group"
+    : "Apply to lead a group";
   const { groups, loading: groupsLoading } = useGroups(user?.uid);
   const { messages: recentMessages, loading: recentLoading } =
     useRecentMessages(groups);
@@ -114,11 +126,15 @@ export default function HomePage() {
         ) : groups.length === 0 ? (
           <div className="rounded-lg border border-dashed border-line bg-ink-raised px-4 py-8 text-center">
             <p className="mb-4 text-body-sm text-cream-muted">
-              You haven&apos;t joined any groups yet.
+              You haven&apos;t joined any groups yet. You can request to join
+              an existing one or apply to lead a new group.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              <Link href="/groups/new" className={ctaPrimary}>
-                Create a group
+              <Link href="/discover" className={ctaPrimary}>
+                Discover groups
+              </Link>
+              <Link href={createGroupHref} className={ctaSecondary}>
+                {createGroupLabel}
               </Link>
               <Link href="/join" className={ctaSecondary}>
                 Join with code

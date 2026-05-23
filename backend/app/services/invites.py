@@ -233,6 +233,46 @@ def consume_invite(db: Any, code: str, uid: str) -> tuple[str, str]:
     return gid, invite_id
 
 
+def find_invite_target_gid(db: Any, code: str) -> str:
+    """Resolve an invite code → gid without consuming the invite (ADR 0015).
+
+    The minor-escalation path creates a pending join-request that
+    captures the invite code but does NOT decrement useCount. The
+    invite is only consumed at owner-approval time. We still need to
+    know which group the request targets to write the join-request
+    under the right path, hence this read-only sibling of
+    `consume_invite`.
+
+    Raises the same `invalid_invite` / `archived` errors as
+    `consume_invite` so the caller surfaces consistent codes; the
+    expiry / max-uses checks are deferred to the moment of consume.
+    """
+    hits = list(
+        db.collection_group("invites")
+        .where("code", "==", code)
+        .where("revokedAt", "==", None)
+        .limit(1)
+        .stream()
+    )
+    if not hits:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="invalid_invite",
+            message="Invite code not found",
+        )
+    invite_snap = hits[0]
+    path_parts = invite_snap.reference.path.split("/")
+    gid: str = str(path_parts[1])
+    group_snap = db.collection("groups").document(gid).get()
+    if group_snap.exists and (group_snap.to_dict() or {}).get("archivedAt") is not None:
+        raise APIError(
+            status_code=status.HTTP_410_GONE,
+            code="archived",
+            message="Cannot join an archived group",
+        )
+    return gid
+
+
 def _to_datetime(ts: Any) -> datetime | None:
     if ts is None:
         return None

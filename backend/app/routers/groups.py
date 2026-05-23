@@ -25,6 +25,7 @@ from app.deps import (
     require_leader,
     require_member,
     require_member_or_public,
+    require_ministry_owner_or_admin,
     require_not_archived,
     require_not_banned,
 )
@@ -70,7 +71,7 @@ from app.models.messages import Message, ModerationFields, PinnedMessagesRespons
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import get_firestore, init_firebase_admin
-from app.services.invites import consume_invite
+from app.services.invites import consume_invite, find_invite_target_gid
 from app.services.notifications import bulk_write_notifications
 
 logger = logging.getLogger(__name__)
@@ -113,8 +114,14 @@ def create_group(
     request: Request,
     response: Response,
     body: CreateGroupRequest,
-    user: CurrentUser = Depends(require_not_banned),
+    user: CurrentUser = Depends(require_ministry_owner_or_admin),
 ) -> CreateGroupResponse:
+    # ADR 0015: direct group creation is owner/admin-only. Non-owners
+    # become leaders via the leader-application flow
+    # (`POST /api/leader-applications` → owner approves → backend creates
+    # the group with the applicant as leader). The dep enforces the
+    # gate; `require_ministry_owner_or_admin` already composes
+    # `require_not_banned`.
     db = _db()
     code = _unique_invite_code(db)
     gid = str(uuid.uuid4())
@@ -174,16 +181,76 @@ def join_group(
     body: JoinGroupRequest,
     user: CurrentUser = Depends(require_not_banned),
 ) -> JoinGroupResponse:
+    """Consume an invite link.
+
+    ADR 0015: adults are auto-joined (leader's invite counts as their
+    vouch). Minors escalate to the owner queue with the invite code
+    persisted on the join-request — the invite is **not** consumed at
+    this point; the owner's approval consumes it.
+    """
     db = _db()
-    gid, invite_id = consume_invite(db, body.code, user.uid)
+
+    # Resolve the inviter's intent → user's age-band → branch.
+    user_snap = db.collection("users").document(user.uid).get()
+    raw_user_data = user_snap.to_dict() if getattr(user_snap, "exists", False) else None
+    user_data = raw_user_data if isinstance(raw_user_data, dict) else {}
+    is_minor = bool(user_data.get("isMinor", False))
+
+    if not is_minor:
+        gid, invite_id = consume_invite(db, body.code, user.uid)
+        write_audit_log(
+            actor_uid=user.uid,
+            action="join_group",
+            target_ref=f"groups/{gid}/members/{user.uid}",
+            payload={"inviteId": invite_id, "viaInvite": True},
+        )
+        logger.info("uid=%s joined gid=%s via invite=%s", user.uid, gid, invite_id)
+        return JoinGroupResponse(groupId=gid, joined=True, pendingOwnerReview=False)
+
+    # Minor branch: resolve the gid without consuming the invite, then
+    # write a join-request that will land in the owner queue. The
+    # owner's approval endpoint runs `consume_invite` at decision time.
+    code = body.code.strip().upper()
+    gid = find_invite_target_gid(db, code)
+
+    # 409 if already a member (the invite landing came after a previous
+    # successful join).
+    member_snap = (
+        db.collection("groups").document(gid).collection("members").document(user.uid).get()
+    )
+    if member_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="already_member",
+            message="You are already a member of this group",
+        )
+
+    jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(user.uid)
+    existing = jr_ref.get()
+    if existing.exists and (existing.to_dict() or {}).get("status") == "pending":
+        # Already escalated — idempotent.
+        return JoinGroupResponse(groupId=gid, joined=False, pendingOwnerReview=True)
+
+    jr_ref.set(
+        {
+            "message": "",
+            "requestedAt": gcf.SERVER_TIMESTAMP,
+            "status": "pending",
+            "isMinor": True,
+            "requiresOwnerReview": True,
+            "inviteCode": code,
+            "parentalConsentObtained": None,
+            "parentalConsentNotes": "",
+        }
+    )
     write_audit_log(
         actor_uid=user.uid,
-        action="join_group",
-        target_ref=f"groups/{gid}/members/{user.uid}",
-        payload={"inviteId": invite_id},
+        action="request_join_via_invite_minor",
+        target_ref=f"groups/{gid}/joinRequests/{user.uid}",
+        payload={"viaInvite": True, "code": code},
     )
-    logger.info("uid=%s joined gid=%s via invite=%s", user.uid, gid, invite_id)
-    return JoinGroupResponse(groupId=gid)
+    logger.info("minor invite-escalated uid=%s gid=%s code=%s", user.uid, gid, code)
+    return JoinGroupResponse(groupId=gid, joined=False, pendingOwnerReview=True)
 
 
 @router.post("/{gid}/invite/rotate", response_model=RotateInviteResponse)

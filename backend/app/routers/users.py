@@ -23,6 +23,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
 from firebase_admin import firestore as fb_firestore
+from google.cloud import firestore as gcf
 from starlette.responses import Response as StarletteResponse
 
 from app.deps import get_current_user, require_not_banned
@@ -67,8 +68,11 @@ from app.models.users import (
     UpdateProfileRequest,
     UserProfile,
 )
+from app.services.applications import MIN_AGE, compute_age
+from app.services.applications import is_minor as _is_minor
 from app.services.audit import write_audit_log
 from app.services.firebase import get_firestore
+from app.services.invites import consume_invite, find_invite_target_gid
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users/me", tags=["users"])
@@ -218,13 +222,29 @@ def create_profile(
     body: CreateProfileRequest,
     user: CurrentUser = Depends(require_not_banned),
 ) -> UserProfile:
-    """**Deprecated post-ADR 0012.** New signups must go through
-    `POST /api/applications/me` and wait for admin approval. The
-    `users/{uid}` document is created server-side by the admin
-    approve endpoint, not by this route. We keep the endpoint
-    available but refuse calls that don't have a corresponding
-    approved application — that is the new ingress contract.
+    """Onboarding submit (ADR 0015).
+
+    Open self-signup: any email-verified user can complete onboarding
+    and get a `users/{uid}` doc. The server computes `isMinor` from
+    `dob`, refuses under-13 with 422, persists the raw `dob` on
+    `users/{uid}/private/profile`, and lands the caller in the
+    "unaffiliated" tier (no group memberships yet).
+
+    If `inviteCode` is supplied, this route also attempts to consume
+    it: adults are auto-joined; minors are escalated to the owner
+    queue with the code preserved on the join-request. Failures here
+    are non-fatal — the user doc is created either way; the frontend
+    surfaces the join outcome on the response.
     """
+    age = compute_age(body.dob)
+    if age < MIN_AGE:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="under_minimum_age",
+            message="JACOB requires you to be at least 13",
+            details={"minimumAge": MIN_AGE},
+        )
+
     db = get_firestore()
     user_ref = db.collection("users").document(user.uid)
     snap = user_ref.get()
@@ -235,28 +255,7 @@ def create_profile(
             message="Profile already exists",
         )
 
-    # ADR 0012: refuse direct profile creation without an approved
-    # application. The frontend now uses `/api/applications/me`; this
-    # endpoint exists only so an already-approved user (theoretical
-    # race: approve flips status, the user doc write fails, the user
-    # retries) can finish provisioning. In every other case the user
-    # must apply first.
-    app_snap = db.collection("applications").document(user.uid).get()
-    if not getattr(app_snap, "exists", False):
-        raise APIError(
-            status_code=status.HTTP_403_FORBIDDEN,
-            code="application_required",
-            message="Submit an application via POST /api/applications/me first",
-        )
-    app_status = str((app_snap.to_dict() or {}).get("status") or "")
-    if app_status != "approved":
-        raise APIError(
-            status_code=status.HTTP_403_FORBIDDEN,
-            code="application_not_approved",
-            message="Your application has not been approved yet",
-            details={"status": app_status},
-        )
-
+    minor_flag = _is_minor(body.dob)
     photo_url = str(body.photoURL) if body.photoURL is not None else None
     payload: dict[str, Any] = {
         "displayName": body.displayName,
@@ -264,7 +263,7 @@ def create_profile(
         "photoURL": photo_url,
         "role": "member",
         "schemaVersion": 1,
-        "isMinor": body.isMinor,
+        "isMinor": minor_flag,
         "createdAt": fb_firestore.SERVER_TIMESTAMP,
     }
     if body.phone:
@@ -275,12 +274,67 @@ def create_profile(
         payload["faithBackground"] = body.faithBackground
 
     user_ref.set(payload)
+    # Persist DOB on the owner-only private subcollection. ADR 0015 § 1
+    # keeps the raw date off the public user doc and on the private
+    # path the leader/mod surfaces already inspect via the backend.
+    user_ref.collection("private").document("profile").set(
+        {"dob": body.dob.isoformat()},
+        merge=True,
+    )
+
     write_audit_log(
         actor_uid=user.uid,
         action="account.create_profile",
         target_ref=f"users/{user.uid}",
-        payload={"isMinor": body.isMinor},
+        payload={"isMinor": minor_flag, "hasInviteCode": bool(body.inviteCode)},
     )
+
+    # Optional auto-join via invite code. Mirrors the
+    # `services.invites.consume_invite` / minor-escalation branching
+    # from `routers/groups.py:join_group`. We swallow errors here —
+    # the profile create has already succeeded; the frontend can re-
+    # offer the invite landing if the consume failed.
+    if body.inviteCode:
+        code = body.inviteCode.strip().upper()
+        try:
+            if minor_flag:
+                gid = find_invite_target_gid(db, code)
+                jr_ref = (
+                    db.collection("groups")
+                    .document(gid)
+                    .collection("joinRequests")
+                    .document(user.uid)
+                )
+                existing = jr_ref.get()
+                if not (existing.exists and (existing.to_dict() or {}).get("status") == "pending"):
+                    jr_ref.set(
+                        {
+                            "message": "",
+                            "requestedAt": gcf.SERVER_TIMESTAMP,
+                            "status": "pending",
+                            "isMinor": True,
+                            "requiresOwnerReview": True,
+                            "inviteCode": code,
+                            "parentalConsentObtained": None,
+                            "parentalConsentNotes": "",
+                        }
+                    )
+                    write_audit_log(
+                        actor_uid=user.uid,
+                        action="request_join_via_invite_minor",
+                        target_ref=f"groups/{gid}/joinRequests/{user.uid}",
+                        payload={"viaInvite": True, "code": code, "source": "onboarding"},
+                    )
+            else:
+                consume_invite(db, code, user.uid)
+        except APIError:
+            logger.warning(
+                "create_profile: invite consume/escalation failed uid=%s code=%s",
+                user.uid,
+                code,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("create_profile: unexpected error in invite path uid=%s", user.uid)
 
     fresh = user_ref.get()
     profile = _user_doc_to_profile(user.uid, fresh.to_dict() or {})

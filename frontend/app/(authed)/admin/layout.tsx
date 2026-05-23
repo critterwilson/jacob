@@ -9,7 +9,12 @@ import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 const ADMIN_NAV_LINKS = [
   { href: "/admin/queue", label: "Moderation Queue" },
-  { href: "/admin/applications", label: "Applications" },
+  // ADR 0015 — owner-facing queues. The legacy /admin/applications stays
+  // reachable for the residual ADR 0012 queue but new signups never
+  // land in it.
+  { href: "/admin/leader-applications", label: "Leader applications" },
+  { href: "/admin/minor-reviews", label: "Minor reviews" },
+  { href: "/admin/applications", label: "Applications (legacy)" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/groups", label: "Groups" },
   { href: "/admin/boards", label: "Boards" },

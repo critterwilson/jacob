@@ -9,7 +9,7 @@ the same key allow-list and length predicates that
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -40,19 +40,38 @@ class UserProfile(BaseModel):
 
 
 class CreateProfileRequest(BaseModel):
-    """`POST /api/users/me` body. Replaces `firestore.rules:73-86`."""
+    """`POST /api/users/me` body (ADR 0015).
+
+    Onboarding submit. The server computes `isMinor` from `dob` and
+    persists `dob` to `users/{uid}/private/profile` for the audit
+    trail; only the computed `isMinor` lands on the public user doc.
+    Under-13 is refused at the route layer.
+
+    `isMinor` is no longer client-supplied — the field stays on the
+    response surface but is not part of the submit body.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     displayName: str = Field(min_length=1, max_length=100)
+    dob: date  # ISO YYYY-MM-DD — server computes isMinor from this
     photoURL: HttpUrl | None = None
-    isMinor: bool = False
     # Optional opt-ins shipped by the original onboarding form. Stored
     # alongside the public profile but not part of the rules allow-list
     # (handler decides whether to persist them).
     phone: str | None = Field(default=None, max_length=20)
     location: str | None = Field(default=None, max_length=100)
     faithBackground: str | None = Field(default=None, max_length=500)
+    # ADR 0015: invite code stays on the request for parity with the
+    # legacy applications flow — when present, the route auto-joins
+    # the caller into the target group (adults) or escalates to the
+    # owner queue with the code preserved (minors).
+    inviteCode: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=16,
+        pattern=r"^[A-Za-z0-9]+$",
+    )
 
 
 class UpdateProfileRequest(BaseModel):

@@ -7,7 +7,7 @@ dependency override.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -177,34 +177,41 @@ def test_bootstrap_requires_auth() -> None:
 # ── create profile ────────────────────────────────────────────────────────
 
 
-def _create_profile_db(*, fresh_snap: MagicMock, app_status: str = "approved") -> MagicMock:
-    """Two-collection mock for `POST /api/users/me` happy-path tests.
+def _create_profile_db(*, fresh_snap: MagicMock) -> MagicMock:
+    """Mock for the ADR 0015 onboarding write.
 
-    `users` ref returns absent-then-fresh; `applications` ref returns the
-    requested status (default: approved, so the new guard lets the write
-    through — ADR 0011). Pass `app_status="pending"` or similar to
-    exercise the refusal paths.
+    `users/{uid}` is absent on the first read and present on the second;
+    the `private/profile` subcollection write is captured for assertions
+    on the DOB persistence path.
     """
     user_ref = MagicMock()
     user_ref.get.side_effect = [_user_snap(exists=False), fresh_snap]
+    # `users/{uid}/private/profile` write — exposed for tests that check
+    # the DOB-on-private-subcollection contract.
+    private_ref = MagicMock()
+    private_col = MagicMock()
+    private_col.document.return_value = private_ref
+    user_ref.collection.return_value = private_col
     users_col = MagicMock()
     users_col.document.return_value = user_ref
 
-    app_ref = MagicMock()
-    app_ref.get.return_value = _user_snap(exists=True, data={"status": app_status})
-    apps_col = MagicMock()
-    apps_col.document.return_value = app_ref
-
     db = MagicMock()
-
-    def _col(name: str) -> MagicMock:
-        if name == "applications":
-            return apps_col
-        return users_col
-
-    db.collection.side_effect = _col
+    db.collection.return_value = users_col
     db._user_ref = user_ref  # type: ignore[attr-defined]
+    db._private_ref = private_ref  # type: ignore[attr-defined]
     return db
+
+
+def _adult_dob() -> str:
+    return (date.today() - timedelta(days=365 * 30)).isoformat()
+
+
+def _minor_dob() -> str:
+    return (date.today() - timedelta(days=365 * 15)).isoformat()
+
+
+def _under_13_dob() -> str:
+    return (date.today() - timedelta(days=365 * 10)).isoformat()
 
 
 def test_create_profile_persists_required_fields() -> None:
@@ -221,8 +228,10 @@ def test_create_profile_persists_required_fields() -> None:
     )
     db = _create_profile_db(fresh_snap=fresh_snap)
     user_ref = db._user_ref  # type: ignore[attr-defined]
+    private_ref = db._private_ref  # type: ignore[attr-defined]
 
     user = CurrentUser(uid="alice", email="alice@example.com", claims={})
+    adult_dob = _adult_dob()
     with (
         patch("app.routers.users.get_firestore", return_value=db),
         patch("app.routers.users.write_audit_log") as audit,
@@ -233,7 +242,7 @@ def test_create_profile_persists_required_fields() -> None:
             json={
                 "displayName": "Alice",
                 "photoURL": "https://example.com/a.jpg",
-                "isMinor": False,
+                "dob": adult_dob,
             },
         )
 
@@ -242,7 +251,7 @@ def test_create_profile_persists_required_fields() -> None:
     assert body["uid"] == "alice"
     assert body["displayName"] == "Alice"
 
-    # Wrote the doc.
+    # Wrote the user doc.
     user_ref.set.assert_called_once()
     payload = user_ref.set.call_args[0][0]
     assert payload["displayName"] == "Alice"
@@ -250,10 +259,17 @@ def test_create_profile_persists_required_fields() -> None:
     assert payload["photoURL"] == "https://example.com/a.jpg"
     assert payload["schemaVersion"] == 1
     assert payload["role"] == "member"
+    # server computes isMinor from dob — adult dob ⇒ false
     assert payload["isMinor"] is False
+    assert "dob" not in payload  # DOB never lands on the public user doc
     # createdAt is the server sentinel — assert it's not a literal datetime
     # (that would mean we're trusting the client).
     assert not isinstance(payload["createdAt"], datetime)
+
+    # Wrote DOB to the private subcollection.
+    private_ref.set.assert_called_once()
+    private_payload = private_ref.set.call_args[0][0]
+    assert private_payload["dob"] == adult_dob
 
     # Audit log recorded.
     audit.assert_called_once()
@@ -264,24 +280,58 @@ def test_create_profile_persists_required_fields() -> None:
     assert "jacob-has-profile=1" in set_cookie
 
 
+def test_create_profile_minor_dob_sets_is_minor() -> None:
+    """ADR 0015: server computes isMinor from dob, ignoring any client-side flag."""
+    fresh_snap = _user_snap(
+        exists=True,
+        data={"displayName": "Mia", "isMinor": True, "schemaVersion": 1},
+    )
+    db = _create_profile_db(fresh_snap=fresh_snap)
+    user_ref = db._user_ref  # type: ignore[attr-defined]
+
+    user = CurrentUser(uid="mia", claims={})
+    with (
+        patch("app.routers.users.get_firestore", return_value=db),
+        patch("app.routers.users.write_audit_log"),
+    ):
+        client = TestClient(_app(authed_user=user))
+        res = client.post(
+            "/api/users/me",
+            json={"displayName": "Mia", "dob": _minor_dob()},
+        )
+    assert res.status_code == 201
+    payload = user_ref.set.call_args[0][0]
+    assert payload["isMinor"] is True
+
+
+def test_create_profile_under_13_refused() -> None:
+    db = _create_profile_db(fresh_snap=_user_snap(exists=True))
+    user = CurrentUser(uid="tim", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(authed_user=user))
+        res = client.post(
+            "/api/users/me",
+            json={"displayName": "Tim", "dob": _under_13_dob()},
+        )
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "under_minimum_age"
+    db._user_ref.set.assert_not_called()  # type: ignore[attr-defined]
+
+
 def test_create_profile_409_on_duplicate() -> None:
     user_ref = MagicMock()
     user_ref.get.return_value = _user_snap(exists=True, data={"displayName": "Alice"})
     users_col = MagicMock()
     users_col.document.return_value = user_ref
-    apps_col = MagicMock()
-    apps_col.document.return_value = MagicMock(
-        get=MagicMock(return_value=_user_snap(exists=True, data={"status": "approved"}))
-    )
     db = MagicMock()
-    db.collection.side_effect = lambda name: apps_col if name == "applications" else users_col
+    db.collection.return_value = users_col
 
     user = CurrentUser(uid="alice", email="alice@example.com", claims={})
     with patch("app.routers.users.get_firestore", return_value=db):
         client = TestClient(_app(authed_user=user))
         res = client.post(
             "/api/users/me",
-            json={"displayName": "Alice", "isMinor": False},
+            json={"displayName": "Alice", "dob": _adult_dob()},
         )
 
     assert res.status_code == 409
@@ -294,7 +344,7 @@ def test_create_profile_validates_display_name_too_short() -> None:
     client = TestClient(_app(authed_user=user))
     res = client.post(
         "/api/users/me",
-        json={"displayName": "", "isMinor": False},
+        json={"displayName": "", "dob": _adult_dob()},
     )
     assert res.status_code == 422
     assert res.json()["error"]["code"] == "validation_error"
@@ -305,7 +355,7 @@ def test_create_profile_validates_display_name_too_long() -> None:
     client = TestClient(_app(authed_user=user))
     res = client.post(
         "/api/users/me",
-        json={"displayName": "x" * 101, "isMinor": False},
+        json={"displayName": "x" * 101, "dob": _adult_dob()},
     )
     assert res.status_code == 422
 
@@ -315,7 +365,7 @@ def test_create_profile_rejects_extra_keys() -> None:
     client = TestClient(_app(authed_user=user))
     res = client.post(
         "/api/users/me",
-        json={"displayName": "Alice", "isMinor": False, "role": "admin"},
+        json={"displayName": "Alice", "dob": _adult_dob(), "role": "admin"},
     )
     assert res.status_code == 422
 
@@ -325,7 +375,7 @@ def test_create_profile_rejects_invalid_photo_url() -> None:
     client = TestClient(_app(authed_user=user))
     res = client.post(
         "/api/users/me",
-        json={"displayName": "Alice", "isMinor": False, "photoURL": "not-a-url"},
+        json={"displayName": "Alice", "dob": _adult_dob(), "photoURL": "not-a-url"},
     )
     assert res.status_code == 422
 
@@ -355,7 +405,7 @@ def test_create_profile_persists_optional_fields_when_supplied() -> None:
             "/api/users/me",
             json={
                 "displayName": "Alice",
-                "isMinor": False,
+                "dob": _adult_dob(),
                 "phone": "+1-555-0100",
                 "location": "Brooklyn",
                 "faithBackground": "Methodist",

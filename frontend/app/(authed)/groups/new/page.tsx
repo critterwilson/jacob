@@ -6,18 +6,30 @@ import { useEffect } from "react";
 
 import { CreateGroupForm } from "@/components/groups/CreateGroupForm";
 import { useAuth } from "@/lib/auth-context";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 export default function NewGroupPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const claims = useRoleClaims();
+  // ADR 0015 — direct group creation is owner/admin-only. Non-owners
+  // who land here (typically from an outdated bookmark) are bounced to
+  // the leader-application form. Owner/admin users see the form
+  // unchanged.
+  const canCreateDirectly =
+    !!claims && (claims.isAdmin || claims.isMinistryOwner);
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/sign-in");
+      return;
     }
-  }, [user, loading, router]);
+    if (!loading && claims !== null && !canCreateDirectly) {
+      router.replace("/leader-application");
+    }
+  }, [user, loading, claims, canCreateDirectly, router]);
 
-  if (loading) {
+  if (loading || claims === null) {
     return (
       <main className="flex min-h-svh items-center justify-center">
         <span className="text-sm text-cream-muted">Loading…</span>
@@ -25,7 +37,7 @@ export default function NewGroupPage() {
     );
   }
 
-  if (!user) return null;
+  if (!user || !canCreateDirectly) return null;
 
   return (
     <main className="mx-auto max-w-lg px-4 py-10">
