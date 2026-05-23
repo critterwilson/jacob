@@ -679,9 +679,9 @@ def create_group_mute(
     return MutedGroupResponse(groupId=group_id, mutedAt=now)
 
 
-@router.delete(
+@router.delete(  # noqa: not-banned
     "/muted-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT
-)  # noqa: not-banned
+)
 @limiter.limit(USER_MUTES_WRITE)
 def delete_group_mute(
     request: Request,
