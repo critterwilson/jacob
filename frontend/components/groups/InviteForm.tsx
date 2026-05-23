@@ -9,6 +9,7 @@ import { Banner, Button, Select } from "@/components/ui";
 import { InviteMessagePanel } from "@/components/groups/InviteMessagePanel";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { getInviteUrl } from "@/lib/inviteUrl";
 
 const createInviteSchema = z.object({
   expiry: z.enum(["never", "24h", "7d", "30d"]),
@@ -65,7 +66,7 @@ export function InviteForm({ gid, groupName }: Props) {
 
   const copy = async () => {
     if (!created) return;
-    await navigator.clipboard.writeText(created.url);
+    await navigator.clipboard.writeText(getInviteUrl(created.code));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -105,7 +106,7 @@ export function InviteForm({ gid, groupName }: Props) {
         <>
           <div className="flex items-center gap-3 rounded-lg border border-line bg-ink-raised p-3">
             <span className="flex-1 truncate font-mono text-body-sm text-cream">
-              {created.url}
+              {getInviteUrl(created.code)}
             </span>
             <Button
               type="button"
@@ -127,7 +128,7 @@ export function InviteForm({ gid, groupName }: Props) {
           {showPanel && (
             <InviteMessagePanel
               groupName={groupName}
-              inviteUrl={created.url}
+              inviteUrl={getInviteUrl(created.code)}
               onClose={() => setShowPanel(false)}
             />
           )}

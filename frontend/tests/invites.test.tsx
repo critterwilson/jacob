@@ -96,7 +96,7 @@ describe("InviteForm", () => {
     render(<InviteForm gid="g1" groupName="Sunday Crew" />);
     await user.click(screen.getByRole("button", { name: /generate invite/i }));
     await waitFor(() => {
-      expect(screen.getByText("https://jacob.app/join?code=ABCD1234")).toBeInTheDocument();
+      expect(screen.getByText(/\/join\?code=ABCD1234/)).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
   });
