@@ -45,7 +45,7 @@ export default function MinistryFeedPage() {
     >
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <Eyebrow>Broadcast</Eyebrow>
+          <Eyebrow>From your organization</Eyebrow>
           <Heading id="ministry-feed-heading" level={1} size="md">
             Organization feed
           </Heading>

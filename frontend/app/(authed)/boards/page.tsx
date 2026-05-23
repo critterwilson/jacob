@@ -50,7 +50,7 @@ export default function BoardsPage() {
           )}
         </div>
         <p className="text-body-sm text-cream-muted">
-          Cross-group conversations. Anyone signed in can read and post.
+          Cross-group conversations. Open to everyone in JACOB.
         </p>
       </header>
 
@@ -63,7 +63,7 @@ export default function BoardsPage() {
             </ButtonLink>
           ) : (
             <p className="text-caption text-cream-muted">
-              Check back soon — boards are created by the JACOB team.
+              Check back soon — new boards are added over time.
             </p>
           )}
         </div>

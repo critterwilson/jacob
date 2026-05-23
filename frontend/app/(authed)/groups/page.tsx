@@ -32,13 +32,11 @@ export default function GroupsPage() {
     <main className="mx-auto max-w-2xl px-4 py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3">
         <h1 className="text-2xl font-semibold">Your groups</h1>
+        {/* Two clear actions only — Discover groups was a third button here
+         * but it's already in the drawer (Grow > Discover groups) and the
+         * Home > Browse block, so dropping it from this header keeps the
+         * row to one primary + one secondary action on mobile. */}
         <div className="flex flex-wrap gap-2">
-          <Link
-            href="/discover"
-            className="inline-flex h-11 items-center rounded border border-line px-4 text-body-sm transition-colors duration-fast hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
-          >
-            Discover groups
-          </Link>
           <Link
             href="/join"
             className="inline-flex h-11 items-center rounded border border-line px-4 text-body-sm transition-colors duration-fast hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
