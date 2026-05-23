@@ -19,7 +19,12 @@ import {
 import { ApiError, apiPost } from "@/lib/api";
 import { MIN_AGE, computeAge, dobSchema } from "@/lib/auth-schemas";
 import { auth } from "@/lib/firebase";
-import { clearPendingDob, readPendingDob } from "@/lib/pending-application";
+import {
+  clearPendingDob,
+  clearPendingInviteCode,
+  readPendingDob,
+  readPendingInviteCode,
+} from "@/lib/pending-application";
 
 type SubmitApplicationRequest = {
   displayName: string;
@@ -28,6 +33,7 @@ type SubmitApplicationRequest = {
   phone?: string;
   location?: string;
   faithBackground?: string;
+  inviteCode?: string;
 };
 
 type HttpUrlString = string;
@@ -101,6 +107,11 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
     setSubmitError(null);
     setSubmitting(true);
     try {
+      // If the user arrived via `/join?code=…` before signing up, the
+      // code is stashed in sessionStorage. Persist it onto the
+      // application doc so admin approval (potentially days later, in
+      // a different session) can auto-join the user to that group.
+      const pendingInvite = readPendingInviteCode();
       const body: SubmitApplicationRequest = {
         displayName: values.displayName,
         dob: values.dob,
@@ -110,9 +121,11 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
         ...(values.faithBackground
           ? { faithBackground: values.faithBackground }
           : {}),
+        ...(pendingInvite ? { inviteCode: pendingInvite } : {}),
       };
       await apiPost("/api/applications/me", body);
       clearPendingDob();
+      clearPendingInviteCode();
       router.push("/awaiting-approval");
     } catch (err) {
       if (err instanceof ApiError && err.code === "already_approved") {
@@ -149,6 +162,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       }
     } finally {
       clearPendingDob();
+      clearPendingInviteCode();
       router.push("/sign-in?reason=age");
     }
   };

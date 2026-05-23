@@ -259,6 +259,54 @@ def test_submit_application_rejects_extra_keys() -> None:
     assert res.status_code == 422
 
 
+def test_submit_application_persists_invite_code_uppercased() -> None:
+    """An invite code from `/join?code=…` is stored on the application doc."""
+    db = _make_db()
+    with (
+        patch("app.routers.applications.get_firestore", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+    ):
+        res = TestClient(_applicant_app()).post(
+            "/api/applications/me",
+            json={
+                "displayName": "Alice",
+                "dob": _adult_dob(),
+                "inviteCode": "abcd1234",
+            },
+        )
+    assert res.status_code == 201
+    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
+    # Normalized to uppercase to match `generate_invite_code`'s alphabet.
+    assert payload["inviteCode"] == "ABCD1234"
+
+
+def test_submit_application_without_invite_code_stores_none() -> None:
+    db = _make_db()
+    with (
+        patch("app.routers.applications.get_firestore", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+    ):
+        res = TestClient(_applicant_app()).post(
+            "/api/applications/me",
+            json={"displayName": "Alice", "dob": _adult_dob()},
+        )
+    assert res.status_code == 201
+    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
+    assert payload["inviteCode"] is None
+
+
+def test_submit_application_rejects_malformed_invite_code() -> None:
+    res = TestClient(_applicant_app()).post(
+        "/api/applications/me",
+        json={
+            "displayName": "Alice",
+            "dob": _adult_dob(),
+            "inviteCode": "has spaces!",
+        },
+    )
+    assert res.status_code == 422
+
+
 # ── GET /api/applications/me ──────────────────────────────────────────────
 
 
@@ -508,6 +556,199 @@ def test_admin_approve_409_when_already_decided() -> None:
         )
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "application_already_decided"
+
+
+# ── Admin approve: invite consumption (Case B) ────────────────────────────
+
+
+def test_admin_approve_consumes_invite_code_from_application() -> None:
+    """If the application doc has an inviteCode, approve calls consume_invite."""
+    db = _make_db(
+        app_exists=True,
+        app_data={
+            "email": "alice@example.com",
+            "displayName": "Alice",
+            "isMinor": False,
+            "status": "pending",
+            "inviteCode": "ABCD1234",
+        },
+    )
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+        patch(
+            "app.routers.admin.consume_invite",
+            return_value=("group-xyz", "invite-uuid"),
+        ) as mock_consume,
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/admin/applications/alice/approve",
+            json={},
+        )
+    assert res.status_code == 200
+    # `consume_invite` was called with the normalized code + the
+    # applicant's uid (NOT the admin's uid).
+    mock_consume.assert_called_once_with(db, "ABCD1234", "alice")
+    # User doc was created BEFORE the invite consume (so consume_invite
+    # has a valid `users/{uid}` to bind the member doc to).
+    db._user_ref.set.assert_called_once()  # type: ignore[attr-defined]
+    # The audit log records the join outcome.
+    audit_set_call = db.collection("audit_log").document().set
+    audit_payload = audit_set_call.call_args[0][0]
+    invite_outcome = audit_payload["payload"]["invite"]
+    assert invite_outcome["attempted"] is True
+    assert invite_outcome["status"] == "joined"
+    assert invite_outcome["gid"] == "group-xyz"
+
+
+def test_admin_approve_does_not_attempt_consume_when_no_invite_code() -> None:
+    db = _make_db(
+        app_exists=True,
+        app_data={
+            "email": "alice@example.com",
+            "displayName": "Alice",
+            "isMinor": False,
+            "status": "pending",
+        },
+    )
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+        patch("app.routers.admin.consume_invite") as mock_consume,
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/admin/applications/alice/approve",
+            json={},
+        )
+    assert res.status_code == 200
+    mock_consume.assert_not_called()
+    audit_set_call = db.collection("audit_log").document().set
+    invite_outcome = audit_set_call.call_args[0][0]["payload"]["invite"]
+    assert invite_outcome["attempted"] is False
+
+
+def test_admin_approve_continues_when_invite_code_expired() -> None:
+    """Expired/revoked invite must NOT block approval — log + audit instead."""
+    from fastapi import status as http_status
+
+    from app.errors import APIError as _APIError
+
+    db = _make_db(
+        app_exists=True,
+        app_data={
+            "email": "alice@example.com",
+            "displayName": "Alice",
+            "isMinor": False,
+            "status": "pending",
+            "inviteCode": "ABCD1234",
+        },
+    )
+
+    def _raise_expired(_db_arg, _code, _uid):  # type: ignore[no-untyped-def]
+        raise _APIError(
+            status_code=http_status.HTTP_410_GONE,
+            code="invite_expired",
+            message="This invite has expired",
+        )
+
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+        patch(
+            "app.routers.admin.consume_invite",
+            side_effect=_raise_expired,
+        ),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/admin/applications/alice/approve",
+            json={},
+        )
+    # Approval still succeeds — the user is approved even if the invite
+    # they originally clicked has since expired. They'll just need to
+    # be re-invited if they still want to join the group.
+    assert res.status_code == 200
+    assert res.json()["status"] == "approved"
+    # User doc was created (the approval did fully complete).
+    db._user_ref.set.assert_called_once()  # type: ignore[attr-defined]
+    # Audit records the failed consume with the error code.
+    audit_set_call = db.collection("audit_log").document().set
+    invite_outcome = audit_set_call.call_args[0][0]["payload"]["invite"]
+    assert invite_outcome["status"] == "failed"
+    assert invite_outcome["errorCode"] == "invite_expired"
+
+
+def test_admin_approve_continues_when_group_at_cap() -> None:
+    """At-cap is also non-fatal — same shape as expired."""
+    from fastapi import status as http_status
+
+    from app.errors import APIError as _APIError
+
+    db = _make_db(
+        app_exists=True,
+        app_data={
+            "email": "alice@example.com",
+            "displayName": "Alice",
+            "isMinor": False,
+            "status": "pending",
+            "inviteCode": "ABCD1234",
+        },
+    )
+
+    def _raise_at_cap(_db_arg, _code, _uid):  # type: ignore[no-untyped-def]
+        raise _APIError(
+            status_code=http_status.HTTP_409_CONFLICT,
+            code="group_at_cap",
+            message="This group is at its member limit.",
+            details={"cap": 20, "currentCount": 20},
+        )
+
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+        patch(
+            "app.routers.admin.consume_invite",
+            side_effect=_raise_at_cap,
+        ),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/admin/applications/alice/approve",
+            json={},
+        )
+    assert res.status_code == 200
+    audit_set_call = db.collection("audit_log").document().set
+    invite_outcome = audit_set_call.call_args[0][0]["payload"]["invite"]
+    assert invite_outcome["status"] == "failed"
+    assert invite_outcome["errorCode"] == "group_at_cap"
+
+
+def test_admin_approve_swallows_unexpected_error_from_consume() -> None:
+    """An unexpected exception during consume must not roll back approval."""
+    db = _make_db(
+        app_exists=True,
+        app_data={
+            "email": "alice@example.com",
+            "displayName": "Alice",
+            "isMinor": False,
+            "status": "pending",
+            "inviteCode": "ABCD1234",
+        },
+    )
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.services.audit._db", return_value=db),
+        patch(
+            "app.routers.admin.consume_invite",
+            side_effect=RuntimeError("firestore down"),
+        ),
+    ):
+        res = TestClient(_admin_app()).post(
+            "/api/admin/applications/alice/approve",
+            json={},
+        )
+    assert res.status_code == 200
+    audit_set_call = db.collection("audit_log").document().set
+    invite_outcome = audit_set_call.call_args[0][0]["payload"]["invite"]
+    assert invite_outcome["status"] == "errored"
 
 
 # ── Admin: reject ─────────────────────────────────────────────────────────

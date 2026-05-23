@@ -22,6 +22,12 @@ class SubmitApplicationRequest(BaseModel):
     `dob` field that drives the under-18 detection. The server computes
     `isMinor` from `dob`; client-supplied `isMinor` is ignored on
     purpose (we never trust a self-reported minor flag).
+
+    `inviteCode` is optional and only set when the applicant arrived via
+    `/join?code=<CODE>` before signing up. The code is persisted on the
+    application doc so admin approval — potentially days later, in a
+    different session — can auto-join the user to that group via the
+    same `consume_invite` path used by the join endpoint.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -32,6 +38,12 @@ class SubmitApplicationRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=20)
     location: str | None = Field(default=None, max_length=100)
     faithBackground: str | None = Field(default=None, max_length=500)
+    inviteCode: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=16,
+        pattern=r"^[A-Za-z0-9]+$",
+    )
 
 
 class ApplicationView(BaseModel):

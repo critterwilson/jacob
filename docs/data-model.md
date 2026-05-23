@@ -306,6 +306,7 @@ access signal. Default-deny in `firestore.rules`.
   "phone": null,
   "location": null,
   "faithBackground": null,
+  "inviteCode": "ABCD1234",
   "status": "pending",
   "createdAt": "<serverTimestamp>",
   "submittedAt": "<serverTimestamp>",
@@ -324,6 +325,15 @@ refuses to write `status: "approved"` unless the request body sets
 collection are stamped with `grandfathered: true`,
 `decidedBy: "system_grandfather"`, and `parentalConsentObtained: null`
 by `infra/scripts/backfill_applications.py`.
+
+`inviteCode` is set when the applicant arrived via `/join?code=<CODE>`
+before signing up. The frontend stashes the code in sessionStorage at
+the join landing and the onboarding form sends it on
+`POST /api/applications/me`. On admin approval the approve endpoint
+calls `consume_invite(code, uid)` after creating `users/{uid}` — a
+failed consume (expired, revoked, at member cap, archived group) is
+logged + audited but never blocks the approval. The field stays on
+the doc after approval for audit / debugging; it is not re-consumed.
 
 ---
 

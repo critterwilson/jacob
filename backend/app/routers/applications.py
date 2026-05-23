@@ -106,6 +106,10 @@ def submit_application(
         )
 
     minor_flag = is_minor(body.dob)
+    # Normalize the optional invite code to uppercase to match the
+    # canonical shape produced by `generate_invite_code` (the lookup in
+    # `consume_invite` is case-sensitive). Empty/None survives as None.
+    invite_code = (body.inviteCode.strip().upper() if body.inviteCode else None) or None
     payload: dict[str, Any] = {
         "email": user.email,
         "displayName": body.displayName,
@@ -115,6 +119,7 @@ def submit_application(
         "phone": body.phone or None,
         "location": body.location or None,
         "faithBackground": body.faithBackground or None,
+        "inviteCode": invite_code,
         "status": "pending",
         "submittedAt": fb_firestore.SERVER_TIMESTAMP,
         # On first submit we also stamp createdAt; on resubmit we leave it.
@@ -132,7 +137,11 @@ def submit_application(
         actor_uid=user.uid,
         action="application.submit",
         target_ref=f"applications/{user.uid}",
-        payload={"isMinor": minor_flag, "resubmit": bool(existing)},
+        payload={
+            "isMinor": minor_flag,
+            "resubmit": bool(existing),
+            "hasInviteCode": invite_code is not None,
+        },
     )
 
     fresh = app_ref.get()
