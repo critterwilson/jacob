@@ -46,7 +46,7 @@ function JoinForm() {
     if (!authLoading && !user) {
       const code = searchParams.get("code");
       const dest = code ? `/join?code=${code}` : "/join";
-      router.replace(`/sign-in?redirect=${encodeURIComponent(dest)}`);
+      router.replace(`/sign-in?next=${encodeURIComponent(dest)}`);
     }
   }, [user, authLoading, router, searchParams]);
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
@@ -9,11 +9,24 @@ import { Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useMyApplication } from "@/lib/hooks/useMyApplication";
 import { useUser } from "@/lib/hooks/useUser";
+import { safeNext } from "@/lib/safe-redirect";
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useUser(user?.uid);
+
+  // `?next=` carries the intended post-auth destination (e.g. an
+  // invite landing page). For already-approved Google sign-ups, we
+  // route there instead of /home. For pending/rejected applicants
+  // we forward it onto /awaiting-approval so the eventual approved
+  // landing honors it too.
+  const next = safeNext(searchParams.get("next"));
+  const approvedDest = next ?? "/home";
+  const awaitingHref = next
+    ? `/awaiting-approval?next=${encodeURIComponent(next)}`
+    : "/awaiting-approval";
   // ADR 0012: an applicant who has already submitted the application
   // form lives in `applications/{uid}`. If we land here with a pending
   // or decided application, bounce them to /awaiting-approval — re-
@@ -30,7 +43,7 @@ export default function OnboardingPage() {
       return;
     }
     if (profile) {
-      router.replace("/home");
+      router.replace(approvedDest);
       return;
     }
     // Only redirect to /awaiting-approval for pending or rejected applications.
@@ -40,7 +53,7 @@ export default function OnboardingPage() {
     // useUser bootstraps the profile and sets the cookie, then the `profile`
     // branch above will redirect them to /home.
     if (application && application.status !== "approved") {
-      router.replace("/awaiting-approval");
+      router.replace(awaitingHref);
     }
   }, [
     user,
@@ -50,6 +63,8 @@ export default function OnboardingPage() {
     profileLoading,
     applicationLoading,
     router,
+    approvedDest,
+    awaitingHref,
   ]);
 
   if (authLoading || profileLoading || applicationLoading) {
@@ -99,5 +114,19 @@ export default function OnboardingPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-svh items-center justify-center bg-ink">
+          <span className="text-body-sm text-cream-muted">Loading…</span>
+        </main>
+      }
+    >
+      <OnboardingContent />
+    </Suspense>
   );
 }

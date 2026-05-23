@@ -5,23 +5,30 @@ import {
   sendEmailVerification,
   signOut,
 } from "firebase/auth";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { Banner, Button, Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { auth } from "@/lib/firebase";
+import { safeNext } from "@/lib/safe-redirect";
 
 const POLL_INTERVAL_MS = 5_000;
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading } = useAuth();
   const [resendState, setResendState] = useState<
     "idle" | "sending" | "sent" | "error"
   >("idle");
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const next = safeNext(searchParams.get("next"));
+  const onboardingHref = next
+    ? `/onboarding?next=${encodeURIComponent(next)}`
+    : "/onboarding";
 
   useEffect(() => {
     if (loading) return;
@@ -30,9 +37,9 @@ export default function VerifyEmailPage() {
       return;
     }
     if (user.emailVerified) {
-      router.replace("/onboarding");
+      router.replace(onboardingHref);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, onboardingHref]);
 
   // Poll auth.currentUser.reload() every 5s until emailVerified flips.
   useEffect(() => {
@@ -52,7 +59,7 @@ export default function VerifyEmailPage() {
           clearInterval(pollingRef.current);
           pollingRef.current = null;
         }
-        router.replace("/onboarding");
+        router.replace(onboardingHref);
       }
     };
 
@@ -66,7 +73,7 @@ export default function VerifyEmailPage() {
         pollingRef.current = null;
       }
     };
-  }, [user, router]);
+  }, [user, router, onboardingHref]);
 
   const onResend = async () => {
     const current = auth.currentUser;
@@ -155,5 +162,21 @@ export default function VerifyEmailPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-svh items-center justify-center bg-ink">
+          <span className="text-body-sm text-cream-muted" role="status">
+            Loading…
+          </span>
+        </main>
+      }
+    >
+      <VerifyEmailContent />
+    </Suspense>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { Banner, Button, Card, Eyebrow, Heading } from "@/components/ui";
@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { auth } from "@/lib/firebase";
 import { useMyApplication } from "@/lib/hooks/useMyApplication";
 import { useUser } from "@/lib/hooks/useUser";
+import { safeNext } from "@/lib/safe-redirect";
 
 /**
  * ADR 0012 — "your application is being reviewed" gate.
@@ -24,8 +25,9 @@ import { useUser } from "@/lib/hooks/useUser";
  *   - no application doc    → bounce to /onboarding (they haven't
  *                            submitted the form yet).
  */
-export default function AwaitingApprovalPage() {
+function AwaitingApprovalContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const {
     application,
@@ -38,6 +40,11 @@ export default function AwaitingApprovalPage() {
   // and bounces them to /onboarding, which then redirects back here, looping.
   const { loading: profileLoading } = useUser(user?.uid);
 
+  // `?next=` is the post-approval destination — typically an invite
+  // landing page (`/join?code=…`) preserved from the original sign-in.
+  // Fall back to /home so we never strand an approved user.
+  const approvedDest = safeNext(searchParams.get("next")) ?? "/home";
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -49,9 +56,9 @@ export default function AwaitingApprovalPage() {
     if (applicationLoading || profileLoading) return;
     if (!application) return;
     if (application.status === "approved") {
-      router.replace("/home");
+      router.replace(approvedDest);
     }
-  }, [application, applicationLoading, profileLoading, router]);
+  }, [application, applicationLoading, profileLoading, router, approvedDest]);
 
   useEffect(() => {
     if (applicationLoading || !user) return;
@@ -181,5 +188,21 @@ export default function AwaitingApprovalPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function AwaitingApprovalPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-svh items-center justify-center bg-ink">
+          <span className="text-body-sm text-cream-muted" role="status">
+            Loading…
+          </span>
+        </main>
+      }
+    >
+      <AwaitingApprovalContent />
+    </Suspense>
   );
 }

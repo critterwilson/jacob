@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { Eyebrow, Heading } from "@/components/ui";
 
@@ -16,7 +18,10 @@ export default function SignUpPage() {
           community.
         </p>
       </header>
-      <SignUpForm />
+      {/* SignUpForm reads `?next=` via useSearchParams. */}
+      <Suspense fallback={null}>
+        <SignUpForm />
+      </Suspense>
     </div>
   );
 }

@@ -14,9 +14,13 @@ import {
 } from "vitest";
 
 // next/navigation: stub useRouter so navigation calls don't crash.
+// useSearchParams is read by SignInForm / SignUpForm to thread `?next=`.
+// Each test that cares about it overrides searchParamsGet per-test.
 const mockPush = vi.fn();
+const searchParamsGet = vi.fn<(key: string) => string | null>(() => null);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => ({ get: searchParamsGet }),
 }));
 
 // Replace the Firebase singletons with sentinels — every firebase/auth
@@ -47,6 +51,8 @@ import { AuthProvider, useAuth } from "@/lib/auth-context";
 
 beforeEach(() => {
   mockPush.mockClear();
+  searchParamsGet.mockReset();
+  searchParamsGet.mockReturnValue(null);
   vi.mocked(fbAuth.onAuthStateChanged).mockReset();
   vi.mocked(fbAuth.signInWithEmailAndPassword).mockReset();
   vi.mocked(fbAuth.signInWithPopup).mockReset();
@@ -243,6 +249,87 @@ describe("SignInForm", () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/"));
   });
+
+  // — `?next=` honoring (invite-link round-trip) —
+  it("redirects to the `next` query param after email/password sign-in", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    vi.mocked(fbAuth.signInWithEmailAndPassword).mockResolvedValue({
+      user: { emailVerified: true },
+    } as unknown as fbAuth.UserCredential);
+
+    render(<SignInForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/join?code=ABCD1234"),
+    );
+  });
+
+  it("redirects to the `next` query param after Google sign-in", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    vi.mocked(fbAuth.signInWithPopup).mockResolvedValue({
+      user: { uid: "g1", emailVerified: true },
+    } as unknown as fbAuth.UserCredential);
+
+    render(<SignInForm />);
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue with google/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/join?code=ABCD1234"),
+    );
+  });
+
+  it("ignores an absolute-URL `next` (open-redirect guard)", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "https://evil.example/steal" : null,
+    );
+    vi.mocked(fbAuth.signInWithEmailAndPassword).mockResolvedValue({
+      user: { emailVerified: true },
+    } as unknown as fbAuth.UserCredential);
+
+    render(<SignInForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/"));
+  });
+
+  it("ignores a protocol-relative `next` (open-redirect guard)", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "//evil.example/x" : null,
+    );
+    vi.mocked(fbAuth.signInWithEmailAndPassword).mockResolvedValue({
+      user: { emailVerified: true },
+    } as unknown as fbAuth.UserCredential);
+
+    render(<SignInForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/"));
+  });
+
+  it("forwards `next` onto the Create-an-account link", () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    render(<SignInForm />);
+    const link = screen.getByRole("link", { name: /create an account/i });
+    expect(link).toHaveAttribute(
+      "href",
+      `/sign-up?next=${encodeURIComponent("/join?code=ABCD1234")}`,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -344,6 +431,74 @@ describe("SignUpForm", () => {
     );
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/onboarding"));
+  });
+
+  // — `?next=` survives the email/password signup funnel —
+  it("threads `next` onto /verify-email after email/password signup", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    vi.mocked(fbAuth.createUserWithEmailAndPassword).mockResolvedValue({
+      user: { uid: "alice", emailVerified: false },
+    } as unknown as fbAuth.UserCredential);
+    vi.mocked(fbAuth.sendEmailVerification).mockResolvedValue(undefined);
+
+    render(<SignUpForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.type(screen.getByLabelText(/date of birth/i), "1990-04-12");
+    await userEvent.click(screen.getByLabelText(/i agree/i));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create account/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(
+        `/verify-email?next=${encodeURIComponent("/join?code=ABCD1234")}`,
+      ),
+    );
+  });
+
+  it("threads `next` onto /onboarding after Google sign-up", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    vi.mocked(fbAuth.signInWithPopup).mockResolvedValue({
+      user: { uid: "g1", emailVerified: true },
+    } as unknown as fbAuth.UserCredential);
+
+    render(<SignUpForm />);
+    await userEvent.click(screen.getByLabelText(/i agree/i));
+    await userEvent.click(
+      screen.getByRole("button", { name: /continue with google/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(
+        `/onboarding?next=${encodeURIComponent("/join?code=ABCD1234")}`,
+      ),
+    );
+  });
+
+  it("ignores an absolute-URL `next` and falls back to /verify-email", async () => {
+    searchParamsGet.mockImplementation((k) =>
+      k === "next" ? "https://evil.example/steal" : null,
+    );
+    vi.mocked(fbAuth.createUserWithEmailAndPassword).mockResolvedValue({
+      user: { uid: "alice", emailVerified: false },
+    } as unknown as fbAuth.UserCredential);
+    vi.mocked(fbAuth.sendEmailVerification).mockResolvedValue(undefined);
+
+    render(<SignUpForm />);
+    await userEvent.type(screen.getByLabelText(/email/i), "alice@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "longenoughpw1!");
+    await userEvent.type(screen.getByLabelText(/date of birth/i), "1990-04-12");
+    await userEvent.click(screen.getByLabelText(/i agree/i));
+    await userEvent.click(
+      screen.getByRole("button", { name: /create account/i }),
+    );
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/verify-email"));
   });
 
   it("blocks the email/password submit when the ToS checkbox is unchecked", async () => {
