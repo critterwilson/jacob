@@ -2,7 +2,7 @@ export { onMessageWrite } from "./onMessageWrite";
 export { onMessageCreate } from "./onMessageCreate";
 export { onMemberWrite } from "./onMemberWrite";
 export { onReactionWrite } from "./onReactionWrite";
-export { onMessageIndex } from "./onMessageIndex";
+export { onMessageTokenize } from "./onMessageTokenize";
 export { onBoardPostCreate } from "./onBoardPostCreate";
 export { onBoardPostWrite } from "./onBoardPostWrite";
 export { onBoardReplyWrite } from "./onBoardReplyWrite";

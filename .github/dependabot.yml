@@ -24,19 +24,6 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
 
-  # L11: forward-looking entry for the Typesense image pinned in
-  # infra/typesense.tf. Dependabot's docker ecosystem scans Dockerfiles,
-  # not Terraform, so this is a no-op until /infra grows a Dockerfile —
-  # the operational mechanism today is the digest-rotation runbook at
-  # docs/runbooks/typesense-image-pin.md.
-  - package-ecosystem: docker
-    directory: /infra
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    reviewers:
-      - critterwilson
-
   - package-ecosystem: github-actions
     directory: /
     schedule:

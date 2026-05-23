@@ -2,18 +2,18 @@
 
 This file is loaded automatically by Claude Code on every task. It pins cross-cutting decisions so individual task specs in `DEV_PLAN.md` can stay tight. Read it before starting any task.
 
-*Last revised: 2026-05-23 (delegated membership / ADR 0015).*
+*Last revised: 2026-05-23 (post-M6 + Phase 3 + API versioning + ADR 0016 native search).*
 
 ## Project in one paragraph
 
-JACOB is a small-group messaging web app for Christian small groups. The frontend (Next.js) calls a FastAPI backend on Cloud Run for **all** end-user data access through `/api/*`. Firebase Auth and Firebase Storage are still used directly by the client; nothing else is. Cloud Functions for Firebase handle Firestore-triggered fan-out (denormalisation, search-sidecar indexing, FCM delivery). Firestore security rules are **default-deny** on every previously-client-accessible path post-M6 — they remain in the repo as defense-in-depth, not as the load-bearing access-control surface they were before M6.
+JACOB is a small-group messaging web app for Christian small groups. The frontend (Next.js) calls a FastAPI backend on Cloud Run for **all** end-user data access through `/api/*`. Firebase Auth and Firebase Storage are still used directly by the client; nothing else is. Cloud Functions for Firebase handle Firestore-triggered fan-out (denormalisation, search-token maintenance, FCM delivery). Firestore security rules are **default-deny** on every previously-client-accessible path post-M6 — they remain in the repo as defense-in-depth, not as the load-bearing access-control surface they were before M6.
 
 ## Tech stack (pinned versions are recommendations, not constraints)
 
 - **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS, deployed to Firebase **App Hosting** (managed Cloud Run, SSR).
 - **Backend:** Python 3.12 + FastAPI + uvicorn, deployed as a container on Cloud Run.
 - **Functions:** Cloud Functions for Firebase v2 (TypeScript, `functions/`) — Firestore triggers + Cloud Tasks worker for FCM.
-- **Data:** Cloud Firestore (Native mode, single region: `nam5`). BigQuery (`jacob_analytics` dataset) for daily analytics snapshots; Typesense (self-hosted on Cloud Run) for full-text search.
+- **Data:** Cloud Firestore (Native mode, single region: `nam5`). BigQuery (`jacob_analytics` dataset) for daily analytics snapshots. Search is native Firestore (ADR 0016) — keyword `array-contains` against a `searchTokens` field maintained by a Cloud Function trigger.
 - **Auth:** Firebase Authentication (email/password + Google sign-in).
 - **Storage:** Google Cloud Storage (one bucket for public media, one for quarantined uploads).
 - **Moderation:** Cloud Vision API (SafeSearch), Cloud Natural Language API, third-party CSAM hash service (`JACOB_HASH_PROVIDER`).
@@ -69,51 +69,18 @@ JACOB is a small-group messaging web app for Christian small groups. The fronten
 └── docs/
     ├── data-model.md           # canonical Firestore schema — see "Collection layout" below
     ├── data-layer-migration-plan.md
-    ├── adr/                    # ADRs: 0001, 0003, 0004, 0005, 0007, 0009, 0010, 0011, 0012 (superseded by 0014), 0013, 0014 (0002/0006/0008 were planned but those tasks were parked)
+    ├── adr/                    # ADRs: 0001, 0003, 0004, 0005 (superseded by 0016), 0007, 0009, 0010, 0011, 0012 (superseded by 0015), 0013, 0014, 0015, 0016 (0002/0006/0008 were planned but those tasks were parked)
     ├── runbooks/               # operational runbooks
     ├── follow-ups/             # phase-1-deferred.md, phase-2-deferred.md, phase-3-deferred.md, phase-3-parked.md
     └── legal/                  # internal legal-team source docs
 ```
-
-## Membership model (ADR 0015)
-
-Open self-signup, delegated approval. Anyone with a verified email can
-complete onboarding and get a `users/{uid}` doc (the existing
-"approved member" load-bearing artifact). The new account lands in an
-"unaffiliated" tier — it has no group memberships, so the existing
-`require_member` deps gate every group-scoped surface. Public boards,
-discover, search, and request-to-join stay reachable.
-
-Three approval surfaces:
-
-- **Owner approves group leaders** via `/api/admin/leader-applications*`.
-  The `leader_applications/{appId}` collection is the queue. On
-  approval the backend creates the target `groups/{gid}` with the
-  applicant as leader. Direct `POST /api/groups` is owner/admin-only.
-- **Group leaders approve adult members into their group** via the
-  pre-existing `groups/{gid}/joinRequests/{uid}` flow from PR #284.
-  Adults arriving via an invite (`POST /api/groups/join`) are
-  auto-joined — the leader is vouching by inviting.
-- **Owner approves minors into any group** via
-  `/api/admin/minor-join-requests` and
-  `/api/admin/groups/{gid}/join-requests/{uid}/(approve|reject)`. Two
-  load-bearing safety rules: (1) the leader-side approve/reject
-  endpoint refuses requests flagged `requiresOwnerReview` with
-  `403 minor_owner_review_required`, and (2) the owner approve
-  endpoint refuses without `parentalConsentObtained: true` with `422
-  parental_consent_required`. An invite never bypasses owner approval
-  for a minor — the consume happens only on owner approval.
-
-The legacy `applications/{uid}` collection from ADR 0012 stays in the
-data model for the residual queue; `POST /api/applications/me` returns
-410 Gone. See [docs/adr/0015-delegated-membership.md](docs/adr/0015-delegated-membership.md).
 
 ## Architectural rule of thumb
 
 **Decide where each operation lives:**
 
 - **Default: a FastAPI endpoint under `/api/*`.** Verify the Firebase ID token via `get_current_user`, compose the right access dep (`require_member` / `require_leader` / `require_member_or_public` / `require_not_banned`), and use the Firebase Admin SDK to read or write. This is the rule for every user-facing data access.
-- **Firestore-triggered work** (denormalisation, post-write fan-out, the search sidecar, FCM dispatch) lives in **Cloud Functions for Firebase v2 (TypeScript only)** — `functions/`. Use it only when reactive server-trusted work needs to follow a write the API just made.
+- **Firestore-triggered work** (denormalisation, post-write fan-out, search-token maintenance, FCM dispatch) lives in **Cloud Functions for Firebase v2 (TypeScript only)** — `functions/`. Use it only when reactive server-trusted work needs to follow a write the API just made.
 - **Realtime push** to clients was deferred — chat polls the backend roughly every 10s via the polling pattern below. M5 reintroduces sub-second push when revisited.
 
 The pre-M6 "trust the client when possible" rule no longer applies. Firestore client SDK calls are blocked by adblockers (the load-bearing reason for M1–M6); the trust boundary now sits at the FastAPI surface. See `docs/data-layer-migration-plan.md`.

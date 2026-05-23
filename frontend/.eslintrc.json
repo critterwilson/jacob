@@ -1,23 +1,6 @@
 {
   "extends": "next/core-web-vitals",
   "rules": {
-    "no-restricted-imports": [
-      "error",
-      {
-        "paths": [
-          {
-            "name": "typesense",
-            "message": "Frontend must NEVER reach Typesense directly — call /api/search instead. See docs/adr/0005-search-sidecar.md."
-          }
-        ],
-        "patterns": [
-          {
-            "group": ["typesense/*"],
-            "message": "Frontend must NEVER reach Typesense directly — call /api/search instead. See docs/adr/0005-search-sidecar.md."
-          }
-        ]
-      }
-    ],
     "no-restricted-syntax": [
       "error",
       {

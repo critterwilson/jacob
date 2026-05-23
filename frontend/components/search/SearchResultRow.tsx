@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 import type { SearchHit } from "@/lib/hooks/useSearch";
-import { sanitiseSnippet } from "@/lib/search-snippet";
 
 type Props = {
   hit: SearchHit;
@@ -21,7 +20,6 @@ function hitHref(hit: SearchHit): string {
 }
 
 export function SearchResultRow({ hit, onNavigate }: Props) {
-  const safeSnippet = sanitiseSnippet(hit.body ?? "");
   const date = new Date(hit.createdAt).toLocaleString([], {
     month: "short",
     day: "numeric",
@@ -41,12 +39,7 @@ export function SearchResultRow({ hit, onNavigate }: Props) {
         </span>
         <time>{date}</time>
       </div>
-      <p
-        className="text-sm text-cream"
-        // SAFE: sanitiseSnippet escapes everything and re-allows ONLY <mark>.
-        // See frontend/lib/search-snippet.ts.
-        dangerouslySetInnerHTML={{ __html: safeSnippet }}
-      />
+      <p className="text-sm text-cream">{hit.body ?? ""}</p>
     </Link>
   );
 }
