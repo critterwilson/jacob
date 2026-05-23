@@ -178,7 +178,7 @@ def test_bootstrap_requires_auth() -> None:
 
 
 def _create_profile_db(*, fresh_snap: MagicMock) -> MagicMock:
-    """Mock for the ADR 0014 onboarding write.
+    """Mock for the ADR 0015 onboarding write.
 
     `users/{uid}` is absent on the first read and present on the second;
     the `private/profile` subcollection write is captured for assertions
@@ -281,7 +281,7 @@ def test_create_profile_persists_required_fields() -> None:
 
 
 def test_create_profile_minor_dob_sets_is_minor() -> None:
-    """ADR 0014: server computes isMinor from dob, ignoring any client-side flag."""
+    """ADR 0015: server computes isMinor from dob, ignoring any client-side flag."""
     fresh_snap = _user_snap(
         exists=True,
         data={"displayName": "Mia", "isMinor": True, "schemaVersion": 1},

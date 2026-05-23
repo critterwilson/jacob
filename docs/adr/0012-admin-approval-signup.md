@@ -1,17 +1,17 @@
 # ADR 0012 — Admin-approval signup flow + parental-consent gate
 
-**Status:** Superseded by [ADR 0014](0014-delegated-membership.md) (2026-05-23)
+**Status:** Superseded by [ADR 0015](0015-delegated-membership.md) (2026-05-23)
 **Original status:** Accepted (2026-05-17)
 **Authors:** admin-approval signup task
 **Related:** `frontend/content/legal/privacy.md` § Children, `frontend/content/legal/terms.md` § Who can use JACOB, `docs/data-model.md`.
 
 > **Superseded.** The single platform-wide admin queue described here is
 > replaced by the delegated, group-based approval model in
-> [ADR 0014](0014-delegated-membership.md). The `applications/{uid}`
+> [ADR 0015](0015-delegated-membership.md). The `applications/{uid}`
 > collection is kept in the data model so the legacy queue can be
 > drained, but new signups no longer go through it; `POST /api/applications/me`
 > returns `410 Gone`. The under-18 parental-consent attestation moves
-> to the per-join-request flow on the owner queue (see ADR 0014 § 4).
+> to the per-join-request flow on the owner queue (see ADR 0015 § 4).
 
 ## Context
 

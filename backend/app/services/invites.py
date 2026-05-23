@@ -234,7 +234,7 @@ def consume_invite(db: Any, code: str, uid: str) -> tuple[str, str]:
 
 
 def find_invite_target_gid(db: Any, code: str) -> str:
-    """Resolve an invite code → gid without consuming the invite (ADR 0014).
+    """Resolve an invite code → gid without consuming the invite (ADR 0015).
 
     The minor-escalation path creates a pending join-request that
     captures the invite code but does NOT decrement useCount. The

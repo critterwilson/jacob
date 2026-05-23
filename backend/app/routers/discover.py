@@ -227,7 +227,7 @@ def create_join_request(
                 requiresOwnerReview=bool(existing.get("requiresOwnerReview")),
             )
 
-    # ADR 0014: minors escalate to the owner queue. Read isMinor from
+    # ADR 0015: minors escalate to the owner queue. Read isMinor from
     # the user doc (set at onboarding time) and denormalise it onto the
     # join-request so the owner CG query doesn't need to re-fetch every
     # user. The leader-facing list endpoint hides `requiresOwnerReview`
@@ -317,7 +317,7 @@ def list_join_requests(
     requests_out: list[PendingRequest] = []
     for snap in page:
         d = snap.to_dict() or {}
-        # ADR 0014: a leader must NEVER see a minor's pending request as
+        # ADR 0015: a leader must NEVER see a minor's pending request as
         # actionable. Hiding it from the list entirely is the right
         # default — surfacing it read-only would tempt nudging the
         # owner or treating the queue as a signal of interest from the
@@ -374,7 +374,7 @@ def approve_join_request(
                 code="not_found",
                 message="Pending join request not found",
             )
-        # ADR 0014 — load-bearing safety check: a leader must not be
+        # ADR 0015 — load-bearing safety check: a leader must not be
         # able to approve a minor. The bubble-up to the owner queue is
         # the only legitimate path; this branch is the server-side
         # backstop in case the leader has a stale UI hiding the flag.
@@ -456,7 +456,7 @@ def reject_join_request(
             return False, False
         if bool((snap.to_dict() or {}).get("requiresOwnerReview")):
             # Signal to the caller that this is the wrong endpoint
-            # without writing anything inside the transaction. ADR 0014
+            # without writing anything inside the transaction. ADR 0015
             # — minor decisions belong to the owner exclusively.
             return False, True
         txn.update(

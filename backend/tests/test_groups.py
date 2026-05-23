@@ -23,7 +23,7 @@ from app.routers.groups import router
 def _make_app(uid: str = "alice", *, is_owner: bool = True) -> FastAPI:
     """Return a minimal FastAPI app with the groups router and a mocked user.
 
-    ADR 0014: `POST /api/groups` is owner/admin-only. Tests default to
+    ADR 0015: `POST /api/groups` is owner/admin-only. Tests default to
     granting the owner claim on the CurrentUser so the real
     `require_ministry_owner_or_admin` dep passes; the dep still composes
     `require_not_banned`, which the banned-path tests exercise via

@@ -880,7 +880,7 @@ describe("ADR 0012 default-deny — applications", () => {
   });
 });
 
-describe("ADR 0014 default-deny — leader_applications", () => {
+describe("ADR 0015 default-deny — leader_applications", () => {
   it("denies reading leader_applications/{appId} even by the applicant", async () => {
     await seed(async (db) => {
       await setDoc(doc(db, "leader_applications", "app1"), {

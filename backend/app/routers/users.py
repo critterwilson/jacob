@@ -222,7 +222,7 @@ def create_profile(
     body: CreateProfileRequest,
     user: CurrentUser = Depends(require_not_banned),
 ) -> UserProfile:
-    """Onboarding submit (ADR 0014).
+    """Onboarding submit (ADR 0015).
 
     Open self-signup: any email-verified user can complete onboarding
     and get a `users/{uid}` doc. The server computes `isMinor` from
@@ -274,7 +274,7 @@ def create_profile(
         payload["faithBackground"] = body.faithBackground
 
     user_ref.set(payload)
-    # Persist DOB on the owner-only private subcollection. ADR 0014 § 1
+    # Persist DOB on the owner-only private subcollection. ADR 0015 § 1
     # keeps the raw date off the public user doc and on the private
     # path the leader/mod surfaces already inspect via the backend.
     user_ref.collection("private").document("profile").set(

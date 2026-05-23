@@ -1,4 +1,4 @@
-# ADR 0014 — Delegated, group-based membership approval
+# ADR 0015 — Delegated, group-based membership approval
 
 **Status:** Accepted (2026-05-23)
 **Authors:** delegated-membership rework

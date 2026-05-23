@@ -47,7 +47,7 @@ function formatDate(v: string | null): string {
 }
 
 /**
- * ADR 0014 leader-application form.
+ * ADR 0015 leader-application form.
  *
  * Any signed-in user can apply to lead a new group. The organization
  * owner reviews the application; on approval the backend creates the

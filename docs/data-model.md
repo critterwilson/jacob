@@ -77,7 +77,7 @@ org_slugs/{slug}                                # backend only — slug uniquene
 org_consent_tokens/{token}                      # backend only — attach consent flow
 domain_claims/{domain}                          # T55 — custom domain claims
 
-# ADR 0014 — delegated leader-application queue
+# ADR 0015 — delegated leader-application queue
 leader_applications/{appId}                     # owner-only via /api/admin/leader-applications*
 
 # T58 — feature flags
@@ -309,10 +309,10 @@ Items pending human moderator review. Written by the moderation pipeline
 
 ---
 
-## `applications/{uid}` (backend only, ADR 0012 — **deprecated by ADR 0014**)
+## `applications/{uid}` (backend only, ADR 0012 — **deprecated by ADR 0015**)
 
 **Legacy.** The platform-wide admin-approval queue is retired by
-[ADR 0014](adr/0014-delegated-membership.md). New signups create their
+[ADR 0015](adr/0015-delegated-membership.md). New signups create their
 `users/{uid}` doc directly via `POST /api/users/me` and never write to
 this collection. The submit endpoint `POST /api/applications/me` now
 returns `410 Gone`; the legacy admin list/approve/reject endpoints stay
@@ -362,7 +362,7 @@ the doc after approval for audit / debugging; it is not re-consumed.
 
 ---
 
-## `leader_applications/{appId}` (backend only, ADR 0014)
+## `leader_applications/{appId}` (backend only, ADR 0015)
 
 Delegated-membership queue: a non-owner submits a leader application
 via `POST /api/leader-applications`; the ministry owner reviews via
@@ -396,11 +396,11 @@ target `groups/{gid}` document with the applicant as leader and stamps
 * `createdGroupId` is set when `status == "approved"`. It is the gid of
   the group the approval produced; the applicant is its leader.
 
-## Minor-escalation fields on `groups/{gid}/joinRequests/{uid}` (ADR 0014)
+## Minor-escalation fields on `groups/{gid}/joinRequests/{uid}` (ADR 0015)
 
 The join-request schema introduced in PR #284 grows five new fields to
 support the owner-side minor-review queue. Existing rows pre-dating
-ADR 0014 lack these fields and default to "adult / leader-decided" —
+ADR 0015 lack these fields and default to "adult / leader-decided" —
 the leader-side queue treats `requiresOwnerReview` as `false` when
 missing.
 

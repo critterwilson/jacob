@@ -43,7 +43,7 @@ function formatDate(v: string | null): string {
 }
 
 /**
- * Owner queue for minor join-requests (ADR 0014 § 4).
+ * Owner queue for minor join-requests (ADR 0015 § 4).
  *
  * Group leaders cannot see or action these — the backend strips them
  * from the leader's list and refuses leader-side approve/reject. The

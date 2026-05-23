@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * `/awaiting-approval` is a legacy ADR 0012 route. Under ADR 0014 it
+ * `/awaiting-approval` is a legacy ADR 0012 route. Under ADR 0015 it
  * redirects to `?next=` (or `/home`) — no polling, no application UI.
  * This test pins that contract so old bookmarks don't 404 and a
  * future regression doesn't reintroduce a queue gate.

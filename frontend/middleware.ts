@@ -130,7 +130,7 @@ const PUBLIC_PREFIXES = [
   "/forgot-password",
   "/verify-email",
   "/onboarding",
-  // Legacy ADR 0012 path. Under ADR 0014 it just redirects to /home,
+  // Legacy ADR 0012 path. Under ADR 0015 it just redirects to /home,
   // but the route stays reachable so old bookmarks don't 404. Keep it
   // in the public list because users without a profile cookie may
   // land here from external links.

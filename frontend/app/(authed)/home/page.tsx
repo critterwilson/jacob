@@ -36,7 +36,7 @@ const ctaSecondary =
 export default function HomePage() {
   const { user } = useAuth();
   const claims = useRoleClaims();
-  // ADR 0014: only owners/admins can create groups directly. Everyone
+  // ADR 0015: only owners/admins can create groups directly. Everyone
   // else applies via the leader-application flow.
   const canCreateDirectly =
     !!claims && (claims.isAdmin || claims.isMinistryOwner);

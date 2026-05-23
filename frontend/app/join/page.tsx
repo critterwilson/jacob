@@ -69,7 +69,7 @@ function JoinForm() {
         pendingOwnerReview?: boolean;
       }>("/api/groups/join", { code: values.code });
       if (res.pendingOwnerReview) {
-        // ADR 0014: minor arrived via an invite. Don't navigate into the
+        // ADR 0015: minor arrived via an invite. Don't navigate into the
         // group (they're not a member yet) — show the pending state and
         // route home.
         setSubmitError(

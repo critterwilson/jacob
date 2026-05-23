@@ -59,7 +59,7 @@ function formatDate(v: string | null): string {
 }
 
 /**
- * Owner queue for the ADR 0014 leader-application flow.
+ * Owner queue for the ADR 0015 leader-application flow.
  *
  * Lists pending applications; approve writes the target group + makes
  * the applicant its leader; reject records a reason for the audit log.

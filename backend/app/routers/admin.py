@@ -890,7 +890,7 @@ def revoke_ministry_owner(
     return MinistryOwnerGrantResponse(uid=uid, ministryOwner=False)
 
 
-# ── leader applications (ADR 0014) ────────────────────────────────────────────
+# ── leader applications (ADR 0015) ────────────────────────────────────────────
 
 
 @router.get("/leader-applications", response_model=LeaderApplicationListResponse)
@@ -1080,7 +1080,7 @@ def reject_leader_application(
     return LeaderApplicationDecisionResponse(appId=app_id, status="rejected")
 
 
-# ── owner-side minor join-request queue (ADR 0014) ───────────────────────────
+# ── owner-side minor join-request queue (ADR 0015) ───────────────────────────
 
 
 def _ts_to_iso(ts: Any) -> str:
@@ -1108,7 +1108,7 @@ def list_minor_join_requests(
 
     Collection-group query on `joinRequests` filtered by
     `requiresOwnerReview == true && status == "pending"`. The CG index
-    is declared in `firestore/firestore.indexes.json` (ADR 0014).
+    is declared in `firestore/firestore.indexes.json` (ADR 0015).
     The leader-facing queue strips these rows so a leader can never see
     or action a minor's request.
     """
@@ -1158,7 +1158,7 @@ def list_minor_join_requests(
         user_data = user_data_by_uid.get(uid, {})
 
         # Surface age if we have it on the user doc; otherwise leave None.
-        # DOB lives on `users/{uid}/private/profile` (ADR 0014 § 1) so this
+        # DOB lives on `users/{uid}/private/profile` (ADR 0015 § 1) so this
         # CG-time read does not have access to it — by design, to keep the
         # owner queue query cheap. The owner can drill into the user
         # profile if precise age matters; the isMinor signal is enough
@@ -1193,7 +1193,7 @@ def owner_approve_join_request(
     body: OwnerApproveJoinRequest,
     owner: CurrentUser = Depends(require_ministry_owner_or_admin),
 ) -> ReviewResponse:
-    """Owner approves a minor's join-request with parental consent (ADR 0014).
+    """Owner approves a minor's join-request with parental consent (ADR 0015).
 
     Refuses (422 `parental_consent_required`) unless the body sets
     `parentalConsentObtained: true`. Also refuses (409
@@ -1347,7 +1347,7 @@ def owner_reject_join_request(
     body: OwnerRejectJoinRequest,
     owner: CurrentUser = Depends(require_ministry_owner_or_admin),
 ) -> ReviewResponse:
-    """Owner rejects a minor's join-request with a reason (ADR 0014)."""
+    """Owner rejects a minor's join-request with a reason (ADR 0015)."""
     db = _db()
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(uid)
     jr_snap = jr_ref.get()

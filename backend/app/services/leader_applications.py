@@ -1,4 +1,4 @@
-"""Shared helpers for the leader-application flow (ADR 0014).
+"""Shared helpers for the leader-application flow (ADR 0015).
 
 `leader_applications/{appId}` is the queueing collection. On owner
 approval the backend creates the target `groups/{gid}` document with

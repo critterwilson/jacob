@@ -26,7 +26,7 @@ import {
   readPendingInviteCode,
 } from "@/lib/pending-application";
 
-// ADR 0014: onboarding writes the user doc directly via POST /api/users/me.
+// ADR 0015: onboarding writes the user doc directly via POST /api/users/me.
 // The legacy applications collection is retired; the request shape mirrors
 // the backend `CreateProfileRequest` model.
 type CreateProfileRequest = {
@@ -129,7 +129,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       await apiPost("/api/users/me", body);
       clearPendingDob();
       clearPendingInviteCode();
-      // ADR 0014: new users land "unaffiliated" — no platform-wide
+      // ADR 0015: new users land "unaffiliated" — no platform-wide
       // approval queue. Send them to /home which renders the
       // unaffiliated banner pointing at /discover.
       router.push("/home");

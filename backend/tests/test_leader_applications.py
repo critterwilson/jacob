@@ -1,4 +1,4 @@
-"""Tests for the ADR 0014 leader-application flow.
+"""Tests for the ADR 0015 leader-application flow.
 
 Covers:
 - `POST /api/leader-applications` happy path + idempotency.

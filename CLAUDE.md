@@ -2,7 +2,7 @@
 
 This file is loaded automatically by Claude Code on every task. It pins cross-cutting decisions so individual task specs in `DEV_PLAN.md` can stay tight. Read it before starting any task.
 
-*Last revised: 2026-05-23 (delegated membership / ADR 0014).*
+*Last revised: 2026-05-23 (delegated membership / ADR 0015).*
 
 ## Project in one paragraph
 
@@ -75,7 +75,7 @@ JACOB is a small-group messaging web app for Christian small groups. The fronten
     └── legal/                  # internal legal-team source docs
 ```
 
-## Membership model (ADR 0014)
+## Membership model (ADR 0015)
 
 Open self-signup, delegated approval. Anyone with a verified email can
 complete onboarding and get a `users/{uid}` doc (the existing
@@ -106,7 +106,7 @@ Three approval surfaces:
 
 The legacy `applications/{uid}` collection from ADR 0012 stays in the
 data model for the residual queue; `POST /api/applications/me` returns
-410 Gone. See [docs/adr/0014-delegated-membership.md](docs/adr/0014-delegated-membership.md).
+410 Gone. See [docs/adr/0015-delegated-membership.md](docs/adr/0015-delegated-membership.md).
 
 ## Architectural rule of thumb
 

@@ -151,7 +151,7 @@ def _under_13_dob() -> str:
 
 
 def test_submit_application_returns_410_gone() -> None:
-    """ADR 0014: the platform-wide application queue is retired.
+    """ADR 0015: the platform-wide application queue is retired.
 
     `POST /api/applications/me` is preserved for OpenAPI schema parity
     but always returns 410 with code `application_flow_retired`. The

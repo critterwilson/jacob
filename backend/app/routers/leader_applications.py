@@ -1,4 +1,4 @@
-"""Leader-application router (ADR 0014).
+"""Leader-application router (ADR 0015).
 
 A non-owner who wants to lead a group submits one of these via
 `POST /api/leader-applications`; the ministry owner reviews and decides

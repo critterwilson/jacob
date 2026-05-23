@@ -1,4 +1,4 @@
-"""ADR 0014 — minor escalation tests for the join-request flow.
+"""ADR 0015 — minor escalation tests for the join-request flow.
 
 The load-bearing safety rules under test:
 
@@ -176,7 +176,7 @@ def test_adult_join_request_does_not_set_owner_review() -> None:
 
 def test_leader_cannot_approve_minor_join_request() -> None:
     """Load-bearing safety: a group leader must NOT be able to approve a
-    minor's join-request. ADR 0014 § 4.
+    minor's join-request. ADR 0015 § 4.
     """
     db = MagicMock()
     group_ref = MagicMock()
@@ -261,7 +261,7 @@ def test_leader_cannot_reject_minor_join_request() -> None:
 
 
 def test_leader_list_hides_minor_join_requests() -> None:
-    """ADR 0014: minor rows are removed from the leader-facing list entirely."""
+    """ADR 0015: minor rows are removed from the leader-facing list entirely."""
     db = MagicMock()
     group_ref = MagicMock()
     groups_col = MagicMock()

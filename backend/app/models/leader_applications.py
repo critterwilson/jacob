@@ -1,4 +1,4 @@
-"""Pydantic models for the leader-application flow (ADR 0014).
+"""Pydantic models for the leader-application flow (ADR 0015).
 
 A non-owner who wants to lead a group submits a `leader_applications/{appId}`
 doc; the ministry owner reviews the queue and either approves (the backend

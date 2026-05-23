@@ -232,7 +232,7 @@ def require_ministry_owner_or_admin(
     user: CurrentUser = Depends(get_current_user),
     _ban_check: CurrentUser = Depends(require_not_banned),
 ) -> CurrentUser:
-    """Allow ministry owners OR platform admins (ADR 0014).
+    """Allow ministry owners OR platform admins (ADR 0015).
 
     Owner queues (leader applications, minor join-request reviews) are
     the ministry owner's surface, but admin is a strict superset of

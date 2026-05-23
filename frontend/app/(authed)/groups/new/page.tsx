@@ -12,7 +12,7 @@ export default function NewGroupPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const claims = useRoleClaims();
-  // ADR 0014 — direct group creation is owner/admin-only. Non-owners
+  // ADR 0015 — direct group creation is owner/admin-only. Non-owners
   // who land here (typically from an outdated bookmark) are bounced to
   // the leader-application form. Owner/admin users see the form
   // unchanged.

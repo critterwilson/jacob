@@ -116,7 +116,7 @@ def create_group(
     body: CreateGroupRequest,
     user: CurrentUser = Depends(require_ministry_owner_or_admin),
 ) -> CreateGroupResponse:
-    # ADR 0014: direct group creation is owner/admin-only. Non-owners
+    # ADR 0015: direct group creation is owner/admin-only. Non-owners
     # become leaders via the leader-application flow
     # (`POST /api/leader-applications` → owner approves → backend creates
     # the group with the applicant as leader). The dep enforces the
@@ -183,7 +183,7 @@ def join_group(
 ) -> JoinGroupResponse:
     """Consume an invite link.
 
-    ADR 0014: adults are auto-joined (leader's invite counts as their
+    ADR 0015: adults are auto-joined (leader's invite counts as their
     vouch). Minors escalate to the owner queue with the invite code
     persisted on the join-request — the invite is **not** consumed at
     this point; the owner's approval consumes it.

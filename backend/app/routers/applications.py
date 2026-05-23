@@ -1,6 +1,6 @@
 """Applications router — legacy ADR 0012 admin-approval signup flow.
 
-ADR 0014 supersedes this surface. `POST /api/applications/me` now
+ADR 0015 supersedes this surface. `POST /api/applications/me` now
 returns `410 Gone` unconditionally; new signups create their user
 doc directly via `POST /api/users/me`. `GET /api/applications/me`
 stays reachable as a read-only legacy surface so the frontend can
@@ -37,7 +37,7 @@ def submit_application(
     body: SubmitApplicationRequest,
     user: CurrentUser = Depends(require_not_banned),
 ) -> ApplicationView:
-    """**Deprecated by ADR 0014.** Always returns 410 Gone.
+    """**Deprecated by ADR 0015.** Always returns 410 Gone.
 
     The platform-wide admin-approval queue has been replaced by the
     delegated, group-based approval model. New signups complete
@@ -49,7 +49,7 @@ def submit_application(
         status_code=status.HTTP_410_GONE,
         code="application_flow_retired",
         message=(
-            "The platform-wide application queue has been retired (ADR 0014). "
+            "The platform-wide application queue has been retired (ADR 0015). "
             "Complete onboarding via POST /api/users/me and request to join groups individually."
         ),
         details={"replacedBy": "/api/users/me"},

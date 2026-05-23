@@ -40,7 +40,7 @@ class UserProfile(BaseModel):
 
 
 class CreateProfileRequest(BaseModel):
-    """`POST /api/users/me` body (ADR 0014).
+    """`POST /api/users/me` body (ADR 0015).
 
     Onboarding submit. The server computes `isMinor` from `dob` and
     persists `dob` to `users/{uid}/private/profile` for the audit
@@ -62,7 +62,7 @@ class CreateProfileRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=20)
     location: str | None = Field(default=None, max_length=100)
     faithBackground: str | None = Field(default=None, max_length=500)
-    # ADR 0014: invite code stays on the request for parity with the
+    # ADR 0015: invite code stays on the request for parity with the
     # legacy applications flow — when present, the route auto-joins
     # the caller into the target group (adults) or escalates to the
     # owner queue with the code preserved (minors).

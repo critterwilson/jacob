@@ -7,7 +7,7 @@ import { safeNext } from "@/lib/safe-redirect";
 
 /**
  * Legacy ADR 0012 route. The platform-wide application queue is
- * retired by ADR 0014; new signups never land here. We keep the path
+ * retired by ADR 0015; new signups never land here. We keep the path
  * reachable so old bookmarks / signed-in tabs don't 404 — anyone who
  * hits it is bounced to /home (or the original `?next=` target).
  */
