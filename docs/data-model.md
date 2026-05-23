@@ -21,6 +21,7 @@ users/{uid}
 users/{uid}/private/{docId}
 users/{uid}/mutes/{otherUid}                    # T21 — owner-only
 users/{uid}/blocks/{otherUid}                   # T21 — owner-only
+users/{uid}/mutedGroups/{gid}                   # ADR 0014 — per-group push silencing
 users/{uid}/devices/{deviceId}                  # T34 — FCM device tokens
 users/{uid}/notifications/{nid}                 # T34 — notification inbox
 users/{uid}/notificationPrefs/main              # T34 — push/email toggle prefs
@@ -153,6 +154,23 @@ enumerate them.
 
 // users/{uid}/blocks/{otherUid}
 { "blockedAt": "<serverTimestamp>" }
+```
+
+### `users/{uid}/mutedGroups/{gid}` (ADR 0014)
+
+Per-group push silencing. Distinct from `mutes/{otherUid}` above (which
+hides a specific user's messages everywhere). The presence of a
+`mutedGroups/{gid}` doc only suppresses the generic `group_message`
+push fan-out from that group for the owning user — @mentions and
+replies to your own messages still come through, because those carry
+an explicit ask for attention.
+
+Backend-mediated via `/api/users/me/muted-groups/*`; the rule is
+default-deny.
+
+```json
+// users/{uid}/mutedGroups/{gid}
+{ "groupId": "g_pleasant_grove", "mutedAt": "<serverTimestamp>" }
 ```
 
 ---

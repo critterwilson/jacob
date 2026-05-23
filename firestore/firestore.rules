@@ -34,6 +34,11 @@ service cloud.firestore {
       match /mutes/{otherUid} {
         allow read, write: if false;
       }
+      // ADR 0014 — per-group push silencing. Backend-mediated via
+      // `/api/users/me/muted-groups/*`; Admin SDK bypasses this rule.
+      match /mutedGroups/{groupId} {
+        allow read, write: if false;
+      }
       match /blocks/{otherUid} {
         allow read, write: if false;
       }

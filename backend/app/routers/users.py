@@ -54,6 +54,9 @@ from app.models.users import (
     BootstrapResponse,
     CreateProfileRequest,
     DeviceResponse,
+    MutedGroupEntry,
+    MutedGroupResponse,
+    MutedGroupsResponse,
     MutedUserEntry,
     MuteResponse,
     MutesResponse,
@@ -623,6 +626,71 @@ def delete_mute(
 ) -> Response:
     db = get_firestore()
     ref = db.collection("users").document(user.uid).collection("mutes").document(other_uid)
+    ref.delete()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── group mutes (ADR 0014) ─────────────────────────────────────────────────
+#
+# Per-group push silencing. Distinct from `/mutes/{uid}` (which hides a
+# specific user's messages everywhere). A group mute only suppresses the
+# generic `group_message` push fan-out for one group — @mentions and
+# replies to your own messages still come through, because those carry
+# an explicit ask for attention.
+
+
+@router.get("/muted-groups", response_model=MutedGroupsResponse)
+def list_muted_groups(
+    user: CurrentUser = Depends(get_current_user),
+) -> MutedGroupsResponse:
+    db = get_firestore()
+    col = db.collection("users").document(user.uid).collection("mutedGroups")
+    snaps = list(col.stream())
+    entries: list[MutedGroupEntry] = []
+    for snap in snaps:
+        data = snap.to_dict() or {}
+        muted_at = _ts_to_dt(data.get("mutedAt")) or datetime.now(UTC)
+        entries.append(MutedGroupEntry(groupId=snap.id, mutedAt=muted_at))
+    return MutedGroupsResponse(mutedGroups=entries)
+
+
+@router.post(
+    "/muted-groups/{group_id}",
+    response_model=MutedGroupResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@limiter.limit(USER_MUTES_WRITE)
+def create_group_mute(
+    request: Request,
+    response: Response,
+    group_id: str,
+    user: CurrentUser = Depends(require_not_banned),
+) -> MutedGroupResponse:
+    if not group_id:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_group_id",
+            message="group_id is required",
+        )
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("mutedGroups").document(group_id)
+    now = datetime.now(UTC)
+    ref.set({"groupId": group_id, "mutedAt": fb_firestore.SERVER_TIMESTAMP})
+    return MutedGroupResponse(groupId=group_id, mutedAt=now)
+
+
+@router.delete(  # noqa: not-banned
+    "/muted-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+@limiter.limit(USER_MUTES_WRITE)
+def delete_group_mute(
+    request: Request,
+    response: Response,
+    group_id: str,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    db = get_firestore()
+    ref = db.collection("users").document(user.uid).collection("mutedGroups").document(group_id)
     ref.delete()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

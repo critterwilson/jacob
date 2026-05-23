@@ -36,7 +36,8 @@ type NotificationDoc = {
     | "board_mention"
     | "reply"
     | "digest_send"
-    | "ministry_post";
+    | "ministry_post"
+    | "group_message";
   groupId?: string;
   boardId?: string;
   messageRef?: string;
@@ -54,6 +55,7 @@ type PrefDoc = {
   announcements: boolean;
   digest: boolean;
   ministryFeed: boolean;
+  groupMessages: boolean;
 };
 
 type DeviceDoc = {
@@ -69,6 +71,7 @@ const KIND_TO_PREF: Record<string, keyof PrefDoc | null> = {
   reply: "replies",
   digest_send: "digest",
   ministry_post: "ministryFeed",
+  group_message: "groupMessages",
 };
 
 /** Exported for unit tests. */
@@ -105,6 +108,14 @@ export function buildPayload(
         title: "✝️ New organization post",
         body,
         collapseKey: `ministry_post:${msgId}`,
+      };
+    case "group_message":
+      // One push per group at a time — bursts collapse onto the latest
+      // message in a chatty group instead of stacking up.
+      return {
+        title: "💬 New message",
+        body,
+        collapseKey: `group_message:${gid}`,
       };
     default:
       return { title: "JACOB", body, collapseKey: `notif:${recipientUid}` };

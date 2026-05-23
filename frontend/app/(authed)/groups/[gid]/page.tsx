@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
 import { useJoinRequests } from "@/lib/hooks/useJoinRequests";
+import { MuteGroupButton } from "@/components/groups/MuteGroupButton";
 import { ReportButton } from "@/components/moderation/ReportButton";
 
 type Props = { params: { gid: string } };
@@ -28,7 +29,7 @@ export default function GroupPage({ params }: Props) {
   // `useGroupMembership` reads the canonical members/{uid} row, so
   // promoted leaders (not just the founder) get the leader-only UI.
   // The previous `createdBy === user.uid` heuristic missed them.
-  const { isLeader } = useGroupMembership(user?.uid, gid);
+  const { membership, isLeader } = useGroupMembership(user?.uid, gid);
   const { pendingCount } = useJoinRequests(isLeader ? gid : undefined);
 
   useEffect(() => {
@@ -84,13 +85,12 @@ export default function GroupPage({ params }: Props) {
         {group.isPrivate && " · Private"}
       </p>
 
-      <ButtonLink
-        href={`/groups/${gid}/chat`}
-        variant="primary"
-        className="mb-6"
-      >
-        Open chat
-      </ButtonLink>
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <ButtonLink href={`/groups/${gid}/chat`} variant="primary">
+          Open chat
+        </ButtonLink>
+        {membership && <MuteGroupButton groupId={gid} />}
+      </div>
 
       {/* Member sub-nav — the three sections every member of this group
        *  can use. Visually distinct from the leader "Manage" row below

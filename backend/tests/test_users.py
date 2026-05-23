@@ -231,6 +231,90 @@ def test_delete_block_requires_auth() -> None:
     assert res.status_code == 401
 
 
+# ── group mutes (ADR 0014) ────────────────────────────────────────────────
+
+
+def _muted_groups_db(ids: list[str]) -> MagicMock:
+    """A list_db()-shaped stub for users/{uid}/mutedGroups."""
+    db = MagicMock()
+    col = MagicMock()
+    snaps = []
+    for gid in ids:
+        s = MagicMock()
+        s.id = gid
+        s.to_dict.return_value = {
+            "groupId": gid,
+            "mutedAt": datetime(2026, 5, 23, tzinfo=UTC),
+        }
+        snaps.append(s)
+    col.stream.return_value = iter(snaps)
+    db.collection.return_value.document.return_value.collection.return_value = col
+    return db
+
+
+def test_list_muted_groups_returns_entries() -> None:
+    db = _muted_groups_db(["g1", "g2"])
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get("/api/users/me/muted-groups")
+    assert res.status_code == 200
+    data = res.json()
+    assert [g["groupId"] for g in data["mutedGroups"]] == ["g1", "g2"]
+
+
+def test_list_muted_groups_empty_when_no_docs() -> None:
+    db = _muted_groups_db([])
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.get("/api/users/me/muted-groups")
+    assert res.json() == {"mutedGroups": []}
+
+
+def test_list_muted_groups_requires_auth() -> None:
+    client = TestClient(_app(user=None))
+    res = client.get("/api/users/me/muted-groups")
+    assert res.status_code == 401
+
+
+def test_create_group_mute_writes_doc() -> None:
+    db, ref = _doc_db()
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.post("/api/users/me/muted-groups/g1")
+    assert res.status_code == 201
+    body = res.json()
+    assert body["groupId"] == "g1"
+    ref.set.assert_called_once()
+    payload = ref.set.call_args[0][0]
+    assert payload["groupId"] == "g1"
+    assert "mutedAt" in payload
+
+
+def test_delete_group_mute_204() -> None:
+    db, ref = _doc_db()
+    user = CurrentUser(uid="alice", claims={})
+    with patch("app.routers.users.get_firestore", return_value=db):
+        client = TestClient(_app(user))
+        res = client.delete("/api/users/me/muted-groups/g1")
+    assert res.status_code == 204
+    ref.delete.assert_called_once()
+
+
+def test_create_group_mute_requires_auth() -> None:
+    client = TestClient(_app(user=None))
+    res = client.post("/api/users/me/muted-groups/g1")
+    assert res.status_code == 401
+
+
+def test_delete_group_mute_requires_auth() -> None:
+    client = TestClient(_app(user=None))
+    res = client.delete("/api/users/me/muted-groups/g1")
+    assert res.status_code == 401
+
+
 # ── require_not_banned dep behaviour ──────────────────────────────────────
 
 
