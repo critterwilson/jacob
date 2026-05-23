@@ -10,7 +10,8 @@ import {
   buildInviteMessage,
 } from "@/components/groups/InviteMessagePanel";
 
-const INVITE_URL = "https://app.jacob.com/join?code=ABCD1234";
+// URL that getInviteUrl() produces in jsdom — origin matches window.location.origin in the test env
+const INVITE_URL = `${window.location.origin}/join?code=ABCD1234`;
 const GROUP_NAME = "Sunday Crew";
 
 function renderPanel(overrides?: Partial<Parameters<typeof InviteMessagePanel>[0]>) {
