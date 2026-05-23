@@ -21,11 +21,11 @@ def reset_circuit():
     """Reset the module-level circuit breaker state between tests."""
     verse_svc._circuit._failures = 0
     verse_svc._circuit._opened_at = None
-    verse_svc._calendar_cache = None
+    verse_svc._load_calendar.cache_clear()
     yield
     verse_svc._circuit._failures = 0
     verse_svc._circuit._opened_at = None
-    verse_svc._calendar_cache = None
+    verse_svc._load_calendar.cache_clear()
 
 
 _SAMPLE_CALENDAR = {
@@ -231,6 +231,17 @@ def test_daily_verse_invalid_day_param() -> None:
     )
     assert res.status_code == 400
     assert res.json()["error"]["code"] == "invalid_day"
+
+
+def test_load_calendar_resolves_bundled_file() -> None:
+    """verse_calendar.json must be reachable at the path shipped in the container image."""
+    from app.services.verse import _CALENDAR_PATH
+
+    assert _CALENDAR_PATH.exists(), f"verse_calendar.json not found at {_CALENDAR_PATH}"
+    cal = verse_svc._load_calendar()
+    assert isinstance(cal.get("rotation"), list)
+    assert len(cal["rotation"]) > 0  # type: ignore[arg-type]
+    assert isinstance(cal.get("calendar"), dict)
 
 
 def test_daily_verse_normalises_unexpected_translation() -> None:

@@ -27,9 +27,7 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-_CALENDAR_PATH = (
-    Path(__file__).parent.parent.parent.parent.parent / "infra" / "seed" / "verse_calendar.json"
-)
+_CALENDAR_PATH = Path(__file__).parent.parent / "data" / "verse_calendar.json"
 Translation = Literal["WEB", "KJV"]
 
 
