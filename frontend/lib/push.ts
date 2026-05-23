@@ -63,22 +63,13 @@ export async function registerPushToken(uid: string): Promise<string | null> {
   let swReg: ServiceWorkerRegistration;
   try {
     swReg = await navigator.serviceWorker.register(SW_PATH, { scope: "/" });
-    // Wait for the SW to activate before posting config; on first install
-    // swReg.active is null until the installing worker transitions to active.
-    const config = (app as unknown as { options: Record<string, unknown> }).options;
-    const active =
-      swReg.active ??
-      (await new Promise<ServiceWorker>((resolve) => {
-        const worker = swReg.installing ?? swReg.waiting;
-        if (!worker) return;
-        worker.addEventListener("statechange", function handler() {
-          if (worker.state === "activated") {
-            worker.removeEventListener("statechange", handler);
-            resolve(worker);
-          }
-        });
-      }));
-    active?.postMessage({ type: "FIREBASE_CONFIG", config });
+    // The SW now inlines its Firebase config at the top level (see
+    // `app/firebase-messaging-sw.js/route.ts`), so the previous
+    // postMessage(FIREBASE_CONFIG) handoff is no longer needed. iOS
+    // wakes the SW cold for every background push; relying on
+    // postMessage from a foreground page meant `firebase.messaging()`
+    // was never called during a cold start and the push handler never
+    // registered — see the route handler header for the full history.
   } catch (err) {
     console.warn("[push] SW registration failed:", err);
     return null;

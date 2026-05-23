@@ -152,11 +152,16 @@ function isPublicPath(pathname: string): boolean {
   return false;
 }
 
-// Run on every page request EXCEPT static assets, the service worker,
+// Run on every page request EXCEPT static assets, the service workers,
 // and Next.js internals. The matcher excludes API routes (those go
 // straight to the backend) and asset paths.
+//
+// `firebase-messaging-sw.js` is served by a Next.js route handler at
+// `app/firebase-messaging-sw.js/route.ts` and must reach the browser
+// verbatim — without the onboarding redirect, which the browser would
+// happily install as a service worker controlling the whole origin.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons|sw.js|manifest.webmanifest|api).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|sw.js|firebase-messaging-sw.js|manifest.webmanifest|api).*)",
   ],
 };
