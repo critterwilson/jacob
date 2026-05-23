@@ -49,15 +49,9 @@ describe("sanitiseSnippet", () => {
     );
   });
 
-  it("preserves <mark> wrappers from Typesense", () => {
+  it("escapes <mark> as text (no HTML survives — native search returns plain bodies)", () => {
     expect(sanitiseSnippet("hello <mark>world</mark>")).toBe(
-      "hello <mark>world</mark>",
-    );
-  });
-
-  it("escapes attempted attribute injection inside mark", () => {
-    expect(sanitiseSnippet('<mark onclick="x">a</mark>')).not.toContain(
-      'onclick="x"',
+      "hello &lt;mark&gt;world&lt;/mark&gt;",
     );
   });
 
@@ -71,7 +65,7 @@ describe("sanitiseSnippet", () => {
 import { SearchResultRow } from "@/components/search/SearchResultRow";
 
 describe("SearchResultRow", () => {
-  it("renders a hit with mark highlighting and a link to the message", () => {
+  it("renders a hit body as plain text and links to the message", () => {
     render(
       <SearchResultRow
         hit={{
@@ -79,7 +73,7 @@ describe("SearchResultRow", () => {
           groupId: "g1",
           authorUid: "alice",
           authorDisplayName: "Alice",
-          body: "hello <mark>world</mark>",
+          body: "hello world",
           createdAt: "2026-05-02T12:00:00Z",
           parentMessageId: null,
         }}
@@ -87,10 +81,10 @@ describe("SearchResultRow", () => {
     );
     const link = screen.getByRole("link");
     expect(link.getAttribute("href")).toBe("/groups/g1/chat#m-m1");
-    expect(link.querySelector("mark")?.textContent).toBe("world");
+    expect(link.textContent).toContain("hello world");
   });
 
-  it("does NOT render injected <script> as HTML", () => {
+  it("does NOT render injected <script> as HTML (React text-escaping)", () => {
     render(
       <SearchResultRow
         hit={{

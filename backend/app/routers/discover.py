@@ -86,7 +86,7 @@ def list_discover_groups(
     groups: list[DiscoverGroup] = []
     for snap in page:
         d = snap.to_dict() or {}
-        # Client-side q filter (full-text search is T28 Typesense; simple prefix match here)
+        # Client-side q filter — simple substring match on name/description.
         if q:
             name = (d.get("name") or "").lower()
             desc = (d.get("description") or "").lower()

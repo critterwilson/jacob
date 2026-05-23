@@ -1,6 +1,6 @@
 # ADR 0005 — Full-text message search via Typesense sidecar
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0016](0016-native-firestore-search.md) (2026-05-23). The Typesense sidecar never reliably booted, sat as a dormant $100/month always-on cost risk, and search isn't a near-term priority — we replaced it with native Firestore keyword search.
 **Date:** 2026-05-02
 **Resolves:** Phase 2 task T28
 **Spec section:** `docs/phase-2-impl-spec.md` § "T28 — Full-text search sidecar (Typesense)"

@@ -82,10 +82,6 @@ the minimum each one needs:
   frontend exception telemetry (stack traces, request metadata, and a
   request ID) to Sentry to investigate errors. Full message bodies and
   user-supplied media are not sent.
-- **Typesense** — we run a self-hosted Typesense search sidecar on Google
-  Cloud Run that holds an index of message bodies and your display name
-  so that in-group search works. Typesense is operationally a separate
-  component from Firestore even though we host it ourselves.
 - **Google BigQuery** (operated by Google LLC) — once a day we copy a
   snapshot of message metadata into BigQuery so leaders can see
   group-level activity counts. See "How long we keep it" below for how

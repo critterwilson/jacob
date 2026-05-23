@@ -593,17 +593,6 @@ def _delete_reports_by_user(db: Any, uid: str) -> int:
     return count
 
 
-def _delete_typesense_messages(uid: str) -> int:
-    """Search-sidecar cleanup is delegated to the existing
-    `onMessageWrite` Cloud Function (functions/src/onMessageWrite.ts).
-
-    Tombstoning a message (via `_tombstone_messages` above) fires that
-    trigger, which re-indexes the message in Typesense with the
-    tombstoned authorUid. No direct delete is needed here. Returns 0.
-    """
-    return 0
-
-
 def finalize_account(uid: str) -> dict[str, Any]:
     """Hard-delete a user past their grace window. Idempotent (C1).
 
@@ -660,7 +649,6 @@ def finalize_account(uid: str) -> dict[str, Any]:
     org_admins = _delete_org_admins(db, uid)
     ban_dropped = _delete_ban(db, uid)
     others_blocks_mutes = _delete_others_blocks_and_mutes(db, uid)
-    typesense_deleted = _delete_typesense_messages(uid)
 
     _delete_avatar(photo_url if isinstance(photo_url, str) else None)
     _delete_private_subcollection(db, uid)
@@ -689,7 +677,6 @@ def finalize_account(uid: str) -> dict[str, Any]:
         "banDropped": ban_dropped,
         "othersBlocksDeleted": others_blocks_mutes["blocks"],
         "othersMutesDeleted": others_blocks_mutes["mutes"],
-        "typesenseDeleted": typesense_deleted,
         "userSubcollections": subcol_counts,
         "rtdbPresenceDeleted": rtdb_counts["presence"],
         "rtdbTypingDeleted": rtdb_counts["typing"],

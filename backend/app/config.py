@@ -26,13 +26,10 @@ class Settings(BaseSettings):
     # T25 — Invite URL base (used in InviteResponse.url)
     app_url: str = "https://jacob.app"
 
-    # T28 — Typesense search sidecar
-    typesense_host: str = ""
-    typesense_api_key: str = ""
-    typesense_collection: str = "messages"
-    typesense_timeout_seconds: float = 5.0
+    # Search (ADR 0016) — native Firestore search over message
+    # `searchTokens`. Feature-flagged so the endpoint can be disabled
+    # without redeploying.
     jacob_search_enabled: bool = False
-    typesense_membership_cap: int = 100
 
     # T29 — BigQuery sticker analytics
     bq_analytics_dataset: str = "jacob_analytics"

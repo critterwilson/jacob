@@ -86,7 +86,6 @@ feature_flags/{flagKey}                         # read via GET /api/flags
 # Idempotency markers (subcollections, Cloud Functions only)
 groups/{gid}/messages/{mid}/_events/{eid}
 groups/{gid}/messages/{mid}/_reaction_events/{eid}
-groups/{gid}/messages/{mid}/_index_events/{eid}
 groups/{gid}/_member_events/{eid}
 boards/{boardId}/_post_events/{eid}
 boards/{boardId}/posts/{postId}/_reply_events/{eid}
@@ -237,7 +236,10 @@ edit (`body`, `editedAt`) or soft-delete (`deletedAt`). Hard deletion is
 forbidden — soft-delete only.
 
 `threadReplyCount` is maintained by a Cloud Function watching writes to
-this collection; clients cannot update it.
+this collection; clients cannot update it. `searchTokens` is maintained
+by the `onMessageTokenize` trigger (ADR 0016) — a lowercased,
+word-tokenised, de-duplicated form of `body` capped at 100 entries,
+used by `/api/search` for keyword `array-contains` queries.
 
 Top-level message:
 
@@ -249,6 +251,7 @@ Top-level message:
   "mediaRefs": [],
   "parentMessageId": null,
   "threadReplyCount": 2,
+  "searchTokens": ["tonight", "s", "reading", "is", "john", "15"],
   "createdAt": "<serverTimestamp>",
   "editedAt": null,
   "deletedAt": null

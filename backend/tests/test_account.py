@@ -439,7 +439,6 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
             "app.services.deletion._delete_user_subcollections",
             _wrap("subcollections", {"notifications": 7, "devices": 2, "mutes": 0}),
         ),
-        patch("app.services.deletion._delete_typesense_messages", _wrap("typesense", 0)),
     ):
         result = deletion.finalize_account("alice")
 
@@ -458,7 +457,6 @@ def test_finalize_calls_every_cleanup_helper(monkeypatch) -> None:  # type: igno
         "ban": 1,
         "others": 1,
         "subcollections": 1,
-        "typesense": 1,
     }
     # Return shape carries the new counters.
     assert result["boardPostsTombstoned"] == 2

@@ -255,6 +255,13 @@
       ]
     },
     {
+      "collectionGroup": "messages",
+      "fieldPath": "searchTokens",
+      "indexes": [
+        { "arrayConfig": "CONTAINS", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "audit_log",
       "fieldPath": "actorUid",
       "indexes": [
