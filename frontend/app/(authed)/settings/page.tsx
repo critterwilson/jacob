@@ -41,7 +41,11 @@ export default function YouPage() {
 
       <Section title="Account" items={ACCOUNT_ITEMS} />
 
-      <Section title="Appeals" items={APPEALS_ITEMS} />
+      <Section
+        title="Appeals"
+        description="If something you posted was removed and you think it shouldn't have been, you can ask us to take another look."
+        items={APPEALS_ITEMS}
+      />
 
       {orgs.length > 0 && (
         <section className="space-y-2" aria-labelledby="you-orgs-heading">
@@ -91,7 +95,15 @@ export default function YouPage() {
   );
 }
 
-function Section({ title, items }: { title: string; items: Item[] }) {
+function Section({
+  title,
+  items,
+  description,
+}: {
+  title: string;
+  items: Item[];
+  description?: string;
+}) {
   const headingId = `you-${title.toLowerCase().replace(/\s+/g, "-")}-heading`;
   return (
     <section className="space-y-2" aria-labelledby={headingId}>
@@ -101,6 +113,9 @@ function Section({ title, items }: { title: string; items: Item[] }) {
       >
         {title}
       </h2>
+      {description && (
+        <p className="px-1 text-caption text-cream-muted">{description}</p>
+      )}
       <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-ink-raised shadow-raise">
         {items.map(({ href, label, danger }) => (
           <li key={href}>

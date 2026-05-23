@@ -69,19 +69,26 @@ export default function AdminAppealsPage() {
         </p>
       </header>
 
-      <div className="flex gap-2 text-sm">
-        {(["pending", "upheld", "reversed", "all"] as Filter[]).map((f) => (
+      <div className="flex flex-wrap gap-2 text-sm">
+        {(
+          [
+            { value: "pending", label: "Pending" },
+            { value: "upheld", label: "Upheld (original stands)" },
+            { value: "reversed", label: "Reversed (action undone)" },
+            { value: "all", label: "All" },
+          ] as { value: Filter; label: string }[]
+        ).map(({ value, label }) => (
           <button
-            key={f}
+            key={value}
             type="button"
-            onClick={() => setFilter(f)}
+            onClick={() => setFilter(value)}
             className={`rounded px-3 py-1 ${
-              filter === f
+              filter === value
                 ? "bg-ink-overlay font-medium text-gold-soft"
                 : "border border-line hover:bg-ink-overlay"
             }`}
           >
-            {f}
+            {label}
           </button>
         ))}
       </div>

@@ -310,7 +310,7 @@ export default function AdminUsersPage() {
                       variant="destructive"
                       onClick={() => void banUser(u.uid, "permanent")}
                     >
-                      Ban ∞
+                      Ban permanently
                     </Button>
                   </div>
                 )}

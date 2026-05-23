@@ -112,9 +112,9 @@ export default function AdminIncidentsPage() {
               }
               className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 focus:outline-none focus-visible:shadow-glow-gold"
             >
-              <option value="SEV1">SEV1 — outage</option>
-              <option value="SEV2">SEV2 — degraded</option>
-              <option value="SEV3">SEV3 — info</option>
+              <option value="SEV1">SEV1 — Outage</option>
+              <option value="SEV2">SEV2 — Degraded</option>
+              <option value="SEV3">SEV3 — Informational</option>
             </select>
           </label>
           <label className="col-span-3 block text-sm">

@@ -99,6 +99,9 @@ export default function AdminNcmecPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">NCMEC reporting queue</h1>
+        <p className="mt-1 text-caption text-cream-muted">
+          NCMEC — National Center for Missing &amp; Exploited Children.
+        </p>
         <p className="mt-1 text-sm text-parchment-amber">
           ⚠️ Submitting a case files an external legal report. Read{" "}
           <code className="rounded bg-ink-overlay px-1 text-xs">

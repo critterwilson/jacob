@@ -139,13 +139,17 @@ export default function DeleteAccountPage() {
               className="mt-1 h-4 w-4 accent-gold focus:outline-none focus-visible:shadow-glow-gold"
             />
             <span>
-              <span className="block font-medium text-cream">
-                Keep my messages
+              <span className="flex items-center gap-2">
+                <span className="font-medium text-cream">
+                  Keep my messages
+                </span>
+                <span className="rounded-full bg-sage/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sage">
+                  Recommended
+                </span>
               </span>
-              <span className="block text-caption text-cream-muted">
+              <span className="mt-0.5 block text-caption text-cream-muted">
                 Author will show as “[deleted user]” but the message text stays
-                visible to other members. Recommended — keeps group history
-                intact.
+                visible to other members. Keeps group history intact.
               </span>
             </span>
           </label>

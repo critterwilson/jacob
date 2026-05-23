@@ -33,9 +33,9 @@ function formatBytes(n: number | null): string {
 function statusLabel(s: ExportStatus): string {
   switch (s) {
     case "queued":
-      return "Queued — waiting for the next processor run (every 5 minutes).";
+      return "Preparing your data — this can take a few minutes.";
     case "processing":
-      return "Assembling your bundle…";
+      return "Building your data bundle…";
     case "ready":
       return "Ready to download.";
     case "failed":
