@@ -158,6 +158,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  // Clear the pending-application sessionStorage between tests so the
+  // invite-code stash doesn't bleed across cases.
+  window.sessionStorage.clear();
 });
 
 const ADULT_DOB = "1990-04-12";
@@ -496,8 +499,56 @@ describe("ProfileForm validation", () => {
       expect(calls.length).toBeGreaterThan(0);
       const body = JSON.parse((calls[0][1] as RequestInit).body as string);
       expect(body).toMatchObject({ displayName: "Alice", dob: ADULT_DOB });
+      // No invite stashed → no inviteCode on the wire.
+      expect(body.inviteCode).toBeUndefined();
     });
     expect(mockPush).toHaveBeenCalledWith("/awaiting-approval");
+  });
+
+  it("includes the stashed invite code in the application submit", async () => {
+    pushHandler(
+      (url, method) => url.includes("/api/v1/applications/me") && method === "POST",
+      () => ({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          uid: "uid-1",
+          email: "user@example.com",
+          displayName: "Alice",
+          photoURL: null,
+          dob: ADULT_DOB,
+          age: 35,
+          isMinor: false,
+          status: "pending",
+        }),
+      }),
+    );
+    window.sessionStorage.setItem("jacob-pending-invite-code", "ABCD1234");
+
+    const user = userEvent.setup();
+    renderForm();
+
+    await advanceToStep2(user);
+    await user.click(
+      screen.getByRole("checkbox", { name: /community guidelines/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /submit application/i }));
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(
+        (c) =>
+          String(c[0]).includes("/api/v1/applications/me") &&
+          (c[1] as RequestInit | undefined)?.method === "POST",
+      );
+      expect(calls.length).toBeGreaterThan(0);
+      const body = JSON.parse((calls[0][1] as RequestInit).body as string);
+      expect(body.inviteCode).toBe("ABCD1234");
+    });
+    // The stash is cleared after a successful submit so a stale code
+    // can't leak into a follow-up application.
+    expect(
+      window.sessionStorage.getItem("jacob-pending-invite-code"),
+    ).toBeNull();
   });
 
   it("shows error code and message when an ApiError is returned", async () => {

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { stashPendingInviteCode } from "@/lib/pending-application";
 
 const joinSchema = z.object({
   code: z
@@ -45,6 +46,12 @@ function JoinForm() {
   useEffect(() => {
     if (!authLoading && !user) {
       const code = searchParams.get("code");
+      // Stash the code in sessionStorage so it survives the
+      // signup → verify-email → onboarding hops within the tab.
+      // ProfileForm picks it up and persists it onto the
+      // application doc, where it outlives the (potentially
+      // multi-day) admin-approval wait.
+      if (code) stashPendingInviteCode(code);
       const dest = code ? `/join?code=${code}` : "/join";
       router.replace(`/sign-in?next=${encodeURIComponent(dest)}`);
     }

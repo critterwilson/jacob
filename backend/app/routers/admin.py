@@ -50,6 +50,7 @@ from app.services.applications import application_doc_to_view, compute_age
 from app.services.audit import write_audit_log
 from app.services.email import send_moderation_notice
 from app.services.firebase import init_firebase_admin
+from app.services.invites import consume_invite
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -652,6 +653,53 @@ def approve_application(
                 user_payload[field] = value
         user_ref.set(user_payload)
 
+    # If the applicant arrived via an invite link before signing up,
+    # the code was persisted on the application doc at submit time.
+    # Consume it now — the user doc above is the prerequisite for
+    # `consume_invite` to write a `groups/{gid}/members/{uid}` entry.
+    #
+    # Failure here is non-fatal: the approval has already produced a
+    # working user account, so we log and audit the outcome but never
+    # roll back. Realistic failure modes (invite expired, revoked, at
+    # member cap, group archived) just mean the user lands without
+    # auto-join and can re-open the invite link manually if it's
+    # still valid.
+    invite_code = app_data.get("inviteCode")
+    invite_outcome: dict[str, Any] = {"attempted": False}
+    if invite_code:
+        invite_outcome["attempted"] = True
+        invite_outcome["code"] = str(invite_code)
+        try:
+            joined_gid, joined_invite_id = consume_invite(db, str(invite_code), uid)
+            invite_outcome["status"] = "joined"
+            invite_outcome["gid"] = joined_gid
+            invite_outcome["inviteId"] = joined_invite_id
+            logger.info(
+                "approve: consumed invite uid=%s gid=%s inviteId=%s",
+                uid,
+                joined_gid,
+                joined_invite_id,
+            )
+        except APIError as err:
+            # `APIError` inherits from `HTTPException`; its standard
+            # shape is `.detail = {"error": {"code", "message", "details"}}`.
+            err_payload: dict[str, Any] = {}
+            if isinstance(err.detail, dict):
+                err_payload = err.detail.get("error") or {}
+            err_code = str(err_payload.get("code") or "unknown_error")
+            err_message = str(err_payload.get("message") or err.detail or "")
+            invite_outcome["status"] = "failed"
+            invite_outcome["errorCode"] = err_code
+            logger.warning(
+                "approve: invite consume failed uid=%s code=%s err=%s",
+                uid,
+                err_code,
+                err_message,
+            )
+        except Exception:  # noqa: BLE001
+            invite_outcome["status"] = "errored"
+            logger.exception("approve: unexpected error consuming invite uid=%s", uid)
+
     app_ref.update(
         {
             "status": "approved",
@@ -679,6 +727,7 @@ def approve_application(
                 else None
             ),
             "parentalConsentNotesLength": len(body.parentalConsentNotes or ""),
+            "invite": invite_outcome,
         },
     )
 
