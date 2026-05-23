@@ -7,7 +7,7 @@ import {
   sendEmailVerification,
   signInWithPopup,
 } from "firebase/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -16,11 +16,22 @@ import { Banner, Button, Input, Link } from "@/components/ui";
 import { type SignUpValues, signUpSchema } from "@/lib/auth-schemas";
 import { auth } from "@/lib/firebase";
 import { stashPendingDob } from "@/lib/pending-application";
+import { safeNext } from "@/lib/safe-redirect";
 
 export function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // `?next=` survives the multi-page signup funnel by being threaded
+  // onto the URL of every next hop (verify-email, onboarding). For
+  // brand-new applicants the invite-code itself is persisted on the
+  // application doc (separate fix), so it survives admin approval; the
+  // `next` URL only needs to outlive same-session redirects.
+  const next = safeNext(searchParams.get("next"));
+  const withNext = (path: string): string =>
+    next ? `${path}?next=${encodeURIComponent(next)}` : path;
 
   const {
     register,
@@ -51,7 +62,7 @@ export function SignUpForm() {
       // Email/password signups land on /verify-email until they click the
       // verification link. Google sign-in (below) is already verified by
       // the provider, so it skips this gate.
-      router.push("/verify-email");
+      router.push(withNext("/verify-email"));
     } catch (err) {
       setSubmitError(humanizeAuthError(err));
     } finally {
@@ -80,7 +91,7 @@ export function SignUpForm() {
     }
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-      router.push("/onboarding");
+      router.push(withNext("/onboarding"));
     } catch (err) {
       setSubmitError(humanizeAuthError(err));
     }
@@ -184,7 +195,7 @@ export function SignUpForm() {
 
       <p className="text-body-sm text-cream-muted">
         Already have an account?{" "}
-        <Link href="/sign-in" variant="accent">
+        <Link href={withNext("/sign-in")} variant="accent">
           Sign in
         </Link>
       </p>

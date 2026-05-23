@@ -16,8 +16,12 @@ import {
 // --- router mock -----------------------------------------------------------
 const mockReplace = vi.fn();
 const mockPush = vi.fn();
+const onboardingSearchParamsGet = vi.fn<(key: string) => string | null>(
+  () => null,
+);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => ({ get: onboardingSearchParamsGet }),
 }));
 
 // --- Firebase singletons ---------------------------------------------------
@@ -145,6 +149,8 @@ beforeEach(() => {
   };
   mockReplace.mockClear();
   mockPush.mockClear();
+  onboardingSearchParamsGet.mockReset();
+  onboardingSearchParamsGet.mockReturnValue(null);
   vi.mocked(fbAuth.onAuthStateChanged).mockReset();
   vi.mocked(fbAuth.deleteUser).mockReset();
 });
@@ -240,6 +246,81 @@ describe("OnboardingPage redirect logic", () => {
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/awaiting-approval");
+    });
+  });
+
+  it("honors `?next=` when a profile already exists (Google signup, approved user)", async () => {
+    onboardingSearchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    mockAuthState({ uid: "uid-1", email: "user@example.com" });
+    nextBootstrap = {
+      hasProfile: true,
+      profile: {
+        uid: "uid-1",
+        displayName: "Alice",
+        email: "user@example.com",
+        photoURL: null,
+        role: "member",
+        schemaVersion: 1,
+        isMinor: false,
+        createdAt: null,
+      },
+    };
+
+    render(
+      <AuthProvider>
+        <OnboardingPage />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/join?code=ABCD1234");
+    });
+  });
+
+  it("forwards `?next=` onto /awaiting-approval for pending applicants", async () => {
+    onboardingSearchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    mockAuthState({ uid: "uid-1", email: "user@example.com" });
+    nextBootstrap = { hasProfile: false, profile: null };
+    nextApplication = {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        uid: "uid-1",
+        email: "user@example.com",
+        displayName: "Alice",
+        photoURL: null,
+        dob: ADULT_DOB,
+        age: 35,
+        isMinor: false,
+        phone: null,
+        location: null,
+        faithBackground: null,
+        status: "pending",
+        createdAt: null,
+        submittedAt: null,
+        decidedAt: null,
+        decidedBy: null,
+        parentalConsentObtained: null,
+        parentalConsentNotes: "",
+        rejectionReason: "",
+        grandfathered: false,
+      }),
+    };
+
+    render(
+      <AuthProvider>
+        <OnboardingPage />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        `/awaiting-approval?next=${encodeURIComponent("/join?code=ABCD1234")}`,
+      );
     });
   });
 

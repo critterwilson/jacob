@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { SignInForm } from "@/components/auth/SignInForm";
 import { Eyebrow, Heading } from "@/components/ui";
 
@@ -12,7 +14,12 @@ export default function SignInPage() {
           Sign in
         </Heading>
       </header>
-      <SignInForm />
+      {/* SignInForm reads `?next=` via useSearchParams, which needs a
+       * Suspense boundary so the rest of the page can stay statically
+       * pre-rendered. */}
+      <Suspense fallback={null}>
+        <SignInForm />
+      </Suspense>
     </div>
   );
 }

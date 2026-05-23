@@ -7,7 +7,7 @@ import {
   signInWithPopup,
   signOut,
 } from "firebase/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -15,11 +15,16 @@ import { humanizeAuthError } from "@/components/auth/error-messages";
 import { Banner, Button, Input, Link } from "@/components/ui";
 import { type SignInValues, signInSchema } from "@/lib/auth-schemas";
 import { auth } from "@/lib/firebase";
+import { safeNext } from "@/lib/safe-redirect";
 
 export function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const next = safeNext(searchParams.get("next"));
+  const postAuthDest = next ?? "/";
 
   const {
     register,
@@ -43,7 +48,7 @@ export function SignInForm() {
         );
         return;
       }
-      router.push("/");
+      router.push(postAuthDest);
     } catch (err) {
       setSubmitError(humanizeAuthError(err));
     } finally {
@@ -55,7 +60,7 @@ export function SignInForm() {
     setSubmitError(null);
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-      router.push("/");
+      router.push(postAuthDest);
     } catch (err) {
       setSubmitError(humanizeAuthError(err));
     }
@@ -112,7 +117,10 @@ export function SignInForm() {
         <Link href="/forgot-password" variant="muted">
           Forgot password?
         </Link>
-        <Link href="/sign-up" variant="muted">
+        <Link
+          href={next ? `/sign-up?next=${encodeURIComponent(next)}` : "/sign-up"}
+          variant="muted"
+        >
           Create an account
         </Link>
       </div>

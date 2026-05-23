@@ -13,8 +13,12 @@ import {
 } from "vitest";
 
 const mockReplace = vi.fn();
+const verifyEmailSearchParamsGet = vi.fn<(key: string) => string | null>(
+  () => null,
+);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace, push: vi.fn() }),
+  useSearchParams: () => ({ get: verifyEmailSearchParamsGet }),
 }));
 
 // vi.mock is hoisted; declare the auth sentinel via vi.hoisted so the
@@ -59,6 +63,8 @@ function mockAuthState(
 beforeEach(() => {
   mockReplace.mockClear();
   mockAuth.currentUser = null;
+  verifyEmailSearchParamsGet.mockReset();
+  verifyEmailSearchParamsGet.mockReturnValue(null);
   vi.mocked(fbAuth.onAuthStateChanged).mockReset();
   vi.mocked(fbAuth.reload).mockReset();
   vi.mocked(fbAuth.sendEmailVerification).mockReset();
@@ -151,6 +157,54 @@ describe("VerifyEmailPage", () => {
     });
     expect(mockReplace).toHaveBeenCalledWith("/onboarding");
     expect(reloadCalls).toBeGreaterThanOrEqual(2);
+  });
+
+  it("threads `next` onto /onboarding when already verified", async () => {
+    verifyEmailSearchParamsGet.mockImplementation((k) =>
+      k === "next" ? "/join?code=ABCD1234" : null,
+    );
+    const user = {
+      uid: "u1",
+      email: "alice@example.com",
+      emailVerified: true,
+    };
+    mockAuthState(user);
+    mockAuth.currentUser = user;
+
+    render(
+      <AuthProvider>
+        <VerifyEmailPage />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith(
+        `/onboarding?next=${encodeURIComponent("/join?code=ABCD1234")}`,
+      );
+    });
+  });
+
+  it("ignores an absolute-URL `next` and falls back to /onboarding", async () => {
+    verifyEmailSearchParamsGet.mockImplementation((k) =>
+      k === "next" ? "https://evil.example/" : null,
+    );
+    const user = {
+      uid: "u1",
+      email: "alice@example.com",
+      emailVerified: true,
+    };
+    mockAuthState(user);
+    mockAuth.currentUser = user;
+
+    render(
+      <AuthProvider>
+        <VerifyEmailPage />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/onboarding");
+    });
   });
 
   it("resends the verification email when the resend button is clicked", async () => {
