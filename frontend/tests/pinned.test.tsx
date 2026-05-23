@@ -128,8 +128,9 @@ describe("MessageItem", () => {
     });
   });
 
-  it("non-leader does not see Pin in the overflow menu", () => {
-    const { container } = render(
+  it("non-leader does not see Pin in the overflow menu", async () => {
+    const user = userEvent.setup();
+    render(
       <MessageItem
         gid="g1"
         message={fakeMessage}
@@ -138,11 +139,12 @@ describe("MessageItem", () => {
         onTogglePin={vi.fn()}
       />,
     );
-    // Pin button should not exist (not leader)
-    expect(screen.queryByRole("button", { name: /^pin$/i })).toBeNull();
+    // Open the More menu — Pin lives there under the kebab now.
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    expect(screen.queryByRole("menuitem", { name: /^pin$/i })).toBeNull();
   });
 
-  it("leader sees Pin button and clicking calls onTogglePin", async () => {
+  it("leader sees Pin in the More menu and clicking calls onTogglePin", async () => {
     const user = userEvent.setup();
     const onTogglePin = vi.fn();
 
@@ -156,9 +158,9 @@ describe("MessageItem", () => {
       />,
     );
 
-    // Hover to reveal the action bar — use getByRole after rendering
-    const pinBtn = screen.getByRole("button", { name: /^pin$/i });
-    await user.click(pinBtn);
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    const pinItem = screen.getByRole("menuitem", { name: /^pin$/i });
+    await user.click(pinItem);
     expect(onTogglePin).toHaveBeenCalledWith("m1");
   });
 

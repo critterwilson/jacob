@@ -92,13 +92,16 @@ describe("MessageItem", () => {
     expect(screen.queryByText("hello world")).not.toBeInTheDocument();
   });
 
-  it("shows Edit and Delete buttons for the author on hover (within 15 min)", () => {
+  it("shows Edit and Delete items in the More menu for the author within 15 min", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
     render(<MessageItem gid="g1" message={makeMessage()} isLeader={false} />);
-    expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    expect(screen.getByRole("menuitem", { name: /^edit$/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
   });
 
-  it("does not show Edit button when message is older than 15 minutes", () => {
+  it("hides Edit in the More menu once the message is older than 15 minutes", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
     render(
       <MessageItem
         gid="g1"
@@ -108,11 +111,13 @@ describe("MessageItem", () => {
         isLeader={false}
       />,
     );
-    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    expect(screen.queryByRole("menuitem", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
   });
 
-  it("shows Delete button for a leader on another user's message", () => {
+  it("shows Delete (not Edit) in the More menu for a leader on another user's message", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
     render(
       <MessageItem
         gid="g1"
@@ -120,8 +125,9 @@ describe("MessageItem", () => {
         isLeader={true}
       />,
     );
-    expect(screen.getByRole("button", { name: /delete/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    expect(screen.getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /^edit$/i })).not.toBeInTheDocument();
   });
 
   it("renders sticker badges", () => {

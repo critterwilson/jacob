@@ -5,11 +5,16 @@ import { type MouseEvent, useState } from "react";
 import { ApiError, apiDelete, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { MessageBody } from "@/components/chat/MessageBody";
+import { useMessageMenu } from "@/components/chat/MessageMenuContext";
+import {
+  MessageMoreMenu,
+  type MoreMenuItem,
+} from "@/components/chat/MessageMoreMenu";
 import { PhotoView } from "@/components/chat/PhotoView";
 import { ReactionBar } from "@/components/chat/ReactionBar";
 import { ReactionPicker } from "@/components/chat/ReactionPicker";
-import { ReportButton } from "@/components/moderation/ReportButton";
-import { WellbeingFlagButton } from "@/components/moderation/WellbeingFlagButton";
+import { ReportDialog } from "@/components/moderation/ReportDialog";
+import { WellbeingFlagDialog } from "@/components/moderation/WellbeingFlagDialog";
 import { StickerBadge } from "@/components/stickers/StickerBadge";
 import { Avatar, Button, Textarea, cn } from "@/components/ui";
 import { useStickers } from "@/lib/hooks/useStickers";
@@ -102,6 +107,9 @@ export function MessageItem({
   const [editBody, setEditBody] = useState(message.body);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [wellbeingOpen, setWellbeingOpen] = useState(false);
+  const menu = useMessageMenu();
 
   const isAuthor = resolvedUid === message.authorUid;
   const author = resolveAuthor(message.authorUid, members, resolvedUid);
@@ -175,28 +183,22 @@ export function MessageItem({
     }
   };
 
-  const actionChip =
-    // 32 px chip — slightly tighter than the 36 px chips elsewhere so
-    // the full action cluster (Reply / Edit / Delete / Pin / Announce /
-    // react / report / wellbeing) fits on a single row at 390px without
-    // wrapping into the message body. The chips sit inside a hover-
-    // /tap-revealed pill so the floor is the cluster's own padded
-    // hit-area, not each chip individually.
-    "inline-flex h-8 items-center rounded-full px-2.5 text-caption text-cream-muted " +
-    "transition-colors duration-fast hover:bg-ink hover:text-cream " +
-    "focus:outline-none focus-visible:shadow-glow-gold";
-
   // Touch devices have no hover state — the action row would be unreachable
-  // if we only revealed it on `:hover`. Tapping the message toggles a local
-  // "actions visible" flag so the row works on phones; on desktop, hover
-  // still works as before.
-  const [actionsActive, setActionsActive] = useState(false);
+  // if we only revealed it on `:hover`. Tapping the message toggles the
+  // shared `MessageMenuContext` for `(mid, "actions")`; on desktop hover
+  // continues to reveal the row via the `group-hover` class below. Only
+  // one menu is ever open across the chat (see MessageMenuContext) — so
+  // tapping another message, scrolling, tapping outside, or pressing Esc
+  // all reliably dismiss it.
+  const actionsActive = menu.isOpen(message.id, "actions");
+  const anyMenuOpenForThis =
+    menu.openMenu?.mid === message.id && menu.openMenu.type !== null;
   const handleSurfaceClick = (e: MouseEvent<HTMLElement>) => {
     const target = e.target as HTMLElement;
     // Don't toggle when the user is interacting with the actions row,
     // inline links, the edit textarea, photos, reaction chips, or stickers.
     if (
-      target.closest("[data-message-actions]") ||
+      target.closest("[data-message-menu]") ||
       target.closest("a") ||
       target.closest("button") ||
       target.closest("input") ||
@@ -205,8 +207,54 @@ export function MessageItem({
     ) {
       return;
     }
-    setActionsActive((v) => !v);
+    menu.toggle(message.id, "actions");
   };
+
+  // Compose the More-menu items. Each is rendered only when applicable
+  // so the popover stays short (Edit only on your own messages, Pin only
+  // for leaders, Report/Flag only on other people's messages, etc.).
+  const moreItems: MoreMenuItem[] = [];
+  if (canEdit) {
+    moreItems.push({
+      key: "edit",
+      label: "Edit",
+      onSelect: () => setEditing(true),
+    });
+  }
+  if (canDelete) {
+    moreItems.push({
+      key: "delete",
+      label: "Delete",
+      destructive: true,
+      onSelect: () => void handleDelete(),
+    });
+  }
+  if (isLeader && onTogglePin) {
+    moreItems.push({
+      key: "pin",
+      label: pinnedIds.includes(message.id) ? "Unpin" : "Pin",
+      onSelect: () => onTogglePin(message.id),
+    });
+  }
+  if (isLeader && onAnnounce && !message.announcedAt) {
+    moreItems.push({
+      key: "announce",
+      label: "Announce",
+      onSelect: () => onAnnounce(message.id),
+    });
+  }
+  if (!isAuthor && resolvedUid) {
+    moreItems.push({
+      key: "report",
+      label: "Report",
+      onSelect: () => setReportOpen(true),
+    });
+    moreItems.push({
+      key: "flag",
+      label: "Flag concern",
+      onSelect: () => setWellbeingOpen(true),
+    });
+  }
 
   return (
     <article
@@ -218,6 +266,7 @@ export function MessageItem({
         // message in a group: normal top padding so the visual block
         // is clearly separated from the previous sender.
         isContinuation ? "pt-0.5 pb-1" : "pt-3 pb-1",
+        anyMenuOpenForThis && "bg-ink-raised",
       )}
     >
       {isContinuation ? (
@@ -393,16 +442,16 @@ export function MessageItem({
 
       {!isDeleted && !editing && !readonly && (
         <div
-          data-message-actions
+          data-message-menu
           className={cn(
-            "absolute right-2 top-0 z-10 flex max-w-[calc(100%-1rem)] flex-wrap items-center justify-end gap-0.5 rounded-full border border-line bg-ink-raised/95 px-1 py-1 shadow-pop backdrop-blur-sm transition-opacity duration-fast",
+            "absolute right-2 top-0 z-10 flex items-center gap-0.5 rounded-full border border-line bg-ink-raised/95 px-1 py-1 shadow-pop backdrop-blur-sm transition-opacity duration-fast",
             // Lifted slightly above the message so the cluster reads as
             // a floating toolbar rather than crowding the body.
             "-translate-y-1/2",
             // Always rendered so action chips don't pop into existence; toggled
             // via opacity + pointer-events. Hover works on desktop; tapping the
             // message reveals on touch (no hover state).
-            actionsActive
+            actionsActive || anyMenuOpenForThis
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100",
           )}
@@ -410,73 +459,51 @@ export function MessageItem({
           {onReply && message.parentMessageId === null && (
             <button
               type="button"
-              onClick={() => onReply(message)}
-              className={actionChip}
+              onClick={() => {
+                onReply(message);
+                menu.close();
+              }}
+              aria-label="Reply"
+              className={
+                "inline-flex h-9 items-center rounded-full px-3 text-caption text-cream-muted " +
+                "transition-colors duration-fast hover:bg-ink hover:text-cream " +
+                "focus:outline-none focus-visible:shadow-glow-gold"
+              }
             >
               Reply
-            </button>
-          )}
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className={actionChip}
-            >
-              Edit
-            </button>
-          )}
-          {canDelete && (
-            <button
-              type="button"
-              onClick={() => void handleDelete()}
-              className={actionChip}
-            >
-              Delete
-            </button>
-          )}
-          {isLeader && onTogglePin && (
-            <button
-              type="button"
-              onClick={() => onTogglePin(message.id)}
-              className={actionChip}
-            >
-              {pinnedIds.includes(message.id) ? "Unpin" : "Pin"}
-            </button>
-          )}
-          {isLeader && onAnnounce && !message.announcedAt && (
-            <button
-              type="button"
-              onClick={() => onAnnounce(message.id)}
-              className={actionChip}
-            >
-              Announce
             </button>
           )}
           {onToggleReaction && isMyReaction && (
             <ReactionPicker
               mid={message.id}
               isMyReaction={isMyReaction}
-              onToggle={onToggleReaction}
+              onToggle={(mid, slug) => {
+                onToggleReaction(mid, slug);
+              }}
               disabled={archived}
             />
           )}
-          {!isAuthor && (
-            <ReportButton
-              resourceType="message"
-              resourceId={message.id}
-              groupId={gid}
-              className={cn(actionChip, "flex items-center text-cream-muted")}
-            />
-          )}
-          {!isAuthor && (
-            <WellbeingFlagButton
-              subjectUid={message.authorUid}
-              subjectName={author.displayName}
-              messageId={message.id}
-              groupId={gid}
-              className={cn(actionChip, "text-cream-muted")}
-            />
-          )}
+          <MessageMoreMenu mid={message.id} items={moreItems} />
+        </div>
+      )}
+
+      {!isAuthor && resolvedUid && (
+        <div data-keep-menu-open>
+          <ReportDialog
+            open={reportOpen}
+            onClose={() => setReportOpen(false)}
+            resourceType="message"
+            resourceId={message.id}
+            groupId={gid}
+          />
+          <WellbeingFlagDialog
+            open={wellbeingOpen}
+            onClose={() => setWellbeingOpen(false)}
+            subjectUid={message.authorUid}
+            subjectName={author.displayName}
+            messageId={message.id}
+            groupId={gid}
+          />
         </div>
       )}
     </article>

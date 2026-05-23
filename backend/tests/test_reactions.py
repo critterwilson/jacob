@@ -123,7 +123,9 @@ def test_react_happy_path() -> None:
     assert "reactionCounts" not in body
 
 
-def test_react_404_sticker_missing() -> None:
+def test_react_404_slug_unknown() -> None:
+    # Not an emoji slug (the canonical reaction set) AND no matching
+    # sticker doc — server rejects.
     user = CurrentUser(uid="alice", email=None, claims={})
     db = _make_db(sticker_exists=False)
     with (
@@ -133,7 +135,38 @@ def test_react_404_sticker_missing() -> None:
         client = TestClient(_app(user))
         res = client.post("/api/groups/g1/messages/m1/reactions/nope")
     assert res.status_code == 404
-    assert res.json()["error"]["code"] == "sticker_not_found"
+    assert res.json()["error"]["code"] == "reaction_slug_unknown"
+
+
+def test_react_accepts_emoji_slug_without_sticker_doc() -> None:
+    # An emoji slug from EMOJI_REACTION_SLUGS short-circuits the sticker
+    # existence check — the picker now lives entirely outside the
+    # stickers collection. Sticker lookup is back-compat only.
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = _make_db(sticker_exists=False)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.post("/api/groups/g1/messages/m1/reactions/like")
+    assert res.status_code == 201
+    body = res.json()
+    assert body["slug"] == "like"
+
+
+def test_react_accepts_legacy_sticker_slug() -> None:
+    # Reactions persisted before the emoji/tag split still toggle —
+    # any slug that resolves to a sticker doc is accepted.
+    user = CurrentUser(uid="alice", email=None, claims={})
+    db = _make_db(sticker_exists=True)
+    with (
+        patch("app.deps.get_firestore", return_value=db),
+        patch("app.routers.messages.get_firestore", return_value=db),
+    ):
+        client = TestClient(_app(user))
+        res = client.post("/api/groups/g1/messages/m1/reactions/prayer-request")
+    assert res.status_code == 201
 
 
 def test_react_404_message_missing() -> None:
