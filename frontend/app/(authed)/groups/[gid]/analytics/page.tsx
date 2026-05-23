@@ -60,19 +60,24 @@ export default function AnalyticsPage({ params }: Props) {
 
       {/* Range toggle */}
       <div className="mb-8 inline-flex rounded border border-line text-sm" role="group">
-        {(["7d", "30d"] as const).map((r) => (
+        {(
+          [
+            { value: "7d", label: "Last 7 days" },
+            { value: "30d", label: "Last 30 days" },
+          ] as { value: Range; label: string }[]
+        ).map(({ value, label }) => (
           <button
-            key={r}
+            key={value}
             type="button"
-            onClick={() => setRange(r)}
-            aria-pressed={range === r}
+            onClick={() => setRange(value)}
+            aria-pressed={range === value}
             className={`px-4 py-1.5 first:rounded-l last:rounded-r ${
-              range === r
+              range === value
                 ? "bg-gold text-ink"
                 : "bg-ink-raised text-cream-muted hover:bg-ink-raised"
             }`}
           >
-            {r}
+            {label}
           </button>
         ))}
       </div>
@@ -87,14 +92,15 @@ export default function AnalyticsPage({ params }: Props) {
 
       {state.status === "ok" && state.data.totalMessages === 0 && (
         <p className="py-16 text-center text-cream-muted">
-          Quiet week — see you next Sunday
+          No messages yet in this period. Once people start chatting, you&apos;ll
+          see activity here.
         </p>
       )}
 
       {state.status === "ok" && state.data.totalMessages > 0 && (
         <div className="space-y-10">
           <p className="text-sm text-cream-muted">
-            {state.data.totalMessages} messages in the last {range}
+            {state.data.totalMessages} messages in the {range === "7d" ? "last 7 days" : "last 30 days"}
             {" · "}Includes through{" "}
             {new Date(state.data.generatedAt).toLocaleDateString()}
           </p>
@@ -105,7 +111,7 @@ export default function AnalyticsPage({ params }: Props) {
           </section>
 
           <section>
-            <h2 className="mb-4 text-base font-semibold">Sticker mix</h2>
+            <h2 className="mb-4 text-base font-semibold">Reactions used</h2>
             {state.data.stickerMix.length === 0 ? (
               <p className="text-sm text-cream-muted">No stickers used this period.</p>
             ) : (

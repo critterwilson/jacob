@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { InviteForm } from "@/components/groups/InviteForm";
 import { InviteList } from "@/components/groups/InviteList";
+import { QuickJoinCode } from "@/components/groups/QuickJoinCode";
 import { Heading, Link, Section } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroup } from "@/lib/hooks/useGroup";
@@ -62,15 +63,22 @@ export default function GroupInvitesPage({ params }: Props) {
       </header>
 
       <Section
-        title="Create invite"
+        title="Quick-join code"
+        description="A persistent short code anyone can use to join at /join. Generate a new code if you need to revoke access."
+      >
+        <QuickJoinCode gid={gid} />
+      </Section>
+
+      <Section
+        title="Create an invite link"
         description="Generate a shareable link with optional expiry and use limits."
       >
         <InviteForm gid={gid} groupName={groupName} />
       </Section>
 
       <Section
-        title="Invite history"
-        description="Active and past invites for this group."
+        title="Invite links"
+        description="Active and past invite links for this group."
       >
         {invitesLoading ? (
           <p className="text-body-sm text-cream-muted">Loading…</p>

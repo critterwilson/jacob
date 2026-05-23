@@ -63,8 +63,9 @@ export default function GroupDevotionalsPage() {
         <p className="text-body-sm text-cream-muted">Loading…</p>
       ) : devotionals.length === 0 ? (
         <p className="text-body-sm text-cream-muted">
-          No devotionals yet.
-          {isLeader && " Use “Write devotional” to publish one."}
+          {isLeader
+            ? "No devotionals yet. Leaders can write one using Write devotional above."
+            : "No devotionals yet — leaders can publish one anytime."}
         </p>
       ) : (
         <ul className="space-y-3">

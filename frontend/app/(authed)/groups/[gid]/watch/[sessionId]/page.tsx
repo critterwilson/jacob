@@ -31,7 +31,14 @@ export default function WatchSessionPage() {
       </Link>
       <h1 className="mt-2 text-2xl font-semibold">Watch Together</h1>
       <p className="text-sm text-cream-muted">
-        Watch Together is not available right now. Check back later.
+        Watch Together is coming soon. In the meantime, head over to the{" "}
+        <Link
+          href={`/groups/${gid}/sermons`}
+          className="text-gold-soft underline-offset-2 hover:underline"
+        >
+          sermon archive
+        </Link>{" "}
+        to watch what your group has shared.
       </p>
     </main>
   );

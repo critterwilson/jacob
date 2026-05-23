@@ -106,7 +106,6 @@ export default function MembersPage({ params }: Props) {
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{m.displayName}</p>
-                <code className="text-xs text-cream-muted">{m.uid}</code>
                 <div className="mt-1 flex gap-1">
                   <span
                     className={`rounded px-2 py-0.5 text-xs font-medium ${
@@ -115,16 +114,16 @@ export default function MembersPage({ params }: Props) {
                         : "bg-ink-overlay text-cream-muted"
                     }`}
                   >
-                    {m.role}
+                    {m.role === "leader" ? "Leader" : "Member"}
                   </span>
                   {isFounderRow && (
                     <span className="rounded bg-parchment-amber/20 px-2 py-0.5 text-xs font-medium text-parchment-amber">
-                      founder
+                      Founder
                     </span>
                   )}
                   {isSelf && (
                     <span className="rounded bg-ink-raised px-2 py-0.5 text-xs text-cream-muted">
-                      you
+                      You
                     </span>
                   )}
                 </div>

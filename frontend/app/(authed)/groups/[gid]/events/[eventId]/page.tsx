@@ -279,17 +279,17 @@ export default function EventDetailPage() {
         </ButtonLink>
       </section>
 
-      {/* Leader: RSVP roster + attendance */}
+      {/* Leader: RSVP list + attendance */}
       {isLeader && (
         <section
-          aria-label="Attendance roster"
+          aria-label="Who's coming"
           className="mt-8 space-y-3"
         >
           <h2 className="text-sm font-semibold uppercase tracking-wide text-cream-muted">
-            Roster
+            Who&apos;s coming
           </h2>
           {rsvpListLoading ? (
-            <p className="text-sm text-cream-muted">Loading roster…</p>
+            <p className="text-sm text-cream-muted">Loading…</p>
           ) : !rsvpList || rsvpList.length === 0 ? (
             <p className="text-sm text-cream-muted">No RSVPs yet.</p>
           ) : (
