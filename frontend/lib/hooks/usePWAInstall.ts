@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { detectPlatform, type InstallPlatform } from "@/lib/platform";
+
 const SNOOZE_KEY = "pwa-install-snoozed-until";
 const PERMANENT_KEY = "pwa-install-dismissed";
 const SNOOZE_DAYS = 14;
@@ -12,8 +14,10 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 export function usePWAInstall() {
-  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [promptEvent, setPromptEvent] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [platform, setPlatform] = useState<InstallPlatform>("unknown");
 
   // Stable across the lifetime of the page — if you're in standalone you're in standalone.
   const isStandalone =
@@ -22,6 +26,8 @@ export function usePWAInstall() {
       !!(navigator as Navigator & { standalone?: boolean }).standalone);
 
   useEffect(() => {
+    setPlatform(detectPlatform());
+
     if (localStorage.getItem(PERMANENT_KEY) === "1") {
       setDismissed(true);
       return;
@@ -70,6 +76,7 @@ export function usePWAInstall() {
     permanentDismiss,
     dismissed,
     isStandalone,
+    platform,
   };
 }
 
