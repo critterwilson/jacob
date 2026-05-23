@@ -276,9 +276,18 @@ group at write time):
 
 ## `stickers/{stickerId}`
 
-Reaction stickers. Read-only for any authenticated user; seeded and
-maintained via the Admin SDK (see seed scripts under
-[firestore/seed/](../firestore/seed/)).
+Author-applied message tags — "Prayer Request", "Praise Report",
+"Check-In", etc. Attached at compose time via the `stickerIds` field
+on the message document. **Distinct from emoji reactions**: those are
+a fixed allowlist of emoji slugs (`like` / `love` / `pray` / `laugh`
+/ `wow` / `sad`) defined in `backend/app/services/reactions.py` and
+mirrored on the client in `frontend/lib/emojiReactions.ts`. The
+reaction endpoint accepts either an emoji slug from that allowlist or
+(for back-compat with reactions persisted before the split) a sticker
+slug that exists in this collection.
+
+Read-only for any authenticated user; seeded and maintained via the
+Admin SDK (see seed scripts under [firestore/seed/](../firestore/seed/)).
 
 ```json
 {

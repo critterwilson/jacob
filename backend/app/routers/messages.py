@@ -63,6 +63,7 @@ from app.models.messages import (
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import get_firestore
+from app.services.reactions import EMOJI_REACTION_SLUGS
 from app.services.stream_hub import get_stream_hub
 
 logger = logging.getLogger(__name__)
@@ -761,13 +762,19 @@ def react_to_message(
     require_not_archived(membership)
     db = get_firestore()
 
-    sticker_snap = db.collection("stickers").document(slug).get()
-    if not getattr(sticker_snap, "exists", False):
-        raise APIError(
-            status_code=status.HTTP_404_NOT_FOUND,
-            code="sticker_not_found",
-            message="Sticker not found",
-        )
+    # Accept either an emoji-reaction slug (the canonical picker set —
+    # `EMOJI_REACTION_SLUGS`) or a sticker slug that exists in the
+    # `stickers` collection. The sticker path is back-compat for
+    # reactions persisted before reactions and stickers were split into
+    # separate concepts; new client code only ever sends emoji slugs.
+    if slug not in EMOJI_REACTION_SLUGS:
+        sticker_snap = db.collection("stickers").document(slug).get()
+        if not getattr(sticker_snap, "exists", False):
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="reaction_slug_unknown",
+                message="Reaction slug is not a recognised emoji or sticker",
+            )
 
     msg_ref = db.collection("groups").document(gid).collection("messages").document(mid)
     msg_snap = msg_ref.get()

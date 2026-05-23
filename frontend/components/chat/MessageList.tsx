@@ -3,6 +3,10 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MessageItem } from "@/components/chat/MessageItem";
+import {
+  MessageMenuProvider,
+  useMessageMenu,
+} from "@/components/chat/MessageMenuContext";
 import { Banner } from "@/components/ui";
 import { useBlocks } from "@/lib/hooks/useBlocks";
 import { useMembers } from "@/lib/hooks/useMembers";
@@ -113,7 +117,19 @@ function JumpToBottomIcon({ className }: { className?: string }) {
  *   - A floating "jump to bottom" pill appears when the user is
  *     scrolled up and a new message arrives off-screen.
  */
-export function MessageList({
+export function MessageList(props: Props) {
+  // Wrap the inner list in `MessageMenuProvider` so every MessageItem
+  // shares a single open-menu state — opening one message's reaction
+  // picker or More menu closes any other open menu, outside-tap and Esc
+  // dismiss, and the scroll dismissal below stays consistent with that.
+  return (
+    <MessageMenuProvider>
+      <MessageListInner {...props} />
+    </MessageMenuProvider>
+  );
+}
+
+function MessageListInner({
   gid,
   messages,
   loading,
@@ -129,6 +145,7 @@ export function MessageList({
   onAnnounce,
   readonly = false,
 }: Props) {
+  const { close: closeMenu } = useMessageMenu();
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialScrollDoneRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -192,11 +209,15 @@ export function MessageList({
   }, [visible.length, lastVisibleId]);
 
   // Toggle the jump-to-bottom pill on user scroll so it disappears
-  // once they're back near the bottom.
+  // once they're back near the bottom. Also closes any open message
+  // menu — a previous bug let the action pill / reaction picker stay
+  // pinned to a row even as the user scrolled it off-screen, hiding
+  // messages underneath.
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
     const onScroll = () => {
+      closeMenu();
       const distanceFromBottom =
         container.scrollHeight - (container.scrollTop + container.clientHeight);
       if (distanceFromBottom <= NEAR_BOTTOM_PX) {
@@ -208,7 +229,7 @@ export function MessageList({
     };
     container.addEventListener("scroll", onScroll, { passive: true });
     return () => container.removeEventListener("scroll", onScroll);
-  }, [unreadBelow]);
+  }, [unreadBelow, closeMenu]);
 
   const jumpToBottom = () => {
     const container = scrollRef.current;

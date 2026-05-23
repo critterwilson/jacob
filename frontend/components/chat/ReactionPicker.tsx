@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
 import { cn } from "@/components/ui";
-import { useStickers } from "@/lib/hooks/useStickers";
+import { EMOJI_REACTIONS } from "@/lib/emojiReactions";
+import { useMessageMenu } from "@/components/chat/MessageMenuContext";
 
 type Props = {
   mid: string;
@@ -37,36 +36,40 @@ function SmileyAddIcon({ className }: { className?: string }) {
   );
 }
 
+/**
+ * Emoji reaction picker. Renders the canonical `EMOJI_REACTIONS` set —
+ * NOT message stickers (which are an author-applied tag concept living
+ * in `frontend/components/stickers/`). The two were previously crossed:
+ * the picker pulled from `useStickers()`, so tapping "react" surfaced
+ * "Prayer Request", "Praise Report", etc. instead of an emoji set.
+ *
+ * Open/close state is held in `MessageMenuContext` so opening another
+ * message's menu, tapping outside, scrolling, or pressing Esc all
+ * dismiss the popover.
+ */
 export function ReactionPicker({
   mid,
   isMyReaction,
   onToggle,
   disabled = false,
 }: Props) {
-  const { stickers } = useStickers();
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [open]);
+  const { isOpen, toggle, close } = useMessageMenu();
+  const open = isOpen(mid, "reactions");
 
   if (disabled) return null;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="relative" data-message-menu>
       <button
         type="button"
         aria-label="Add reaction"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggle(mid, "reactions");
+        }}
         className={
-          "inline-flex h-8 w-8 items-center justify-center rounded-full text-cream-muted " +
+          "inline-flex h-9 w-9 items-center justify-center rounded-full text-cream-muted " +
           "transition-colors duration-fast hover:bg-ink hover:text-cream " +
           "focus:outline-none focus-visible:shadow-glow-gold"
         }
@@ -78,30 +81,28 @@ export function ReactionPicker({
         <div
           role="dialog"
           aria-label="Reaction picker"
-          className="absolute bottom-full right-0 z-20 mb-1 flex max-w-[calc(100vw-2rem)] flex-wrap gap-1 rounded-lg border border-line bg-ink-overlay p-2 shadow-pop"
+          className="absolute bottom-full right-0 z-20 mb-1 flex max-w-[calc(100vw-2rem)] gap-1 rounded-lg border border-line bg-ink-overlay p-2 shadow-pop"
         >
-          {stickers.slice(0, 6).map((s) => {
-            const mine = isMyReaction(mid, s.slug);
+          {EMOJI_REACTIONS.map((r) => {
+            const mine = isMyReaction(mid, r.slug);
             return (
               <button
-                key={s.slug}
+                key={r.slug}
                 type="button"
                 aria-pressed={mine}
-                aria-label={s.name}
-                onClick={() => {
-                  onToggle(mid, s.slug);
-                  setOpen(false);
+                aria-label={r.label}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(mid, r.slug);
+                  close();
                 }}
                 className={cn(
-                  "rounded px-2 py-1 text-caption transition-colors duration-fast " +
+                  "inline-flex h-9 w-9 items-center justify-center rounded-full text-lg leading-none transition-colors duration-fast " +
                     "focus:outline-none focus-visible:shadow-glow-gold",
-                  mine
-                    ? "bg-gold/15 font-medium"
-                    : "hover:bg-ink",
+                  mine ? "bg-gold/15" : "hover:bg-ink",
                 )}
-                style={{ color: s.color }}
               >
-                {s.name}
+                <span aria-hidden="true">{r.emoji}</span>
               </button>
             );
           })}
