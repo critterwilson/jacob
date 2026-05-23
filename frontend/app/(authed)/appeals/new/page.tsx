@@ -106,9 +106,7 @@ export default function NewAppealPage() {
       </label>
 
       <label className="block text-sm">
-        <span className="font-medium text-cream">
-          Subject reference
-        </span>
+        <span className="font-medium text-cream">Reference</span>
         <input
           value={subjectRef}
           onChange={(e) => setSubjectRef(e.target.value)}
@@ -122,14 +120,14 @@ export default function NewAppealPage() {
           className="mt-1 w-full rounded border border-line bg-ink-raised px-2 py-1 font-mono text-xs focus:outline-none focus-visible:shadow-glow-gold"
         />
         <span className="mt-1 block text-xs text-cream-muted">
-          The notification you received about the moderation action contains
-          this reference.
+          Copy this from the notification you received about the action — it
+          identifies the exact item being appealed.
         </span>
       </label>
 
       <label className="block text-sm">
         <span className="font-medium text-cream">
-          Why do you think this was a mistake? (≥ 50 chars)
+          Why do you think this was a mistake?
         </span>
         <textarea
           value={body}
@@ -139,7 +137,7 @@ export default function NewAppealPage() {
           placeholder="Explain the context the original reviewer may have missed."
         />
         <span className="mt-1 block text-xs text-cream-muted">
-          {body.length} / 50 chars minimum
+          At least 50 characters. {body.length} so far.
         </span>
       </label>
 
