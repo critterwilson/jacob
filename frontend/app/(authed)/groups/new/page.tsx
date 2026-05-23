@@ -35,6 +35,10 @@ export default function NewGroupPage() {
           Back to groups
         </Link>
       </div>
+      <p className="mb-6 text-body-sm text-cream-muted">
+        Groups are spaces for Bible study, prayer, and connection. You&apos;ll
+        be the founder and can invite members once it&apos;s set up.
+      </p>
       <CreateGroupForm />
     </main>
   );
