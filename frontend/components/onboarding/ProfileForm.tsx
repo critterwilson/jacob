@@ -26,7 +26,10 @@ import {
   readPendingInviteCode,
 } from "@/lib/pending-application";
 
-type SubmitApplicationRequest = {
+// ADR 0014: onboarding writes the user doc directly via POST /api/users/me.
+// The legacy applications collection is retired; the request shape mirrors
+// the backend `CreateProfileRequest` model.
+type CreateProfileRequest = {
   displayName: string;
   dob: string;
   photoURL: HttpUrlString | null;
@@ -108,11 +111,11 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
     setSubmitting(true);
     try {
       // If the user arrived via `/join?code=…` before signing up, the
-      // code is stashed in sessionStorage. Persist it onto the
-      // application doc so admin approval (potentially days later, in
-      // a different session) can auto-join the user to that group.
+      // code is stashed in sessionStorage. The onboarding endpoint
+      // auto-joins adults into the target group on success; for minors
+      // it escalates a pending join-request to the owner queue.
       const pendingInvite = readPendingInviteCode();
-      const body: SubmitApplicationRequest = {
+      const body: CreateProfileRequest = {
         displayName: values.displayName,
         dob: values.dob,
         photoURL: photoURL ?? null,
@@ -123,22 +126,17 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
           : {}),
         ...(pendingInvite ? { inviteCode: pendingInvite } : {}),
       };
-      await apiPost("/api/applications/me", body);
+      await apiPost("/api/users/me", body);
       clearPendingDob();
       clearPendingInviteCode();
-      router.push("/awaiting-approval");
+      // ADR 0014: new users land "unaffiliated" — no platform-wide
+      // approval queue. Send them to /home which renders the
+      // unaffiliated banner pointing at /discover.
+      router.push("/home");
     } catch (err) {
-      if (err instanceof ApiError && err.code === "already_approved") {
-        // Race: an admin approved while the user was filling the form,
-        // or this caller already has a user doc. Skip straight to the app.
-        router.push("/groups");
-        return;
-      }
-      if (err instanceof ApiError && err.code === "application_decided") {
-        // The application is already in a decided state — the
-        // /awaiting-approval screen will show the rejection or push to
-        // /groups. Route there and let it figure out the rest.
-        router.push("/awaiting-approval");
+      if (err instanceof ApiError && err.code === "profile_exists") {
+        // Race: this caller already has a user doc. Skip to the app.
+        router.push("/home");
         return;
       }
       if (err instanceof ApiError && err.code === "under_minimum_age") {
@@ -235,7 +233,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
             autoComplete="bday"
             required
             {...register("dob")}
-            helperText="JACOB requires you to be at least 13. Applicants under 18 need parental consent — an admin will confirm this before your account is approved."
+            helperText="JACOB requires you to be at least 13. Applicants under 18 need an organization owner to confirm parental consent before they can join a group."
             error={errors.dob?.message}
           />
 
@@ -273,9 +271,8 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       {step === 2 && (
         <div className="space-y-6">
           <p className="text-body-sm text-cream-muted">
-            Last step — agree to JACOB&rsquo;s community guidelines and submit
-            your application. An admin will review it before your account is
-            approved.
+            Last step — agree to JACOB&rsquo;s community guidelines to
+            finish creating your account.
           </p>
 
           <div className="space-y-2">
@@ -326,7 +323,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
               fullWidth
               loading={submitting}
             >
-              {submitting ? "Submitting application…" : "Submit application"}
+              {submitting ? "Creating your account…" : "Create account"}
             </Button>
           </div>
         </div>

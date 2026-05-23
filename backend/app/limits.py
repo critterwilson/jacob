@@ -86,8 +86,17 @@ APPEAL_SUBMIT: str = "3/day"
 # Admin-approval signup (ADR 0012). Submit is the load-bearing write;
 # poll is what `/awaiting-approval` calls every 30s while waiting for
 # an admin decision, so the cap has to comfortably absorb that.
+# Deprecated by ADR 0014 — the submit endpoint now returns 410 Gone;
+# the poll budget is left in place so the legacy admin queue surface
+# (which still reads applications) keeps a reasonable cap.
 APPLICATION_SUBMIT: str = "5/hour"
 APPLICATION_POLL: str = "60/minute"
+
+# ADR 0014 — leader-application queue. Submit is per-user (one at a
+# time, but a user can iterate after a rejection); admin list / mutate
+# share the existing ADMIN_LIST / ADMIN_MUTATION budgets.
+LEADER_APPLICATION_SUBMIT: str = "5/hour"
+LEADER_APPLICATION_POLL: str = "60/minute"
 
 # M2 — users router. Bootstrap is called on every session start so it
 # needs a generous limit; profile mutation surfaces are deliberately

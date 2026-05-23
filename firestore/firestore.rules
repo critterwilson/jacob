@@ -231,7 +231,20 @@ service cloud.firestore {
     // member access. Applicant writes via `POST /api/applications/me`;
     // admin reads / approves / rejects via `/api/admin/applications*`.
     // Default-deny: clients never read these docs directly.
+    //
+    // ADR 0014 deprecates this collection: new signups no longer write
+    // here; the legacy admin queue stays reachable until existing
+    // pending docs are drained.
     match /applications/{uid} {
+      allow read, write: if false;
+    }
+
+    // --- delegated leader applications (ADR 0014) -----------------------
+    // Non-owners submit `leader_applications/{appId}` via
+    // `POST /api/leader-applications`; the ministry owner approves via
+    // `/api/admin/leader-applications*`. Default-deny: every direct
+    // client path is closed; Admin SDK bypasses these rules.
+    match /leader_applications/{appId} {
       allow read, write: if false;
     }
 

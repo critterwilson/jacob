@@ -150,161 +150,20 @@ def _under_13_dob() -> str:
 # ── POST /api/applications/me ─────────────────────────────────────────────
 
 
-def test_submit_application_happy_path_adult() -> None:
-    db = _make_db()
-    with (
-        patch("app.routers.applications.get_firestore", return_value=db),
-        patch("app.services.audit._db", return_value=db),
-    ):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Alice", "dob": _adult_dob()},
-        )
-    assert res.status_code == 201
-    body = res.json()
-    assert body["status"] == "pending"
-    assert body["isMinor"] is False
+def test_submit_application_returns_410_gone() -> None:
+    """ADR 0014: the platform-wide application queue is retired.
 
-    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
-    assert payload["displayName"] == "Alice"
-    assert payload["isMinor"] is False
-    assert payload["status"] == "pending"
-
-
-def test_submit_application_happy_path_minor_marks_is_minor() -> None:
-    db = _make_db()
-    with (
-        patch("app.routers.applications.get_firestore", return_value=db),
-        patch("app.services.audit._db", return_value=db),
-    ):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Mia", "dob": _minor_dob()},
-        )
-    assert res.status_code == 201
-    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
-    assert payload["isMinor"] is True
-
-
-def test_submit_application_refuses_under_13() -> None:
-    db = _make_db()
-    with patch("app.routers.applications.get_firestore", return_value=db):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Tim", "dob": _under_13_dob()},
-        )
-    assert res.status_code == 422
-    assert res.json()["error"]["code"] == "under_minimum_age"
-    db._app_ref.set.assert_not_called()  # type: ignore[attr-defined]
-
-
-def test_submit_application_refuses_when_user_already_approved() -> None:
-    db = _make_db(user_exists=True, user_data={"displayName": "Alice"})
-    with patch("app.routers.applications.get_firestore", return_value=db):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Alice", "dob": _adult_dob()},
-        )
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "already_approved"
-
-
-def test_submit_application_refuses_resubmit_after_decision() -> None:
-    db = _make_db(
-        app_exists=True,
-        app_data={"status": "rejected"},
-    )
-    with patch("app.routers.applications.get_firestore", return_value=db):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Alice", "dob": _adult_dob()},
-        )
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "application_decided"
-
-
-def test_submit_application_allows_resubmit_while_pending() -> None:
-    db = _make_db(
-        app_exists=True,
-        app_data={"status": "pending", "createdAt": "old"},
-    )
-    with (
-        patch("app.routers.applications.get_firestore", return_value=db),
-        patch("app.services.audit._db", return_value=db),
-    ):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Alice Updated", "dob": _adult_dob()},
-        )
-    assert res.status_code == 201
-    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
-    assert payload["displayName"] == "Alice Updated"
-    # createdAt preserved from the prior submission.
-    assert payload["createdAt"] == "old"
-
-
-def test_submit_application_invalid_dob_string_returns_422() -> None:
+    `POST /api/applications/me` is preserved for OpenAPI schema parity
+    but always returns 410 with code `application_flow_retired`. The
+    new ingress is `POST /api/users/me` (onboarding) + per-group
+    join-requests.
+    """
     res = TestClient(_applicant_app()).post(
         "/api/applications/me",
-        json={"displayName": "Alice", "dob": "not-a-date"},
+        json={"displayName": "Alice", "dob": _adult_dob()},
     )
-    assert res.status_code == 422
-
-
-def test_submit_application_rejects_extra_keys() -> None:
-    res = TestClient(_applicant_app()).post(
-        "/api/applications/me",
-        json={"displayName": "Alice", "dob": _adult_dob(), "role": "admin"},
-    )
-    assert res.status_code == 422
-
-
-def test_submit_application_persists_invite_code_uppercased() -> None:
-    """An invite code from `/join?code=…` is stored on the application doc."""
-    db = _make_db()
-    with (
-        patch("app.routers.applications.get_firestore", return_value=db),
-        patch("app.services.audit._db", return_value=db),
-    ):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={
-                "displayName": "Alice",
-                "dob": _adult_dob(),
-                "inviteCode": "abcd1234",
-            },
-        )
-    assert res.status_code == 201
-    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
-    # Normalized to uppercase to match `generate_invite_code`'s alphabet.
-    assert payload["inviteCode"] == "ABCD1234"
-
-
-def test_submit_application_without_invite_code_stores_none() -> None:
-    db = _make_db()
-    with (
-        patch("app.routers.applications.get_firestore", return_value=db),
-        patch("app.services.audit._db", return_value=db),
-    ):
-        res = TestClient(_applicant_app()).post(
-            "/api/applications/me",
-            json={"displayName": "Alice", "dob": _adult_dob()},
-        )
-    assert res.status_code == 201
-    payload = db._app_ref.set.call_args[0][0]  # type: ignore[attr-defined]
-    assert payload["inviteCode"] is None
-
-
-def test_submit_application_rejects_malformed_invite_code() -> None:
-    res = TestClient(_applicant_app()).post(
-        "/api/applications/me",
-        json={
-            "displayName": "Alice",
-            "dob": _adult_dob(),
-            "inviteCode": "has spaces!",
-        },
-    )
-    assert res.status_code == 422
+    assert res.status_code == 410
+    assert res.json()["error"]["code"] == "application_flow_retired"
 
 
 # ── GET /api/applications/me ──────────────────────────────────────────────

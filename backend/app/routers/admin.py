@@ -17,8 +17,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore as fb_firestore
+from google.cloud import firestore as gcf
 
-from app.deps import require_admin
+from app.deps import require_admin, require_ministry_owner_or_admin
 from app.errors import APIError
 from app.limits import ADMIN_LIST, ADMIN_MUTATION
 from app.middleware.rate_limit import limiter
@@ -44,6 +45,20 @@ from app.models.applications import (
     ApproveApplicationRequest,
     RejectApplicationRequest,
 )
+from app.models.discover import (
+    MinorJoinRequest,
+    MinorJoinRequestsResponse,
+    OwnerApproveJoinRequest,
+    OwnerRejectJoinRequest,
+    ReviewResponse,
+)
+from app.models.group import DEFAULT_MEMBER_CAP
+from app.models.leader_applications import (
+    ApproveLeaderApplicationRequest,
+    LeaderApplicationDecisionResponse,
+    LeaderApplicationListResponse,
+    RejectLeaderApplicationRequest,
+)
 from app.models.ministry_feed import MinistryOwnerGrantResponse
 from app.models.user import CurrentUser
 from app.services.applications import application_doc_to_view, compute_age
@@ -51,6 +66,10 @@ from app.services.audit import write_audit_log
 from app.services.email import send_moderation_notice
 from app.services.firebase import init_firebase_admin
 from app.services.invites import consume_invite
+from app.services.leader_applications import (
+    create_group_for_approved_application,
+    leader_application_doc_to_view,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -869,3 +888,500 @@ def revoke_ministry_owner(
     )
     logger.info("admin=%s revoked ministry_owner uid=%s", admin.uid, uid)
     return MinistryOwnerGrantResponse(uid=uid, ministryOwner=False)
+
+
+# ── leader applications (ADR 0014) ────────────────────────────────────────────
+
+
+@router.get("/leader-applications", response_model=LeaderApplicationListResponse)
+@limiter.limit(ADMIN_LIST)
+def list_leader_applications(
+    request: Request,
+    response: Response,
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    status_filter: str = Query(default="pending", alias="status"),
+    owner: CurrentUser = Depends(require_ministry_owner_or_admin),
+) -> LeaderApplicationListResponse:
+    """List leader applications by status (default: pending).
+
+    Owner-only (admin is a superset). The pending queue is the
+    "register your gym" queue — pending applications are the only ones
+    actionable from the owner queue UI; approved/rejected are exposed
+    for audit history.
+    """
+    if status_filter not in {"pending", "approved", "rejected"}:
+        raise APIError(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_status",
+            message="status must be one of pending, approved, rejected",
+        )
+
+    db = _db()
+    query = (
+        db.collection("leader_applications")
+        .where("status", "==", status_filter)
+        .order_by("createdAt")
+        .limit(limit + 1)
+    )
+    if cursor:
+        cursor_snap = db.collection("leader_applications").document(cursor).get()
+        if cursor_snap.exists:
+            query = query.start_after(cursor_snap)
+
+    docs = list(query.stream())
+    has_more = len(docs) > limit
+    page = docs[:limit]
+    items = [leader_application_doc_to_view(snap.id, snap.to_dict() or {}) for snap in page]
+    next_cursor = page[-1].id if has_more and page else None
+    return LeaderApplicationListResponse(items=items, nextCursor=next_cursor)
+
+
+@router.post(
+    "/leader-applications/{app_id}/approve",
+    response_model=LeaderApplicationDecisionResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def approve_leader_application(
+    app_id: str,
+    request: Request,
+    response: Response,
+    body: ApproveLeaderApplicationRequest,
+    owner: CurrentUser = Depends(require_ministry_owner_or_admin),
+) -> LeaderApplicationDecisionResponse:
+    """Approve a pending leader application and create the target group.
+
+    The group is created atomically with the applicant as leader via
+    `services.leader_applications.create_group_for_approved_application`,
+    which mirrors `POST /api/groups`. On success the application doc
+    records `createdGroupId` for the audit trail.
+    """
+    db = _db()
+    app_ref = db.collection("leader_applications").document(app_id)
+    app_snap = app_ref.get()
+    if not app_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="leader_application_not_found",
+            message="Leader application not found",
+        )
+    app_data = app_snap.to_dict() or {}
+    if str(app_data.get("status") or "") != "pending":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="leader_application_already_decided",
+            message="This application has already been decided",
+            details={"status": app_data.get("status")},
+        )
+
+    applicant_uid = str(app_data.get("applicantUid") or "")
+    if not applicant_uid:
+        raise APIError(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="application_corrupt",
+            message="Application is missing an applicantUid",
+        )
+
+    # Verify the applicant still has a user doc — if they deleted their
+    # account between submit and approve, we can't make them a leader.
+    user_snap = db.collection("users").document(applicant_uid).get()
+    if not getattr(user_snap, "exists", False):
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="applicant_missing",
+            message="The applicant no longer has a JACOB account",
+        )
+
+    audience = body.audienceOverride or str(app_data.get("proposedAudience") or "christian")
+    gid = create_group_for_approved_application(
+        db,
+        applicant_uid=applicant_uid,
+        name=str(app_data.get("proposedGroupName") or ""),
+        description=str(app_data.get("proposedGroupDescription") or ""),
+        audience=audience,
+    )
+
+    app_ref.update(
+        {
+            "status": "approved",
+            "decidedAt": fb_firestore.SERVER_TIMESTAMP,
+            "decidedBy": owner.uid,
+            "decisionNotes": body.decisionNotes,
+            "createdGroupId": gid,
+        }
+    )
+
+    write_audit_log(
+        actor_uid=owner.uid,
+        action="leader_application.approve",
+        target_ref=f"leader_applications/{app_id}",
+        payload={
+            "applicantUid": applicant_uid,
+            "createdGroupId": gid,
+            "audience": audience,
+        },
+    )
+    logger.info(
+        "owner=%s approved leader_application=%s applicant=%s gid=%s",
+        owner.uid,
+        app_id,
+        applicant_uid,
+        gid,
+    )
+    return LeaderApplicationDecisionResponse(appId=app_id, status="approved", createdGroupId=gid)
+
+
+@router.post(
+    "/leader-applications/{app_id}/reject",
+    response_model=LeaderApplicationDecisionResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def reject_leader_application(
+    app_id: str,
+    request: Request,
+    response: Response,
+    body: RejectLeaderApplicationRequest,
+    owner: CurrentUser = Depends(require_ministry_owner_or_admin),
+) -> LeaderApplicationDecisionResponse:
+    db = _db()
+    app_ref = db.collection("leader_applications").document(app_id)
+    app_snap = app_ref.get()
+    if not app_snap.exists:
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="leader_application_not_found",
+            message="Leader application not found",
+        )
+    app_data = app_snap.to_dict() or {}
+    if str(app_data.get("status") or "") != "pending":
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="leader_application_already_decided",
+            message="This application has already been decided",
+            details={"status": app_data.get("status")},
+        )
+
+    app_ref.update(
+        {
+            "status": "rejected",
+            "decidedAt": fb_firestore.SERVER_TIMESTAMP,
+            "decidedBy": owner.uid,
+            "decisionNotes": body.reason,
+        }
+    )
+
+    write_audit_log(
+        actor_uid=owner.uid,
+        action="leader_application.reject",
+        target_ref=f"leader_applications/{app_id}",
+        payload={"reasonLength": len(body.reason)},
+    )
+    logger.info("owner=%s rejected leader_application=%s", owner.uid, app_id)
+    return LeaderApplicationDecisionResponse(appId=app_id, status="rejected")
+
+
+# ── owner-side minor join-request queue (ADR 0014) ───────────────────────────
+
+
+def _ts_to_iso(ts: Any) -> str:
+    if ts is None:
+        return ""
+    try:
+        if hasattr(ts, "isoformat"):
+            return str(ts.isoformat())
+        if hasattr(ts, "seconds"):
+            return datetime.fromtimestamp(ts.seconds, UTC).isoformat()
+        return str(ts)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+@router.get("/minor-join-requests", response_model=MinorJoinRequestsResponse)
+@limiter.limit(ADMIN_LIST)
+def list_minor_join_requests(
+    request: Request,
+    response: Response,
+    limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
+    owner: CurrentUser = Depends(require_ministry_owner_or_admin),
+) -> MinorJoinRequestsResponse:
+    """Owner queue: pending join-requests that escalated for minor review.
+
+    Collection-group query on `joinRequests` filtered by
+    `requiresOwnerReview == true && status == "pending"`. The CG index
+    is declared in `firestore/firestore.indexes.json` (ADR 0014).
+    The leader-facing queue strips these rows so a leader can never see
+    or action a minor's request.
+    """
+    db = _db()
+    snaps = list(
+        db.collection_group("joinRequests")
+        .where("requiresOwnerReview", "==", True)
+        .where("status", "==", "pending")
+        .order_by("requestedAt", direction=gcf.Query.ASCENDING)
+        .limit(limit)
+        .stream()
+    )
+
+    rows: list[MinorJoinRequest] = []
+    # Batch-read the parent group + applicant user docs so the per-row
+    # render is one round-trip per kind.
+    group_refs: dict[str, Any] = {}
+    user_refs: dict[str, Any] = {}
+    parent_path_by_snap: dict[str, tuple[str, str]] = {}
+    for snap in snaps:
+        parent_group = snap.reference.parent.parent
+        if parent_group is None:
+            continue
+        gid = parent_group.id
+        uid = snap.id
+        parent_path_by_snap[snap.id] = (gid, uid)
+        group_refs.setdefault(gid, parent_group)
+        user_refs.setdefault(uid, db.collection("users").document(uid))
+
+    group_data_by_gid: dict[str, dict[str, Any]] = {}
+    user_data_by_uid: dict[str, dict[str, Any]] = {}
+    if group_refs:
+        for doc in db.get_all(list(group_refs.values())):
+            if getattr(doc, "exists", False):
+                group_data_by_gid[doc.id] = doc.to_dict() or {}
+    if user_refs:
+        for doc in db.get_all(list(user_refs.values())):
+            if getattr(doc, "exists", False):
+                user_data_by_uid[doc.id] = doc.to_dict() or {}
+
+    for snap in snaps:
+        if snap.id not in parent_path_by_snap:
+            continue
+        gid, uid = parent_path_by_snap[snap.id]
+        data = snap.to_dict() or {}
+        group_data = group_data_by_gid.get(gid, {})
+        user_data = user_data_by_uid.get(uid, {})
+
+        # Surface age if we have it on the user doc; otherwise leave None.
+        # DOB lives on `users/{uid}/private/profile` (ADR 0014 § 1) so this
+        # CG-time read does not have access to it — by design, to keep the
+        # owner queue query cheap. The owner can drill into the user
+        # profile if precise age matters; the isMinor signal is enough
+        # to know the bubble-up was correct.
+        rows.append(
+            MinorJoinRequest(
+                gid=gid,
+                groupName=str(group_data.get("name") or ""),
+                uid=uid,
+                displayName=str(user_data.get("displayName") or "") or uid,
+                photoURL=user_data.get("photoURL"),
+                age=None,
+                message=str(data.get("message") or ""),
+                requestedAt=_ts_to_iso(data.get("requestedAt")),
+                inviteCode=data.get("inviteCode"),
+            )
+        )
+
+    return MinorJoinRequestsResponse(requests=rows, nextCursor=None)
+
+
+@router.post(
+    "/groups/{gid}/join-requests/{uid}/approve",
+    response_model=ReviewResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def owner_approve_join_request(
+    gid: str,
+    uid: str,
+    request: Request,
+    response: Response,
+    body: OwnerApproveJoinRequest,
+    owner: CurrentUser = Depends(require_ministry_owner_or_admin),
+) -> ReviewResponse:
+    """Owner approves a minor's join-request with parental consent (ADR 0014).
+
+    Refuses (422 `parental_consent_required`) unless the body sets
+    `parentalConsentObtained: true`. Also refuses (409
+    `not_a_minor_request`) if the join-request was not flagged for
+    owner review — the leader's normal approve endpoint handles those.
+    """
+    db = _db()
+    jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(uid)
+    group_ref = db.collection("groups").document(gid)
+
+    jr_snap = jr_ref.get()
+    jr_exists = getattr(jr_snap, "exists", False)
+    jr_status = (jr_snap.to_dict() or {}).get("status") if jr_exists else None
+    if jr_status != "pending":
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="not_found",
+            message="Pending join request not found",
+        )
+    jr_data = jr_snap.to_dict() or {}
+    if not bool(jr_data.get("requiresOwnerReview")):
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="not_a_minor_request",
+            message=(
+                "This request is not flagged for owner review; " "the group leader can approve it."
+            ),
+        )
+
+    if body.parentalConsentObtained is not True:
+        raise APIError(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            code="parental_consent_required",
+            message="Parental consent must be confirmed to approve an under-18 join request",
+        )
+
+    invite_code = jr_data.get("inviteCode")
+
+    @gcf.transactional
+    def _txn(transaction: Any) -> None:
+        fresh_jr = jr_ref.get(transaction=transaction)
+        if not fresh_jr.exists or (fresh_jr.to_dict() or {}).get("status") != "pending":
+            raise APIError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                code="not_found",
+                message="Pending join request not found",
+            )
+        g_snap = group_ref.get(transaction=transaction)
+        g_data = g_snap.to_dict() or {}
+        cap = int(g_data.get("memberCap") or DEFAULT_MEMBER_CAP)
+        count = int(g_data.get("memberCount") or 0)
+        if count >= cap:
+            raise APIError(
+                status_code=status.HTTP_409_CONFLICT,
+                code="group_at_cap",
+                message="This group is at its member limit.",
+                details={"cap": cap, "currentCount": count},
+            )
+        transaction.update(
+            jr_ref,
+            {
+                "status": "approved",
+                "reviewedAt": fb_firestore.SERVER_TIMESTAMP,
+                "reviewedBy": owner.uid,
+                "parentalConsentObtained": True,
+                "parentalConsentNotes": body.parentalConsentNotes,
+            },
+        )
+        member_ref = group_ref.collection("members").document(uid)
+        transaction.set(
+            member_ref,
+            {
+                "role": "member",
+                "joinedAt": fb_firestore.SERVER_TIMESTAMP,
+                "uid": uid,
+            },
+        )
+        transaction.update(group_ref, {"memberCount": gcf.Increment(1)})
+
+    _txn(db.transaction())
+
+    # If the request originated from an invite landing, consume the
+    # invite NOW so its useCount / lastUsedAt reflect reality. Failure
+    # here is non-fatal: the membership write above already succeeded.
+    # `consume_invite` is the same path adult invite-landings take, but
+    # for an already-joined user it raises `409 already_member`, which
+    # we treat as "fine, the member doc is there, that's all we wanted".
+    invite_outcome: dict[str, Any] = {"attempted": False}
+    if invite_code:
+        invite_outcome["attempted"] = True
+        invite_outcome["code"] = str(invite_code)
+        try:
+            consumed_gid, consumed_invite_id = consume_invite(db, str(invite_code), uid)
+            invite_outcome["status"] = "joined"
+            invite_outcome["gid"] = consumed_gid
+            invite_outcome["inviteId"] = consumed_invite_id
+        except APIError as err:
+            err_payload: dict[str, Any] = {}
+            if isinstance(err.detail, dict):
+                err_payload = err.detail.get("error") or {}
+            err_code = str(err_payload.get("code") or "unknown_error")
+            invite_outcome["status"] = "failed"
+            invite_outcome["errorCode"] = err_code
+            # already_member is the expected outcome — we just added them.
+            if err_code != "already_member":
+                logger.warning(
+                    "owner_approve_join: invite consume failed uid=%s gid=%s code=%s err=%s",
+                    uid,
+                    gid,
+                    invite_code,
+                    err_code,
+                )
+        except Exception:  # noqa: BLE001
+            invite_outcome["status"] = "errored"
+            logger.exception(
+                "owner_approve_join: unexpected error consuming invite uid=%s gid=%s",
+                uid,
+                gid,
+            )
+
+    write_audit_log(
+        actor_uid=owner.uid,
+        action="owner_approve_join_request",
+        target_ref=f"groups/{gid}/joinRequests/{uid}",
+        payload={
+            "targetUid": uid,
+            "parentalConsentObtained": True,
+            "parentalConsentNotesLength": len(body.parentalConsentNotes or ""),
+            "invite": invite_outcome,
+        },
+    )
+    logger.info(
+        "owner=%s approved minor join_request gid=%s uid=%s",
+        owner.uid,
+        gid,
+        uid,
+    )
+    return ReviewResponse(gid=gid, uid=uid, status="approved")
+
+
+@router.post(
+    "/groups/{gid}/join-requests/{uid}/reject",
+    response_model=ReviewResponse,
+)
+@limiter.limit(ADMIN_MUTATION)
+def owner_reject_join_request(
+    gid: str,
+    uid: str,
+    request: Request,
+    response: Response,
+    body: OwnerRejectJoinRequest,
+    owner: CurrentUser = Depends(require_ministry_owner_or_admin),
+) -> ReviewResponse:
+    """Owner rejects a minor's join-request with a reason (ADR 0014)."""
+    db = _db()
+    jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(uid)
+    jr_snap = jr_ref.get()
+    jr_exists = getattr(jr_snap, "exists", False)
+    jr_status = (jr_snap.to_dict() or {}).get("status") if jr_exists else None
+    if jr_status != "pending":
+        raise APIError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="not_found",
+            message="Pending join request not found",
+        )
+    jr_data = jr_snap.to_dict() or {}
+    if not bool(jr_data.get("requiresOwnerReview")):
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="not_a_minor_request",
+            message=(
+                "This request is not flagged for owner review; " "the group leader can reject it."
+            ),
+        )
+
+    jr_ref.update(
+        {
+            "status": "rejected",
+            "reviewedAt": fb_firestore.SERVER_TIMESTAMP,
+            "reviewedBy": owner.uid,
+            "rejectionReason": body.reason,
+        }
+    )
+    write_audit_log(
+        actor_uid=owner.uid,
+        action="owner_reject_join_request",
+        target_ref=f"groups/{gid}/joinRequests/{uid}",
+        payload={"targetUid": uid, "reasonLength": len(body.reason)},
+    )
+    logger.info("owner=%s rejected minor join_request gid=%s uid=%s", owner.uid, gid, uid)
+    return ReviewResponse(gid=gid, uid=uid, status="rejected")

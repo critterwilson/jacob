@@ -7,7 +7,6 @@ import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
 import { Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { useMyApplication } from "@/lib/hooks/useMyApplication";
 import { useUser } from "@/lib/hooks/useUser";
 import { safeNext } from "@/lib/safe-redirect";
 
@@ -17,57 +16,24 @@ function OnboardingContent() {
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading } = useUser(user?.uid);
 
-  // `?next=` carries the intended post-auth destination (e.g. an
-  // invite landing page). For already-approved Google sign-ups, we
-  // route there instead of /home. For pending/rejected applicants
-  // we forward it onto /awaiting-approval so the eventual approved
-  // landing honors it too.
+  // `?next=` carries the intended post-auth destination (typically an
+  // invite landing). For users who already have a profile we forward
+  // them there instead of /home.
   const next = safeNext(searchParams.get("next"));
   const approvedDest = next ?? "/home";
-  const awaitingHref = next
-    ? `/awaiting-approval?next=${encodeURIComponent(next)}`
-    : "/awaiting-approval";
-  // ADR 0012: an applicant who has already submitted the application
-  // form lives in `applications/{uid}`. If we land here with a pending
-  // or decided application, bounce them to /awaiting-approval — re-
-  // filling the form would be confusing.
-  const { application, loading: applicationLoading } = useMyApplication({
-    uid: user?.uid,
-    pollMs: 60_000,
-  });
 
   useEffect(() => {
-    if (authLoading || profileLoading || applicationLoading) return;
+    if (authLoading || profileLoading) return;
     if (!user) {
       router.replace("/sign-in");
       return;
     }
     if (profile) {
       router.replace(approvedDest);
-      return;
     }
-    // Only redirect to /awaiting-approval for pending or rejected applications.
-    // Approved users without a cookie are sent here by middleware after
-    // /awaiting-approval redirects them to /home. Sending them back to
-    // /awaiting-approval creates an infinite loop. Instead, hold here while
-    // useUser bootstraps the profile and sets the cookie, then the `profile`
-    // branch above will redirect them to /home.
-    if (application && application.status !== "approved") {
-      router.replace(awaitingHref);
-    }
-  }, [
-    user,
-    profile,
-    application,
-    authLoading,
-    profileLoading,
-    applicationLoading,
-    router,
-    approvedDest,
-    awaitingHref,
-  ]);
+  }, [user, profile, authLoading, profileLoading, router, approvedDest]);
 
-  if (authLoading || profileLoading || applicationLoading) {
+  if (authLoading || profileLoading) {
     return (
       <main className="flex min-h-svh items-center justify-center bg-ink">
         <span className="text-body-sm text-cream-muted">Loading…</span>
@@ -77,17 +43,6 @@ function OnboardingContent() {
 
   if (!user) return null;
   if (profile) return null;
-  // Pending/rejected: redirect is in flight via the effect above.
-  if (application && application.status !== "approved") return null;
-  // Approved but cookie not yet set — hold on loading while bootstrap
-  // completes rather than showing the "Apply to join" form.
-  if (application?.status === "approved") {
-    return (
-      <main className="flex min-h-svh items-center justify-center bg-ink">
-        <span className="text-body-sm text-cream-muted">Loading…</span>
-      </main>
-    );
-  }
 
   return (
     <main className="flex min-h-svh flex-col items-center bg-ink px-4 py-12 pt-safe-t pb-safe-b">
@@ -101,13 +56,13 @@ function OnboardingContent() {
 
         <Card surface="raised" padding="lg" className="w-full space-y-6">
           <header className="space-y-2">
-            <Eyebrow>One last step</Eyebrow>
+            <Eyebrow>Welcome to JACOB</Eyebrow>
             <Heading level={2} size="sm">
-              Apply to join
+              Set up your profile
             </Heading>
             <p className="text-body-sm text-cream-muted">
-              Tell us a little about yourself. An admin will review your
-              application before your account is approved.
+              Tell us a little about yourself. You&rsquo;ll be able to discover
+              and request to join groups as soon as you&rsquo;re finished.
             </p>
           </header>
           <ProfileForm uid={user.uid} email={user.email} />

@@ -77,6 +77,9 @@ org_slugs/{slug}                                # backend only — slug uniquene
 org_consent_tokens/{token}                      # backend only — attach consent flow
 domain_claims/{domain}                          # T55 — custom domain claims
 
+# ADR 0014 — delegated leader-application queue
+leader_applications/{appId}                     # owner-only via /api/admin/leader-applications*
+
 # T58 — feature flags
 feature_flags/{flagKey}                         # read via GET /api/flags
 
@@ -306,13 +309,17 @@ Items pending human moderator review. Written by the moderation pipeline
 
 ---
 
-## `applications/{uid}` (backend only, ADR 0012)
+## `applications/{uid}` (backend only, ADR 0012 — **deprecated by ADR 0014**)
 
-Signup applications between email verification and admin approval. The
-applicant writes via `POST /api/applications/me`; the admin reads, approves,
-or rejects via `/api/admin/applications*`. The `users/{uid}` doc is only
-created on admin approval — application doc presence is **not** a member-
-access signal. Default-deny in `firestore.rules`.
+**Legacy.** The platform-wide admin-approval queue is retired by
+[ADR 0014](adr/0014-delegated-membership.md). New signups create their
+`users/{uid}` doc directly via `POST /api/users/me` and never write to
+this collection. The submit endpoint `POST /api/applications/me` now
+returns `410 Gone`; the legacy admin list/approve/reject endpoints stay
+in place so any pre-migration pending docs can be drained.
+
+The schema below is retained for the residual data. Default-deny in
+`firestore.rules`.
 
 ```json
 {
@@ -352,6 +359,74 @@ calls `consume_invite(code, uid)` after creating `users/{uid}` — a
 failed consume (expired, revoked, at member cap, archived group) is
 logged + audited but never blocks the approval. The field stays on
 the doc after approval for audit / debugging; it is not re-consumed.
+
+---
+
+## `leader_applications/{appId}` (backend only, ADR 0014)
+
+Delegated-membership queue: a non-owner submits a leader application
+via `POST /api/leader-applications`; the ministry owner reviews via
+`/api/admin/leader-applications*`. On approval the backend creates the
+target `groups/{gid}` document with the applicant as leader and stamps
+`createdGroupId` here for the audit trail. Default-deny in
+`firestore.rules`.
+
+```json
+{
+  "applicantUid": "alice",
+  "applicantDisplayName": "Alice",
+  "applicantEmail": "alice@example.com",
+  "proposedGroupName": "Tuesday Night",
+  "proposedGroupDescription": "Tuesday night small group, Pleasant Grove.",
+  "proposedAudience": "christian",
+  "motivation": "...",
+  "status": "pending",
+  "createdAt": "<serverTimestamp>",
+  "decidedAt": null,
+  "decidedBy": null,
+  "decisionNotes": "",
+  "createdGroupId": null
+}
+```
+
+* `status` ∈ `"pending" | "approved" | "rejected"`.
+* `decidedBy` is the owner uid that decided; `decisionNotes` is free
+  text recorded against the application (approval comment or rejection
+  reason — both share the field).
+* `createdGroupId` is set when `status == "approved"`. It is the gid of
+  the group the approval produced; the applicant is its leader.
+
+## Minor-escalation fields on `groups/{gid}/joinRequests/{uid}` (ADR 0014)
+
+The join-request schema introduced in PR #284 grows five new fields to
+support the owner-side minor-review queue. Existing rows pre-dating
+ADR 0014 lack these fields and default to "adult / leader-decided" —
+the leader-side queue treats `requiresOwnerReview` as `false` when
+missing.
+
+```json
+{
+  "isMinor": false,
+  "requiresOwnerReview": false,
+  "inviteCode": null,
+  "parentalConsentObtained": null,
+  "parentalConsentNotes": ""
+}
+```
+
+* `requiresOwnerReview` — true when the request must be decided by the
+  ministry owner. Stamped on creation from `users/{uid}.isMinor`. The
+  leader-side approve/reject endpoints refuse rows with this flag set
+  (`403 minor_owner_review_required`).
+* `isMinor` — denormalised from the user doc so the owner CG query
+  doesn't have to re-fetch every user.
+* `inviteCode` — set when the join-request was created from an invite
+  landing (`POST /api/groups/join` for a minor). The owner approval
+  endpoint runs `consume_invite(code, uid)` at decision time; failures
+  are logged but never block the approval.
+* `parentalConsentObtained` / `parentalConsentNotes` — owner-supplied
+  attestation, mirroring the ADR 0012 § 3 model now relocated to the
+  per-join-request decision.
 
 ---
 

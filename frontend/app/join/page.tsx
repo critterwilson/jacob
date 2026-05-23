@@ -63,11 +63,21 @@ function JoinForm() {
     setSubmitting(true);
 
     try {
-      const { groupId } = await apiPost<{ groupId: string }>(
-        "/api/groups/join",
-        { code: values.code },
-      );
-      router.push(`/groups/${groupId}`);
+      const res = await apiPost<{
+        groupId: string;
+        joined?: boolean;
+        pendingOwnerReview?: boolean;
+      }>("/api/groups/join", { code: values.code });
+      if (res.pendingOwnerReview) {
+        // ADR 0014: minor arrived via an invite. Don't navigate into the
+        // group (they're not a member yet) — show the pending state and
+        // route home.
+        setSubmitError(
+          "Thanks! Because you're under 18, your request was sent to the organization owner for review. You can use the rest of JACOB while you wait.",
+        );
+        return;
+      }
+      router.push(`/groups/${res.groupId}`);
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.code === "group_at_cap") {

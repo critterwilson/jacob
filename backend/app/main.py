@@ -31,6 +31,7 @@ from app.routers import (
     groups,
     incidents,
     invites,
+    leader_applications,
     messages,
     ministry_feed,
     ncmec,
@@ -187,6 +188,7 @@ app.include_router(transparency.public_router)
 app.include_router(transparency.admin_router)
 app.include_router(transparency.org_router)
 app.include_router(applications.router)
+app.include_router(leader_applications.router)
 app.include_router(ministry_feed.router)
 app.include_router(wellbeing.router)
 app.include_router(wellbeing.admin_router)

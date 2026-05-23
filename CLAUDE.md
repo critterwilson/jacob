@@ -2,7 +2,7 @@
 
 This file is loaded automatically by Claude Code on every task. It pins cross-cutting decisions so individual task specs in `DEV_PLAN.md` can stay tight. Read it before starting any task.
 
-*Last revised: 2026-05-19 (post-M6 + Phase 3 + API versioning).*
+*Last revised: 2026-05-23 (delegated membership / ADR 0014).*
 
 ## Project in one paragraph
 
@@ -69,11 +69,44 @@ JACOB is a small-group messaging web app for Christian small groups. The fronten
 └── docs/
     ├── data-model.md           # canonical Firestore schema — see "Collection layout" below
     ├── data-layer-migration-plan.md
-    ├── adr/                    # ADRs: 0001, 0003, 0004, 0005, 0007, 0009, 0010 (0002/0006/0008 were planned but those tasks were parked)
+    ├── adr/                    # ADRs: 0001, 0003, 0004, 0005, 0007, 0009, 0010, 0011, 0012 (superseded by 0014), 0013, 0014 (0002/0006/0008 were planned but those tasks were parked)
     ├── runbooks/               # operational runbooks
     ├── follow-ups/             # phase-1-deferred.md, phase-2-deferred.md, phase-3-deferred.md, phase-3-parked.md
     └── legal/                  # internal legal-team source docs
 ```
+
+## Membership model (ADR 0014)
+
+Open self-signup, delegated approval. Anyone with a verified email can
+complete onboarding and get a `users/{uid}` doc (the existing
+"approved member" load-bearing artifact). The new account lands in an
+"unaffiliated" tier — it has no group memberships, so the existing
+`require_member` deps gate every group-scoped surface. Public boards,
+discover, search, and request-to-join stay reachable.
+
+Three approval surfaces:
+
+- **Owner approves group leaders** via `/api/admin/leader-applications*`.
+  The `leader_applications/{appId}` collection is the queue. On
+  approval the backend creates the target `groups/{gid}` with the
+  applicant as leader. Direct `POST /api/groups` is owner/admin-only.
+- **Group leaders approve adult members into their group** via the
+  pre-existing `groups/{gid}/joinRequests/{uid}` flow from PR #284.
+  Adults arriving via an invite (`POST /api/groups/join`) are
+  auto-joined — the leader is vouching by inviting.
+- **Owner approves minors into any group** via
+  `/api/admin/minor-join-requests` and
+  `/api/admin/groups/{gid}/join-requests/{uid}/(approve|reject)`. Two
+  load-bearing safety rules: (1) the leader-side approve/reject
+  endpoint refuses requests flagged `requiresOwnerReview` with
+  `403 minor_owner_review_required`, and (2) the owner approve
+  endpoint refuses without `parentalConsentObtained: true` with `422
+  parental_consent_required`. An invite never bypasses owner approval
+  for a minor — the consume happens only on owner approval.
+
+The legacy `applications/{uid}` collection from ADR 0012 stays in the
+data model for the residual queue; `POST /api/applications/me` returns
+410 Gone. See [docs/adr/0014-delegated-membership.md](docs/adr/0014-delegated-membership.md).
 
 ## Architectural rule of thumb
 

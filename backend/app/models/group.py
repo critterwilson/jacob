@@ -41,6 +41,12 @@ class JoinGroupRequest(BaseModel):
 
 class JoinGroupResponse(BaseModel):
     groupId: str
+    # ADR 0014: an adult arriving via an invite link is auto-joined
+    # (`joined=True`). A minor lands in the owner queue with
+    # `pendingOwnerReview=True` and `joined=False` — the invite is NOT
+    # consumed at this point; the owner approval consumes it.
+    joined: bool = True
+    pendingOwnerReview: bool = False
 
 
 class RotateInviteResponse(BaseModel):

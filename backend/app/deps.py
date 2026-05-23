@@ -228,6 +228,27 @@ def require_not_banned(
     return user
 
 
+def require_ministry_owner_or_admin(
+    user: CurrentUser = Depends(get_current_user),
+    _ban_check: CurrentUser = Depends(require_not_banned),
+) -> CurrentUser:
+    """Allow ministry owners OR platform admins (ADR 0014).
+
+    Owner queues (leader applications, minor join-request reviews) are
+    the ministry owner's surface, but admin is a strict superset of
+    every privilege and should always pass. Strict-identity checks so
+    `1` / `"true"` do not satisfy the gate.
+    """
+    claims = user.claims
+    if claims.get("admin") is True or claims.get("ministry_owner") is True:
+        return user
+    raise APIError(
+        status_code=status.HTTP_403_FORBIDDEN,
+        code="forbidden",
+        message="Organization owner privileges required",
+    )
+
+
 def require_ministry_owner(
     user: CurrentUser = Depends(get_current_user),
     _ban_check: CurrentUser = Depends(require_not_banned),

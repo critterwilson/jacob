@@ -130,9 +130,10 @@ const PUBLIC_PREFIXES = [
   "/forgot-password",
   "/verify-email",
   "/onboarding",
-  // ADR 0012 — pending/rejected applicants live here until an admin
-  // decides. They don't have a profile cookie yet, so this path must
-  // bypass the `jacob-has-profile` middleware gate.
+  // Legacy ADR 0012 path. Under ADR 0014 it just redirects to /home,
+  // but the route stays reachable so old bookmarks don't 404. Keep it
+  // in the public list because users without a profile cookie may
+  // land here from external links.
   "/awaiting-approval",
   "/privacy",
   "/terms",

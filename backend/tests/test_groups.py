@@ -20,14 +20,22 @@ from app.models.user import CurrentUser
 from app.routers.groups import router
 
 
-def _make_app(uid: str = "alice") -> FastAPI:
-    """Return a minimal FastAPI app with the groups router and a mocked user."""
+def _make_app(uid: str = "alice", *, is_owner: bool = True) -> FastAPI:
+    """Return a minimal FastAPI app with the groups router and a mocked user.
+
+    ADR 0014: `POST /api/groups` is owner/admin-only. Tests default to
+    granting the owner claim on the CurrentUser so the real
+    `require_ministry_owner_or_admin` dep passes; the dep still composes
+    `require_not_banned`, which the banned-path tests exercise via
+    `patch("app.deps.get_firestore", return_value=banned_db())`. Pass
+    `is_owner=False` to assert the 403 refusal explicitly.
+    """
     app = FastAPI()
     app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
     app.include_router(router)
-    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
-        uid=uid, email=f"{uid}@example.com", claims={}
-    )
+    claims = {"ministry_owner": True} if is_owner else {}
+    user = CurrentUser(uid=uid, email=f"{uid}@example.com", claims=claims)
+    app.dependency_overrides[get_current_user] = lambda: user
     return app
 
 

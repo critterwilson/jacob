@@ -220,7 +220,22 @@ def create_join_request(
     if existing_snap.exists:
         existing = existing_snap.to_dict() or {}
         if existing.get("status") == "pending":
-            return JoinResponse(gid=gid, pending=True, requestId=user.uid)
+            return JoinResponse(
+                gid=gid,
+                pending=True,
+                requestId=user.uid,
+                requiresOwnerReview=bool(existing.get("requiresOwnerReview")),
+            )
+
+    # ADR 0014: minors escalate to the owner queue. Read isMinor from
+    # the user doc (set at onboarding time) and denormalise it onto the
+    # join-request so the owner CG query doesn't need to re-fetch every
+    # user. The leader-facing list endpoint hides `requiresOwnerReview`
+    # rows; the leader approve endpoint refuses them.
+    user_snap = db.collection("users").document(user.uid).get()
+    raw_user_data = user_snap.to_dict() if getattr(user_snap, "exists", False) else None
+    user_data = raw_user_data if isinstance(raw_user_data, dict) else {}
+    is_minor = bool(user_data.get("isMinor", False))
 
     # Write join request.
     db.collection("groups").document(gid).collection("joinRequests").document(user.uid).set(
@@ -228,16 +243,32 @@ def create_join_request(
             "message": body.message,
             "requestedAt": gcf.SERVER_TIMESTAMP,
             "status": "pending",
+            "isMinor": is_minor,
+            "requiresOwnerReview": is_minor,
+            "inviteCode": None,
+            "parentalConsentObtained": None,
+            "parentalConsentNotes": "",
         }
     )
     write_audit_log(
         actor_uid=user.uid,
         action="request_join",
         target_ref=f"groups/{gid}",
-        payload={"joinMode": "request"},
+        payload={"joinMode": "request", "isMinor": is_minor},
     )
-    logger.info("request_join uid=%s gid=%s", user.uid, gid)
-    return JoinResponse(gid=gid, pending=True, requestId=user.uid)
+    logger.info(
+        "request_join uid=%s gid=%s isMinor=%s requiresOwnerReview=%s",
+        user.uid,
+        gid,
+        is_minor,
+        is_minor,
+    )
+    return JoinResponse(
+        gid=gid,
+        pending=True,
+        requestId=user.uid,
+        requiresOwnerReview=is_minor,
+    )
 
 
 # ── GET /api/groups/{gid}/join-requests ──────────────────────────────────────
@@ -286,6 +317,14 @@ def list_join_requests(
     requests_out: list[PendingRequest] = []
     for snap in page:
         d = snap.to_dict() or {}
+        # ADR 0014: a leader must NEVER see a minor's pending request as
+        # actionable. Hiding it from the list entirely is the right
+        # default — surfacing it read-only would tempt nudging the
+        # owner or treating the queue as a signal of interest from the
+        # minor. The owner queue at `/admin/minor-join-requests` is the
+        # only surface for these.
+        if bool(d.get("requiresOwnerReview")):
+            continue
         profile = profiles.get(snap.id, {})
         requests_out.append(
             PendingRequest(
@@ -295,6 +334,9 @@ def list_join_requests(
                 message=d.get("message") or "",
                 requestedAt=_ts_to_iso(d.get("requestedAt")),
                 status=d.get("status", "pending"),
+                isMinor=bool(d.get("isMinor", False)),
+                requiresOwnerReview=False,
+                inviteCode=d.get("inviteCode"),
             )
         )
     next_cursor = page[-1].id if has_more and page else None
@@ -331,6 +373,16 @@ def approve_join_request(
                 status_code=status.HTTP_404_NOT_FOUND,
                 code="not_found",
                 message="Pending join request not found",
+            )
+        # ADR 0014 — load-bearing safety check: a leader must not be
+        # able to approve a minor. The bubble-up to the owner queue is
+        # the only legitimate path; this branch is the server-side
+        # backstop in case the leader has a stale UI hiding the flag.
+        if bool((jr_snap.to_dict() or {}).get("requiresOwnerReview")):
+            raise APIError(
+                status_code=status.HTTP_403_FORBIDDEN,
+                code="minor_owner_review_required",
+                message="Minor join requests can only be approved by an organization owner",
             )
         # Enforce soft member cap inside the transaction.
         g_snap = group_ref.get(transaction=transaction)
@@ -398,10 +450,15 @@ def reject_join_request(
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(target_uid)
 
     @gcf.transactional
-    def _reject_txn(txn: Any) -> bool:
+    def _reject_txn(txn: Any) -> tuple[bool, bool]:
         snap = txn.get(jr_ref)
         if not snap.exists or (snap.to_dict() or {}).get("status") != "pending":
-            return False
+            return False, False
+        if bool((snap.to_dict() or {}).get("requiresOwnerReview")):
+            # Signal to the caller that this is the wrong endpoint
+            # without writing anything inside the transaction. ADR 0014
+            # — minor decisions belong to the owner exclusively.
+            return False, True
         txn.update(
             jr_ref,
             {
@@ -410,9 +467,16 @@ def reject_join_request(
                 "reviewedBy": actor_uid,
             },
         )
-        return True
+        return True, False
 
-    if not _reject_txn(db.transaction()):
+    decided, owner_only = _reject_txn(db.transaction())
+    if owner_only:
+        raise APIError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="minor_owner_review_required",
+            message="Minor join requests can only be rejected by an organization owner",
+        )
+    if not decided:
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="not_found",

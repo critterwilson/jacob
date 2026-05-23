@@ -880,6 +880,73 @@ describe("ADR 0012 default-deny — applications", () => {
   });
 });
 
+describe("ADR 0014 default-deny — leader_applications", () => {
+  it("denies reading leader_applications/{appId} even by the applicant", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "leader_applications", "app1"), {
+        applicantUid: "alice",
+        proposedGroupName: "Tuesday Night",
+        status: "pending",
+        createdAt: Timestamp.now(),
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "leader_applications", "app1")),
+    );
+  });
+
+  it("denies writing leader_applications/{appId} from the client", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "leader_applications", "app1"), {
+        applicantUid: "alice",
+        proposedGroupName: "Tuesday Night",
+        status: "pending",
+        createdAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("denies updating leader_applications/{appId} from the client", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "leader_applications", "app1"), {
+        applicantUid: "alice",
+        status: "pending",
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "leader_applications", "app1"), {
+        status: "approved",
+      }),
+    );
+  });
+
+  it("denies reading another applicant's leader application doc", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "leader_applications", "app1"), {
+        applicantUid: "bob",
+        status: "pending",
+      });
+    });
+    await assertFails(
+      getDoc(doc(authed("alice"), "leader_applications", "app1")),
+    );
+  });
+
+  it("denies writing leader_applications even with a ministry_owner claim", async () => {
+    // The owner only acts through the Admin SDK via /api/admin/leader-applications*;
+    // the custom claim does not unlock direct client writes.
+    const ownerCtx = testEnv
+      .authenticatedContext("owner-uid", { ministry_owner: true })
+      .firestore();
+    await assertFails(
+      setDoc(doc(ownerCtx, "leader_applications", "app2"), {
+        applicantUid: "alice",
+        status: "approved",
+      }),
+    );
+  });
+});
+
 describe("M6 — collection-group members read", () => {
   // The previous CG-members exception was removed in M6: Firestore
   // rules can't separate doc-level reads from CG queries at the rule
