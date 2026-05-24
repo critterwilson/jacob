@@ -108,6 +108,13 @@ export async function sendFcm(token: string, payload: FcmPayload): Promise<void>
         notification: {
           icon: "/icons/icon-192x192.png",
           badge: "/icons/badge-96x96.png",
+          // `tag` is what the browser uses to collapse notifications
+          // on the device. `headers.Topic` is the upstream Web Push
+          // collapse key; without `tag`, two rapid sends to the same
+          // collapseKey would each render their own banner instead of
+          // replacing the earlier one. Match the two so collapse
+          // behaviour is consistent end-to-end.
+          tag: payload.collapseKey,
         },
       },
     });
