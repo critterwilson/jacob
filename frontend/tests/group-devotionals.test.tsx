@@ -122,12 +122,13 @@ describe("GroupDevotionalsPage CTA visibility", () => {
     expect(screen.getByText(/no devotionals yet/i)).toBeInTheDocument();
   });
 
-  it("lists every devotional returned by the hook", () => {
+  it("lists every devotional returned by the hook, linking by structured path", () => {
     mockMembership.mockReturnValue({ isLeader: false, loading: false });
     mockUseGroupDevotionals.mockReturnValue({
       devotionals: [
         {
-          slug: "g1-week-1",
+          slug: "week-1-joy",
+          path: "group/abc12345/week-1-joy",
           title: "Week 1: Joy",
           scriptureRef: "Phil 4:4",
           body: "Rejoice in the Lord always.",
@@ -137,6 +138,7 @@ describe("GroupDevotionalsPage CTA visibility", () => {
           audience: "christian",
           groupId: "g1",
           groupName: "Crossroads",
+          authorHash: "abc12345",
         },
       ],
       loading: false,
@@ -146,6 +148,12 @@ describe("GroupDevotionalsPage CTA visibility", () => {
     expect(
       screen.getByRole("heading", { name: "Week 1: Joy" }),
     ).toBeInTheDocument();
+    // Detail link uses the new path scheme — uid never appears in the URL.
+    const detailLink = screen.getByRole("link", { name: /week 1: joy/i });
+    expect(detailLink).toHaveAttribute(
+      "href",
+      "/devotionals/group/abc12345/week-1-joy",
+    );
   });
 });
 
@@ -158,20 +166,23 @@ describe("NewGroupDevotionalPage role gating", () => {
     expect(
       screen.getByText(/only group leaders can write devotionals/i),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText(/slug/i)).not.toBeInTheDocument();
+    // No slug input in the form at all — the URL slug is title-derived.
+    expect(screen.queryByLabelText(/^slug$/i)).not.toBeInTheDocument();
   });
 
-  it("renders the form for leaders", () => {
+  it("renders the form for leaders (title input but no slug input)", () => {
     mockMembership.mockReturnValue({ isLeader: true, loading: false });
     render(<NewGroupDevotionalPage />);
     expect(screen.getByText(/write a devotional/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/slug/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^slug$/i)).not.toBeInTheDocument();
   });
 
-  it("submits with groupId auto-set to the route gid", async () => {
+  it("submits with groupId auto-set and routes by returned path", async () => {
     mockMembership.mockReturnValue({ isLeader: true, loading: false });
     mockCreateDevotional.mockResolvedValue({
-      slug: "g1-week-1",
+      slug: "week-1",
+      path: "group/abc12345/week-1",
       title: "Week 1",
       scriptureRef: "Phil 4:4",
       body: "Rejoice in the Lord always.",
@@ -181,12 +192,10 @@ describe("NewGroupDevotionalPage role gating", () => {
       audience: "christian",
       groupId: "g1",
       groupName: "Crossroads",
+      authorHash: "abc12345",
     });
 
     render(<NewGroupDevotionalPage />);
-    fireEvent.change(screen.getByLabelText(/slug/i), {
-      target: { value: "g1-week-1" },
-    });
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Week 1" },
     });
@@ -198,17 +207,18 @@ describe("NewGroupDevotionalPage role gating", () => {
     );
 
     await waitFor(() => expect(mockCreateDevotional).toHaveBeenCalled());
-    expect(mockCreateDevotional).toHaveBeenCalledWith(
-      expect.objectContaining({
-        slug: "g1-week-1",
-        title: "Week 1",
-        // Critical: the form scopes to the route's gid, the user doesn't
-        // pick this.
-        groupId: "g1",
-      }),
-    );
+    const payload = mockCreateDevotional.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.title).toBe("Week 1");
+    // Critical: the form scopes to the route's gid, the user doesn't
+    // pick this. And the user never types a slug.
+    expect(payload.groupId).toBe("g1");
+    expect(payload).not.toHaveProperty("slug");
     await waitFor(() =>
-      expect(routerPush).toHaveBeenCalledWith("/devotionals/g1-week-1"),
+      // Routes to the structured path returned by the API — group ID
+      // does NOT appear in the URL.
+      expect(routerPush).toHaveBeenCalledWith(
+        "/devotionals/group/abc12345/week-1",
+      ),
     );
   });
 });

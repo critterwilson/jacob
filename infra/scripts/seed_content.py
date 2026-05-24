@@ -9,6 +9,12 @@ Reads every JSON file under `infra/seed/devotionals/` and
 Admin SDK. Idempotent — re-running with edited JSON updates the doc
 in place. `publishedAt` is set on first write and preserved on
 subsequent runs unless `--bump-published` is passed.
+
+Devotional doc IDs use the path-based scheme (schemaVersion 2):
+`org__<slug>` for platform-wide entries. The seed JSON's `slug` field
+is the title-derived URL slug; the script composes the final doc ID
+itself. Pre-rename docs with the bare slug as ID are deleted in the
+same pass so re-seeding doesn't leave duplicates.
 """
 
 from __future__ import annotations
@@ -19,6 +25,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# `backend/` is on sys.path when run from the project root with
+# `cd backend && python ../infra/scripts/seed_content.py` (per the
+# usage docstring above). The import of app.services has always
+# depended on that — this just preserves the same contract.
+from app.services.devotional_paths import doc_id_for  # noqa: E402
 from firebase_admin import firestore as fb_firestore
 
 from app.services.firebase import init_firebase_admin
@@ -52,18 +63,18 @@ def _load_dir(path: Path) -> list[dict[str, Any]]:
     return out
 
 
-def _seed_collection(
+def _seed_reading_plans(
     db: Any,
     *,
-    collection: str,
     docs: list[dict[str, Any]],
     bump_published: bool,
     dry_run: bool,
 ) -> int:
+    """Reading plans still use slug-as-doc-ID; only devotionals changed."""
     written = 0
     for doc in docs:
         slug = doc["slug"]
-        ref = db.collection(collection).document(slug)
+        ref = db.collection("reading_plans").document(slug)
         existing = ref.get()
         payload: dict[str, Any] = {**doc, "schemaVersion": 1}
         if existing.exists and not bump_published:
@@ -75,10 +86,60 @@ def _seed_collection(
         else:
             payload["publishedAt"] = fb_firestore.SERVER_TIMESTAMP
         if dry_run:
-            print(f"would write {collection}/{slug}")
+            print(f"would write reading_plans/{slug}")
         else:
             ref.set(payload, merge=False)
-            print(f"wrote {collection}/{slug}")
+            print(f"wrote reading_plans/{slug}")
+        written += 1
+    return written
+
+
+def _seed_devotionals(
+    db: Any,
+    *,
+    docs: list[dict[str, Any]],
+    bump_published: bool,
+    dry_run: bool,
+) -> int:
+    """Write each seed entry under the new `org__<slug>` doc ID and
+    sweep up any pre-rename doc with the same bare slug — keeps
+    re-seeding idempotent across the cutover."""
+    written = 0
+    for doc in docs:
+        slug = doc["slug"]
+        # Seed entries are platform-wide (group-scoped devotionals are
+        # authored by leaders, not seeded). The doc ID encodes that.
+        new_doc_id = doc_id_for("org", slug)
+        ref = db.collection("devotionals").document(new_doc_id)
+        legacy_ref = db.collection("devotionals").document(slug)
+
+        existing = ref.get()
+        payload: dict[str, Any] = {
+            **doc,
+            "schemaVersion": 2,
+            "groupId": None,
+        }
+        if existing.exists and not bump_published:
+            existing_data = existing.to_dict() or {}
+            if existing_data.get("publishedAt") is not None:
+                payload["publishedAt"] = existing_data["publishedAt"]
+            else:
+                payload["publishedAt"] = fb_firestore.SERVER_TIMESTAMP
+        else:
+            payload["publishedAt"] = fb_firestore.SERVER_TIMESTAMP
+
+        if dry_run:
+            print(f"would write devotionals/{new_doc_id}")
+            if legacy_ref.get().exists:
+                print(f"would delete legacy devotionals/{slug}")
+        else:
+            ref.set(payload, merge=False)
+            print(f"wrote devotionals/{new_doc_id}")
+            # Clear out the pre-rename doc so the same slug isn't
+            # served from two paths after the cutover.
+            if legacy_ref.get().exists:
+                legacy_ref.delete()
+                print(f"deleted legacy devotionals/{slug}")
         written += 1
     return written
 
@@ -107,21 +168,19 @@ def main(argv: list[str]) -> int:
     if db is None:
         print("dry-run — no writes")
         for d in devotionals:
-            print(f"  devotional {d['slug']}")
+            print(f"  devotional {d['slug']} → devotionals/{doc_id_for('org', d['slug'])}")
         for p in plans:
             print(f"  plan       {p['slug']} ({p.get('duration', '?')} days)")
         return 0
 
-    n1 = _seed_collection(
+    n1 = _seed_devotionals(
         db,
-        collection="devotionals",
         docs=devotionals,
         bump_published=args.bump_published,
         dry_run=False,
     )
-    n2 = _seed_collection(
+    n2 = _seed_reading_plans(
         db,
-        collection="reading_plans",
         docs=plans,
         bump_published=args.bump_published,
         dry_run=False,

@@ -89,7 +89,7 @@ beforeEach(() => {
 // ── DevotionalForm validation ─────────────────────────────────────────────────
 
 describe("DevotionalForm", () => {
-  it("renders required fields in create mode", () => {
+  it("renders required fields in create mode (no slug input — auto-generated)", () => {
     render(
       <DevotionalForm
         mode="create"
@@ -97,12 +97,13 @@ describe("DevotionalForm", () => {
         onSubmit={vi.fn().mockResolvedValue(null)}
       />,
     );
-    expect(screen.getByLabelText(/slug/i)).toBeInTheDocument();
+    // Slug is auto-derived from the title; the author never types it.
+    expect(screen.queryByLabelText(/^slug$/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/body/i)).toBeInTheDocument();
   });
 
-  it("does not render slug field in edit mode", () => {
+  it("never renders a slug input in edit mode either", () => {
     render(
       <DevotionalForm
         mode="edit"
@@ -110,7 +111,7 @@ describe("DevotionalForm", () => {
         onSubmit={vi.fn().mockResolvedValue(null)}
       />,
     );
-    expect(screen.queryByLabelText(/slug/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^slug$/i)).not.toBeInTheDocument();
   });
 
   it("shows validation error when title is empty on submit", async () => {
@@ -123,43 +124,15 @@ describe("DevotionalForm", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /publish/i }));
     await waitFor(() =>
-      expect(screen.getByText(/slug is required/i)).toBeInTheDocument(),
+      expect(screen.getByText(/title is required/i)).toBeInTheDocument(),
     );
   });
 
-  it("rejects an invalid slug pattern", async () => {
-    render(
-      <DevotionalForm
-        mode="create"
-        submitLabel="Publish"
-        onSubmit={vi.fn().mockResolvedValue(null)}
-      />,
-    );
-    fireEvent.change(screen.getByLabelText(/slug/i), {
-      target: { value: "Has Spaces!" },
-    });
-    fireEvent.change(screen.getByLabelText(/title/i), {
-      target: { value: "My Title" },
-    });
-    fireEvent.change(screen.getByLabelText(/body/i), {
-      target: { value: "Some body text" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /publish/i }));
-    await waitFor(() =>
-      expect(
-        screen.getByText(/lowercase letters, numbers, and hyphens/i),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  it("accepts a valid slug pattern and calls onSubmit", async () => {
+  it("calls onSubmit with title-derived values (no slug field on payload)", async () => {
     const onSubmit = vi.fn().mockResolvedValue(null);
     render(
       <DevotionalForm mode="create" submitLabel="Publish" onSubmit={onSubmit} />,
     );
-    fireEvent.change(screen.getByLabelText(/slug/i), {
-      target: { value: "john-3-16" },
-    });
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "God So Loved" },
     });
@@ -169,7 +142,7 @@ describe("DevotionalForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /publish/i }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     const args = onSubmit.mock.calls[0][0] as Record<string, unknown>;
-    expect(args.slug).toBe("john-3-16");
+    expect(args).not.toHaveProperty("slug");
     expect(args.title).toBe("God So Loved");
   });
 
@@ -178,9 +151,6 @@ describe("DevotionalForm", () => {
     render(
       <DevotionalForm mode="create" submitLabel="Publish" onSubmit={onSubmit} />,
     );
-    fireEvent.change(screen.getByLabelText(/slug/i), {
-      target: { value: "test-slug" },
-    });
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Title" },
     });
@@ -223,10 +193,12 @@ describe("NewDevotionalPage", () => {
     });
     render(<NewDevotionalPage />);
     expect(screen.getByText(/write a devotional/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/slug/i)).toBeInTheDocument();
+    // Form has a title input, but no longer a slug input.
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^slug$/i)).not.toBeInTheDocument();
   });
 
-  it("calls createDevotional with form values on submit", async () => {
+  it("calls createDevotional with form values on submit (no slug field)", async () => {
     mockUseRoleClaims.mockReturnValue({
       isAdmin: false,
       isModerator: false,
@@ -234,6 +206,7 @@ describe("NewDevotionalPage", () => {
     });
     mockCreateDevotional.mockResolvedValue({
       slug: "psalm-23",
+      path: "org/psalm-23",
       title: "Psalm 23",
       scriptureRef: "Ps 23",
       body: "Body",
@@ -241,12 +214,12 @@ describe("NewDevotionalPage", () => {
       sourceAttribution: "",
       publishedAt: null,
       audience: "christian",
+      groupId: null,
+      groupName: null,
+      authorHash: null,
     });
 
     render(<NewDevotionalPage />);
-    fireEvent.change(screen.getByLabelText(/slug/i), {
-      target: { value: "psalm-23" },
-    });
     fireEvent.change(screen.getByLabelText(/title/i), {
       target: { value: "Psalm 23" },
     });
@@ -254,11 +227,10 @@ describe("NewDevotionalPage", () => {
       target: { value: "The Lord is my shepherd" },
     });
     fireEvent.click(screen.getByRole("button", { name: /publish devotional/i }));
-    await waitFor(() =>
-      expect(mockCreateDevotional).toHaveBeenCalledWith(
-        expect.objectContaining({ slug: "psalm-23", title: "Psalm 23" }),
-      ),
-    );
+    await waitFor(() => expect(mockCreateDevotional).toHaveBeenCalled());
+    const payload = mockCreateDevotional.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.title).toBe("Psalm 23");
+    expect(payload).not.toHaveProperty("slug");
   });
 });
 

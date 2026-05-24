@@ -43,7 +43,7 @@ export function TodayDevotional({ devotional, loading }: Props) {
 
   return (
     <Link
-      href={`/devotionals/${devotional.slug}`}
+      href={`/devotionals/${devotional.path}`}
       className="block rounded-lg no-underline focus:outline-none focus-visible:shadow-glow-gold"
     >
       <Card surface="raised" interactive className="space-y-2">

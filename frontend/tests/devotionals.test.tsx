@@ -51,6 +51,7 @@ describe("devotionals + reading-plan hooks (T51)", () => {
       devotionals: [
         {
           slug: "psalm-23",
+          path: "org/psalm-23",
           title: "The Lord is My Shepherd",
           scriptureRef: "Ps 23",
           body: "...",
@@ -58,12 +59,43 @@ describe("devotionals + reading-plan hooks (T51)", () => {
           sourceAttribution: "PD",
           publishedAt: null,
           audience: "christian",
+          groupId: null,
+          groupName: null,
+          authorHash: null,
         },
       ],
     });
     const { result } = renderHook(() => useDevotionals());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.devotionals).toHaveLength(1);
+    expect(result.current.devotionals[0].path).toBe("org/psalm-23");
+  });
+
+  it("useDevotional builds the structured API path from the devotional path", async () => {
+    apiGet.mockResolvedValue({
+      slug: "abide",
+      path: "group/abc12345/abide",
+      title: "Abide",
+      scriptureRef: "John 15",
+      body: "...",
+      audioUrl: null,
+      sourceAttribution: "",
+      publishedAt: null,
+      audience: "christian",
+      groupId: "g1",
+      groupName: "Crossroads",
+      authorHash: "abc12345",
+    });
+    const { result } = renderHook(() => useDevotional("group/abc12345/abide"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    // The hook should percent-encode each path segment individually so
+    // the slash structure is preserved (otherwise the backend can't
+    // route it to /api/devotionals/group/.../...).
+    expect(apiGet).toHaveBeenCalledWith(
+      "/api/devotionals/group/abc12345/abide",
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+    expect(result.current.devotional?.groupName).toBe("Crossroads");
   });
 
   it("useDevotional 404 → null", async () => {

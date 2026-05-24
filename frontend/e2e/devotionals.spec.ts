@@ -19,9 +19,14 @@ test.describe("devotionals", () => {
     }
 
     await firstDevotional.click();
-    await expect(page).toHaveURL(/\/devotionals\/[A-Za-z0-9-]+$/, {
-      timeout: 15_000,
-    });
+    // After the auto-slug rename, URLs can be one of three shapes:
+    //   /devotionals/<slug>                       (legacy seed data)
+    //   /devotionals/org/<slug>                   (platform-wide)
+    //   /devotionals/group/<authorHash>/<slug>    (group-scoped)
+    await expect(page).toHaveURL(
+      /\/devotionals\/([A-Za-z0-9-]+|org\/[A-Za-z0-9-]+|group\/[A-Za-z0-9-]+\/[A-Za-z0-9-]+)$/,
+      { timeout: 15_000 },
+    );
 
     // Scripture component renders with `font-display`, which Tailwind aliases
     // to `var(--font-eb-garamond)` ahead of an Iowan Old Style fallback.
