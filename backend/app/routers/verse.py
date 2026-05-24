@@ -28,7 +28,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["verse"])
 
 _DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_ALLOWED_TRANSLATIONS = {"WEB", "KJV"}
+# Only KJV is currently servable. Other translations in the policy set
+# (ESV/NIV/NKJV/NLT/NRSV) are copyrighted and would require a publisher
+# license. Legacy WEB docs written before the policy change are normalised
+# to KJV — the historic text may not match the label, but for past-day
+# lookups this is acceptable transient drift.
+_ALLOWED_TRANSLATIONS = {"KJV"}
 _ALLOWED_SOURCES = {"bible-api.com", "calendar-override"}
 
 
@@ -65,9 +70,9 @@ def get_daily_verse(
         )
 
     data: dict[str, Any] = snap.to_dict() or {}
-    translation = data.get("translation", "WEB")
+    translation = data.get("translation", "KJV")
     if translation not in _ALLOWED_TRANSLATIONS:
-        translation = "WEB"
+        translation = "KJV"
     source = data.get("source", "bible-api.com")
     if source not in _ALLOWED_SOURCES:
         source = "bible-api.com"

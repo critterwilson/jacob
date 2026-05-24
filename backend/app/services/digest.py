@@ -177,7 +177,7 @@ def assemble_user_payload(
         today_verse = {
             "reference": str(v.get("reference", "")),
             "text": str(v.get("text", "")),
-            "translation": str(v.get("translation", "WEB")),
+            "translation": str(v.get("translation", "KJV")),
         }
 
     quiet_week = not any(g.top_stickers or g.new_members for g in groups) and missed_replies == 0

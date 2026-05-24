@@ -5,7 +5,7 @@ import { ApiError, apiGet } from "@/lib/api";
 
 export type DailyVerse = {
   reference: string;
-  translation: "WEB" | "KJV";
+  translation: "KJV";
   text: string;
   source: "bible-api.com" | "calendar-override";
 };

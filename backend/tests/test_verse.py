@@ -30,10 +30,10 @@ def reset_circuit():
 
 _SAMPLE_CALENDAR = {
     "calendar": {
-        "12-25": {"reference": "Luke 2:11", "translation": "WEB", "source": "calendar-override"},
+        "12-25": {"reference": "Luke 2:11", "translation": "KJV", "source": "calendar-override"},
         "2026-04-05": {
             "reference": "Joel 2:12-13",
-            "translation": "WEB",
+            "translation": "KJV",
             "source": "calendar-override",
         },
     },
@@ -62,7 +62,7 @@ def test_fetch_verse_calendar_override_by_full_date():
 
     assert doc.reference == "Joel 2:12-13"
     assert doc.source == "calendar-override"
-    mock_api.assert_called_once_with("Joel 2:12-13", "WEB")
+    mock_api.assert_called_once_with("Joel 2:12-13", "KJV")
 
 
 def test_fetch_verse_calendar_override_by_month_day():
@@ -73,7 +73,7 @@ def test_fetch_verse_calendar_override_by_month_day():
 
     assert doc.reference == "Luke 2:11"
     assert doc.source == "calendar-override"
-    mock_api.assert_called_once_with("Luke 2:11", "WEB")
+    mock_api.assert_called_once_with("Luke 2:11", "KJV")
 
 
 def test_fetch_verse_rotation():
@@ -183,7 +183,7 @@ def test_daily_verse_happy_path() -> None:
     assert body == {
         "day": "2026-05-03",
         "reference": "John 3:16",
-        "translation": "WEB",
+        "translation": "KJV",
         "text": "For God so loved the world.",
         "source": "bible-api.com",
     }
@@ -254,5 +254,170 @@ def test_daily_verse_normalises_unexpected_translation() -> None:
         )
     assert res.status_code == 200
     body = res.json()
-    assert body["translation"] == "WEB"
+    assert body["translation"] == "KJV"
     assert body["source"] == "bible-api.com"
+
+
+def test_daily_verse_normalises_legacy_web_translation() -> None:
+    """Legacy daily_verse docs written with translation='WEB' should be served
+    as 'KJV' after the translation-policy change."""
+    snap = _verse_doc_snap(translation="WEB")
+    with patch("app.routers.verse.get_firestore", return_value=_verse_db(snap)):
+        client = TestClient(_verse_app())
+        res = client.get(
+            "/api/daily-verse?day=2026-05-03",
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 200
+    assert res.json()["translation"] == "KJV"
+
+
+# ── Song of Solomon exclusion ────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "reference,expected",
+    [
+        ("Song of Solomon 2:1", True),
+        ("Song of Solomon 4:1-7", True),
+        ("Song of Songs 1:1", True),
+        ("song of songs 1:1", True),
+        ("CANTICLES 2:4", True),
+        ("Canticles 8:6", True),
+        ("John 3:16", False),
+        ("1 John 4:8", False),
+        ("Psalm 23:1", False),
+        ("Romans 8:28", False),
+        ("Songs 1:1", False),  # not an actual book — must not be falsely matched
+    ],
+)
+def test_is_excluded_reference(reference: str, expected: bool) -> None:
+    assert verse_svc.is_excluded_reference(reference) is expected
+
+
+def test_scrub_excluded_filters_calendar_and_rotation() -> None:
+    """Calendar overrides and rotation entries in excluded books are dropped at load time."""
+    src = "calendar-override"
+    raw = {
+        "calendar": {
+            "12-25": {"reference": "Luke 2:11", "translation": "KJV", "source": src},
+            "02-14": {"reference": "Song of Solomon 2:10", "translation": "KJV", "source": src},
+            "06-01": {"reference": "Song of Songs 8:6-7", "translation": "KJV", "source": src},
+        },
+        "rotation": [
+            "John 3:16",
+            "Song of Solomon 2:1",
+            "Romans 8:28",
+            "Canticles 1:2",
+            "Psalm 23:1",
+        ],
+    }
+
+    scrubbed = verse_svc._scrub_excluded(raw)
+
+    assert "12-25" in scrubbed["calendar"]  # type: ignore[operator]
+    assert "02-14" not in scrubbed["calendar"]  # type: ignore[operator]
+    assert "06-01" not in scrubbed["calendar"]  # type: ignore[operator]
+    assert scrubbed["rotation"] == ["John 3:16", "Romans 8:28", "Psalm 23:1"]
+
+
+def test_fetch_verse_calendar_override_excluded_raises() -> None:
+    """Even if a Song of Solomon entry somehow slips past the loader, fetch must refuse."""
+    fixed_date = datetime(2026, 2, 14, tzinfo=UTC)
+    # Patch _load_calendar directly with an unscrubbed calendar that the
+    # production loader would reject — proves the in-flight guard works too.
+    poisoned = {
+        "calendar": {
+            "02-14": {
+                "reference": "Song of Solomon 2:10",
+                "translation": "KJV",
+                "source": "calendar-override",
+            },
+        },
+        "rotation": ["John 3:16"],
+    }
+    with _patch_calendar(poisoned), _patch_api("text") as mock_api:
+        with pytest.raises(RuntimeError, match="excluded book"):
+            verse_svc.fetch_verse_for_today(today=fixed_date)
+    mock_api.assert_not_called()
+
+
+def test_bundled_calendar_has_no_excluded_books() -> None:
+    """Sanity: the shipped verse_calendar.json must not select any excluded book.
+
+    This is the load-bearing assertion that no Song of Solomon reference can
+    be selected/served from the calendar/rotation pair we ship today, and
+    will fail loudly if a future edit slips one through.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    backend_root = _Path(__file__).resolve().parent.parent
+    files = [
+        backend_root / "app" / "data" / "verse_calendar.json",
+        backend_root.parent / "infra" / "seed" / "verse_calendar.json",
+    ]
+
+    for path in files:
+        assert path.exists(), f"missing {path}"
+        raw = _json.loads(path.read_text())
+        for key, entry in (raw.get("calendar") or {}).items():
+            ref = entry.get("reference", "")
+            assert not verse_svc.is_excluded_reference(
+                ref
+            ), f"{path.name}: calendar entry {key!r} ({ref!r}) is an excluded book"
+        for ref in raw.get("rotation") or []:
+            assert not verse_svc.is_excluded_reference(
+                ref
+            ), f"{path.name}: rotation entry {ref!r} is an excluded book"
+
+
+def test_fetch_verse_never_returns_excluded_reference() -> None:
+    """End-to-end: walk every day of a leap year through fetch_verse_for_today
+    using the real bundled calendar. None of the selected references may be
+    from an excluded book."""
+    from datetime import timedelta
+
+    # Real bundled calendar — _load_calendar's cache_clear in the autouse
+    # fixture forces a fresh load from disk.
+    start = datetime(2024, 1, 1, tzinfo=UTC)
+    with _patch_api("text"):
+        for day_of_year in range(366):
+            d = start + timedelta(days=day_of_year)
+            doc = verse_svc.fetch_verse_for_today(today=d)
+            assert not verse_svc.is_excluded_reference(
+                doc.reference
+            ), f"day {d.date()} selected excluded reference {doc.reference!r}"
+
+
+# ── Translation restriction ──────────────────────────────────────────────
+
+
+def test_default_translation_is_kjv() -> None:
+    """The rotation path (no override) must request KJV from bible-api.com."""
+    fixed_date = datetime(2025, 6, 15, tzinfo=UTC)
+    with _patch_calendar(_SAMPLE_CALENDAR), _patch_api("text") as mock_api:
+        doc = verse_svc.fetch_verse_for_today(today=fixed_date)
+    assert doc.translation == "KJV"
+    args, _ = mock_api.call_args
+    assert args[1] == "KJV"
+
+
+def test_calendar_override_forces_kjv_regardless_of_data() -> None:
+    """Even if the calendar JSON specified a non-KJV translation, the service
+    must coerce to KJV — we never ship copyrighted translation text."""
+    cal = {
+        "calendar": {
+            "12-25": {
+                "reference": "Luke 2:11",
+                "translation": "ESV",  # not allowed
+                "source": "calendar-override",
+            },
+        },
+        "rotation": ["John 3:16"],
+    }
+    fixed_date = datetime(2025, 12, 25, tzinfo=UTC)
+    with _patch_calendar(cal), _patch_api("text") as mock_api:
+        doc = verse_svc.fetch_verse_for_today(today=fixed_date)
+    assert doc.translation == "KJV"
+    mock_api.assert_called_once_with("Luke 2:11", "KJV")

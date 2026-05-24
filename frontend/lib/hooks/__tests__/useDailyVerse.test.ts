@@ -39,7 +39,7 @@ describe("useDailyVerse", () => {
     mockApiGet.mockResolvedValueOnce({
       day: "2026-05-03",
       reference: "John 3:16",
-      translation: "WEB",
+      translation: "KJV",
       text: "For God so loved the world.",
       source: "bible-api.com",
     });
@@ -50,7 +50,7 @@ describe("useDailyVerse", () => {
 
     expect(result.current.verse).toEqual({
       reference: "John 3:16",
-      translation: "WEB",
+      translation: "KJV",
       text: "For God so loved the world.",
       source: "bible-api.com",
     });
