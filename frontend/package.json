@@ -5,8 +5,7 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/fix-apphosting-standalone.mjs && tsc --project tsconfig.sw.json",
-    "build:sw": "tsc --project tsconfig.sw.json",
+    "build": "next build && node scripts/fix-apphosting-standalone.mjs",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",

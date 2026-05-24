@@ -85,4 +85,39 @@ describe("GET /firebase-messaging-sw.js", () => {
     expect(body).not.toContain("FIREBASE_CONFIG");
     expect(body).not.toMatch(/addEventListener\(\s*["']message["']/);
   });
+
+  // ── merged app-shell SW invariants (PR after #332) ─────────────────────
+  // The FCM SW and the app-shell SW used to be separate scripts, both
+  // registered at scope "/". Two registrations at the same scope is
+  // undefined-behavior territory and was exactly the bug that left
+  // iOS PWAs without a working push handler. Pin the invariant that
+  // this single SW does both jobs.
+
+  it("registers install/activate/fetch handlers for app-shell caching", async () => {
+    const { body } = await fetchSw();
+    expect(body).toMatch(/addEventListener\(\s*["']install["']/);
+    expect(body).toMatch(/addEventListener\(\s*["']activate["']/);
+    expect(body).toMatch(/addEventListener\(\s*["']fetch["']/);
+  });
+
+  it("calls skipWaiting() in install so the new SW takes over immediately", async () => {
+    const { body } = await fetchSw();
+    // Without skipWaiting, devices with an older SW already controlling
+    // them (legacy /sw.js or pre-merge /firebase-messaging-sw.js) will
+    // keep that SW active until every PWA tab closes — which, on iOS,
+    // basically never happens until the user kills the PWA.
+    expect(body).toMatch(/self\.skipWaiting\(\)/);
+  });
+
+  it("calls clients.claim() in activate so existing tabs swap controllers", async () => {
+    const { body } = await fetchSw();
+    expect(body).toMatch(/self\.clients\.claim\(\)/);
+  });
+
+  it("precaches the offline app-shell route", async () => {
+    const { body } = await fetchSw();
+    expect(body).toMatch(/PRECACHE_URLS/);
+    expect(body).toContain("/home");
+    expect(body).toContain("/manifest.webmanifest");
+  });
 });
