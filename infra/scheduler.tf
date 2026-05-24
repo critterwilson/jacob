@@ -2,11 +2,14 @@
  * Cloud Scheduler jobs (M4, T29, T33, T34, T35, T38).
  *
  * Replaces the hand-created scheduler jobs that previously ran as the
- * default Compute SA. Each job uses a dedicated OIDC identity and has
+ * default Compute SA. Each job uses a dedicated identity and has
  * `roles/run.invoker` only on its own Cloud Run job — so a compromise
  * of one scheduler SA cannot be used to start another job.
  *
  * All jobs invoke Cloud Run Jobs (not Services) via the admin API.
+ * The admin API authenticates with OAuth access tokens, not OIDC ID
+ * tokens — OIDC returns UNAUTHENTICATED even when the SA has
+ * `roles/run.invoker`. See "Execute Cloud Run jobs on a schedule".
  *
  * Schedules (UTC):
  *   firestore_export       — daily 03:00
@@ -19,7 +22,7 @@
  */
 
 variable "scheduler_region" {
-  description = "Cloud Scheduler region. Must match Cloud Run job region for OIDC."
+  description = "Cloud Scheduler region. Must match the Cloud Run job region (each job's invoke URL is region-scoped)."
   type        = string
   default     = "us-central1"
 }
@@ -37,9 +40,14 @@ variable "finalize_deletions_job_name" {
 }
 
 locals {
-  scheduler_run_invoke_url_export      = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.firestore_export_job_name}:run"
-  scheduler_run_invoke_url_deletions   = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.finalize_deletions_job_name}:run"
-  scheduler_run_invoke_audience_export = "https://${var.scheduler_region}-run.googleapis.com/"
+  scheduler_run_invoke_url_export    = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.firestore_export_job_name}:run"
+  scheduler_run_invoke_url_deletions = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.finalize_deletions_job_name}:run"
+
+  # OAuth scope required to call the Cloud Run admin API (run.googleapis.com).
+  # Cloud Scheduler's `oauth_token` block accepts any cloud-platform-class
+  # scope; the broad scope below matches Google's documented example for
+  # invoking Cloud Run jobs on a schedule.
+  scheduler_run_oauth_scope = "https://www.googleapis.com/auth/cloud-platform"
 }
 
 # ── per-job run.invoker IAM (scoped to the specific Cloud Run job) ───────────
@@ -96,9 +104,9 @@ resource "google_cloud_scheduler_job" "firestore_export" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_export
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_export.email
-      audience              = local.scheduler_run_invoke_audience_export
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
@@ -128,9 +136,9 @@ resource "google_cloud_scheduler_job" "finalize_deletions" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_deletions
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_deletions.email
-      audience              = local.scheduler_run_invoke_audience_export
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
@@ -172,9 +180,9 @@ resource "google_cloud_scheduler_job" "firestore_to_bigquery" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_bq_loader
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_analytics.email
-      audience              = "https://${var.scheduler_region}-run.googleapis.com/"
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
@@ -234,9 +242,9 @@ resource "google_cloud_scheduler_job" "daily_verse" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_daily_verse
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_daily_verse.email
-      audience              = "https://${var.scheduler_region}-run.googleapis.com/"
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
@@ -296,9 +304,9 @@ resource "google_cloud_scheduler_job" "weekly_digest" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_weekly_digest
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_weekly_digest.email
-      audience              = "https://${var.scheduler_region}-run.googleapis.com/"
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
@@ -362,9 +370,9 @@ resource "google_cloud_scheduler_job" "process_export_jobs" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_exports
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_exports.email
-      audience              = "https://${var.scheduler_region}-run.googleapis.com/"
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
@@ -424,9 +432,9 @@ resource "google_cloud_scheduler_job" "cleanup_stale_devices" {
     http_method = "POST"
     uri         = local.scheduler_run_invoke_url_cleanup_devices
 
-    oidc_token {
+    oauth_token {
       service_account_email = google_service_account.jacob_scheduler_cleanup_devices.email
-      audience              = "https://${var.scheduler_region}-run.googleapis.com/"
+      scope                 = local.scheduler_run_oauth_scope
     }
   }
 
