@@ -22,7 +22,7 @@ describe("DailyVerse", () => {
     mockUse.mockReturnValue({
       verse: {
         reference: "John 3:16",
-        translation: "WEB",
+        translation: "KJV",
         text: "For God so loved the world, that he gave his one and only Son.",
         source: "bible-api.com",
       },
@@ -49,7 +49,7 @@ describe("DailyVerse", () => {
     mockUse.mockReturnValue({
       verse: {
         reference: "Psalm 23:1",
-        translation: "WEB",
+        translation: "KJV",
         text: "The Lord is my shepherd.",
         source: "bible-api.com",
       },

@@ -69,7 +69,7 @@ class Settings(BaseSettings):
 
     # T33 — Bible verse feed
     bible_api_base: str = "https://bible-api.com"
-    jacob_verse_translation: str = "web"
+    jacob_verse_translation: str = "kjv"
     jacob_verse_disabled: bool = False
 
     # T35 — Weekly digest + one-click unsubscribe

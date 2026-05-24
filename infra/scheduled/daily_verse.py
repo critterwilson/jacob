@@ -6,7 +6,9 @@ Triggered by Cloud Scheduler at 07:00 UTC daily. Writes to
 Environment variables:
   GCP_PROJECT_ID          — GCP project (required for Firestore)
   BIBLE_API_BASE          — override the base URL (default: https://bible-api.com)
-  JACOB_VERSE_TRANSLATION — WEB or KJV (default: web, used inside verse.py)
+  JACOB_VERSE_TRANSLATION — KJV (default: kjv, used inside verse.py). Other
+                            translations in the policy set (ESV/NIV/NKJV/NLT/
+                            NRSV) are copyrighted and not currently servable.
   JACOB_VERSE_DISABLED    — set to "true" to skip without error exit
 """
 

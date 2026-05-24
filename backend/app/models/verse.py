@@ -8,6 +8,6 @@ from pydantic import BaseModel
 class DailyVerseResponse(BaseModel):
     day: str  # YYYY-MM-DD, the doc id used in Firestore
     reference: str
-    translation: Literal["WEB", "KJV"]
+    translation: Literal["KJV"]
     text: str
     source: Literal["bible-api.com", "calendar-override"]

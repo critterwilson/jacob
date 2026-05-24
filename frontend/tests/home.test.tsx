@@ -76,7 +76,7 @@ vi.mock("@/lib/hooks/useDailyVerse", () => ({
   useDailyVerse: () => ({
     verse: {
       reference: "John 3:16",
-      translation: "WEB",
+      translation: "KJV",
       text: "For God so loved the world.",
       source: "bible-api.com",
     },
