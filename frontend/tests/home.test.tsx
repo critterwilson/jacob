@@ -135,6 +135,7 @@ let devotionalsMock: DevotionalsMock = {
   devotionals: [
     {
       slug: "abide",
+      path: "org/abide",
       title: "Abide",
       scriptureRef: "John 15:5",
       body: "**Abide in me**, as I in you.",
@@ -144,6 +145,7 @@ let devotionalsMock: DevotionalsMock = {
       audience: "christian",
       groupId: null,
       groupName: null,
+      authorHash: null,
     },
   ],
   loading: false,
@@ -269,6 +271,7 @@ beforeEach(() => {
     devotionals: [
       {
         slug: "abide",
+        path: "org/abide",
         title: "Abide",
         scriptureRef: "John 15:5",
         body: "**Abide in me**, as I in you.",
@@ -278,6 +281,7 @@ beforeEach(() => {
         audience: "christian",
         groupId: null,
         groupName: null,
+        authorHash: null,
       },
     ],
     loading: false,
@@ -455,6 +459,7 @@ describe("TodayDevotional", () => {
       <TodayDevotional
         devotional={{
           slug: "abide",
+          path: "org/abide",
           title: "Abide",
           scriptureRef: "John 15:5",
           body: "**Abide in me**, as I in you.\nMore body.",
@@ -464,6 +469,7 @@ describe("TodayDevotional", () => {
           audience: "christian",
           groupId: null,
           groupName: null,
+          authorHash: null,
         }}
         loading={false}
       />,
@@ -474,7 +480,11 @@ describe("TodayDevotional", () => {
     expect(
       screen.getByText(/Abide in me, as I in you. More body./),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/devotionals/abide");
+    // Link uses the structured `path` (org/<slug>) — not the bare slug.
+    expect(screen.getByRole("link")).toHaveAttribute(
+      "href",
+      "/devotionals/org/abide",
+    );
   });
 
   it("renders the empty state when no devotional is supplied", () => {

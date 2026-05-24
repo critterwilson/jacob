@@ -732,7 +732,6 @@ def test_reading_plan_today_handles_orphaned_progress() -> None:
 # ── create / update / delete (ministry_owner only) ──────────────────────────
 
 _CREATE_BODY = {
-    "slug": "john-3-16",
     "title": "God So Loved",
     "scriptureRef": "John 3:16",
     "body": "For God so loved the world…",
@@ -756,25 +755,41 @@ def test_create_devotional_success() -> None:
         res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=_CREATE_BODY)
     assert res.status_code == 201, res.text
     body = res.json()
-    assert body["slug"] == "john-3-16"
+    # Slug is derived from the title — no `slug` field on the request.
+    assert body["slug"] == "god-so-loved"
+    assert body["path"] == "org/god-so-loved"
     assert body["title"] == "God So Loved"
     assert body["audience"] == "christian"
-    # Confirm doc was written to fake store.
-    assert fs._doc_get("devotionals/john-3-16") is not None
+    assert body["schemaVersion"] == 2
+    assert body["authorHash"] is None  # platform-wide: no author hash
+    # Confirm doc was written under the new path-based ID.
+    assert fs._doc_get("devotionals/org__god-so-loved") is not None
 
 
-def test_create_devotional_duplicate_slug_returns_409() -> None:
+def test_create_devotional_auto_slug_collision_appends_suffix() -> None:
+    """Two devotionals with the same title get -2, -3, … suffixes
+    rather than 409. Authoring no longer asks for a slug, so 409 would
+    be unrecoverable for the author."""
     fs = FakeFirestore()
-    _seed_devotional(fs, slug="john-3-16")
     with patch("app.routers.devotionals._db", return_value=fs):
-        res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=_CREATE_BODY)
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "slug_taken"
+        client = TestClient(_app(user=_ministry_owner()))
+        first = client.post("/api/devotionals", json=_CREATE_BODY)
+        second = client.post("/api/devotionals", json=_CREATE_BODY)
+        third = client.post("/api/devotionals", json=_CREATE_BODY)
+    assert first.json()["slug"] == "god-so-loved"
+    assert second.json()["slug"] == "god-so-loved-2"
+    assert third.json()["slug"] == "god-so-loved-3"
+    # All three got the 201 happy path — no 409.
+    assert {first.status_code, second.status_code, third.status_code} == {201}
 
 
-def test_create_devotional_invalid_slug_returns_422() -> None:
+def test_create_devotional_blank_title_returns_422() -> None:
+    """Empty title still rejected by the pydantic model. The slug
+    fallback exists for *unusual but non-empty* titles like "!!!", not
+    for "".
+    """
     fs = FakeFirestore()
-    bad_body = {**_CREATE_BODY, "slug": "Has Spaces!"}
+    bad_body = {**_CREATE_BODY, "title": ""}
     with patch("app.routers.devotionals._db", return_value=fs):
         res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=bad_body)
     assert res.status_code == 422
@@ -839,8 +854,7 @@ def test_delete_devotional_404() -> None:
 # ── group-scoped devotionals (leader-authored, member-visible) ──────────────
 
 _GROUP_CREATE_BODY = {
-    "slug": "g1-week-1",
-    "title": "Group Week 1",
+    "title": "Group Week One",
     "scriptureRef": "Phil 4:6",
     "body": "Rejoice always.",
     "audience": "christian",
@@ -859,9 +873,17 @@ def test_leader_creates_devotional_for_own_group() -> None:
     body = res.json()
     assert body["groupId"] == "g1"
     assert body["groupName"] == "Crossroads"
-    persisted = fs._doc_get("devotionals/g1-week-1")
+    assert body["slug"] == "group-week-one"
+    # Group-scoped: path includes the 8-char author hash segment.
+    assert body["authorHash"] is not None
+    assert len(body["authorHash"]) == 8
+    assert body["path"] == f"group/{body['authorHash']}/group-week-one"
+    # Persisted under the new doc-ID scheme: group__<hash>__<slug>.
+    persisted = fs._doc_get(f"devotionals/group__{body['authorHash']}__group-week-one")
+    assert persisted is not None
     assert persisted["groupId"] == "g1"
     assert persisted["createdBy"] == "lead-1"
+    assert persisted["authorHash"] == body["authorHash"]
 
 
 def test_non_leader_cannot_create_for_group() -> None:
@@ -876,8 +898,10 @@ def test_non_leader_cannot_create_for_group() -> None:
         )
     assert res.status_code == 403
     assert res.json()["error"]["code"] == "not_a_leader"
-    # Confirm nothing got persisted.
+    # Confirm nothing got persisted under either old or new scheme.
     assert fs._doc_get("devotionals/g1-week-1") is None
+    matching = [p for p in fs.docs if p.startswith("devotionals/group__")]
+    assert matching == []
 
 
 def test_leader_of_other_group_cannot_create_here() -> None:
@@ -915,11 +939,13 @@ def test_admin_can_create_group_scoped_devotional() -> None:
 def test_create_platform_wide_when_groupid_omitted() -> None:
     """Without groupId, the existing ministry-owner gate still applies."""
     fs = FakeFirestore()
-    body = {**_CREATE_BODY, "slug": "platform-week-1"}
+    body = {**_CREATE_BODY, "title": "Platform Week One"}
     with patch("app.routers.devotionals._db", return_value=fs):
         res = TestClient(_app(user=_ministry_owner())).post("/api/devotionals", json=body)
     assert res.status_code == 201
-    persisted = fs._doc_get("devotionals/platform-week-1")
+    # Doc lives at the new path-based ID; groupId field stays null.
+    persisted = fs._doc_get("devotionals/org__platform-week-one")
+    assert persisted is not None
     assert persisted["groupId"] is None
 
 
@@ -930,7 +956,8 @@ def test_create_platform_wide_rejected_for_group_leader_without_owner_claim() ->
     _seed_group(fs, gid="g1", leaders=("lead-1",))
     with patch("app.routers.devotionals._db", return_value=fs):
         res = TestClient(_app(user=_leader("lead-1"))).post(
-            "/api/devotionals", json=_CREATE_BODY  # no groupId
+            "/api/devotionals",
+            json=_CREATE_BODY,  # no groupId
         )
     assert res.status_code == 403
 
@@ -1152,6 +1179,114 @@ def test_leader_can_delete_their_groups_devotional() -> None:
         res = TestClient(_app(user=_leader("lead-1"))).delete("/api/devotionals/g1-1")
     assert res.status_code == 204
     assert fs._doc_get("devotionals/g1-1") is None
+
+
+# ── new path-based routes (org/<slug>, group/<hash>/<slug>) ─────────────────
+
+
+def test_get_org_devotional_via_new_path() -> None:
+    """A devotional created under the new scheme is reachable at
+    `/api/devotionals/org/<slug>` and the legacy single-segment URL
+    also resolves it (fallback chain tries `org__<slug>` first)."""
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_ministry_owner()))
+        created = client.post("/api/devotionals", json=_CREATE_BODY).json()
+        # Canonical path: /api/devotionals/org/<auto-slug>
+        new_path = client.get(f"/api/devotionals/org/{created['slug']}")
+        # Legacy path resolves the same doc through the fallback chain.
+        legacy_path = client.get(f"/api/devotionals/{created['slug']}")
+    assert new_path.status_code == 200
+    assert legacy_path.status_code == 200
+    assert new_path.json()["path"] == f"org/{created['slug']}"
+    assert legacy_path.json()["path"] == f"org/{created['slug']}"
+
+
+def test_get_group_devotional_via_new_path() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="Crossroads", leaders=("lead-1",), members=("mem-1",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_leader("lead-1")))
+        created = client.post("/api/devotionals", json=_GROUP_CREATE_BODY).json()
+        # Member can fetch via the new path.
+        member_client = TestClient(_app(user=_leader("mem-1")))
+        with patch("app.routers.devotionals._db", return_value=fs):
+            res = member_client.get(
+                f"/api/devotionals/group/{created['authorHash']}/{created['slug']}"
+            )
+    assert res.status_code == 200
+    assert res.json()["groupId"] == "g1"
+    assert res.json()["groupName"] == "Crossroads"
+
+
+def test_get_group_devotional_via_new_path_404s_for_non_members() -> None:
+    """The path-based route must enforce the same membership gate as
+    the legacy route, since the URL alone leaks no membership info."""
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="X", leaders=("lead-1",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_leader("lead-1")))
+        created = client.post("/api/devotionals", json=_GROUP_CREATE_BODY).json()
+        stranger = TestClient(_app(user=_leader("stranger")))
+        with patch("app.routers.devotionals._db", return_value=fs):
+            res = stranger.get(f"/api/devotionals/group/{created['authorHash']}/{created['slug']}")
+    # 404, not 403 — the existence of the slug must not be probeable.
+    assert res.status_code == 404
+
+
+def test_patch_org_devotional_via_new_path() -> None:
+    fs = FakeFirestore()
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_ministry_owner()))
+        created = client.post("/api/devotionals", json=_CREATE_BODY).json()
+        res = client.patch(
+            f"/api/devotionals/org/{created['slug']}",
+            json={"title": "Renamed"},
+        )
+    assert res.status_code == 200
+    assert res.json()["title"] == "Renamed"
+
+
+def test_delete_group_devotional_via_new_path() -> None:
+    fs = FakeFirestore()
+    _seed_group(fs, gid="g1", name="X", leaders=("lead-1",))
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_leader("lead-1")))
+        created = client.post("/api/devotionals", json=_GROUP_CREATE_BODY).json()
+        res = client.delete(f"/api/devotionals/group/{created['authorHash']}/{created['slug']}")
+    assert res.status_code == 204
+    assert fs._doc_get(f"devotionals/group__{created['authorHash']}__{created['slug']}") is None
+
+
+def test_legacy_get_resolves_pre_rename_doc() -> None:
+    """A doc with the legacy single-segment ID (schemaVersion=1) still
+    resolves through the legacy URL — no migration required for pre-
+    rename seed data."""
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="psalm-23-shepherd", title="The Lord is my shepherd")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        res = TestClient(_app(user=_user())).get("/api/devotionals/psalm-23-shepherd")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["title"] == "The Lord is my shepherd"
+    # Path for legacy docs mirrors their single-segment URL — keeps
+    # frontend link construction uniform.
+    assert body["path"] == "psalm-23-shepherd"
+
+
+def test_list_devotionals_returns_path_for_routing() -> None:
+    """List response must include `path` so the frontend can build the
+    correct link for both legacy and new-scheme entries."""
+    fs = FakeFirestore()
+    _seed_devotional(fs, slug="legacy-entry", title="Legacy")
+    with patch("app.routers.devotionals._db", return_value=fs):
+        client = TestClient(_app(user=_ministry_owner()))
+        # Create one new-scheme entry alongside the legacy one.
+        client.post("/api/devotionals", json={**_CREATE_BODY, "title": "New Entry"})
+        res = client.get("/api/devotionals")
+    by_slug = {d["slug"]: d for d in res.json()["devotionals"]}
+    assert by_slug["legacy-entry"]["path"] == "legacy-entry"
+    assert by_slug["new-entry"]["path"] == "org/new-entry"
 
 
 def test_leader_cannot_delete_platform_devotional() -> None:

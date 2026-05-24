@@ -5,7 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, apiDelete, apiPatch, apiPost, apiGet } from "@/lib/api";
 
 export type Devotional = {
+  // Title-derived slug (e.g. "the-lord-is-my-shepherd"). Use `path`
+  // when building URLs — `slug` is just the title-derived piece.
   slug: string;
+  // Canonical URL path segment under `/devotionals/`:
+  //   platform-wide → "org/<slug>"
+  //   group-scoped  → "group/<authorHash>/<slug>"
+  //   legacy        → "<slug>" (pre-rename docs, same as legacy URL)
+  path: string;
   title: string;
   scriptureRef: string;
   body: string;
@@ -20,10 +27,14 @@ export type Devotional = {
   // /api/devotionals list returns null for platform entries and the
   // group's display name for group-scoped entries.
   groupName: string | null;
+  // 8-char stable hash of the author's uid; populated for group-scoped
+  // entries (it's the second URL segment) and null on platform-wide.
+  authorHash: string | null;
 };
 
 export type DevotionalCreatePayload = {
-  slug: string;
+  // Slug is auto-derived from the title server-side; the form no longer
+  // collects one.
   title: string;
   scriptureRef?: string;
   body: string;
@@ -38,12 +49,25 @@ export type DevotionalCreatePayload = {
   groupId?: string | null;
 };
 
-export type DevotionalUpdatePayload = Partial<Omit<DevotionalCreatePayload, "slug">>;
+export type DevotionalUpdatePayload = Partial<DevotionalCreatePayload>;
+
+// Build the API path for a single devotional from its `path` field.
+// Caller-facing routes accept the same shape because every segment of
+// the structured path is URL-safe ASCII.
+function apiPathFor(devotionalPath: string): string {
+  return `/api/devotionals/${devotionalPath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/")}`;
+}
 
 export function useDevotionalMutations(): {
   createDevotional: (payload: DevotionalCreatePayload) => Promise<Devotional | null>;
-  patchDevotional: (slug: string, payload: DevotionalUpdatePayload) => Promise<Devotional | null>;
-  deleteDevotional: (slug: string) => Promise<boolean>;
+  patchDevotional: (
+    devotionalPath: string,
+    payload: DevotionalUpdatePayload,
+  ) => Promise<Devotional | null>;
+  deleteDevotional: (devotionalPath: string) => Promise<boolean>;
 } {
   const createDevotional = useCallback(
     async (payload: DevotionalCreatePayload): Promise<Devotional | null> => {
@@ -61,12 +85,12 @@ export function useDevotionalMutations(): {
 
   const patchDevotional = useCallback(
     async (
-      slug: string,
+      devotionalPath: string,
       payload: DevotionalUpdatePayload,
     ): Promise<Devotional | null> => {
       try {
         return await apiPatch<Devotional, DevotionalUpdatePayload>(
-          `/api/devotionals/${encodeURIComponent(slug)}`,
+          apiPathFor(devotionalPath),
           payload,
         );
       } catch {
@@ -76,14 +100,17 @@ export function useDevotionalMutations(): {
     [],
   );
 
-  const deleteDevotional = useCallback(async (slug: string): Promise<boolean> => {
-    try {
-      await apiDelete(`/api/devotionals/${encodeURIComponent(slug)}`);
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
+  const deleteDevotional = useCallback(
+    async (devotionalPath: string): Promise<boolean> => {
+      try {
+        await apiDelete(apiPathFor(devotionalPath));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
 
   return { createDevotional, patchDevotional, deleteDevotional };
 }
@@ -154,21 +181,21 @@ export function useGroupDevotionals(gid: string | null | undefined): {
 }
 
 
-export function useDevotional(slug: string | null): {
+export function useDevotional(devotionalPath: string | null): {
   devotional: Devotional | null;
   loading: boolean;
 } {
   const [devotional, setDevotional] = useState<Devotional | null>(null);
-  const [loading, setLoading] = useState(Boolean(slug));
+  const [loading, setLoading] = useState(Boolean(devotionalPath));
 
   useEffect(() => {
-    if (!slug) {
+    if (!devotionalPath) {
       setDevotional(null);
       setLoading(false);
       return;
     }
     const ctrl = new AbortController();
-    apiGet<Devotional>(`/api/devotionals/${encodeURIComponent(slug)}`, {
+    apiGet<Devotional>(apiPathFor(devotionalPath), {
       signal: ctrl.signal,
     })
       .then((res) => {
@@ -181,7 +208,7 @@ export function useDevotional(slug: string | null): {
         setLoading(false);
       });
     return () => ctrl.abort();
-  }, [slug]);
+  }, [devotionalPath]);
 
   return { devotional, loading };
 }

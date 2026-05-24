@@ -42,7 +42,7 @@ groups/{gid}/sermons/{sermonId}                 # T52 — sermon archive
 # Platform content
 stickers/{stickerId}
 daily_verse/{date}                              # T33 — daily Bible verse
-devotionals/{slug}                              # T51 — flat; optional groupId field scopes to a group
+devotionals/{docId}                             # T51 — flat; docId encodes scope: `org__<slug>` or `group__<authorHash>__<slug>`
 reading_plans/{slug}                            # T51
 
 # Cross-group boards
@@ -693,15 +693,37 @@ the consumed code.
 * TTL: 60 minutes. Single-use. `consume_consent_token` marks
   `consumedAt` inside the verify transaction.
 
-## `devotionals/{slug}` (T51)
+## `devotionals/{docId}` (T51)
 
-Short scripture-paired reflections. Flat top-level collection, slug
-globally unique — backed by `/api/devotionals*`; default-deny rules
-keep every direct path closed.
+Short scripture-paired reflections. Flat top-level collection, backed by
+`/api/devotionals*`; default-deny rules keep every direct path closed.
+
+### Doc-ID + URL scheme (schemaVersion 2)
+
+The doc ID encodes scope; the URL path under `/devotionals/` is the
+same thing with `/` as the separator instead of `__`:
+
+| Scope            | Firestore doc ID                       | URL path                                   |
+|------------------|----------------------------------------|--------------------------------------------|
+| Platform-wide    | `org__<slug>`                          | `/devotionals/org/<slug>`                  |
+| Group-scoped     | `group__<authorHash>__<slug>`          | `/devotionals/group/<authorHash>/<slug>`   |
+| Legacy (v1)      | `<slug>` (bare)                        | `/devotionals/<slug>`                      |
+
+* `<slug>` is **derived server-side from the title** — lowercase,
+  hyphenated, punctuation stripped, capped at 60 chars. The form no
+  longer asks for a slug. Same-author + same-slug collisions get a
+  numeric suffix (`-2`, `-3`, …).
+* `<authorHash>` is an 8-char base32 prefix of
+  `SHA-256("jacob.dev.author:" + uid)` — stable per uid and not
+  reversible. It keeps raw Firebase UIDs out of URLs while still
+  namespacing slugs per author. Helper: `app.services.devotional_paths.author_hash`.
+* Legacy (v1) docs continue to resolve through `/api/devotionals/<slug>`
+  (the backend's fallback chain tries `org__<slug>` first, then the
+  bare doc ID), so old links never 404.
 
 ```json
 {
-  "slug": "psalm-23",
+  "slug": "the-lord-is-my-shepherd",
   "title": "The Lord is my shepherd",
   "scriptureRef": "Psalm 23",
   "body": "Markdown body...",
@@ -710,18 +732,20 @@ keep every direct path closed.
   "publishedAt": "<serverTimestamp>",
   "audience": "christian",
   "groupId": null,
+  "authorHash": null,
   "createdBy": "<actor-uid>",
-  "schemaVersion": 1
+  "schemaVersion": 2
 }
 ```
 
 * `groupId` — **null** = platform-wide, authored by a `ministry_owner`
   and visible to every signed-in user. **Set** = scoped to that group,
   authored by a leader of the group, visible only to its members.
-  Mirrors how `groups/{gid}/sermons/{sermonId}` works for sermons, but
-  kept as one flat collection so platform + group entries can be merged
+  Kept as one flat collection so platform + group entries can be merged
   into a single feed with a single Firestore query per scope (no
   per-group fan-out).
+* `authorHash` — set on group-scoped devotionals (where it's part of
+  the URL); null on platform-wide ones.
 * The merged feed `GET /api/devotionals` returns platform entries plus
   every devotional whose `groupId` is in the caller's membership set,
   joined with the group name for labelling.
@@ -731,8 +755,10 @@ keep every direct path closed.
   group-scoped entries → leader of that group or admin. The same role
   rules apply to patch/delete (resolved against the doc's `groupId`,
   not the request body).
-* Slugs are unique across the platform — a leader's choice of slug
-  collides with everyone else's. Pick narrow group-prefixed slugs.
+* Slug uniqueness namespace is the doc ID — `(scope, authorHash)`.
+  Two different leaders can both have a devotional titled "Psalm 23"
+  because their author hashes differ; the same leader writing the same
+  title twice gets `-2` appended.
 
 ## `feature_flags/{flagKey}` (T58, backend only)
 

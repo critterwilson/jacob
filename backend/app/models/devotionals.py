@@ -16,7 +16,17 @@ Audience = Literal["christian", "general"]
 
 
 class Devotional(BaseModel):
+    # The title-derived slug (e.g. "the-lord-is-my-shepherd"). Doesn't
+    # include the scope/author-hash prefix; combine with `path` for the
+    # full URL part.
     slug: str
+    # Canonical URL path segment under `/devotionals/`:
+    #   platform-wide → "org/<slug>"
+    #   group-scoped  → "group/<authorHash>/<slug>"
+    # Frontend constructs links as `/devotionals/${path}`. Legacy docs
+    # written before the rename still expose `path = slug` so the old
+    # `/devotionals/[slug]` route keeps resolving.
+    path: str
     title: str
     scriptureRef: str
     body: str
@@ -33,6 +43,11 @@ class Devotional(BaseModel):
     # entries and on responses where the group context is already
     # implied (e.g. /api/groups/{gid}/devotionals).
     groupName: str | None = None
+    # Stable, non-reversible 8-char base32 hash of the author's UID.
+    # Set on group-scoped devotionals (used as the second URL segment)
+    # and null on platform-wide ones.
+    authorHash: str | None = None
+    # 1 = legacy (slug-as-doc-ID); 2 = path-based (org__/group__ doc IDs).
     schemaVersion: int = 1
 
 
@@ -115,7 +130,9 @@ class MarkDayCompleteResponse(BaseModel):
 
 
 class DevotionalCreateRequest(BaseModel):
-    slug: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    # Slug is derived server-side from the title — the form no longer
+    # asks for one. On collision within the (scope, authorHash) doc-ID
+    # namespace, a numeric suffix is appended.
     title: str = Field(min_length=1, max_length=200)
     scriptureRef: str = Field(default="", max_length=200)
     body: str = Field(min_length=1, max_length=8000)

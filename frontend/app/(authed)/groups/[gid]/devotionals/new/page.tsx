@@ -49,7 +49,6 @@ export default function NewGroupDevotionalPage() {
     values: DevotionalFormValues,
   ): Promise<string | null> => {
     const res = await createDevotional({
-      slug: values.slug,
       title: values.title,
       scriptureRef: values.scriptureRef || undefined,
       body: values.body,
@@ -61,9 +60,11 @@ export default function NewGroupDevotionalPage() {
       // expose `groupId`. The backend enforces leader-of-this-group.
       groupId: gid,
     });
-    if (!res)
-      return "Failed to create devotional — the slug may already be taken.";
-    router.push(`/devotionals/${res.slug}`);
+    if (!res) return "Failed to create devotional.";
+    // Backend returns `path` like "group/<hash>/<slug>" — link straight
+    // to it. Group ID does not appear in the URL (per the new scheme:
+    // author is the namespacing dimension, not group).
+    router.push(`/devotionals/${res.path}`);
     return null;
   };
 

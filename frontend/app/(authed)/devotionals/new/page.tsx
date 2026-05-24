@@ -40,7 +40,6 @@ export default function NewDevotionalPage() {
     values: DevotionalFormValues,
   ): Promise<string | null> => {
     const res = await createDevotional({
-      slug: values.slug,
       title: values.title,
       scriptureRef: values.scriptureRef || undefined,
       body: values.body,
@@ -49,8 +48,9 @@ export default function NewDevotionalPage() {
       publishedAt: values.publishedAt || null,
       audience: values.audience,
     });
-    if (!res) return "Failed to create devotional — the slug may already be taken.";
-    router.push(`/devotionals/${res.slug}`);
+    if (!res) return "Failed to create devotional.";
+    // Backend returns `path` like "org/<slug>" — link straight to it.
+    router.push(`/devotionals/${res.path}`);
     return null;
   };
 

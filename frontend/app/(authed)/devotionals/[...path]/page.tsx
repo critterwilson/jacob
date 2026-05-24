@@ -15,9 +15,7 @@ import {
 } from "@/lib/hooks/useDevotionals";
 
 // Minimal markdown rendering: bold (**), italic (*), inline code (`),
-// blockquote (>), paragraphs. T53 will replace this with the shared
-// renderer; until then, the devotional body is treated as text with a
-// few escape sequences so the seed content reads cleanly.
+// blockquote (>), paragraphs.
 function renderMarkdown(body: string): JSX.Element[] {
   const blocks = body.split(/\n\n+/);
   return blocks.map((block, i) => {
@@ -74,10 +72,17 @@ function renderInline(text: string): JSX.Element[] {
 
 export default function DevotionalPage() {
   const params = useParams();
-  const slug = String(
-    Array.isArray(params?.slug) ? params.slug[0] : (params?.slug ?? ""),
-  );
-  const { devotional, loading } = useDevotional(slug);
+  // Catch-all `[...path]` route matches every shape under
+  // `/devotionals/`: legacy `<slug>`, platform `org/<slug>`, and group
+  // `group/<authorHash>/<slug>`. The path segments are stitched back
+  // together as the devotional's canonical path identifier.
+  const pathSegments = Array.isArray(params?.path)
+    ? params.path
+    : params?.path
+      ? [String(params.path)]
+      : [];
+  const devotionalPath = pathSegments.join("/");
+  const { devotional, loading } = useDevotional(devotionalPath || null);
   const claims = useRoleClaims();
   const { user } = useAuth();
   const { patchDevotional, deleteDevotional } = useDevotionalMutations();
@@ -117,16 +122,21 @@ export default function DevotionalPage() {
     );
   }
 
+  // Use the devotional's authoritative `path` for mutations so we hit
+  // the same backend route regardless of which URL shape the caller
+  // arrived on.
+  const mutationPath = devotional.path;
+
   const handleDelete = async () => {
     if (!confirm(`Delete "${devotional.title}"?`)) return;
-    const ok = await deleteDevotional(slug);
+    const ok = await deleteDevotional(mutationPath);
     if (ok) window.location.assign("/devotionals");
   };
 
   const handleEdit = async (
     values: DevotionalFormValues,
   ): Promise<string | null> => {
-    const res = await patchDevotional(slug, {
+    const res = await patchDevotional(mutationPath, {
       title: values.title,
       scriptureRef: values.scriptureRef || undefined,
       body: values.body,

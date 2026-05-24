@@ -50,9 +50,9 @@ export default function DevotionalsIndexPage() {
       ) : (
         <ul className="space-y-3">
           {devotionals.map((d) => (
-            <li key={d.slug}>
+            <li key={d.path}>
               <Link
-                href={`/devotionals/${d.slug}`}
+                href={`/devotionals/${d.path}`}
                 variant="muted"
                 className="block rounded-lg no-underline hover:no-underline focus:outline-none focus-visible:shadow-glow-gold"
               >

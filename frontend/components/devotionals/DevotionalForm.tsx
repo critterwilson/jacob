@@ -8,15 +8,10 @@ import { z } from "zod";
 import { Banner, Button, Input, Select, Textarea } from "@/components/ui";
 import { safeHttpUrl } from "@/lib/safeUrl";
 
-const slugPattern = /^[a-z0-9][a-z0-9-]*$/;
-
-const editFields = {
+const baseFields = {
   title: z.string().min(1, "Title is required").max(200, "Max 200 characters"),
   scriptureRef: z.string().max(200, "Max 200 characters").optional(),
-  body: z
-    .string()
-    .min(1, "Body is required")
-    .max(8000, "Max 8000 characters"),
+  body: z.string().min(1, "Body is required").max(8000, "Max 8000 characters"),
   audioUrl: z
     .string()
     .refine(
@@ -35,20 +30,11 @@ const editFields = {
   audience: z.enum(["christian", "general"]),
 };
 
-const baseSchema = z.object(editFields);
-
-export const devotionalCreateSchema = baseSchema.extend({
-  slug: z
-    .string()
-    .min(1, "Slug is required")
-    .max(80, "Max 80 characters")
-    .regex(
-      slugPattern,
-      "Lowercase letters, numbers, and hyphens only (must start with letter or digit)",
-    ),
-});
-
-export const devotionalEditSchema = baseSchema;
+// Slug is auto-derived from the title server-side, so create + edit use
+// the same schema. Kept as separate exports for callsites that still
+// distinguish the two modes.
+export const devotionalCreateSchema = z.object(baseFields);
+export const devotionalEditSchema = devotionalCreateSchema;
 
 export type DevotionalFormValues = z.infer<typeof devotionalCreateSchema>;
 
@@ -76,10 +62,9 @@ export function DevotionalForm({
     formState: { errors },
   } = useForm<DevotionalFormValues>({
     resolver: zodResolver(
-      mode === "create" ? devotionalCreateSchema : (devotionalEditSchema as typeof devotionalCreateSchema),
+      mode === "create" ? devotionalCreateSchema : devotionalEditSchema,
     ),
     defaultValues: {
-      slug: "",
       title: "",
       scriptureRef: "",
       body: "",
@@ -105,21 +90,15 @@ export function DevotionalForm({
       className="space-y-4"
       noValidate
     >
-      {mode === "create" && (
-        <Input
-          label="Slug"
-          required
-          placeholder="e.g. john-3-16-reflection"
-          helperText="URL identifier — lowercase letters, numbers, and hyphens"
-          error={errors.slug?.message}
-          {...register("slug")}
-        />
-      )}
-
       <Input
         label="Title"
         required
         placeholder="Devotional title"
+        helperText={
+          mode === "create"
+            ? "The URL is generated from the title."
+            : undefined
+        }
         error={errors.title?.message}
         {...register("title")}
       />
