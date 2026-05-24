@@ -59,16 +59,19 @@ firebase.initializeApp(${JSON.stringify(config)});
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function (payload) {
-  var title = (payload && payload.notification && payload.notification.title) || "JACOB";
-  var body = (payload && payload.notification && payload.notification.body) || "";
-  self.registration.showNotification(title, {
-    body: body,
-    icon: "/icons/icon-192x192.png",
-    badge: "/icons/badge-96x96.png",
-    tag: (payload && payload.collapseKey) || "jacob-push",
-  });
-});
+// Intentionally NOT registering onBackgroundMessage with a showNotification
+// call. The FCM SDK's internal push handler already auto-displays
+// notification-type payloads (everything we send today has a top-level
+// \`notification\` field — see functions/src/services/fcm.ts) using the
+// icon/badge/tag from the \`webpush.notification\` block. Registering our
+// own showNotification on top of that produced two notifications per
+// push on Christopher's iPhone (one from the SDK + one from this
+// handler).
+//
+// If we ever start sending data-only payloads (no \`notification\` field),
+// the SDK won't auto-display and we'll need to add a handler here that
+// branches on \`!payload.notification\`. Until then, leave this as the
+// sole display path.
 
 // ── App-shell caching ────────────────────────────────────────────────────
 

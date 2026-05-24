@@ -151,6 +151,14 @@ def _device_id_from_token(token: str) -> str:
     return digest[:16]
 
 
+def _device_id_from_installation(installation_id: str) -> str:
+    # Namespace-prefix the digest so an installationId-derived id can
+    # never accidentally collide with a token-derived id from a
+    # pre-migration registration.
+    digest = hashlib.sha256(("install:" + installation_id).encode("utf-8")).hexdigest()
+    return "i" + digest[:15]
+
+
 def _encode_cursor(created_at: datetime, doc_id: str) -> str:
     payload = f"{created_at.isoformat()}|{doc_id}".encode()
     return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
@@ -465,10 +473,59 @@ def register_device(
     db = get_firestore()
     devices_col = db.collection("users").document(user.uid).collection("devices")
 
-    # Dedupe: if this fcmToken already exists for the user, return the
-    # existing deviceId rather than spawn a duplicate doc. The original
-    # client logic hashed the token to derive a stable id so duplicates
-    # were already collapsed; the backend matches that contract.
+    # Preferred dedup path — Firebase Installations ID is stable per
+    # browser install across FCM token rotations, so the same physical
+    # install collapses onto a single doc no matter how many times the
+    # token rotates (SW updates, PWA reinstalls, iOS subscription
+    # churn). Without this, every rotation spawned a fresh device doc
+    # and fan-out would FCM-send to every stale token in parallel,
+    # producing duplicate notifications on a single physical device.
+    if body.installationId is not None:
+        existing = list(
+            devices_col.where("installationId", "==", body.installationId).limit(1).stream()
+        )
+        if existing:
+            snap = existing[0]
+            snap.reference.update(
+                {
+                    "fcmToken": body.fcmToken,
+                    "platform": body.platform,
+                    "userAgent": body.userAgent,
+                    "appVersion": body.appVersion,
+                    "lastSeenAt": fb_firestore.SERVER_TIMESTAMP,
+                }
+            )
+            registered = _ts_to_dt((snap.to_dict() or {}).get("createdAt")) or datetime.now(UTC)
+            return DeviceResponse(deviceId=snap.id, registeredAt=registered)
+
+        # First time this install has registered. Create the new doc,
+        # then sweep any pre-migration device docs for this user that
+        # lack an installationId — those are stale orphans left over
+        # from the old token-only dedup path (e.g. Christopher's
+        # duplicate iPhone docs that produced the original symptom).
+        # We only delete docs missing the installationId field, so a
+        # legitimate second physical device that has already migrated
+        # is never touched.
+        device_id = _device_id_from_installation(body.installationId)
+        now = datetime.now(UTC)
+        devices_col.document(device_id).set(
+            {
+                "fcmToken": body.fcmToken,
+                "platform": body.platform,
+                "userAgent": body.userAgent,
+                "appVersion": body.appVersion,
+                "installationId": body.installationId,
+                "createdAt": fb_firestore.SERVER_TIMESTAMP,
+                "lastSeenAt": fb_firestore.SERVER_TIMESTAMP,
+            }
+        )
+        _sweep_legacy_devices_without_installation_id(devices_col, keep_id=device_id)
+        return DeviceResponse(deviceId=device_id, registeredAt=now)
+
+    # ── Legacy path (back-compat): pre-installationId clients ────────
+    # Dedup by fcmToken — incorrect across token rotations but no worse
+    # than before this PR. Will be removed once every client has shipped
+    # the installationId send.
     existing = list(devices_col.where("fcmToken", "==", body.fcmToken).limit(1).stream())
     if existing:
         snap = existing[0]
@@ -489,6 +546,29 @@ def register_device(
         }
     )
     return DeviceResponse(deviceId=device_id, registeredAt=now)
+
+
+def _sweep_legacy_devices_without_installation_id(devices_col: Any, *, keep_id: str) -> None:
+    """One-shot migration: drop pre-`installationId` device docs for the
+    user once they've registered an installation-id-bearing device.
+
+    Pre-installationId docs are dedupe-keyed by fcmToken value, which
+    means every token rotation spawned a fresh doc. Now that the user
+    has registered with a stable identifier, the old docs are
+    duplicates of the same physical install. Deleting them stops the
+    fan-out from sending to multiple tokens for one phone.
+
+    The sweep is conservative: it only deletes docs that have NO
+    `installationId` field, so a second physical device that has
+    already migrated is unaffected.
+    """
+    for snap in devices_col.stream():
+        if snap.id == keep_id:
+            continue
+        data = snap.to_dict() or {}
+        if "installationId" in data:
+            continue
+        snap.reference.delete()
 
 
 @router.delete("/devices/{device_id}", status_code=status.HTTP_204_NO_CONTENT)  # noqa: not-banned

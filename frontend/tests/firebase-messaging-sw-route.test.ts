@@ -57,11 +57,20 @@ describe("GET /firebase-messaging-sw.js", () => {
     }
   });
 
-  it("calls firebase.messaging() and registers onBackgroundMessage", async () => {
+  it("calls firebase.messaging() so the SDK's auto-display push handler is registered", async () => {
     const { body } = await fetchSw();
     expect(body).toMatch(/firebase\.messaging\(\)/);
-    expect(body).toMatch(/onBackgroundMessage\s*\(/);
-    expect(body).toMatch(/showNotification\s*\(/);
+  });
+
+  it("does NOT call showNotification from onBackgroundMessage", async () => {
+    // The FCM SDK already auto-displays payloads that contain a top-
+    // level `notification` field (every kind we send today — see
+    // functions/src/services/fcm.ts). If our own onBackgroundMessage
+    // also calls showNotification, the user sees two banners per
+    // push. Pin the invariant that this SW does not add a second
+    // display path on top of the SDK's.
+    const { body } = await fetchSw();
+    expect(body).not.toMatch(/showNotification\s*\(/);
   });
 
   it("inlines the per-environment projectId", async () => {

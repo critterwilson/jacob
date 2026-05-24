@@ -162,6 +162,14 @@ class RegisterDeviceRequest(BaseModel):
     platform: Literal["web", "ios", "android"]
     userAgent: str = Field(max_length=256, default="")
     appVersion: str | None = None
+    # Firebase Installations ID — stable per browser install across FCM
+    # token rotations. When present the backend dedupes by this field
+    # instead of `fcmToken`, so the same physical install maps to one
+    # device doc no matter how many times the token rotates (e.g. SW
+    # updates, PWA reinstalls). Optional for back-compat with older
+    # clients still in the wild; those keep the legacy token-based
+    # dedup path.
+    installationId: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class DeviceResponse(BaseModel):

@@ -33,6 +33,12 @@ type RegisterDeviceRequest = {
   platform: "web" | "ios" | "android";
   userAgent: string;
   appVersion: string | null;
+  // Firebase Installations ID — stable per browser install (across token
+  // rotations). The backend uses this to dedupe: a single physical
+  // browser install should map to exactly one device doc regardless of
+  // how many times the FCM token rotates. Optional for back-compat
+  // with older clients still in the wild.
+  installationId?: string;
 };
 
 type DeviceResponse = {
@@ -84,6 +90,21 @@ export async function registerPushToken(uid: string): Promise<string | null> {
     return null;
   }
 
+  // Firebase Installations ID — stable per browser install. The FCM
+  // token rotates every time the browser re-subscribes (e.g. after a
+  // SW update), which used to spawn a new device doc per rotation
+  // and produce duplicate notifications. Sending the installationId
+  // lets the backend collapse all token rotations onto a single doc.
+  // Best-effort: a failure here just falls back to the legacy
+  // fcmToken-based dedup, which is incorrect but no worse than before.
+  let installationId: string | undefined;
+  try {
+    const { getInstallations, getId } = await import("firebase/installations");
+    installationId = await getId(getInstallations(app));
+  } catch (err) {
+    console.warn("[push] installations getId failed (falling back to legacy dedup):", err);
+  }
+
   try {
     const res = await apiPost<DeviceResponse, RegisterDeviceRequest>(
       "/api/users/me/devices",
@@ -92,6 +113,7 @@ export async function registerPushToken(uid: string): Promise<string | null> {
         platform: "web",
         userAgent: navigator.userAgent.slice(0, 256),
         appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
+        ...(installationId ? { installationId } : {}),
       },
     );
     return res.deviceId;
