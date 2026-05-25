@@ -216,6 +216,82 @@ def test_daily_verse_404_when_doc_missing() -> None:
     assert res.json()["error"]["details"] == {"day": "2026-05-03"}
 
 
+def _verse_db_with_fallback(today_snap: MagicMock, fallback_snap: MagicMock) -> MagicMock:
+    """Mock DB that returns `today_snap` for .document(today).get() and
+    `fallback_snap` (its .id + .to_dict()) from .order_by().limit().stream()."""
+    coll = MagicMock()
+    coll.document.return_value.get.return_value = today_snap
+    coll.order_by.return_value.limit.return_value.stream.return_value = iter([fallback_snap])
+    db = MagicMock()
+    db.collection.return_value = coll
+    return db
+
+
+def test_daily_verse_falls_back_to_most_recent_when_today_missing() -> None:
+    """When the default no-day call lands during the 00:00–07:00 UTC window
+    before the daily job has written today's doc, the endpoint must return
+    the most recent doc with 200 instead of 404 — otherwise the frontend
+    hides the verse panel for the entire US evening."""
+    today_missing = _verse_doc_snap(exists=False)
+    fallback = MagicMock()
+    fallback.id = "2026-05-24"
+    fallback.to_dict.return_value = {
+        "reference": "1 Peter 2:9",
+        "translation": "KJV",
+        "text": "But you are a chosen race…",
+        "source": "bible-api.com",
+    }
+    db = _verse_db_with_fallback(today_missing, fallback)
+    with patch("app.routers.verse.get_firestore", return_value=db):
+        client = TestClient(_verse_app())
+        res = client.get("/api/daily-verse", headers={"Authorization": "Bearer t"})
+
+    assert res.status_code == 200
+    body = res.json()
+    # The response carries the *fallback's* real day so the client can show
+    # it accurately, not today's date.
+    assert body["day"] == "2026-05-24"
+    assert body["reference"] == "1 Peter 2:9"
+    assert body["translation"] == "KJV"
+    # Confirm the fallback path was actually exercised.
+    db.collection.return_value.order_by.assert_called_once()
+
+
+def test_daily_verse_404_when_collection_empty() -> None:
+    """Cold-start: no docs at all → 404 (only condition under which the
+    no-day path may still 404)."""
+    today_missing = _verse_doc_snap(exists=False)
+    coll = MagicMock()
+    coll.document.return_value.get.return_value = today_missing
+    coll.order_by.return_value.limit.return_value.stream.return_value = iter([])
+    db = MagicMock()
+    db.collection.return_value = coll
+    with patch("app.routers.verse.get_firestore", return_value=db):
+        client = TestClient(_verse_app())
+        res = client.get("/api/daily-verse", headers={"Authorization": "Bearer t"})
+    assert res.status_code == 404
+    assert res.json()["error"]["code"] == "verse_not_found"
+
+
+def test_daily_verse_explicit_day_still_404s_when_missing() -> None:
+    """Explicit ?day=... lookups remain strict: missing → 404 (no fallback).
+    Historical queries are deliberate, so missing means missing."""
+    today_missing = _verse_doc_snap(exists=False)
+    fallback = MagicMock()
+    fallback.id = "2026-05-24"
+    fallback.to_dict.return_value = {"reference": "Psalm 23:1"}
+    db = _verse_db_with_fallback(today_missing, fallback)
+    with patch("app.routers.verse.get_firestore", return_value=db):
+        client = TestClient(_verse_app())
+        res = client.get(
+            "/api/daily-verse?day=2024-01-15",
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 404
+    # Crucially, the fallback path must NOT be touched for explicit-day queries.
+    db.collection.return_value.order_by.assert_not_called()
+
+
 def test_daily_verse_requires_auth() -> None:
     client = TestClient(_verse_app(authed=False))
     res = client.get("/api/daily-verse")
