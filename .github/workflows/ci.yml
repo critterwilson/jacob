@@ -127,14 +127,14 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 14
       - name: Upload frontend server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-server-log
           path: frontend-server.log
