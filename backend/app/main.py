@@ -44,7 +44,6 @@ from app.routers import (
     unfurl,
     uploads,
     users,
-    verse,
     watch,
     wellbeing,
 )
@@ -169,7 +168,6 @@ app.include_router(discover.router)
 app.include_router(boards.router)
 app.include_router(stickers.router)
 app.include_router(users.router)
-app.include_router(verse.router)
 app.include_router(flags.router)
 app.include_router(flags.admin_router)
 app.include_router(orgs.router)

@@ -152,7 +152,7 @@ jobs:
         # step, and scheduled jobs are independently created/destroyed.
         run: |
           IMAGE="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/jacob-images/jacob-backend:${{ github.sha }}"
-          for job in firestore-export finalize-deletions firestore-to-bigquery cleanup-stale-devices daily-verse weekly-digest process-export-jobs; do
+          for job in firestore-export finalize-deletions firestore-to-bigquery cleanup-stale-devices weekly-digest process-export-jobs; do
             if gcloud run jobs describe "$job" --region us-central1 --project "${{ secrets.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
               echo "Updating $job → $IMAGE"
               gcloud run jobs update "$job" \

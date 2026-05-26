@@ -41,7 +41,6 @@ groups/{gid}/sermons/{sermonId}                 # T52 — sermon archive
 
 # Platform content
 stickers/{stickerId}
-daily_verse/{date}                              # T33 — daily Bible verse
 devotionals/{docId}                             # T51 — flat; docId encodes scope: `org__<slug>` or `group__<authorHash>__<slug>`
 reading_plans/{slug}                            # T51
 

@@ -72,18 +72,6 @@ vi.mock("@/lib/hooks/useDeletionStatus", () => ({
   useDeletionStatus: () => ({ pending: false, finalizeAt: null, keepBody: true }),
 }));
 
-vi.mock("@/lib/hooks/useDailyVerse", () => ({
-  useDailyVerse: () => ({
-    verse: {
-      reference: "John 3:16",
-      translation: "KJV",
-      text: "For God so loved the world.",
-      source: "bible-api.com",
-    },
-    loading: false,
-  }),
-}));
-
 // ── home-surface section hooks ────────────────────────────────────────────────
 
 type PlanTodayMock = {
@@ -618,10 +606,8 @@ describe("HomePage", () => {
     expect(screen.getAllByText("Youth Group").length).toBeGreaterThan(0);
   });
 
-  it("renders all composed sections — verse, plan, devotional, groups, activity, ministry, browse", () => {
+  it("renders all composed sections — plan, devotional, groups, activity, ministry, browse", () => {
     render(<HomePage />);
-    // Verse (from DailyVerse mock)
-    expect(screen.getByText(/For God so loved the world/i)).toBeInTheDocument();
     // Reading plan section
     expect(screen.getByText(/Psalms in 21 days/)).toBeInTheDocument();
     expect(screen.getByText(/Day 3 of 21/)).toBeInTheDocument();

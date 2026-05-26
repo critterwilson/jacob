@@ -1,5 +1,5 @@
 /**
- * Cloud Scheduler jobs (M4, T29, T33, T34, T35, T38).
+ * Cloud Scheduler jobs (M4, T29, T34, T35, T38).
  *
  * Replaces the hand-created scheduler jobs that previously ran as the
  * default Compute SA. Each job uses a dedicated identity and has
@@ -16,7 +16,6 @@
  *   finalize_deletions     — daily 03:30
  *   firestore_to_bigquery  — daily 04:30 (after export completes, T29)
  *   cleanup_stale_devices  — daily 05:00 (prune FCM tokens idle >60d, T34)
- *   daily_verse            — daily 07:00 (Bible verse cache, T33)
  *   weekly_digest          — Sundays 16:00 (email digest, T35)
  *   process_export_jobs    — every 5 min (GDPR DSAR processor, T38)
  */
@@ -189,68 +188,6 @@ resource "google_cloud_scheduler_job" "firestore_to_bigquery" {
   depends_on = [
     google_project_iam_member.scheduler_analytics_run_invoker,
     google_cloud_run_v2_job.firestore_to_bigquery,
-  ]
-}
-
-# ── daily-verse (T33, 07:00 UTC) ─────────────────────────────────────────────
-
-variable "daily_verse_job_name" {
-  description = "Cloud Run Job name for the daily Bible verse fetcher."
-  type        = string
-  default     = "daily-verse"
-}
-
-locals {
-  scheduler_run_invoke_url_daily_verse = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.daily_verse_job_name}:run"
-}
-
-resource "google_service_account" "jacob_scheduler_daily_verse" {
-  project      = var.project_id
-  account_id   = "jacob-scheduler-daily-verse"
-  display_name = "JACOB Cloud Scheduler — daily-verse invoker"
-}
-
-resource "google_project_iam_member" "scheduler_daily_verse_run_invoker" {
-  project = var.project_id
-  role    = "roles/run.invoker"
-  member  = "serviceAccount:${google_service_account.jacob_scheduler_daily_verse.email}"
-
-  condition {
-    title       = "only daily-verse Cloud Run job"
-    description = "Restrict run.invoker to the daily-verse job."
-    expression  = "resource.name.endsWith(\"/${var.daily_verse_job_name}\")"
-  }
-}
-
-resource "google_cloud_scheduler_job" "daily_verse" {
-  name        = "daily-verse"
-  project     = var.project_id
-  region      = var.scheduler_region
-  description = "Fetch today's Bible verse and cache it in Firestore (07:00 UTC)."
-  schedule    = "0 7 * * *"
-  time_zone   = "Etc/UTC"
-
-  retry_config {
-    retry_count          = 1
-    max_retry_duration   = "0s"
-    min_backoff_duration = "60s"
-    max_backoff_duration = "3600s"
-    max_doublings        = 5
-  }
-
-  http_target {
-    http_method = "POST"
-    uri         = local.scheduler_run_invoke_url_daily_verse
-
-    oauth_token {
-      service_account_email = google_service_account.jacob_scheduler_daily_verse.email
-      scope                 = local.scheduler_run_oauth_scope
-    }
-  }
-
-  depends_on = [
-    google_project_iam_member.scheduler_daily_verse_run_invoker,
-    google_cloud_run_v2_job.daily_verse,
   ]
 }
 

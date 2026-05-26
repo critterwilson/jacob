@@ -92,19 +92,11 @@ def _make_db(*, gids: list[str] | None = None) -> MagicMock:
     groups_col.stream.return_value = iter(group_snaps)
     groups_col.document.side_effect = _groups_doc
 
-    # daily_verse (not exists by default)
-    verse_snap = MagicMock()
-    verse_snap.exists = False
-    verse_col = MagicMock()
-    verse_col.document.return_value.get.return_value = verse_snap
-
     def _collection(name: str) -> MagicMock:
         if name == "users":
             return users_col
         if name == "groups":
             return groups_col
-        if name == "daily_verse":
-            return verse_col
         return MagicMock()
 
     db.collection.side_effect = _collection
