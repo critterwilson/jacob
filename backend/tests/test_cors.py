@@ -24,7 +24,7 @@ client = TestClient(app)
 
 def _preflight(origin: str) -> httpx.Response:
     return client.options(
-        "/api/daily-verse",
+        "/api/incidents",
         headers={
             "Origin": origin,
             "Access-Control-Request-Method": "GET",

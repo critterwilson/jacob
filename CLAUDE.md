@@ -62,7 +62,7 @@ JACOB is a small-group messaging web app for Christian small groups. The fronten
 │   └── tests/              # @firebase/rules-unit-testing — required for every rule change
 ├── infra/
 │   ├── *.tf                # Terraform: Cloud Run, BigQuery, buckets, scheduler, WIF, …
-│   ├── scheduled/          # Cloud Run Job entrypoints (firestore_to_bigquery, finalize_deletions, daily_verse, weekly_digest, …)
+│   ├── scheduled/          # Cloud Run Job entrypoints (firestore_to_bigquery, finalize_deletions, weekly_digest, …)
 │   ├── scripts/            # one-shot ops scripts (e.g. reindex_messages.py)
 │   ├── seed/               # data-seed jobs
 │   └── bigquery/           # views.sql
@@ -89,7 +89,7 @@ The pre-M6 "trust the client when possible" rule no longer applies. Firestore cl
 
 ### Collection layout
 
-The canonical schema lives in **[docs/data-model.md](docs/data-model.md)**. Read it before adding a collection or field. The data model has grown well beyond the original Phase 1 set — it now includes `users/{uid}/{mutes,blocks,devices,notifications,notificationPrefs,exports,plan_progress}` subcollections; org-tier collections (`orgs/`, `orgs/{orgId}/{admins,members,invites}`, `org_slugs/`, `org_consent_tokens/`, `domain_claims/`); cross-group boards (`boards/{boardId}/posts/{postId}/{replies,reactions/{slug}/users/{uid}}`); per-message reactions and pinning; per-group `events/{eid}/rsvps/{uid}`; idempotency markers (`_events`, `_reaction_events`, `_index_events`, `_post_events`, `_reply_events`, `_member_events`); search/moderation state collections; feature flags (`feature_flags/`); incident banners (`active_incidents/`); ban appeals; transparency reports; daily verse; NCMEC cases; and several backend-only stores. Do not invent new collections without an ADR — schema changes require a `firestore.rules` and `firestore.indexes.json` update in the same PR.
+The canonical schema lives in **[docs/data-model.md](docs/data-model.md)**. Read it before adding a collection or field. The data model has grown well beyond the original Phase 1 set — it now includes `users/{uid}/{mutes,blocks,devices,notifications,notificationPrefs,exports,plan_progress}` subcollections; org-tier collections (`orgs/`, `orgs/{orgId}/{admins,members,invites}`, `org_slugs/`, `org_consent_tokens/`, `domain_claims/`); cross-group boards (`boards/{boardId}/posts/{postId}/{replies,reactions/{slug}/users/{uid}}`); per-message reactions and pinning; per-group `events/{eid}/rsvps/{uid}`; idempotency markers (`_events`, `_reaction_events`, `_index_events`, `_post_events`, `_reply_events`, `_member_events`); search/moderation state collections; feature flags (`feature_flags/`); incident banners (`active_incidents/`); ban appeals; transparency reports; NCMEC cases; and several backend-only stores. Do not invent new collections without an ADR — schema changes require a `firestore.rules` and `firestore.indexes.json` update in the same PR.
 
 ### Querying
 

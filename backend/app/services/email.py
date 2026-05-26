@@ -260,7 +260,6 @@ def send_weekly_digest(
         "top_stickers": payload.top_stickers,
         "missed_replies": payload.missed_replies,
         "new_members": payload.new_members,
-        "today_verse": payload.today_verse,
         "groups": payload.groups,
         "quiet_week": payload.quiet_week,
     }

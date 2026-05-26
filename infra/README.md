@@ -46,7 +46,6 @@ default Compute Engine SA is **not** used by any JACOB workload.
 | `jacob-scheduler-export@${project}.iam.gserviceaccount.com`     | OIDC identity — Cloud Scheduler firestore-export job          |
 | `jacob-scheduler-deletions@${project}.iam.gserviceaccount.com`  | OIDC identity — Cloud Scheduler finalize-deletions job        |
 | `jacob-scheduler-analytics@${project}.iam.gserviceaccount.com`  | OIDC identity — Cloud Scheduler firestore-to-bigquery job (T29)|
-| `jacob-scheduler-daily-verse@${project}.iam.gserviceaccount.com`| OIDC identity — Cloud Scheduler daily-verse job (T33)         |
 | `jacob-scheduler-weekly-digest@${project}.iam.gserviceaccount.com` | OIDC identity — Cloud Scheduler weekly-digest job (T35)    |
 | `jacob-scheduler-exports@${project}.iam.gserviceaccount.com`    | OIDC identity — Cloud Scheduler process-export-jobs job (T38) |
 | `jacob-cleanup-devices@${project}.iam.gserviceaccount.com`      | OIDC identity — Cloud Scheduler cleanup-stale-devices job (T34) |
@@ -58,7 +57,7 @@ emits each email as a Terraform output.
 project-wide `roles/iam.serviceAccountUser` so it can act-as any of the
 runtime SAs at deploy time.
 
-## Cloud Scheduler jobs (M4, T29, T33, T34, T35, T38)
+## Cloud Scheduler jobs (M4, T29, T34, T35, T38)
 
 `scheduler.tf` defines the Cloud Scheduler trigger for each scheduled task;
 `cloud-run-jobs.tf` defines the underlying `google_cloud_run_v2_job` that
@@ -71,7 +70,6 @@ with `roles/run.invoker` scoped to that job only (IAM condition).
 | `finalize-deletions-daily`      | daily 03:30     | `finalize-deletions`        | M4   |
 | `firestore-to-bigquery-daily`   | daily 04:30     | `firestore-to-bigquery`     | T29  |
 | `cleanup-stale-devices-daily`   | daily 05:00     | `cleanup-stale-devices`     | T34  |
-| `daily-verse`                   | daily 07:00     | `daily-verse`               | T33  |
 | `weekly-digest`                 | Sundays 16:00   | `weekly-digest`             | T35  |
 | `process-export-jobs-5min`      | every 5 min     | `process-export-jobs`       | T38  |
 

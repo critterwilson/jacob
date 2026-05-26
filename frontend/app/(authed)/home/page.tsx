@@ -3,7 +3,6 @@
 import Link from "next/link";
 
 import { ContinueReadingPlan } from "@/components/home/ContinueReadingPlan";
-import { DailyVerse } from "@/components/home/DailyVerse";
 import { MinistryHighlights } from "@/components/home/MinistryHighlights";
 import { RecentActivity } from "@/components/home/RecentActivity";
 import { TodayDevotional } from "@/components/home/TodayDevotional";
@@ -79,14 +78,6 @@ export default function HomePage() {
       <Heading level={1} size="md">
         Welcome{user?.displayName ? `, ${user.displayName}` : ""}
       </Heading>
-
-      {/* Section 1 — Today's verse. Anchors the page with scripture. */}
-      <section aria-labelledby="home-verse-heading">
-        <h2 id="home-verse-heading" className="sr-only">
-          Verse of the day
-        </h2>
-        <DailyVerse />
-      </section>
 
       {/* Section 2 — Continue reading plan. Sequential + has a streak,
        *  so it's the highest-action surface on the page. */}

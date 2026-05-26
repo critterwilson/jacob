@@ -1,5 +1,5 @@
 /**
- * Cloud Run Jobs for every scheduled background task (M4, T29, T33–T35, T38).
+ * Cloud Run Jobs for every scheduled background task (M4, T29, T34, T35, T38).
  *
  * scheduler.tf already defines a `google_cloud_scheduler_job` per cadence and
  * an OIDC-scoped invoker SA per job. Until this file landed, the underlying
@@ -27,8 +27,8 @@
  *
  * To bring an existing job into Terraform state without disruption:
  *
- *     terraform import google_cloud_run_v2_job.daily_verse \
- *       projects/${PROJECT_ID}/locations/us-central1/jobs/daily-verse
+ *     terraform import google_cloud_run_v2_job.weekly_digest \
+ *       projects/${PROJECT_ID}/locations/us-central1/jobs/weekly-digest
  */
 
 variable "cloudrun_jobs_region" {
@@ -271,50 +271,6 @@ resource "google_cloud_run_v2_job" "cleanup_stale_devices" {
   }
 }
 
-# ── daily-verse (T33, daily 07:00 UTC) ───────────────────────────────────────
-
-resource "google_cloud_run_v2_job" "daily_verse" {
-  name     = var.daily_verse_job_name
-  location = var.cloudrun_jobs_region
-  project  = var.project_id
-
-  template {
-    template {
-      service_account = google_service_account.jacob_api.email
-      timeout         = var.cloudrun_job_task_timeout
-      max_retries     = 1
-
-      containers {
-        image   = var.cloudrun_jobs_image
-        command = ["python", "/app/scheduled/daily_verse.py"]
-
-        resources {
-          limits = {
-            cpu    = var.cloudrun_job_cpu
-            memory = var.cloudrun_job_memory
-          }
-        }
-
-        dynamic "env" {
-          for_each = local.cloudrun_job_common_env
-          content {
-            name  = env.key
-            value = env.value
-          }
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].template[0].containers[0].image,
-      client,
-      client_version,
-    ]
-  }
-}
-
 # ── weekly-digest (T35, Sundays 16:00 UTC) ───────────────────────────────────
 
 resource "google_cloud_run_v2_job" "weekly_digest" {
@@ -431,7 +387,6 @@ output "cloud_run_job_names" {
     google_cloud_run_v2_job.finalize_deletions.name,
     google_cloud_run_v2_job.firestore_to_bigquery.name,
     google_cloud_run_v2_job.cleanup_stale_devices.name,
-    google_cloud_run_v2_job.daily_verse.name,
     google_cloud_run_v2_job.weekly_digest.name,
     google_cloud_run_v2_job.process_export_jobs.name,
   ]

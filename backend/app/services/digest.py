@@ -1,7 +1,7 @@
 """Weekly email digest assembly (T35).
 
 Reads the user's group list, queries BigQuery for trailing-7-day stats,
-fetches today's Bible verse from Firestore, and returns a DigestPayload.
+and returns a DigestPayload.
 
 When `JACOB_DIGEST_ENABLED=false` (default), assembly raises
 `DigestDisabledError` so the job exits cleanly without BigQuery calls.
@@ -49,7 +49,6 @@ class DigestPayload:
     top_stickers: list[StickerUsage]
     missed_replies: int
     new_members: int
-    today_verse: dict[str, str] | None
     groups: list[GroupSummary]
     quiet_week: bool
 
@@ -168,18 +167,6 @@ def assemble_user_payload(
                 if m.get("authorUid") != uid:
                     missed_replies += 1
 
-    # Today's verse.
-    today_str = now.strftime("%Y-%m-%d")
-    verse_snap = db.collection("daily_verse").document(today_str).get()
-    today_verse: dict[str, str] | None = None
-    if verse_snap.exists:
-        v = verse_snap.to_dict() or {}
-        today_verse = {
-            "reference": str(v.get("reference", "")),
-            "text": str(v.get("text", "")),
-            "translation": str(v.get("translation", "KJV")),
-        }
-
     quiet_week = not any(g.top_stickers or g.new_members for g in groups) and missed_replies == 0
 
     return DigestPayload(
@@ -189,7 +176,6 @@ def assemble_user_payload(
         top_stickers=top_stickers_global,
         missed_replies=missed_replies,
         new_members=total_new_members,
-        today_verse=today_verse,
         groups=groups,
         quiet_week=quiet_week,
     )

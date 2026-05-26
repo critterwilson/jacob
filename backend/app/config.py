@@ -67,11 +67,6 @@ class Settings(BaseSettings):
     # T64 — appeals self-review override (test/dev only, see services/appeals.py).
     jacob_allow_self_appeal_review: bool = False
 
-    # T33 — Bible verse feed
-    bible_api_base: str = "https://bible-api.com"
-    jacob_verse_translation: str = "kjv"
-    jacob_verse_disabled: bool = False
-
     # T35 — Weekly digest + one-click unsubscribe
     # HS256 secret for unsubscribe JWT tokens (Secret Manager in prod).
     jwt_unsubscribe_secret: str = ""
