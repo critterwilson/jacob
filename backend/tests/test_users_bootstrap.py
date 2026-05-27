@@ -456,6 +456,22 @@ def test_update_profile_rejects_extra_keys() -> None:
     assert res.status_code == 422
 
 
+def test_update_profile_rejects_self_minor_flip() -> None:
+    """ADR 0015 safety: a user cannot flip their own `isMinor` flag.
+
+    Regression test for OPUS_REVIEW.md § P0-1. Previously this PATCH
+    was accepted and the public flag was written, letting a truthfully-
+    onboarded minor bypass every owner-escalation gate. The model now
+    treats `isMinor` as an unknown key (extra=forbid).
+    """
+    user = CurrentUser(uid="alice", claims={})
+    client = TestClient(_app(authed_user=user))
+    res = client.patch("/api/users/me", json={"isMinor": False})
+    assert res.status_code == 422
+    # Same handling as any other unknown key — no special error code,
+    # just rejected at the pydantic boundary.
+
+
 def test_update_profile_empty_body_422() -> None:
     user_ref = MagicMock()
     user_ref.get.return_value = _user_snap(exists=True, data={"displayName": "Alice"})

@@ -80,13 +80,19 @@ class UpdateProfileRequest(BaseModel):
     All fields optional — only supplied keys are written. Pydantic's
     `extra=forbid` enforces the rules `changedKeys().hasOnly([...])`
     predicate.
+
+    `isMinor` is deliberately NOT on this surface (ADR 0015 safety).
+    The flag is computed from DOB at onboarding and only the platform
+    owner has a legitimate reason to change it post-signup (e.g. a
+    minor's account being corrected on review). A self-PATCH used to
+    let a truthfully-onboarded minor flip the flag to false and bypass
+    every owner-escalation gate; see OPUS_REVIEW.md § P0-1.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     displayName: str | None = Field(default=None, min_length=1, max_length=100)
     photoURL: HttpUrl | None = None
-    isMinor: bool | None = None
     # T61 — locale opt-in. ISO 639-1 (lowercase) optionally suffixed
     # with a region (e.g. `es`, `en-US`). Validation kept narrow at
     # the model boundary; the i18n resolver normalises further.

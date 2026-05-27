@@ -29,7 +29,7 @@ USER app
 ENV PORT=8080
 # Scheduled-job scripts at /app/scheduled/*.py import `from app.services …`
 # but Python only puts the script's own directory on sys.path. Pin /app so
-# `python /app/scheduled/daily_verse.py` can resolve the `app` package.
+# `python /app/scheduled/finalize_deletions.py` can resolve the `app` package.
 # Harmless for the API: uvicorn already imports app.main via WORKDIR.
 ENV PYTHONPATH=/app
 EXPOSE $PORT

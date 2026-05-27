@@ -382,8 +382,6 @@ def update_profile(
     if "photoURL" in supplied:
         url = supplied["photoURL"]
         update["photoURL"] = str(url) if url is not None else None
-    if "isMinor" in supplied:
-        update["isMinor"] = bool(supplied["isMinor"])
     if "locale" in supplied:
         update["locale"] = supplied["locale"]
     if "phone" in supplied:
