@@ -46,7 +46,6 @@ def main() -> int:
     deleted = 0
     errors = 0
 
-    users_ref = db.collection("users")
     # Collection-group query requires a composite index; see firestore.indexes.json.
     stale_query = db.collection_group("devices").where(
         "lastSeenAt", "<", cutoff

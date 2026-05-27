@@ -171,7 +171,18 @@ def create_join_request(
 
     join_mode = group.get("joinMode") or "open"
 
-    if join_mode == "open":
+    # ADR 0015 safety — load-bearing: minors MUST NOT self-join, even
+    # into open-mode groups. A leader picking joinMode="open" is
+    # vouching for adult walk-ins; it is not a parental-consent waiver.
+    # The minor branch always lands in the owner-escalation queue
+    # regardless of joinMode, mirroring the invite-consume minor path
+    # in groups.py:join_group. See OPUS_REVIEW.md § P0-2.
+    user_snap = db.collection("users").document(user.uid).get()
+    raw_user_data = user_snap.to_dict() if getattr(user_snap, "exists", False) else None
+    user_data = raw_user_data if isinstance(raw_user_data, dict) else {}
+    is_minor = bool(user_data.get("isMinor", False))
+
+    if join_mode == "open" and not is_minor:
         # Transparent join inside a transaction so the cap check and
         # memberCount increment are atomic.
         group_ref = db.collection("groups").document(gid)
@@ -213,7 +224,8 @@ def create_join_request(
         logger.info("join_group uid=%s gid=%s mode=open", user.uid, gid)
         return JoinResponse(gid=gid, joined=True)
 
-    # request mode — check for existing pending request (idempotent).
+    # request mode (or open-mode for a minor, escalated per ADR 0015):
+    # check for existing pending request (idempotent).
     existing_snap = (
         db.collection("groups").document(gid).collection("joinRequests").document(user.uid).get()
     )
@@ -227,15 +239,12 @@ def create_join_request(
                 requiresOwnerReview=bool(existing.get("requiresOwnerReview")),
             )
 
-    # ADR 0015: minors escalate to the owner queue. Read isMinor from
-    # the user doc (set at onboarding time) and denormalise it onto the
-    # join-request so the owner CG query doesn't need to re-fetch every
-    # user. The leader-facing list endpoint hides `requiresOwnerReview`
-    # rows; the leader approve endpoint refuses them.
-    user_snap = db.collection("users").document(user.uid).get()
-    raw_user_data = user_snap.to_dict() if getattr(user_snap, "exists", False) else None
-    user_data = raw_user_data if isinstance(raw_user_data, dict) else {}
-    is_minor = bool(user_data.get("isMinor", False))
+    # ADR 0015: minors escalate to the owner queue. `is_minor` was
+    # already read above for the joinMode == "open" minor-escalation
+    # branch; denormalise it onto the join-request so the owner CG
+    # query doesn't need to re-fetch every user. The leader-facing
+    # list endpoint hides `requiresOwnerReview` rows; the leader
+    # approve endpoint refuses them.
 
     # Write join request.
     db.collection("groups").document(gid).collection("joinRequests").document(user.uid).set(

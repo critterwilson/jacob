@@ -69,15 +69,25 @@ def _owner_app(uid: str = "owner") -> FastAPI:
     return app
 
 
-def _build_request_mode_db(*, applicant_is_minor: bool, jr_exists: bool = False) -> MagicMock:
-    """Wire the request-mode happy path: group exists, joinMode=request."""
+def _build_request_mode_db(
+    *,
+    applicant_is_minor: bool,
+    jr_exists: bool = False,
+    join_mode: str = "request",
+) -> MagicMock:
+    """Wire the request-mode happy path: group exists, joinMode=request.
+
+    `join_mode` defaults to "request" but can be overridden to "open"
+    so the minor-escalation test for the open-mode branch (OPUS_REVIEW
+    § P0-2) can reuse this fixture.
+    """
     db = MagicMock()
 
     group_snap = MagicMock()
     group_snap.exists = True
     group_snap.to_dict.return_value = {
         "name": "G1",
-        "joinMode": "request",
+        "joinMode": join_mode,
         "isPrivate": True,
         "archivedAt": None,
         "audience": "christian",
@@ -149,6 +159,38 @@ def test_minor_join_request_sets_requires_owner_review() -> None:
     assert set_call["isMinor"] is True
     assert set_call["requiresOwnerReview"] is True
     assert set_call["parentalConsentObtained"] is None
+
+
+def test_minor_open_mode_join_escalates_instead_of_self_joining() -> None:
+    """OPUS_REVIEW § P0-2 regression — load-bearing safety.
+
+    Before this fix, `joinMode == "open"` (the default) ran a
+    transparent self-join with no isMinor check, letting a minor
+    self-join any open-mode group with no owner review. The fix
+    branches on `isMinor` BEFORE the open-mode short-circuit so a
+    minor lands in the owner-escalation queue regardless of
+    joinMode.
+    """
+    db = _build_request_mode_db(applicant_is_minor=True, join_mode="open")
+    with (
+        patch("app.routers.discover._db", return_value=db),
+        patch("app.routers.discover.write_audit_log"),
+    ):
+        res = TestClient(_applicant_app(uid="minor")).post(
+            "/api/groups/g1/join-requests",
+            json={"message": ""},
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 200
+    body = res.json()
+    # The decisive contract: NOT joined; pending owner review.
+    assert body.get("joined") is not True
+    assert body["pending"] is True
+    assert body["requiresOwnerReview"] is True
+
+    set_call = db._jr_doc_ref.set.call_args[0][0]  # type: ignore[attr-defined]
+    assert set_call["isMinor"] is True
+    assert set_call["requiresOwnerReview"] is True
 
 
 def test_adult_join_request_does_not_set_owner_review() -> None:
