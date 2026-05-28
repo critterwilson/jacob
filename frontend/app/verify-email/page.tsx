@@ -119,9 +119,12 @@ function VerifyEmailContent() {
             <p className="text-body-sm text-cream-muted">
               We sent a verification link to{" "}
               <span className="text-cream">{user.email ?? "your inbox"}</span>.
-              Click it, then come back to this tab — we'll pick up the
-              verification automatically. If it doesn't, hit{" "}
-              <span className="text-cream">"I verified — continue"</span> below.
+              Click it, then come back to this tab — we&apos;ll pick up the
+              verification automatically. If it doesn&apos;t, hit{" "}
+              <span className="text-cream">
+                &ldquo;I verified — continue&rdquo;
+              </span>{" "}
+              below.
             </p>
           </header>
 
