@@ -32,9 +32,13 @@ import { NextResponse } from "next/server";
 // background and foreground messaging stay on the same wire protocol.
 const FIREBASE_COMPAT_VERSION = "10.12.2";
 
-// Bump this whenever the cache layout or precache list changes so the
-// activate handler purges stale caches under the old name.
-const SW_VERSION = "3";
+// Bump this whenever the cache layout or precache list changes — OR to
+// force every device to discard a stale precached app shell. The
+// activate handler purges caches under the old name, and install
+// re-precaches a fresh /home. Bumped to "4" alongside the always-visible
+// nav fix (#354) so installed PWAs that cached the old bottom-nav shell
+// pick up the pinned bar instead of serving the pre-fix /home.
+const SW_VERSION = "4";
 
 export const dynamic = "force-static";
 
