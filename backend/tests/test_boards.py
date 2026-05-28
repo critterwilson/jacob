@@ -116,7 +116,6 @@ def test_admin_create_board_happy_path() -> None:
             "/api/admin/boards",
             json={
                 "name": "Resources",
-                "slug": "resources",
                 "description": "Studies",
                 "audience": "christian",
             },
@@ -124,41 +123,55 @@ def test_admin_create_board_happy_path() -> None:
 
     assert res.status_code == 201
     body = res.json()
+    # Slug is derived from name — no manual slug field.
     assert body["boardId"] == "resources"
     assert body["slug"] == "resources"
     new_ref.set.assert_called_once()
 
 
-def test_admin_create_board_slug_conflict_returns_409() -> None:
+def test_admin_create_board_auto_slug_collision_appends_suffix() -> None:
+    """Same-name re-creation gets `-2`, `-3`, … rather than 409. The
+    author no longer types a slug, so 409 would be unrecoverable."""
     db = MagicMock()
     boards_col = MagicMock()
     db.collection.return_value = boards_col
-    existing_ref = MagicMock()
-    # Document already exists — conflict.
-    existing_ref.get.return_value.exists = True
-    boards_col.document.return_value = existing_ref
-    with patch("app.routers.boards._db", return_value=db):
+    # Track which doc IDs are "already taken" so the predicate can scan
+    # past the collision: first candidate exists, second is free.
+    taken = {"resources"}
+    refs: dict[str, MagicMock] = {}
+
+    def _document(slug: str) -> MagicMock:
+        ref = refs.setdefault(slug, MagicMock())
+        ref.id = slug
+        ref.get.return_value.exists = slug in taken
+        return ref
+
+    boards_col.document.side_effect = _document
+
+    with (
+        patch("app.routers.boards._db", return_value=db),
+        patch("app.services.audit._db", return_value=MagicMock()),
+    ):
         res = TestClient(_app(admin=True)).post(
             "/api/admin/boards",
-            json={
-                "name": "Resources 2",
-                "slug": "resources",
-                "audience": "general",
-            },
+            json={"name": "Resources", "audience": "general"},
         )
 
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "slug_conflict"
+    assert res.status_code == 201
+    body = res.json()
+    assert body["slug"] == "resources-2"
+    assert body["boardId"] == "resources-2"
 
 
-def test_admin_create_board_invalid_slug_returns_422() -> None:
+def test_admin_create_board_rejects_slug_in_body() -> None:
+    """`slug` is no longer a request field — extra='forbid' rejects it."""
     db = MagicMock()
     with patch("app.routers.boards._db", return_value=db):
         res = TestClient(_app(admin=True)).post(
             "/api/admin/boards",
             json={
                 "name": "Bad",
-                "slug": "Has Spaces",
+                "slug": "manual-slug",
                 "audience": "general",
             },
         )
@@ -166,10 +179,34 @@ def test_admin_create_board_invalid_slug_returns_422() -> None:
     assert res.status_code == 422
 
 
+def test_admin_create_board_unsluggable_name_falls_back() -> None:
+    """A name with no alphanumerics (e.g. \"!!!\") still gets a stable
+    slug via the `board` fallback rather than blowing up with an empty
+    doc ID."""
+    db = MagicMock()
+    boards_col = MagicMock()
+    db.collection.return_value = boards_col
+    new_ref = MagicMock()
+    new_ref.get.return_value.exists = False
+    boards_col.document.return_value = new_ref
+
+    with (
+        patch("app.routers.boards._db", return_value=db),
+        patch("app.services.audit._db", return_value=MagicMock()),
+    ):
+        res = TestClient(_app(admin=True)).post(
+            "/api/admin/boards",
+            json={"name": "!!!", "audience": "general"},
+        )
+
+    assert res.status_code == 201
+    assert res.json()["slug"] == "board"
+
+
 def test_non_admin_cannot_create_board() -> None:
     res = TestClient(_app(admin=False)).post(
         "/api/admin/boards",
-        json={"name": "X", "slug": "x", "audience": "general"},
+        json={"name": "X", "audience": "general"},
     )
     assert res.status_code == 403
 

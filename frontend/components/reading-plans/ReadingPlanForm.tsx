@@ -20,16 +20,21 @@ function toDrafts(days: ReadingPlanDayInput[]): DraftDay[] {
 }
 
 export type ReadingPlanFormValues = {
-  slug: string;
   title: string;
   description: string;
   audience: "christian" | "general";
   days: ReadingPlanDayInput[];
 };
 
+// `slug` is server-derived on create and immutable thereafter — it lives
+// in `initial` for the edit-mode read-only badge but is never submitted.
+export type ReadingPlanInitialValues = ReadingPlanFormValues & {
+  slug?: string;
+};
+
 type Props = {
   mode: "create" | "edit";
-  initial?: Partial<ReadingPlanFormValues>;
+  initial?: Partial<ReadingPlanInitialValues>;
   pending?: boolean;
   error?: string | null;
   onSubmit: (values: ReadingPlanCreatePayload | ReadingPlanUpdatePayload) => void;
@@ -54,7 +59,6 @@ export function ReadingPlanForm({
   onCancel,
 }: Props) {
   const formId = useId();
-  const [slug, setSlug] = useState(initial.slug ?? "");
   const [title, setTitle] = useState(initial.title ?? "");
   const [description, setDescription] = useState(initial.description ?? "");
   const [audience, setAudience] = useState<"christian" | "general">(
@@ -82,10 +86,9 @@ export function ReadingPlanForm({
     });
   };
 
-  const slugValid = mode === "edit" || /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(slug);
   const titleValid = title.trim().length > 0;
   const daysValid = days.every((d) => d.scriptureRef.trim().length > 0);
-  const formValid = (mode === "edit" || slugValid) && titleValid && daysValid;
+  const formValid = titleValid && daysValid;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -99,7 +102,6 @@ export function ReadingPlanForm({
 
     if (mode === "create") {
       onSubmit({
-        slug: slug.trim(),
         title: title.trim(),
         description: description.trim(),
         audience,
@@ -118,29 +120,15 @@ export function ReadingPlanForm({
 
   return (
     <form id={formId} onSubmit={handleSubmit} noValidate className="space-y-5">
-      {mode === "create" && (
+      {mode === "edit" && initial.slug && (
         <div className="space-y-1">
-          <label
-            htmlFor={`${formId}-slug`}
-            className="block text-caption text-cream-muted"
-          >
-            URL slug <span className="text-terracotta">*</span>
-          </label>
-          <input
-            id={`${formId}-slug`}
-            value={slug}
-            onChange={(e) => setSlug(e.target.value.toLowerCase())}
-            placeholder="e.g. john-7-day"
-            className={inputClass}
-            aria-describedby={
-              touched && !slugValid ? `${formId}-slug-err` : undefined
-            }
-          />
-          {touched && !slugValid && (
-            <p id={`${formId}-slug-err`} role="alert" className="text-caption text-terracotta">
-              Lowercase letters, digits, and hyphens only (e.g. john-7-day).
-            </p>
-          )}
+          <span className="block text-caption text-cream-muted">URL slug</span>
+          <p className="font-mono text-body-sm text-cream-muted">
+            {initial.slug}
+          </p>
+          <p className="text-caption text-cream-muted">
+            The slug is permanent and can&apos;t be changed.
+          </p>
         </div>
       )}
 

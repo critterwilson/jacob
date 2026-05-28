@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 BoardAudience = Literal["christian", "general"]
 
-_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
 
 class CreateBoardRequest(BaseModel):
+    """Body of `POST /api/admin/boards`.
+
+    Authors do NOT type a slug; the server derives one from `name`
+    (lowercased, hyphenated, punctuation stripped, length-capped, and
+    collision-suffixed with `-2`/`-3`/…). See
+    `app.services.slugs.slugify_title` + `next_available_slug`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=80)
-    slug: str = Field(min_length=1, max_length=80)
     description: str = Field(default="", max_length=500)
     audience: BoardAudience = "general"
-
-    @field_validator("slug")
-    @classmethod
-    def _slug_is_kebab(cls, v: str) -> str:
-        if not _SLUG_RE.match(v):
-            raise ValueError("slug must be lowercase kebab (a-z, 0-9, hyphens)")
-        return v
 
 
 class PatchBoardRequest(BaseModel):
