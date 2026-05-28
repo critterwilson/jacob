@@ -1,11 +1,12 @@
 // Feature-flag client (T58).
 //
 // Pattern: one fetch of `GET /api/flags` per browser session, revalidated
-// on focus and on a 60-second background interval. Components consume
-// `useFlag('mobile_native_enabled')` and re-render when the cached map
-// changes. The 60-second propagation budget is deliberate — see
-// `docs/runbooks/feature-flags.md` for the trade against the spec's
-// 5-second target (post-M6 we don't have a Firestore listener path).
+// on focus / visibilitychange. The prior 60-second background interval
+// was removed (2026-05) per the project-wide "no polling outside chat"
+// rule. Components consume `useFlag('mobile_native_enabled')` and re-
+// render when the cached map changes. The propagation budget is now
+// "next focus event" — see `docs/runbooks/feature-flags.md` for the
+// updated trade against the spec's 5-second target.
 //
 // SSR callers can import `evaluateFlag(flags, key)` and pass a map they
 // fetched server-side from the same endpoint.
@@ -16,15 +17,18 @@ import { useEffect, useState } from "react";
 
 import { ApiError, apiGet } from "@/lib/api";
 
-const REVALIDATE_INTERVAL_MS = 60_000;
-
 type FlagsResponse = { flags: Record<string, boolean> };
 
 let _cache: Record<string, boolean> | null = null;
 let _cacheAt = 0;
 let _inflight: Promise<Record<string, boolean>> | null = null;
 const _subscribers = new Set<() => void>();
-let _revalidateTimer: ReturnType<typeof setInterval> | null = null;
+let _focusListenerBound = false;
+
+// How fresh the cache has to be for `useFlag` to skip a refetch on
+// mount. Tuned to roughly the legacy interval so the first-render
+// experience inside a session feels the same as before.
+const CACHE_TTL_MS = 60_000;
 
 function notify(): void {
   _subscribers.forEach((cb) => cb());
@@ -56,13 +60,18 @@ async function fetchFlags(): Promise<Record<string, boolean>> {
   return _inflight;
 }
 
-function ensureRevalidateTimer(): void {
-  if (_revalidateTimer || typeof window === "undefined") return;
-  _revalidateTimer = setInterval(() => {
-    if (_subscribers.size > 0) {
-      void fetchFlags();
-    }
-  }, REVALIDATE_INTERVAL_MS);
+function ensureFocusListener(): void {
+  if (_focusListenerBound || typeof window === "undefined") return;
+  _focusListenerBound = true;
+  const onWake = () => {
+    if (_subscribers.size === 0) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    void fetchFlags();
+  };
+  window.addEventListener("focus", onWake);
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", onWake);
+  }
 }
 
 export function useFlag(key: string): boolean {
@@ -75,9 +84,9 @@ export function useFlag(key: string): boolean {
       setValue(_cache ? Boolean(_cache[key]) : false);
     };
     _subscribers.add(cb);
-    ensureRevalidateTimer();
+    ensureFocusListener();
 
-    if (!_cache || Date.now() - _cacheAt > REVALIDATE_INTERVAL_MS) {
+    if (!_cache || Date.now() - _cacheAt > CACHE_TTL_MS) {
       void fetchFlags();
     } else {
       cb();
@@ -105,7 +114,7 @@ export function useFlags(): { flags: Record<string, boolean>; loading: boolean }
       setSnapshot({ flags: _cache ?? {}, loading: false });
     };
     _subscribers.add(cb);
-    ensureRevalidateTimer();
+    ensureFocusListener();
     if (!_cache) {
       void fetchFlags();
     } else {
@@ -127,15 +136,12 @@ export function evaluateFlag(
 }
 
 // Test-only: drop the module-level cache so suites can reset between cases.
-// Not exported via the package boundary; callers that rely on it should
-// import from `@/lib/flags` and accept the contract may shift.
 export function __resetFlagCacheForTests(): void {
   _cache = null;
   _cacheAt = 0;
   _inflight = null;
-  if (_revalidateTimer) {
-    clearInterval(_revalidateTimer);
-    _revalidateTimer = null;
-  }
   _subscribers.clear();
+  // We intentionally don't reset _focusListenerBound — the listener is
+  // window-level and JSDOM tears it down with the window. Resetting it
+  // would let tests double-bind across reloads.
 }

@@ -55,25 +55,37 @@ describe("useDeletionStatus", () => {
     expect(result.current.pending).toBe(false);
   });
 
-  it("polls on an interval and clears it on unmount", async () => {
-    vi.useFakeTimers();
-    try {
-      mockApiGet.mockResolvedValue({ status: "none" });
-      const { unmount } = renderHook(() => useDeletionStatus("alice"));
-      // Initial mount fires one fetch synchronously.
-      await vi.waitFor(() => expect(mockApiGet).toHaveBeenCalledTimes(1));
+  it("refetches when the tab regains focus (no interval polling)", async () => {
+    mockApiGet.mockResolvedValue({ status: "none" });
+    const { unmount } = renderHook(() => useDeletionStatus("alice"));
+    await waitFor(() => expect(mockApiGet).toHaveBeenCalledTimes(1));
 
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(mockApiGet).toHaveBeenCalledTimes(2);
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(mockApiGet).toHaveBeenCalledTimes(3);
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible" as DocumentVisibilityState,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(mockApiGet).toHaveBeenCalledTimes(2));
 
-      unmount();
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(mockApiGet).toHaveBeenCalledTimes(3);
-    } finally {
-      vi.useRealTimers();
-    }
+    window.dispatchEvent(new Event("focus"));
+    // Coalesced into the previous tick (default 250ms window) — should
+    // not produce a second fetch this close.
+    expect(mockApiGet).toHaveBeenCalledTimes(2);
+
+    unmount();
+    window.dispatchEvent(new Event("focus"));
+    expect(mockApiGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not start a setInterval polling loop", () => {
+    // Regression guard for the "no polling outside chat" rule. If a
+    // future refactor reintroduces a setInterval, the spy below will
+    // catch it.
+    const spy = vi.spyOn(global, "setInterval");
+    mockApiGet.mockResolvedValue({ status: "none" });
+    renderHook(() => useDeletionStatus("alice"));
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   it("returns empty status when uid is undefined", async () => {

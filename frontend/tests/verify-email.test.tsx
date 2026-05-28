@@ -111,7 +111,7 @@ describe("VerifyEmailPage", () => {
     });
   });
 
-  it("polls reload() every 5s and redirects to /onboarding once verified", async () => {
+  it("re-checks verification on tab focus + the manual button", async () => {
     const user = {
       uid: "u1",
       email: "alice@example.com",
@@ -123,41 +123,40 @@ describe("VerifyEmailPage", () => {
     let reloadCalls = 0;
     vi.mocked(fbAuth.reload).mockImplementation(async () => {
       reloadCalls++;
-      // Flip the sentinel to verified on the second poll.
+      // Flip the sentinel to verified on the second reload (button click).
       if (reloadCalls === 2) {
         mockAuth.currentUser = { ...user, emailVerified: true };
       }
     });
 
-    // Switch to fake timers AFTER initial render so the AuthProvider's
-    // microtasks complete normally.
-    const { rerender } = render(
+    render(
       <AuthProvider>
         <VerifyEmailPage />
       </AuthProvider>,
     );
-    await screen.findByRole("button", { name: /resend verification/i });
+    await screen.findByRole("button", { name: /i verified — continue/i });
 
-    vi.useFakeTimers();
-    rerender(
-      <AuthProvider>
-        <VerifyEmailPage />
-      </AuthProvider>,
-    );
-
-    // First tick — still unverified.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
+    // Focus event — calls reload() once.
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible" as DocumentVisibilityState,
     });
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => expect(reloadCalls).toBeGreaterThanOrEqual(1));
     expect(mockReplace).not.toHaveBeenCalledWith("/onboarding");
 
-    // Second tick — flips to verified, redirect fires.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
+    // Manual button — second reload flips to verified and redirects.
+    await userEvent.click(
+      screen.getByRole("button", { name: /i verified — continue/i }),
+    );
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/onboarding");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/onboarding");
     expect(reloadCalls).toBeGreaterThanOrEqual(2);
   });
+
 
   it("threads `next` onto /onboarding when already verified", async () => {
     verifyEmailSearchParamsGet.mockImplementation((k) =>

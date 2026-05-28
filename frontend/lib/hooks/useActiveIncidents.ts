@@ -2,15 +2,20 @@
 
 // T59 — active incidents hook.
 //
-// Polls `GET /api/incidents` once on mount and revalidates every 60s.
-// Mirrors the cadence of `useFlag` so the banner picks up new
-// declarations within ~one minute. Failures are best-effort: if the
-// API errors, the previous list (or empty) is preserved — we never
-// want a Sentry/network blip to block the rest of the UI.
+// Fetches `GET /api/incidents` once on mount and refetches on tab
+// focus/visibility-visible. Interval polling was removed (2026-05) per
+// the project-wide "no polling outside chat" rule. Banner picks up
+// new declarations the next time the user comes back to the tab —
+// acceptable because incidents are operator-broadcast, not
+// near-real-time signals.
+//
+// Failures are best-effort: previous list (or empty) is preserved so a
+// network blip doesn't blow up the rest of the UI.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiGetConditional } from "@/lib/api";
+import { useRefetchOnFocus } from "@/lib/hooks/useRefetchOnFocus";
 
 export type ActiveIncident = {
   incidentId: string;
@@ -23,8 +28,6 @@ export type ActiveIncident = {
   acknowledged: boolean;
 };
 
-const REVALIDATE_INTERVAL_MS = 60_000;
-
 export function useActiveIncidents(): {
   incidents: ActiveIncident[];
   loading: boolean;
@@ -33,38 +36,37 @@ export function useActiveIncidents(): {
   const [loading, setLoading] = useState(true);
   const etagRef = useRef<string | null>(null);
 
+  const load = useCallback(async () => {
+    try {
+      const result = await apiGetConditional<{ incidents: ActiveIncident[] }>(
+        "/api/incidents",
+        etagRef.current,
+      );
+      if (result.etag) etagRef.current = result.etag;
+      if (result.status === 200 && result.data !== null) {
+        setIncidents(result.data.incidents ?? []);
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status !== 401) {
+        console.warn("incidents_load_failed", err.code, err.status);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    const load = async () => {
-      try {
-        const result = await apiGetConditional<{ incidents: ActiveIncident[] }>(
-          "/api/incidents",
-          etagRef.current,
-        );
-        if (cancelled) return;
-        if (result.etag) etagRef.current = result.etag;
-        if (result.status === 200 && result.data !== null) {
-          setIncidents(result.data.incidents ?? []);
-        }
-        setLoading(false);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status !== 401) {
-          console.warn("incidents_load_failed", err.code, err.status);
-        }
-        setLoading(false);
-      }
-    };
-
-    void load();
-    timer = setInterval(load, REVALIDATE_INTERVAL_MS);
+    void (async () => {
+      await load();
+      if (cancelled) return;
+    })();
     return () => {
       cancelled = true;
-      if (timer) clearInterval(timer);
     };
-  }, []);
+  }, [load]);
+
+  useRefetchOnFocus(() => void load());
 
   return { incidents, loading };
 }

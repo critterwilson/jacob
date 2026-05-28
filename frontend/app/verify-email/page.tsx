@@ -6,15 +6,14 @@ import {
   signOut,
 } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { Banner, Button, Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { auth } from "@/lib/firebase";
+import { useRefetchOnFocus } from "@/lib/hooks/useRefetchOnFocus";
 import { safeNext } from "@/lib/safe-redirect";
-
-const POLL_INTERVAL_MS = 5_000;
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -23,7 +22,7 @@ function VerifyEmailContent() {
   const [resendState, setResendState] = useState<
     "idle" | "sending" | "sent" | "error"
   >("idle");
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [recheckState, setRecheckState] = useState<"idle" | "checking">("idle");
 
   const next = safeNext(searchParams.get("next"));
   const onboardingHref = next
@@ -41,39 +40,38 @@ function VerifyEmailContent() {
     }
   }, [user, loading, router, onboardingHref]);
 
-  // Poll auth.currentUser.reload() every 5s until emailVerified flips.
-  useEffect(() => {
-    if (!user || user.emailVerified) return;
+  // Re-check verification status when:
+  //   - the user comes back to this tab after clicking the link in their
+  //     email (focus / visibilitychange — handled by useRefetchOnFocus)
+  //   - the user clicks the explicit "I clicked the link" button below
+  //
+  // No interval polling — per the project-wide "no polling outside chat"
+  // rule. The realistic flow is: user opens the email in a new tab,
+  // clicks the link, the link tab confirms verified, user returns to
+  // this tab → focus fires → reload + redirect.
+  const recheck = async () => {
+    const current = auth.currentUser;
+    if (!current) return;
+    setRecheckState("checking");
+    try {
+      await reload(current);
+    } catch {
+      // Network blip; user can retry.
+      setRecheckState("idle");
+      return;
+    }
+    setRecheckState("idle");
+    if (auth.currentUser?.emailVerified) {
+      router.replace(onboardingHref);
+    }
+  };
 
-    const tick = async () => {
-      const current = auth.currentUser;
-      if (!current) return;
-      try {
-        await reload(current);
-      } catch {
-        // Network blip, etc. Keep polling.
-        return;
-      }
-      if (auth.currentUser?.emailVerified) {
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-        router.replace(onboardingHref);
-      }
-    };
-
-    pollingRef.current = setInterval(() => {
-      void tick();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [user, router, onboardingHref]);
+  useRefetchOnFocus(
+    () => {
+      void recheck();
+    },
+    { enabled: !!user && !user.emailVerified },
+  );
 
   const onResend = async () => {
     const current = auth.currentUser;
@@ -121,7 +119,12 @@ function VerifyEmailContent() {
             <p className="text-body-sm text-cream-muted">
               We sent a verification link to{" "}
               <span className="text-cream">{user.email ?? "your inbox"}</span>.
-              Click it to continue. This page will refresh automatically.
+              Click it, then come back to this tab — we&apos;ll pick up the
+              verification automatically. If it doesn&apos;t, hit{" "}
+              <span className="text-cream">
+                &ldquo;I verified — continue&rdquo;
+              </span>{" "}
+              below.
             </p>
           </header>
 
@@ -140,6 +143,18 @@ function VerifyEmailContent() {
             <Button
               type="button"
               variant="primary"
+              size="lg"
+              fullWidth
+              onClick={() => void recheck()}
+              loading={recheckState === "checking"}
+            >
+              {recheckState === "checking"
+                ? "Checking…"
+                : "I verified — continue"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
               size="lg"
               fullWidth
               onClick={onResend}

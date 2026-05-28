@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiGet } from "@/lib/api";
+import { useRefetchOnFocus } from "@/lib/hooks/useRefetchOnFocus";
 
 /**
- * T38 — live status of the user's most recent self-serve export job.
+ * T38 — current self-serve export job status.
  *
- * After M2 of the data-layer migration, the hook polls
- * `GET /api/account/export/status` every 5s while a job is in flight
- * (queued or processing) and every 30s otherwise. The previous Firestore
- * listener tracked field-level changes; the polling cadence here is
- * tight enough that ready/failed transitions still feel snappy.
+ * Interval polling was removed (2026-05) per the project-wide "no
+ * polling outside chat" rule. We fetch on mount and refetch on tab
+ * focus. Realistic flow: user requests an export, alt-tabs away to
+ * wait, comes back → focus refetch shows "ready". An explicit
+ * `refresh()` is returned for callers that want a manual button.
  */
 
 export type ExportStatus =
@@ -58,13 +59,6 @@ const DEFAULT: ExportJob = {
   schemaVersion: 1,
 };
 
-const ACTIVE_INTERVAL_MS = 5_000;
-const IDLE_INTERVAL_MS = 30_000;
-
-function isInFlight(s: ExportStatus): boolean {
-  return s === "queued" || s === "processing";
-}
-
 function toJob(res: ExportJobResponse): ExportJob {
   return {
     jobId: res.jobId,
@@ -79,52 +73,42 @@ function toJob(res: ExportJobResponse): ExportJob {
   };
 }
 
-export function useExportStatus(uid: string | undefined): ExportJob {
+export function useExportStatus(uid: string | undefined): ExportJob & { refresh: () => void } {
   const [job, setJob] = useState<ExportJob>(DEFAULT);
   const abortRef = useRef<AbortController | null>(null);
+
+  const load = useCallback(async () => {
+    if (!uid) return;
+    abortRef.current?.abort();
+    const ctl = new AbortController();
+    abortRef.current = ctl;
+    try {
+      const res = await apiGet<ExportJobResponse>("/api/account/export/status", {
+        signal: ctl.signal,
+      });
+      if (ctl.signal.aborted) return;
+      setJob(toJob(res));
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      if (err instanceof ApiError && err.code !== "aborted") {
+        console.warn("export_status_fetch_failed", err.code, err.status);
+      }
+      // Don't clobber a known state with DEFAULT on transient errors.
+    }
+  }, [uid]);
 
   useEffect(() => {
     if (!uid) {
       setJob(DEFAULT);
       return;
     }
-    let cancelled = false;
-    let handle: ReturnType<typeof setTimeout> | null = null;
-    let lastStatus: ExportStatus = "none";
-
-    const tick = async () => {
-      abortRef.current?.abort();
-      const ctl = new AbortController();
-      abortRef.current = ctl;
-      try {
-        const res = await apiGet<ExportJobResponse>("/api/account/export/status", {
-          signal: ctl.signal,
-        });
-        if (cancelled) return;
-        const next = toJob(res);
-        lastStatus = next.status;
-        setJob(next);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.code !== "aborted") {
-          console.warn("export_status_fetch_failed", err.code, err.status);
-        }
-        // Don't clobber a known job state with DEFAULT on a transient
-        // error — keep showing what we last knew until the next tick.
-      } finally {
-        if (cancelled) return;
-        const ms = isInFlight(lastStatus) ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS;
-        handle = setTimeout(tick, ms);
-      }
-    };
-
-    void tick();
+    void load();
     return () => {
-      cancelled = true;
-      if (handle) clearTimeout(handle);
       abortRef.current?.abort();
     };
-  }, [uid]);
+  }, [uid, load]);
 
-  return job;
+  useRefetchOnFocus(() => void load(), { enabled: !!uid });
+
+  return { ...job, refresh: () => void load() };
 }
