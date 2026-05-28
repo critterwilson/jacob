@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiGetConditional } from "@/lib/api";
-
-const POLL_INTERVAL_MS = 30_000;
+import { useRefetchOnFocus } from "@/lib/hooks/useRefetchOnFocus";
 
 export type BoardPost = {
   postId: string;
@@ -29,17 +28,20 @@ type BoardPostsResponse = {
 };
 
 /**
- * Posts on a board. Polls every 30s — boards are far less hot than
- * chat, so SSE is unjustified (per migration plan §6.2).
+ * Posts on a board. Fetches on mount and on tab focus/visibility-visible.
  *
- * Note: this hook fetches only the first page (`useBoardPosts` was
- * also single-page pre-M3). Future paged scrollback can be added by
- * exposing `loadOlder`.
+ * Interval polling was removed (2026-05) per the project-wide "no
+ * polling outside chat" rule. Boards aren't hot — focus refetch
+ * covers the realistic UX (alt-tab back, see current posts).
+ *
+ * `refresh()` is exported so callers can opt into an explicit refetch
+ * after a post / reply / reaction mutation.
  */
 export function useBoardPosts(boardId: string) {
   const [posts, setPosts] = useState<BoardPost[]>([]);
   const [loading, setLoading] = useState(true);
   const etagRef = useRef<string | null>(null);
+  const ctlRef = useRef<AbortController | null>(null);
 
   const fetchOnce = useCallback(
     async (signal: AbortSignal) => {
@@ -57,10 +59,32 @@ export function useBoardPosts(boardId: string) {
     [boardId],
   );
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (!boardId) return;
+    ctlRef.current?.abort();
+    const ctl = new AbortController();
+    ctlRef.current = ctl;
+    void (async () => {
+      try {
+        await fetchOnce(ctl.signal);
+      } catch (err) {
+        if (ctl.signal.aborted) return;
+        if (err instanceof ApiError && err.code !== "aborted") {
+          console.warn("board_posts_failed", err.code, err.status);
+        }
+      }
+    })();
+  }, [boardId, fetchOnce]);
+
+  useEffect(() => {
+    if (!boardId) {
+      setPosts([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const ctl = new AbortController();
+    ctlRef.current = ctl;
     void (async () => {
       try {
         await fetchOnce(ctl.signal);
@@ -74,21 +98,12 @@ export function useBoardPosts(boardId: string) {
       }
     })();
 
-    const interval = setInterval(() => {
-      void (async () => {
-        try {
-          await fetchOnce(ctl.signal);
-        } catch {
-          /* swallow */
-        }
-      })();
-    }, POLL_INTERVAL_MS);
-
     return () => {
       ctl.abort();
-      clearInterval(interval);
     };
   }, [boardId, fetchOnce]);
 
-  return { posts, loading };
+  useRefetchOnFocus(refresh, { enabled: !!boardId });
+
+  return { posts, loading, refresh };
 }

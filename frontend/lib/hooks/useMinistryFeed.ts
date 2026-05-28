@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiGetConditional } from "@/lib/api";
-
-const POLL_INTERVAL_MS = 30_000;
+import { useRefetchOnFocus } from "@/lib/hooks/useRefetchOnFocus";
 
 export type MinistryPost = {
   postId: string;
@@ -27,9 +26,11 @@ type MinistryPostsResponse = {
 };
 
 /**
- * Polls `/api/ministry-feed/posts` every 30s while the tab is visible.
- * Mirrors the boards-posts pattern — single-page (first 20 posts) for v1;
- * pagination can be added by exposing a `loadOlder()` cursor follower.
+ * `/api/ministry-feed/posts` — fetch on mount + refetch on tab focus.
+ *
+ * Interval polling was removed (2026-05) per the "no polling outside
+ * chat" rule. Single-page (first 20 posts); a future `loadOlder()`
+ * cursor follower can be added when needed.
  */
 export function useMinistryFeed() {
   const [posts, setPosts] = useState<MinistryPost[]>([]);
@@ -37,6 +38,7 @@ export function useMinistryFeed() {
   const [error, setError] = useState<string | null>(null);
   const seqRef = useRef(0);
   const etagRef = useRef<string | null>(null);
+  const ctlRef = useRef<AbortController | null>(null);
 
   const fetchOnce = useCallback(async (signal: AbortSignal) => {
     const mySeq = ++seqRef.current;
@@ -52,9 +54,27 @@ export function useMinistryFeed() {
     setError(null);
   }, []);
 
+  const refresh = useCallback(() => {
+    ctlRef.current?.abort();
+    const ctl = new AbortController();
+    ctlRef.current = ctl;
+    void (async () => {
+      try {
+        await fetchOnce(ctl.signal);
+      } catch (err) {
+        if (ctl.signal.aborted) return;
+        if (err instanceof ApiError && err.code !== "aborted") {
+          // Silent on focus refetch — keep the existing list visible.
+          console.warn("ministry_feed_refresh_failed", err.code, err.status);
+        }
+      }
+    })();
+  }, [fetchOnce]);
+
   useEffect(() => {
     setLoading(true);
     const ctl = new AbortController();
+    ctlRef.current = ctl;
     void (async () => {
       try {
         await fetchOnce(ctl.signal);
@@ -68,22 +88,12 @@ export function useMinistryFeed() {
       }
     })();
 
-    const interval = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden) return;
-      void (async () => {
-        try {
-          await fetchOnce(ctl.signal);
-        } catch {
-          /* swallow — next tick retries */
-        }
-      })();
-    }, POLL_INTERVAL_MS);
-
     return () => {
       ctl.abort();
-      clearInterval(interval);
     };
   }, [fetchOnce]);
 
-  return { posts, loading, error };
+  useRefetchOnFocus(refresh);
+
+  return { posts, loading, error, refresh };
 }
