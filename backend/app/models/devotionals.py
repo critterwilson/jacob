@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Audience = Literal["christian", "general"]
 
@@ -100,11 +100,13 @@ class ReadingPlanDayInput(BaseModel):
     prompt: str = Field(default="", max_length=500)
 
 
-_SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$"
-
-
 class ReadingPlanCreateRequest(BaseModel):
-    slug: str = Field(min_length=1, max_length=100, pattern=_SLUG_PATTERN)
+    """Authors do NOT type a slug; the server derives one from `title`
+    via `app.services.slugs.slugify_title` + `next_available_slug`
+    (mirrors the boards + devotionals pattern post-2026-05)."""
+
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=1000)
     days: list[ReadingPlanDayInput] = Field(min_length=1, max_length=365)

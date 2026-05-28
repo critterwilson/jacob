@@ -60,6 +60,7 @@ from app.models.pagination import PaginationParams
 from app.models.user import CurrentUser
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
+from app.services.slugs import next_available_slug, slugify_title
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["boards"])
@@ -129,21 +130,26 @@ def create_board(
     user: CurrentUser = Depends(require_admin),
 ) -> BoardResponse:
     db = _db()
+    name = body.name.strip()
 
-    # Use slug as document ID — Firestore enforces uniqueness naturally.
-    board_ref = db.collection("boards").document(body.slug)
-    board_id = body.slug
-    if board_ref.get().exists:
-        raise APIError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="slug_conflict",
-            message="A board with this slug already exists",
-        )
+    # Derive the slug from the name. Collision-suffix with -2/-3/… by
+    # asking Firestore whether the candidate doc id already exists.
+    base = slugify_title(name, max_len=80, fallback="board")
+    boards_col = db.collection("boards")
+    slug = next_available_slug(
+        base,
+        exists=lambda candidate: boards_col.document(candidate).get().exists,
+        max_len=80,
+        fallback="board",
+    )
+
+    board_ref = boards_col.document(slug)
+    board_id = slug
 
     board_ref.set(
         {
-            "name": body.name.strip(),
-            "slug": body.slug,
+            "name": name,
+            "slug": slug,
             "description": body.description.strip(),
             "audience": body.audience,
             "createdAt": fb_firestore.SERVER_TIMESTAMP,
@@ -156,13 +162,13 @@ def create_board(
         actor_uid=user.uid,
         action="create_board",
         target_ref=f"boards/{board_id}",
-        payload={"slug": body.slug, "audience": body.audience},
+        payload={"slug": slug, "audience": body.audience},
     )
-    logger.info("board created board_id=%s slug=%s actor=%s", board_id, body.slug, user.uid)
+    logger.info("board created board_id=%s slug=%s actor=%s", board_id, slug, user.uid)
     return BoardResponse(
         boardId=board_id,
-        name=body.name.strip(),
-        slug=body.slug,
+        name=name,
+        slug=slug,
         description=body.description.strip(),
         audience=body.audience,
         archivedAt=None,

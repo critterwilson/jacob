@@ -51,11 +51,7 @@ export default function NewReadingPlanPage() {
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(
-          err.code === "slug_taken"
-            ? "That URL slug is already in use. Choose a different one."
-            : err.message || "Failed to create plan.",
-        );
+        setError(err.message || "Failed to create plan.");
       } else {
         setError("Failed to create plan.");
       }

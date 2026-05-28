@@ -1,32 +1,31 @@
-"""Slug generation, author-hash, and doc-ID helpers for devotionals.
+"""Devotional-specific path / slug helpers.
 
-Devotional URLs took a new shape after the title-slug autogeneration
-change: platform-wide entries live at `/devotionals/org/<slug>` and
-group-scoped entries at `/devotionals/group/<authorHash>/<slug>`. The
-Firestore doc ID mirrors the path with `__` as the segment delimiter
-(slashes aren't legal in doc IDs).
-
-`author_hash` is a deterministic, non-reversible base32 prefix of
-SHA-256(uid). Stable per uid; keeps the raw Firebase UID out of URLs
-without needing a secret-keyed HMAC (knowing a UID never grants
-anything in this system; the goal is just "URL doesn't leak the UID
-verbatim").
+The generic title→slug + collision-suffix functions used to live here.
+They've been lifted into `app.services.slugs` so boards, reading
+plans, and any future content surface can share them; devotionals
+keep their existing 60-char cap + "devotional" fallback via a thin
+wrapper so doc IDs (`org__<slug>` / `group__<hash>__<slug>`) don't
+reshape.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import re
 from collections.abc import Callable
 from typing import Literal
 
+from app.services.slugs import (
+    next_available_slug as _next_available_slug_generic,
+)
+from app.services.slugs import (
+    slugify_title as _slugify_title_generic,
+)
+
 Scope = Literal["org", "group"]
 
-# Title-derived slug constraints. 60 chars is a comfortable upper bound:
-# long enough to keep titles readable, short enough that doc IDs (which
-# include scope + optional 8-char author hash + two `__` separators)
-# stay well under Firestore's 1500-byte limit.
+# Devotionals keep their original 60-char cap + "devotional" fallback
+# so existing doc IDs are stable.
 _MAX_SLUG_LEN = 60
 _SLUG_FALLBACK = "devotional"
 
@@ -38,23 +37,31 @@ _AUTHOR_HASH_SALT = "jacob.dev.author:"
 
 
 def slugify_title(title: str) -> str:
-    """Derive a URL-safe slug from a devotional title.
+    """Devotional title → slug. Thin wrapper around the generic helper
+    so devotionals keep their original max-length and fallback."""
+    return _slugify_title_generic(
+        title,
+        max_len=_MAX_SLUG_LEN,
+        fallback=_SLUG_FALLBACK,
+    )
 
-    Lowercase; non-alphanumeric becomes a single hyphen; collapsed runs
-    of hyphens; stripped at the ends; truncated to `_MAX_SLUG_LEN`. If
-    the title contains no alphanumerics, falls back to "devotional"
-    rather than returning an empty string (which would produce a doc
-    ID like `org__`).
-    """
-    lowered = title.casefold()
-    # Replace any run of non-alphanumerics with a single hyphen.
-    hyphenated = re.sub(r"[^a-z0-9]+", "-", lowered)
-    stripped = hyphenated.strip("-")
-    if not stripped:
-        return _SLUG_FALLBACK
-    if len(stripped) > _MAX_SLUG_LEN:
-        stripped = stripped[:_MAX_SLUG_LEN].rstrip("-") or _SLUG_FALLBACK
-    return stripped
+
+def next_available_slug(
+    base_slug: str,
+    *,
+    exists: Callable[[str], bool],
+    max_attempts: int = 100,
+) -> str:
+    """Devotional-specific collision suffixing. Same wrapper rationale
+    as `slugify_title` — preserves the 60-char cap and "devotional"
+    fallback so post-collision slugs match the legacy shape."""
+    return _next_available_slug_generic(
+        base_slug,
+        exists=exists,
+        max_attempts=max_attempts,
+        max_len=_MAX_SLUG_LEN,
+        fallback=_SLUG_FALLBACK,
+    )
 
 
 def author_hash(uid: str) -> str:
@@ -127,34 +134,3 @@ def parse_doc_id(doc_id: str) -> tuple[Scope, str | None, str] | None:
             return None
         return ("group", author, slug)
     return None
-
-
-def next_available_slug(
-    base_slug: str,
-    *,
-    exists: Callable[[str], bool],
-    max_attempts: int = 100,
-) -> str:
-    """Append `-2`, `-3`, ... until `exists(candidate)` returns False.
-
-    `exists` is a caller-provided predicate (typically a Firestore
-    document-exists check). The first candidate tried is `base_slug`
-    itself; on collision, `<base>-2`, then `<base>-3`, and so on.
-
-    Truncates the base if the suffix would push the total past
-    `_MAX_SLUG_LEN` so the doc ID stays within bounds even after many
-    title collisions. Raises RuntimeError after `max_attempts` to
-    avoid infinite loops on a misbehaving predicate.
-    """
-    if not exists(base_slug):
-        return base_slug
-    for n in range(2, max_attempts + 2):
-        suffix = f"-{n}"
-        head_budget = _MAX_SLUG_LEN - len(suffix)
-        head = base_slug[:head_budget].rstrip("-") or _SLUG_FALLBACK
-        candidate = f"{head}{suffix}"
-        if not exists(candidate):
-            return candidate
-    raise RuntimeError(
-        f"could not find unique slug for base={base_slug!r} after {max_attempts} attempts"
-    )

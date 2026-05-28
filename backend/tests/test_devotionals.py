@@ -500,7 +500,6 @@ def test_reading_plan_today_uses_started_at_when_no_completions() -> None:
 # ── admin CRUD: reading plans ─────────────────────────────────────────────────
 
 _VALID_CREATE_BODY = {
-    "slug": "new-plan",
     "title": "New Plan",
     "description": "A test plan.",
     "days": [
@@ -521,6 +520,7 @@ def test_create_reading_plan_returns_201() -> None:
         res = TestClient(_admin_app()).post("/api/reading-plans", json=_VALID_CREATE_BODY)
     assert res.status_code == 201, res.text
     body = res.json()
+    # Slug is derived from the title — no manual `slug` field on the request.
     assert body["slug"] == "new-plan"
     assert body["title"] == "New Plan"
     assert len(body["days"]) == 2
@@ -538,27 +538,40 @@ def test_create_reading_plan_assigns_day_numbers_sequentially() -> None:
     ):
         res = TestClient(_admin_app()).post(
             "/api/reading-plans",
-            json={**_VALID_CREATE_BODY, "slug": "seq-plan"},
+            json={**_VALID_CREATE_BODY, "title": "Seq Plan"},
         )
     assert res.status_code == 201
     days = res.json()["days"]
     assert [d["dayNumber"] for d in days] == [1, 2]
 
 
-def test_create_reading_plan_409_when_slug_taken() -> None:
+def test_create_reading_plan_auto_slug_collision_appends_suffix() -> None:
+    """Same-title re-creation gets `-2`, `-3`, … rather than 409. The
+    author no longer types a slug, so 409 would be unrecoverable."""
     fs = FakeFirestore()
-    _seed_plan(fs, slug="taken", duration=3)
+    _seed_plan(fs, slug="new-plan", duration=3)
     with (
         patch("app.routers.devotionals._db", return_value=fs),
         patch("app.routers.devotionals.write_audit_log"),
         patch.object(__import__("firebase_admin").firestore, "SERVER_TIMESTAMP", datetime.now(UTC)),
     ):
+        res = TestClient(_admin_app()).post("/api/reading-plans", json=_VALID_CREATE_BODY)
+    assert res.status_code == 201, res.text
+    assert res.json()["slug"] == "new-plan-2"
+
+
+def test_create_reading_plan_rejects_slug_in_body() -> None:
+    """`slug` is no longer a request field — extra='forbid' rejects it."""
+    fs = FakeFirestore()
+    with (
+        patch("app.routers.devotionals._db", return_value=fs),
+        patch("app.routers.devotionals.write_audit_log"),
+    ):
         res = TestClient(_admin_app()).post(
             "/api/reading-plans",
-            json={**_VALID_CREATE_BODY, "slug": "taken"},
+            json={**_VALID_CREATE_BODY, "slug": "manual-slug"},
         )
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "slug_taken"
+    assert res.status_code == 422
 
 
 def test_create_reading_plan_403_for_non_admin() -> None:

@@ -34,11 +34,7 @@ export default function NewBoardPage() {
       router.push("/admin/boards");
     } catch (e) {
       if (e instanceof ApiError) {
-        setError(
-          e.code === "slug_conflict"
-            ? "A board with this slug already exists. Choose a different slug."
-            : e.message || `Failed to create board (HTTP ${e.status}).`,
-        );
+        setError(e.message || `Failed to create board (HTTP ${e.status}).`);
       } else if (e instanceof Error) {
         setError(e.message);
       } else {

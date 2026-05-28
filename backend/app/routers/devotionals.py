@@ -90,6 +90,15 @@ from app.services.devotional_paths import (
 )
 from app.services.firebase import init_firebase_admin
 
+# Reading plans use the generic (max_len=100, fallback="reading-plan")
+# variants rather than the devotional-specific wrappers above.
+from app.services.slugs import (
+    next_available_slug as _generic_next_available_slug,
+)
+from app.services.slugs import (
+    slugify_title as _generic_slugify,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["devotionals"])
 
@@ -753,13 +762,18 @@ def create_reading_plan(
     user: CurrentUser = Depends(require_admin),
 ) -> ReadingPlan:
     db = _db()
-    existing = db.collection("reading_plans").document(body.slug).get()
-    if existing.exists:
-        raise APIError(
-            status_code=status.HTTP_409_CONFLICT,
-            code="slug_taken",
-            message=f"Reading plan slug {body.slug!r} is already in use",
-        )
+    plans_col = db.collection("reading_plans")
+
+    # Slug is derived from the title (post-2026-05 — authors don't type
+    # one). Collision-suffix with -2/-3/… via the shared helper.
+    base = _generic_slugify(body.title, max_len=100, fallback="reading-plan")
+    slug = _generic_next_available_slug(
+        base,
+        exists=lambda candidate: plans_col.document(candidate).get().exists,
+        max_len=100,
+        fallback="reading-plan",
+    )
+
     days_data = [
         {
             "dayNumber": i + 1,
@@ -768,10 +782,10 @@ def create_reading_plan(
         }
         for i, d in enumerate(body.days)
     ]
-    plan_ref = db.collection("reading_plans").document(body.slug)
+    plan_ref = plans_col.document(slug)
     plan_ref.set(
         {
-            "slug": body.slug,
+            "slug": slug,
             "title": body.title,
             "description": body.description,
             "days": days_data,
@@ -784,7 +798,7 @@ def create_reading_plan(
     write_audit_log(
         actor_uid=user.uid,
         action="reading_plan_create",
-        target_ref=f"reading_plans/{body.slug}",
+        target_ref=f"reading_plans/{slug}",
         payload={"duration": len(body.days), "audience": body.audience},
     )
     return _doc_to_plan(plan_ref.get())

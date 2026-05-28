@@ -90,17 +90,19 @@ describe("useReadingPlansAdmin", () => {
     let returned;
     await act(async () => {
       returned = await result.current.createPlan({
-        slug: "john-7-day",
         title: "7 Days in John",
         description: "",
         audience: "christian",
         days: [{ scriptureRef: "John 1:1", prompt: "" }],
       });
     });
+    // Slug is server-derived from the title — no manual `slug` field.
     expect(apiPost).toHaveBeenCalledWith(
       "/api/reading-plans",
-      expect.objectContaining({ slug: "john-7-day" }),
+      expect.objectContaining({ title: "7 Days in John" }),
     );
+    const sentPayload = apiPost.mock.calls[0][1] as Record<string, unknown>;
+    expect(sentPayload).not.toHaveProperty("slug");
     expect(returned).toEqual(PLAN);
   });
 
@@ -133,9 +135,10 @@ describe("useReadingPlansAdmin", () => {
 // ── ReadingPlanForm: create mode ─────────────────────────────────────────────
 
 describe("ReadingPlanForm – create mode", () => {
-  it("renders slug, title, description, audience, and one default day", () => {
+  it("renders title, description, audience, and one default day — no slug input", () => {
     render(<ReadingPlanForm mode="create" onSubmit={vi.fn()} />);
-    expect(screen.getByLabelText(/url slug/i)).toBeInTheDocument();
+    // Slug is server-derived from the title — no input on the form.
+    expect(screen.queryByLabelText(/url slug/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/audience/i)).toBeInTheDocument();
@@ -147,7 +150,6 @@ describe("ReadingPlanForm – create mode", () => {
     const onSubmit = vi.fn();
     render(<ReadingPlanForm mode="create" onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText(/url slug/i), "test-plan");
     await user.type(screen.getByLabelText(/title/i), "Test Plan");
     await user.type(
       screen.getByLabelText(/day 1 scripture reference/i),
@@ -155,13 +157,15 @@ describe("ReadingPlanForm – create mode", () => {
     );
     await user.click(screen.getByRole("button", { name: /create plan/i }));
 
-    expect(onSubmit).toHaveBeenCalledWith(
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).toEqual(
       expect.objectContaining({
-        slug: "test-plan",
         title: "Test Plan",
         days: [expect.objectContaining({ scriptureRef: "John 1:1" })],
       }),
     );
+    expect(payload).not.toHaveProperty("slug");
   });
 
   it("does not call onSubmit when title is empty", async () => {
@@ -169,7 +173,6 @@ describe("ReadingPlanForm – create mode", () => {
     const onSubmit = vi.fn();
     render(<ReadingPlanForm mode="create" onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText(/url slug/i), "test-plan");
     await user.type(
       screen.getByLabelText(/day 1 scripture reference/i),
       "John 1:1",
@@ -185,29 +188,11 @@ describe("ReadingPlanForm – create mode", () => {
     const onSubmit = vi.fn();
     render(<ReadingPlanForm mode="create" onSubmit={onSubmit} />);
 
-    await user.type(screen.getByLabelText(/url slug/i), "test-plan");
     await user.type(screen.getByLabelText(/title/i), "Test Plan");
     await user.click(screen.getByRole("button", { name: /create plan/i }));
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText(/scripture reference is required/i)).toBeInTheDocument();
-  });
-
-  it("shows slug format error for invalid slug", async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-    render(<ReadingPlanForm mode="create" onSubmit={onSubmit} />);
-
-    await user.type(screen.getByLabelText(/url slug/i), "INVALID SLUG!");
-    await user.type(screen.getByLabelText(/title/i), "Test Plan");
-    await user.type(
-      screen.getByLabelText(/day 1 scripture reference/i),
-      "John 1:1",
-    );
-    await user.click(screen.getByRole("button", { name: /create plan/i }));
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText(/lowercase letters/i)).toBeInTheDocument();
   });
 });
 
@@ -250,7 +235,6 @@ describe("ReadingPlanForm – day editor", () => {
     await user.click(screen.getByRole("button", { name: /add day/i }));
     await user.click(screen.getByRole("button", { name: /add day/i }));
 
-    await user.type(screen.getByLabelText(/url slug/i), "my-plan");
     await user.type(screen.getByLabelText(/title/i), "My Plan");
 
     const refs = screen.getAllByLabelText(/scripture reference/i);
@@ -294,15 +278,18 @@ describe("ReadingPlanForm – edit mode", () => {
     expect(screen.getByDisplayValue("John 1:1")).toBeInTheDocument();
   });
 
-  it("does not show slug field in edit mode", () => {
+  it("does not render a slug input in edit mode", () => {
     render(
       <ReadingPlanForm
         mode="edit"
-        initial={{ title: "Existing" }}
+        initial={{ slug: "john-7-day", title: "Existing" }}
         onSubmit={vi.fn()}
       />,
     );
+    // The slug is shown as read-only text (not an input).
     expect(screen.queryByLabelText(/url slug/i)).not.toBeInTheDocument();
+    // But it IS shown as a static line so editors know what the URL is.
+    expect(screen.getByText("john-7-day")).toBeInTheDocument();
   });
 });
 

@@ -10,7 +10,6 @@ export type ReadingPlanDayInput = {
 };
 
 export type ReadingPlanCreatePayload = {
-  slug: string;
   title: string;
   description: string;
   days: ReadingPlanDayInput[];

@@ -1,9 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * Tests for /admin/boards/new — the focused create-board page. Covers
- * slug auto-derivation, validation, the POST call, slug-conflict
- * messaging, and post-success navigation back to /admin/boards.
+ * Tests for /admin/boards/new — the focused create-board page. The
+ * server now derives the slug from the name, so the form no longer has
+ * a slug input. Covers validation, the POST call, and post-success
+ * navigation back to /admin/boards.
  */
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -60,13 +61,9 @@ beforeEach(() => {
 });
 
 describe("NewBoardPage", () => {
-  it("auto-derives slug from the name field", async () => {
-    const ue = userEvent.setup();
+  it("no longer renders a slug input — slug is server-derived", () => {
     render(<NewBoardPage />);
-
-    await ue.type(screen.getByRole("textbox", { name: /^name$/i }), "Prayer & Praise");
-    const slugInput = screen.getByRole("textbox", { name: /url slug/i }) as HTMLInputElement;
-    expect(slugInput.value).toBe("prayer-praise");
+    expect(screen.queryByRole("textbox", { name: /url slug/i })).toBeNull();
   });
 
   it("calls POST /api/admin/boards with form values and redirects on success", async () => {
@@ -84,16 +81,15 @@ describe("NewBoardPage", () => {
     render(<NewBoardPage />);
 
     await ue.type(screen.getByRole("textbox", { name: /^name$/i }), "New Board");
-    // Slug auto-fills to "new-board", description optional, audience defaults to general.
     await ue.type(screen.getByRole("textbox", { name: /description/i }), "A new one");
     await ue.click(screen.getByRole("button", { name: /create board/i }));
 
     await waitFor(() => expect(apiPost).toHaveBeenCalledTimes(1));
     const [path, payload] = apiPost.mock.calls[0];
     expect(path).toBe("/api/admin/boards");
-    expect(payload).toMatchObject({
+    // Slug is NOT sent — the server derives it from `name`.
+    expect(payload).toEqual({
       name: "New Board",
-      slug: "new-board",
       description: "A new one",
       audience: "general",
     });
@@ -108,20 +104,16 @@ describe("NewBoardPage", () => {
     expect(await screen.findByText(/name is required/i)).toBeInTheDocument();
   });
 
-  it("shows a helpful error on slug_conflict", async () => {
+  it("surfaces backend error messages when the create call fails", async () => {
     const { ApiError } = await import("@/lib/api");
-    apiPost.mockRejectedValue(
-      new ApiError(409, "slug_conflict", "A board with this slug already exists"),
-    );
+    apiPost.mockRejectedValue(new ApiError(500, "server_error", "Server error"));
 
     const ue = userEvent.setup();
     render(<NewBoardPage />);
-    await ue.type(screen.getByRole("textbox", { name: /^name$/i }), "Dupe");
+    await ue.type(screen.getByRole("textbox", { name: /^name$/i }), "Some Board");
     await ue.click(screen.getByRole("button", { name: /create board/i }));
 
-    expect(
-      await screen.findByText(/board with this slug already exists/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/server error/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
