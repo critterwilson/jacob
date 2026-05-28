@@ -77,6 +77,19 @@ describe("MobileTabBar", () => {
       screen.queryByRole("link", { name: /^settings$/i }),
     ).not.toBeInTheDocument();
   });
+
+  it("is pinned to the bottom of the viewport (fixed, full-width, above content)", () => {
+    render(<MobileTabBar />);
+    const nav = screen.getByRole("navigation", { name: /primary navigation/i });
+    // Always-visible: fixed at the bottom edge, never scrolls away.
+    expect(nav).toHaveClass("fixed");
+    expect(nav).toHaveClass("bottom-0");
+    expect(nav).toHaveClass("inset-x-0");
+    // Above page content, below drawer (z-40) / dialogs (z-50).
+    expect(nav).toHaveClass("z-30");
+    // Lifts touch targets above the iOS home indicator.
+    expect(nav).toHaveClass("pb-safe-b");
+  });
 });
 
 describe("AppShell mobile header", () => {

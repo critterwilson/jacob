@@ -2,31 +2,15 @@
  * @vitest-environment jsdom
  *
  * Covers the FloatingActionBar primitive: it renders the page's one
- * primary action (link or button), is mobile-only, is visible at rest,
- * and hides on scroll-down / shows on scroll-up.
- *
- * The scroll position it tracks is the window (document): AppShell's
- * `<main>` declares `overflow-y: auto` but grows with its content rather
- * than scrolling internally, so the document is the real scroll
- * container. The last test pins that down as a regression guard.
+ * primary action (link or button), is mobile-only, is fixed above the
+ * bottom tab bar, and stays visible at all times (no hide-on-scroll).
  */
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FloatingActionBar } from "@/components/ui";
 
-// Run the rAF coalescing synchronously so a scroll event settles inside
-// fireEvent's act() wrapper.
-beforeEach(() => {
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
-    cb(0);
-    return 0;
-  });
-  vi.stubGlobal("cancelAnimationFrame", () => {});
-});
-
 afterEach(() => {
-  vi.unstubAllGlobals();
   setWindowScrollY(0);
 });
 
@@ -61,64 +45,28 @@ describe("FloatingActionBar", () => {
     expect(screen.getByTestId("floating-action-bar")).toHaveClass("md:hidden");
   });
 
-  it("is visible at rest", () => {
+  it("is fixed-positioned above the tab bar", () => {
     render(<FloatingActionBar label="New post" href="/feed/new" />);
-    expect(screen.getByTestId("floating-action-bar")).toHaveAttribute(
-      "aria-hidden",
-      "false",
-    );
+    const bar = screen.getByTestId("floating-action-bar");
+    expect(bar).toHaveClass("fixed");
+    // Anchored above the bottom tab bar via the shared height token.
+    expect(bar.style.bottom).toContain("--mobile-tab-bar-height");
   });
 
-  it("hides when scrolling down and reappears when scrolling up", () => {
+  it("stays visible regardless of scroll — no hide-on-scroll", () => {
     render(<FloatingActionBar label="New post" href="/feed/new" />);
     const bar = screen.getByTestId("floating-action-bar");
     const link = screen.getByRole("link", { name: "New post" });
 
+    // Scrolling down used to hide it; now it stays put and interactive.
     scrollWindowTo(400);
-    expect(bar).toHaveAttribute("aria-hidden", "true");
-    expect(bar).toHaveClass("opacity-0");
-    // Hidden bar is taken out of the tab order.
-    expect(link).toHaveAttribute("tabindex", "-1");
-
-    scrollWindowTo(250);
-    expect(bar).toHaveAttribute("aria-hidden", "false");
-    expect(bar).toHaveClass("opacity-100");
+    expect(bar).not.toHaveClass("opacity-0");
+    expect(bar).not.toHaveClass("pointer-events-none");
     expect(link).not.toHaveAttribute("tabindex");
-  });
+    expect(bar).not.toHaveAttribute("aria-hidden");
 
-  it("is always visible at the top of the page", () => {
-    render(<FloatingActionBar label="New post" href="/feed/new" />);
-    const bar = screen.getByTestId("floating-action-bar");
-
-    scrollWindowTo(600);
-    expect(bar).toHaveAttribute("aria-hidden", "true");
-    // Back at the top — visible even though the last move was downward
-    // earlier in the gesture.
+    // Scrolling back up changes nothing — it was never hidden.
     scrollWindowTo(0);
-    expect(bar).toHaveAttribute("aria-hidden", "false");
-  });
-
-  // Regression: the bar used to resolve its scroll container by walking
-  // up to the nearest `overflow-y: auto` ancestor. AppShell's <main>
-  // carries `overflow-y: auto` but grows with its content instead of
-  // scrolling — the document scrolls. Binding the listener to that dead
-  // <main> meant the bar never reacted to scroll. It must track the
-  // window even when nested under such an ancestor.
-  it("tracks window scroll even when nested inside an overflow-y:auto ancestor", () => {
-    render(
-      <div style={{ overflowY: "auto" }}>
-        <div>
-          <FloatingActionBar label="New post" href="/feed/new" />
-        </div>
-      </div>,
-    );
-    const bar = screen.getByTestId("floating-action-bar");
-    expect(bar).toHaveAttribute("aria-hidden", "false");
-
-    scrollWindowTo(400);
-    expect(bar).toHaveAttribute("aria-hidden", "true");
-
-    scrollWindowTo(0);
-    expect(bar).toHaveAttribute("aria-hidden", "false");
+    expect(link).not.toHaveAttribute("tabindex");
   });
 });
