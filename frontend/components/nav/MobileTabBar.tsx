@@ -26,8 +26,13 @@ const tabs = [
  * via the avatar button in the mobile header (and the drawer's "You"
  * section).
  *
- * The bar is a flex sibling of `<main>` inside AppShell's inner column,
- * so it occupies its natural height and content scrolls above it.
+ * The bar is `position: fixed` at the bottom of the viewport so it stays
+ * put no matter how tall (or how scrolled) the page is — the nav is never
+ * something you have to scroll down to reach. AppShell adds matching
+ * bottom padding to `<main>` so page content clears the bar instead of
+ * hiding behind it. `z-30` keeps it above page content but below the nav
+ * drawer (z-40) and dialogs (z-50). `pb-safe-b` lifts the touch targets
+ * above the iOS home indicator.
  *
  * Hidden on `fullHeight` routes (chat) — those surfaces want every
  * pixel for the message log and composer.
@@ -38,11 +43,11 @@ export function MobileTabBar() {
     <nav
       aria-label="Primary navigation"
       className={cn(
-        // Flex sibling of <main>; not fixed-positioned. AppShell's inner
-        // column is a flex column, so this sits at the bottom naturally
-        // and content above scrolls within main without ever sitting
-        // underneath it.
-        "flex shrink-0 border-t border-line bg-ink pb-safe-b md:hidden",
+        // Pinned to the bottom edge of the viewport, full width, always
+        // visible. fixed escapes AppShell's overflow-hidden column (no
+        // ancestor sets a transform, so the viewport is the containing
+        // block) — it is never clipped or scrolled away.
+        "fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-ink pb-safe-b md:hidden",
       )}
     >
       {tabs.map(({ href, label, icon: Icon }) => {

@@ -295,8 +295,11 @@ export function AppShell({
 
   return (
     <div className="flex min-h-svh bg-ink text-cream">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-56 flex-none flex-col border-r border-line bg-ink md:flex">
+      {/* Desktop sidebar — pinned to the viewport (sticky top-0, full
+       * viewport height) so the rail never scrolls away even if the
+       * document itself scrolls. Mirrors the always-visible mobile tab
+       * bar on the desktop form factor. */}
+      <aside className="hidden w-56 flex-none flex-col border-r border-line bg-ink md:flex md:sticky md:top-0 md:h-svh md:self-start">
         <div className="flex items-center justify-between px-5 py-6">
           <Wordmark size="sm" />
           {/* Parity with the mobile header search icon — desktop didn't
@@ -439,7 +442,12 @@ export function AppShell({
             // and push the composer below the visible viewport on iOS.
             fullHeight
               ? "flex min-h-0 flex-col overflow-hidden"
-              : "overflow-y-auto",
+              : // The mobile tab bar is fixed over the bottom of the
+                // viewport, so reserve its height (+ safe-area inset) as
+                // scrollable bottom padding — the last row of content
+                // clears the bar instead of hiding behind it. Desktop has
+                // no bottom bar, so the reservation drops at md+.
+                "overflow-y-auto pb-[calc(var(--mobile-tab-bar-height)+env(safe-area-inset-bottom,0px))] md:pb-0",
           )}
         >
           {children}

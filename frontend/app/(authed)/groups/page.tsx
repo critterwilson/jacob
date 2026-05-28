@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { FloatingActionBar } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroups } from "@/lib/hooks/useGroups";
 
@@ -43,9 +44,12 @@ export default function GroupsPage() {
           >
             Join with code
           </Link>
+          {/* Desktop keeps the inline primary; on mobile the persistent
+           * FloatingActionBar (below) carries "New group" so it never
+           * scrolls out of reach behind a long group list. */}
           <Link
             href="/groups/new"
-            className="inline-flex h-11 items-center rounded bg-gold px-4 text-body-sm font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold"
+            className="hidden h-11 items-center rounded bg-gold px-4 text-body-sm font-medium text-ink transition-colors duration-fast hover:bg-gold-soft focus:outline-none focus-visible:shadow-glow-gold md:inline-flex"
           >
             New group
           </Link>
@@ -93,6 +97,13 @@ export default function GroupsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Mobile-only persistent primary action. The empty state already
+       * surfaces a centered "Create a group" CTA on a short, non-scrolling
+       * page, so the bar is only needed once the (scrollable) list exists. */}
+      {groups.length > 0 && (
+        <FloatingActionBar label="New group" href="/groups/new" />
       )}
     </main>
   );

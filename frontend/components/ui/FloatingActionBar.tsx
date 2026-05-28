@@ -1,9 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { useScrollDirection } from "@/lib/hooks/useScrollDirection";
-
 import { Button } from "./Button";
 import { ButtonLink } from "./ButtonLink";
 import { cn } from "./cn";
@@ -27,37 +23,22 @@ type FloatingActionBarProps = {
  * an inline primary button for the same action on mobile. Desktop has no
  * tab bar: the component is `md:hidden` and pages keep their inline button.
  *
- * Scroll behaviour: visible at rest and when scrolling up, slides + fades
- * out of the way when scrolling down, and is always visible near the top
- * of the page. See `useScrollDirection` for the jitter handling.
+ * The bar is always visible — it stays fixed in place regardless of scroll
+ * direction, so the primary action is never something you have to scroll
+ * to reach. (It used to hide on scroll-down; Christopher's preference is
+ * permanent visibility.)
  */
 export function FloatingActionBar({
   label,
   href,
   onClick,
 }: FloatingActionBarProps) {
-  const [scrollTarget, setScrollTarget] = useState<Window | null>(null);
-
-  // The bar's DOM ancestor — AppShell's <main> — carries `overflow-y: auto`,
-  // but on these pages <main> grows with its content rather than scrolling
-  // internally, so the document (window) is what actually scrolls. Track
-  // the window directly. An earlier `findScrollParent` walk bound the
-  // listener to that never-scrolling <main>, so the bar never reacted to
-  // scroll at all. `window` is client-only, hence the mount effect.
-  useEffect(() => {
-    setScrollTarget(window);
-  }, []);
-
-  const { direction, atTop } = useScrollDirection(scrollTarget);
-  const visible = atTop || direction === "up";
-
   const action = href ? (
     <ButtonLink
       href={href}
       variant="primary"
       size="md"
       fullWidth
-      tabIndex={visible ? undefined : -1}
       className="shadow-raise"
     >
       {label}
@@ -68,7 +49,6 @@ export function FloatingActionBar({
       size="md"
       fullWidth
       onClick={onClick}
-      tabIndex={visible ? undefined : -1}
       className="shadow-raise"
     >
       {label}
@@ -78,15 +58,11 @@ export function FloatingActionBar({
   return (
     <div
       data-testid="floating-action-bar"
-      aria-hidden={!visible}
       className={cn(
         // Mobile-only; desktop keeps the page's inline CTA.
+        // z-30 sits above page content but below the nav drawer (z-40)
+        // and dialogs (z-50).
         "fixed inset-x-4 z-30 md:hidden",
-        // Below the nav drawer (z-40) and dialogs (z-50).
-        "transition duration-base ease-in-out will-change-transform",
-        visible
-          ? "translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-4 opacity-0",
       )}
       style={{
         // Sit one notch (0.75rem) above the tab bar, clearing both the
