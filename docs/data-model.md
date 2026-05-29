@@ -43,6 +43,7 @@ groups/{gid}/sermons/{sermonId}                 # T52 — sermon archive
 stickers/{stickerId}
 devotionals/{docId}                             # T51 — flat; docId encodes scope: `org__<slug>` or `group__<authorHash>__<slug>`
 reading_plans/{slug}                            # T51
+weekly_sermons/{weekKey}                         # org-wide weekly video; docId is ISO week `YYYY-Www`; owner-only write, all-members read
 
 # Cross-group boards
 boards/{boardId}                                # T32 — top-level forums
@@ -584,6 +585,36 @@ where `ministryFeed == true` and writes one
 author and users who blocked them). The opt-in default is `false`
 (see ADR 0011 §5). The standard `onNotificationCreate` trigger
 dispatches FCM for each row.
+
+---
+
+## `weekly_sermons/{weekKey}`
+
+The single org-wide video sermon shown at the top of `/home`, refreshed
+weekly by owners. The document id is the ISO week (`YYYY-Www`, e.g.
+`2026-W22`) so there is a natural single-active entry per week and
+overwriting is idempotent. Readable by every signed-in member; written
+only by users holding the `ministry_owner` Firebase custom claim. All
+access flows through `/api/weekly-sermon` (read) and
+`/api/admin/weekly-sermon` (owner publish/update); rules are default-deny.
+
+```json
+{
+  "weekKey": "2026-W22",
+  "weekStart": "2026-05-25",
+  "videoUrl": "https://youtu.be/abc123",
+  "title": "Abiding in the Vine",
+  "description": "Markdown-free plain text...",
+  "postedAt": "Timestamp",
+  "postedBy": "owner-uid"
+}
+```
+
+`GET /api/weekly-sermon` returns the current ISO week's doc, falling back
+to the most-recent posted doc (ordered by `postedAt DESC`) when this
+week hasn't been published yet — mirroring the daily-verse fallback so
+the home hero is never empty once at least one sermon exists. The read
+is ETag-cached for conditional polling.
 
 ---
 

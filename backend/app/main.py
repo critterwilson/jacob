@@ -45,6 +45,7 @@ from app.routers import (
     uploads,
     users,
     watch,
+    weekly_sermon,
     wellbeing,
 )
 from app.services.sentry import init_sentry
@@ -176,6 +177,8 @@ app.include_router(incidents.router)
 app.include_router(incidents.admin_router)
 app.include_router(devotionals.router)
 app.include_router(sermons.router)
+app.include_router(weekly_sermon.router)
+app.include_router(weekly_sermon.admin_router)
 app.include_router(unfurl.router)
 app.include_router(events.router)
 app.include_router(watch.router)

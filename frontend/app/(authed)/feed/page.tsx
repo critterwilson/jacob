@@ -58,17 +58,27 @@ export default function MinistryFeedPage() {
             .
           </p>
         </div>
-        {/* Desktop CTA. On mobile the FloatingActionBar below carries
-         * this action — see docs/design-system.md §9 (one primary). */}
+        {/* Desktop CTAs. On mobile the FloatingActionBar below carries the
+         * primary action — see docs/design-system.md §9 (one primary). */}
         {isOwner === true && (
-          <ButtonLink
-            href="/feed/new"
-            variant="primary"
-            aria-label="New post"
-            className="hidden md:inline-flex"
-          >
-            New post
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink
+              href="/feed/weekly-sermon"
+              variant="secondary"
+              aria-label="Manage weekly sermon"
+              className="hidden md:inline-flex"
+            >
+              Weekly sermon
+            </ButtonLink>
+            <ButtonLink
+              href="/feed/new"
+              variant="primary"
+              aria-label="New post"
+              className="hidden md:inline-flex"
+            >
+              New post
+            </ButtonLink>
+          </div>
         )}
       </header>
 

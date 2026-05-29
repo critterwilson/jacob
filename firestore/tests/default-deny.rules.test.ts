@@ -1039,6 +1039,43 @@ describe("ADR 0011 — ministry_feed", () => {
   });
 });
 
+describe("weekly_sermons — owner-written via backend, default-deny direct", () => {
+  it("denies reading weekly_sermons/{weekKey} as any user", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "weekly_sermons", "2026-W22"), {
+        title: "This Week's Sermon",
+        videoUrl: "https://youtu.be/abc123",
+        postedAt: serverTimestamp(),
+      });
+    });
+    await assertFails(getDoc(doc(authed("alice"), "weekly_sermons", "2026-W22")));
+  });
+
+  it("denies writing weekly_sermons/{weekKey} as any user", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "weekly_sermons", "2026-W22"), {
+        title: "This Week's Sermon",
+        videoUrl: "https://youtu.be/abc123",
+        postedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("denies writing weekly_sermons even with a ministry_owner claim", async () => {
+    // The claim authorizes the backend `/api/admin/weekly-sermon`
+    // surface; the direct Firestore path stays default-deny regardless.
+    const ownerCtx = testEnv
+      .authenticatedContext("owner-uid", { ministry_owner: true })
+      .firestore();
+    await assertFails(
+      setDoc(doc(ownerCtx, "weekly_sermons", "2026-W22"), {
+        title: "This Week's Sermon",
+        videoUrl: "https://youtu.be/abc123",
+      }),
+    );
+  });
+});
+
 describe("M6 — default-deny on unknown paths", () => {
   it("denies reading + writing arbitrary collections", async () => {
     await assertFails(getDoc(doc(authed("alice"), "weird", "x")));

@@ -1,23 +1,26 @@
 import { expect, test } from "./helpers/fixtures";
 
 test.describe("home", () => {
-  test("sidebar and your-groups render", async ({
+  test("weekly sermon hero, recent activity, and sidebar render", async ({
     sharedAccountPage: page,
   }) => {
     await page.goto("/home", { waitUntil: "domcontentloaded" });
 
-    // Welcome heading is visible. We don't assert on the display name to
-    // keep the test resilient to profile changes on the shared account.
-    await expect(page.getByRole("heading", { name: /^welcome/i })).toBeVisible();
+    // Surface 1 — the weekly sermon hero. The "This week's sermon" eyebrow
+    // renders whether or not a sermon has been published, so it's a stable
+    // assertion on the shared account.
+    await expect(page.getByText(/this week's sermon/i).first()).toBeVisible();
+
+    // Surface 2 — recent chat activity.
+    await expect(
+      page.getByRole("heading", { name: /recent in your groups/i }),
+    ).toBeVisible();
 
     // Sidebar nav (desktop viewport — devices['Desktop Chrome'] is 1280×720).
     const nav = page.getByRole("navigation", { name: /main navigation/i });
-    await expect(nav.getByRole("link", { name: /chats/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /boards/i })).toBeVisible();
+    await expect(nav.getByRole("link", { name: /^groups$/i }).first()).toBeVisible();
+    await expect(nav.getByRole("link", { name: /boards/i }).first()).toBeVisible();
     await expect(nav.getByRole("link", { name: /^about$/i })).toBeVisible();
     await expect(nav.getByRole("link", { name: /^faq$/i })).toBeVisible();
-
-    // "Your groups" section.
-    await expect(page.getByRole("heading", { name: /your groups/i })).toBeVisible();
   });
 });
