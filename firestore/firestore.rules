@@ -271,6 +271,14 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // --- weekly sermon -------------------------------------------------
+    // One org-wide video per ISO week. Read via `/api/weekly-sermon`,
+    // written via `/api/admin/weekly-sermon` (ministry_owner claim).
+    // M6 default-deny on the direct path; Admin SDK bypasses.
+    match /weekly_sermons/{weekKey} {
+      allow read, write: if false;
+    }
+
     // --- default deny (defense in depth) --------------------------------
     match /{document=**} {
       allow read, write: if false;

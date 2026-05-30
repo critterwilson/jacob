@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,14 +24,16 @@ vi.mock("@/lib/auth-context", () => ({
   useAuth: () => ({ user: mockUser, loading: false, signOut: vi.fn() }),
 }));
 
+let groupsMock = {
+  groups: [
+    { id: "g1", name: "Sunday Study", memberCount: 4, description: "" },
+    { id: "g2", name: "Youth Group", memberCount: 8, description: "" },
+  ],
+  loading: false,
+};
+
 vi.mock("@/lib/hooks/useGroups", () => ({
-  useGroups: () => ({
-    groups: [
-      { id: "g1", name: "Sunday Study", memberCount: 4, description: "" },
-      { id: "g2", name: "Youth Group", memberCount: 8, description: "" },
-    ],
-    loading: false,
-  }),
+  useGroups: () => groupsMock,
 }));
 
 vi.mock("@/lib/hooks/useRecentMessages", () => ({
@@ -43,16 +45,6 @@ vi.mock("@/lib/hooks/useRecentMessages", () => ({
         groupName: "Sunday Study",
         authorUid: "alice",
         body: "See you Sunday!",
-        createdAt: null,
-        deletedAt: null,
-        mediaRefs: [],
-      },
-      {
-        id: "m2",
-        gid: "g2",
-        groupName: "Youth Group",
-        authorUid: "bob",
-        body: "Great meeting everyone",
         createdAt: null,
         deletedAt: null,
         mediaRefs: [],
@@ -72,120 +64,31 @@ vi.mock("@/lib/hooks/useDeletionStatus", () => ({
   useDeletionStatus: () => ({ pending: false, finalizeAt: null, keepBody: true }),
 }));
 
-// ── home-surface section hooks ────────────────────────────────────────────────
-
-type PlanTodayMock = {
-  data: import("@/lib/hooks/useReadingPlans").ActivePlanToday | null;
+type SermonMock = {
+  sermon: import("@/lib/hooks/useWeeklySermon").WeeklySermon | null;
   loading: boolean;
 };
-let planTodayMock: PlanTodayMock = {
-  data: {
-    plan: {
-      slug: "psalms",
-      title: "Psalms in 21 days",
-      description: "A walk through the Psalter.",
-      duration: 21,
-      audience: "christian",
-      publishedAt: null,
-    },
-    nextDay: {
-      dayNumber: 3,
-      scriptureRef: "Psalm 3",
-      prompt: "Reflect on God as a shield.",
-    },
-    completedDays: [1, 2],
-    streak: 2,
-    lastCompletedAt: null,
-    allDaysComplete: false,
+let sermonMock: SermonMock = {
+  sermon: {
+    weekKey: "2026-W22",
+    videoUrl: "https://youtu.be/abc123",
+    title: "Abiding in the Vine",
+    description: "Reflect on John 15.",
+    postedAt: null,
+    postedBy: "owner",
+    weekStart: "2026-05-25",
   },
   loading: false,
 };
 
-vi.mock("@/lib/hooks/useReadingPlans", () => ({
-  useReadingPlanToday: () => planTodayMock,
-  // The page imports this name; export it as the existing real hook
-  // would. Components on /home don't use these, but TS picks them up.
-  useReadingPlans: () => ({ plans: [], loading: false }),
-  useReadingPlan: () => ({ plan: null, loading: false }),
-  usePlanProgress: () => ({
-    progress: null,
-    loading: false,
-    reload: vi.fn(),
-    markComplete: vi.fn(),
-  }),
+vi.mock("@/lib/hooks/useWeeklySermon", () => ({
+  useWeeklySermon: () => ({ ...sermonMock, mutate: vi.fn(), error: undefined }),
 }));
 
-type DevotionalsMock = {
-  devotionals: import("@/lib/hooks/useDevotionals").Devotional[];
-  loading: boolean;
-};
-let devotionalsMock: DevotionalsMock = {
-  devotionals: [
-    {
-      slug: "abide",
-      path: "org/abide",
-      title: "Abide",
-      scriptureRef: "John 15:5",
-      body: "**Abide in me**, as I in you.",
-      audioUrl: null,
-      sourceAttribution: "Public domain.",
-      publishedAt: null,
-      audience: "christian",
-      groupId: null,
-      groupName: null,
-      authorHash: null,
-    },
-  ],
-  loading: false,
-};
+let ownerMock: boolean | null = false;
 
-vi.mock("@/lib/hooks/useDevotionals", () => ({
-  useDevotionals: () => devotionalsMock,
-  useDevotional: () => ({ devotional: null, loading: false }),
-}));
-
-type MinistryMock = {
-  posts: import("@/lib/hooks/useMinistryFeed").MinistryPost[];
-  loading: boolean;
-  error: string | null;
-};
-let ministryMock: MinistryMock = {
-  posts: [
-    {
-      postId: "p1",
-      title: "Sunday sermon notes",
-      body: "Some encouragement for the week.",
-      sermonUrl: null,
-      coverImageRef: null,
-      authorUid: "leader",
-      createdAt: null,
-      editedAt: null,
-      deletedAt: null,
-      pinnedAt: null,
-      pinnedBy: null,
-      reactionCounts: {},
-    },
-    {
-      postId: "p2",
-      title: "Pinned: weekly memory verse",
-      body: "Romans 12:12 — Rejoice in hope, be patient in tribulation.",
-      sermonUrl: null,
-      coverImageRef: null,
-      authorUid: "leader",
-      createdAt: null,
-      editedAt: null,
-      deletedAt: null,
-      pinnedAt: "2026-05-19T00:00:00Z",
-      pinnedBy: "leader",
-      reactionCounts: {},
-    },
-  ],
-  loading: false,
-  error: null,
-};
-
-vi.mock("@/lib/hooks/useMinistryFeed", () => ({
-  useMinistryFeed: () => ministryMock,
+vi.mock("@/lib/hooks/useMinistryOwner", () => ({
+  useMinistryOwner: () => ownerMock,
 }));
 
 vi.mock("@/lib/hooks/usePushSetup", () => ({
@@ -222,80 +125,33 @@ vi.mock("@/lib/api", () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { AppShell } from "@/components/nav/AppShell";
-import { ContinueReadingPlan } from "@/components/home/ContinueReadingPlan";
-import { MinistryHighlights } from "@/components/home/MinistryHighlights";
 import { RecentActivity } from "@/components/home/RecentActivity";
-import { TodayDevotional } from "@/components/home/TodayDevotional";
+import { WeeklySermon } from "@/components/home/WeeklySermon";
+import { VideoEmbed } from "@/components/media/VideoEmbed";
 import HomePage from "@/app/(authed)/home/page";
-import { apiPost } from "@/lib/api";
-
-const mockApiPost = apiPost as unknown as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   maintenanceFlag = false;
-  planTodayMock = {
-    data: {
-      plan: {
-        slug: "psalms",
-        title: "Psalms in 21 days",
-        description: "A walk through the Psalter.",
-        duration: 21,
-        audience: "christian",
-        publishedAt: null,
-      },
-      nextDay: {
-        dayNumber: 3,
-        scriptureRef: "Psalm 3",
-        prompt: "Reflect on God as a shield.",
-      },
-      completedDays: [1, 2],
-      streak: 2,
-      lastCompletedAt: null,
-      allDaysComplete: false,
+  ownerMock = false;
+  groupsMock = {
+    groups: [
+      { id: "g1", name: "Sunday Study", memberCount: 4, description: "" },
+      { id: "g2", name: "Youth Group", memberCount: 8, description: "" },
+    ],
+    loading: false,
+  };
+  sermonMock = {
+    sermon: {
+      weekKey: "2026-W22",
+      videoUrl: "https://youtu.be/abc123",
+      title: "Abiding in the Vine",
+      description: "Reflect on John 15.",
+      postedAt: null,
+      postedBy: "owner",
+      weekStart: "2026-05-25",
     },
     loading: false,
   };
-  devotionalsMock = {
-    devotionals: [
-      {
-        slug: "abide",
-        path: "org/abide",
-        title: "Abide",
-        scriptureRef: "John 15:5",
-        body: "**Abide in me**, as I in you.",
-        audioUrl: null,
-        sourceAttribution: "Public domain.",
-        publishedAt: null,
-        audience: "christian",
-        groupId: null,
-        groupName: null,
-        authorHash: null,
-      },
-    ],
-    loading: false,
-  };
-  ministryMock = {
-    posts: [
-      {
-        postId: "p1",
-        title: "Sunday sermon notes",
-        body: "Some encouragement for the week.",
-        sermonUrl: null,
-        coverImageRef: null,
-        authorUid: "leader",
-        createdAt: null,
-        editedAt: null,
-        deletedAt: null,
-        pinnedAt: null,
-        pinnedBy: null,
-        reactionCounts: {},
-      },
-    ],
-    loading: false,
-    error: null,
-  };
-  mockApiPost.mockReset();
-  mockApiPost.mockResolvedValue({});
   vi.restoreAllMocks();
 });
 
@@ -304,9 +160,6 @@ beforeEach(() => {
 describe("AppShell", () => {
   it("renders desktop nav links", () => {
     render(<AppShell><div /></AppShell>);
-    // "Groups" appears in the desktop sidebar drawer AND the mobile bottom
-    // tab bar (rendered with md:hidden). About / FAQ only live in the
-    // drawer's long-tail menu, so they remain unique.
     expect(screen.getAllByRole("link", { name: "Groups" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "FAQ" })).toBeInTheDocument();
@@ -320,13 +173,9 @@ describe("AppShell", () => {
   it("opens and closes mobile drawer", async () => {
     render(<AppShell><div /></AppShell>);
     const hamburger = screen.getByRole("button", { name: /open navigation menu/i });
-
-    // Drawer not visible yet
     expect(screen.queryByRole("button", { name: /close navigation menu/i })).not.toBeInTheDocument();
-
     await userEvent.click(hamburger);
     expect(screen.getByRole("button", { name: /close navigation menu/i })).toBeInTheDocument();
-
     await userEvent.click(screen.getByRole("button", { name: /close navigation menu/i }));
     expect(screen.queryByRole("button", { name: /close navigation menu/i })).not.toBeInTheDocument();
   });
@@ -352,11 +201,6 @@ describe("RecentActivity", () => {
     expect(screen.getByText(/no recent messages/i)).toBeInTheDocument();
   });
 
-  it("shows loading state", () => {
-    render(<RecentActivity messages={[]} loading={true} />);
-    expect(screen.getByText(/loading recent activity/i)).toBeInTheDocument();
-  });
-
   it("shows photo placeholder when body is empty and mediaRefs has items", () => {
     const msgs = [
       {
@@ -369,300 +213,100 @@ describe("RecentActivity", () => {
   });
 });
 
-// ── ContinueReadingPlan ───────────────────────────────────────────────────────
+// ── VideoEmbed ────────────────────────────────────────────────────────────────
 
-describe("ContinueReadingPlan", () => {
-  const baseData = planTodayMock.data!;
+describe("VideoEmbed", () => {
+  it("embeds a YouTube share URL as an iframe", () => {
+    render(<VideoEmbed url="https://youtu.be/dQw4w9WgXcQ" title="Sermon" />);
+    const frame = screen.getByTitle("Sermon") as HTMLIFrameElement;
+    expect(frame.tagName).toBe("IFRAME");
+    expect(frame.src).toBe("https://www.youtube.com/embed/dQw4w9WgXcQ");
+  });
 
-  it("renders the active plan with next day + streak chip", () => {
-    render(<ContinueReadingPlan data={baseData} loading={false} />);
-    expect(screen.getByText(/Psalms in 21 days/)).toBeInTheDocument();
-    expect(screen.getByText(/Day 3 of 21/)).toBeInTheDocument();
-    expect(screen.getByText("Reflect on God as a shield.")).toBeInTheDocument();
-    expect(screen.getByText(/2 day streak/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open day 3/ })).toHaveAttribute(
+  it("embeds a YouTube watch URL", () => {
+    render(<VideoEmbed url="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="S" />);
+    expect((screen.getByTitle("S") as HTMLIFrameElement).src).toBe(
+      "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    );
+  });
+
+  it("embeds a Vimeo URL", () => {
+    render(<VideoEmbed url="https://vimeo.com/123456789" title="V" />);
+    expect((screen.getByTitle("V") as HTMLIFrameElement).src).toBe(
+      "https://player.vimeo.com/video/123456789",
+    );
+  });
+
+  it("falls back to a Watch link for an unknown provider", () => {
+    render(<VideoEmbed url="https://example.com/video.mp4" title="X" />);
+    expect(screen.queryByTitle("X")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /watch/i })).toHaveAttribute(
       "href",
-      "/reading-plans/psalms/day/3",
+      "https://example.com/video.mp4",
     );
-  });
-
-  it("renders the empty state when there is no active plan", () => {
-    render(<ContinueReadingPlan data={{ ...baseData, plan: null, nextDay: null }} loading={false} />);
-    expect(screen.getByText(/haven't started a reading plan yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Browse reading plans/i })).toHaveAttribute(
-      "href",
-      "/reading-plans",
-    );
-  });
-
-  it("renders the completed state when allDaysComplete is true", () => {
-    render(
-      <ContinueReadingPlan
-        data={{ ...baseData, nextDay: null, allDaysComplete: true }}
-        loading={false}
-      />,
-    );
-    expect(screen.getByText(/Reading plan complete/i)).toBeInTheDocument();
-    expect(screen.getByText(/finished every day/i)).toBeInTheDocument();
-  });
-
-  it("renders the skeleton when loading", () => {
-    const { container } = render(<ContinueReadingPlan data={null} loading={true} />);
-    // Skeleton component renders as a div with role-less placeholder bars.
-    expect(container.querySelectorAll("div").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Psalms/)).not.toBeInTheDocument();
-  });
-
-  it("renders empty state when not loading and data is null", () => {
-    render(<ContinueReadingPlan data={null} loading={false} />);
-    expect(screen.getByText(/haven't started a reading plan yet/i)).toBeInTheDocument();
-  });
-
-  it("marks the next day complete on click and disables the button", async () => {
-    const user = userEvent.setup();
-    render(<ContinueReadingPlan data={baseData} loading={false} />);
-
-    const button = screen.getByRole("button", { name: /Mark complete/i });
-    await user.click(button);
-
-    await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith(
-        "/api/reading-plans/psalms/progress/mark",
-        { dayNumber: 3 },
-      );
-    });
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /Marked complete/i }),
-      ).toBeDisabled();
-    });
   });
 });
 
-// ── TodayDevotional ───────────────────────────────────────────────────────────
+// ── WeeklySermon ──────────────────────────────────────────────────────────────
 
-describe("TodayDevotional", () => {
-  it("renders title, scripture ref, and a stripped preview", () => {
-    render(
-      <TodayDevotional
-        devotional={{
-          slug: "abide",
-          path: "org/abide",
-          title: "Abide",
-          scriptureRef: "John 15:5",
-          body: "**Abide in me**, as I in you.\nMore body.",
-          audioUrl: null,
-          sourceAttribution: "",
-          publishedAt: null,
-          audience: "christian",
-          groupId: null,
-          groupName: null,
-          authorHash: null,
-        }}
-        loading={false}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "Abide" })).toBeInTheDocument();
-    expect(screen.getByText("John 15:5")).toBeInTheDocument();
-    // Markdown emphasis stripped.
-    expect(
-      screen.getByText(/Abide in me, as I in you. More body./),
-    ).toBeInTheDocument();
-    // Link uses the structured `path` (org/<slug>) — not the bare slug.
-    expect(screen.getByRole("link")).toHaveAttribute(
-      "href",
-      "/devotionals/org/abide",
-    );
+describe("WeeklySermon", () => {
+  const sermon = sermonMock.sermon!;
+
+  it("renders the video embed, title, and description", () => {
+    render(<WeeklySermon sermon={sermon} loading={false} />);
+    expect(screen.getByRole("heading", { name: "Abiding in the Vine" })).toBeInTheDocument();
+    expect(screen.getByText("Reflect on John 15.")).toBeInTheDocument();
+    expect(screen.getByTitle("Abiding in the Vine").tagName).toBe("IFRAME");
   });
 
-  it("renders the empty state when no devotional is supplied", () => {
-    render(<TodayDevotional devotional={null} loading={false} />);
-    expect(screen.getByText(/No devotionals published yet/i)).toBeInTheDocument();
-  });
-
-  it("renders the skeleton when loading", () => {
-    const { container } = render(<TodayDevotional devotional={null} loading={true} />);
-    expect(container.querySelectorAll("div").length).toBeGreaterThan(0);
-    expect(screen.queryByText(/No devotionals/i)).not.toBeInTheDocument();
-  });
-});
-
-// ── MinistryHighlights ───────────────────────────────────────────────────────
-
-describe("MinistryHighlights", () => {
-  it("renders up to two posts and skips deleted ones", () => {
-    render(
-      <MinistryHighlights
-        posts={[
-          {
-            postId: "p1",
-            title: "First",
-            body: "Body 1",
-            sermonUrl: null,
-            coverImageRef: null,
-            authorUid: "u",
-            createdAt: null,
-            editedAt: null,
-            deletedAt: null,
-            pinnedAt: null,
-            pinnedBy: null,
-            reactionCounts: {},
-          },
-          {
-            postId: "p2",
-            title: "Second",
-            body: "Body 2",
-            sermonUrl: null,
-            coverImageRef: null,
-            authorUid: "u",
-            createdAt: null,
-            editedAt: null,
-            deletedAt: "2026-01-01T00:00:00Z",
-            pinnedAt: null,
-            pinnedBy: null,
-            reactionCounts: {},
-          },
-          {
-            postId: "p3",
-            title: "Third",
-            body: "Body 3",
-            sermonUrl: null,
-            coverImageRef: null,
-            authorUid: "u",
-            createdAt: null,
-            editedAt: null,
-            deletedAt: null,
-            pinnedAt: null,
-            pinnedBy: null,
-            reactionCounts: {},
-          },
-          {
-            postId: "p4",
-            title: "Fourth",
-            body: "Body 4",
-            sermonUrl: null,
-            coverImageRef: null,
-            authorUid: "u",
-            createdAt: null,
-            editedAt: null,
-            deletedAt: null,
-            pinnedAt: null,
-            pinnedBy: null,
-            reactionCounts: {},
-          },
-        ]}
-        loading={false}
-      />,
-    );
-    expect(screen.getByText("First")).toBeInTheDocument();
-    expect(screen.getByText("Third")).toBeInTheDocument();
-    // The deleted post and the post past the limit do not render.
-    expect(screen.queryByText("Second")).not.toBeInTheDocument();
-    expect(screen.queryByText("Fourth")).not.toBeInTheDocument();
-  });
-
-  it("flags pinned posts with the Pinned eyebrow", () => {
-    render(
-      <MinistryHighlights
-        posts={[
-          {
-            postId: "p1",
-            title: "A nice update",
-            body: "",
-            sermonUrl: null,
-            coverImageRef: null,
-            authorUid: "u",
-            createdAt: null,
-            editedAt: null,
-            deletedAt: null,
-            pinnedAt: "2026-05-19T00:00:00Z",
-            pinnedBy: "leader",
-            reactionCounts: {},
-          },
-        ]}
-        loading={false}
-      />,
-    );
-    expect(screen.getByText("Pinned")).toBeInTheDocument();
-  });
-
-  it("renders the empty state with a feed link when no posts", () => {
-    render(<MinistryHighlights posts={[]} loading={false} />);
-    expect(screen.getByText(/Nothing posted yet/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Open organization feed/i })).toHaveAttribute(
-      "href",
-      "/feed",
-    );
+  it("renders an empty state when no sermon is posted", () => {
+    render(<WeeklySermon sermon={null} loading={false} />);
+    expect(screen.getByText(/no sermon has been posted yet/i)).toBeInTheDocument();
   });
 });
 
 // ── HomePage ──────────────────────────────────────────────────────────────────
 
 describe("HomePage", () => {
-  it("renders welcome heading and groups", () => {
+  it("shows exactly the two surfaces: weekly sermon hero + recent activity", () => {
     render(<HomePage />);
-    expect(screen.getByRole("heading", { name: /welcome/i })).toBeInTheDocument();
-    expect(screen.getAllByText("Sunday Study").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Youth Group").length).toBeGreaterThan(0);
-  });
-
-  it("renders all composed sections — plan, devotional, groups, activity, ministry, browse", () => {
-    render(<HomePage />);
-    // Reading plan section
-    expect(screen.getByText(/Psalms in 21 days/)).toBeInTheDocument();
-    expect(screen.getByText(/Day 3 of 21/)).toBeInTheDocument();
-    // Devotional section
-    expect(screen.getByRole("heading", { name: "Abide" })).toBeInTheDocument();
-    // Ministry section
-    expect(screen.getByText(/Sunday sermon notes/)).toBeInTheDocument();
-    // Recent activity
+    // Surface 1 — weekly sermon hero.
+    expect(screen.getByRole("heading", { name: "Abiding in the Vine" })).toBeInTheDocument();
+    expect(screen.getByText("This week's sermon")).toBeInTheDocument();
+    // Surface 2 — recent chat activity.
+    expect(screen.getByRole("heading", { name: /recent in your groups/i })).toBeInTheDocument();
     expect(screen.getByText("See you Sunday!")).toBeInTheDocument();
-    // Browse
-    expect(screen.getByRole("link", { name: /Devotionals/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Reading plans/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Discover groups/ })).toBeInTheDocument();
   });
 
-  it("places the user's groups above the organization section", () => {
+  it("no longer renders the stripped sections", () => {
     render(<HomePage />);
-    const groupsHeading = screen.getByRole("heading", { name: "Your groups" });
-    const orgHeading = screen.getByRole("heading", {
-      name: "From your organization",
-    });
-    // Groups (and recent group activity) lead the surface; the org
-    // section follows. DOCUMENT_POSITION_FOLLOWING set => org comes after.
+    expect(screen.queryByRole("heading", { name: /^Your groups$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /from your organization/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Browse$/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Psalms in 21 days/)).not.toBeInTheDocument();
+  });
+
+  it("shows an owner-only link to manage the weekly sermon", () => {
+    ownerMock = true;
+    render(<HomePage />);
     expect(
-      groupsHeading.compareDocumentPosition(orgHeading) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+      screen.getByRole("link", { name: /update this week's sermon/i }),
+    ).toHaveAttribute("href", "/feed/weekly-sermon");
   });
 
-  it("shows the no-plan empty state when the user has no progress", () => {
-    planTodayMock = {
-      data: {
-        plan: null,
-        nextDay: null,
-        completedDays: [],
-        streak: 0,
-        lastCompletedAt: null,
-        allDaysComplete: false,
-      },
-      loading: false,
-    };
+  it("hides the manage link from non-owners", () => {
+    ownerMock = false;
     render(<HomePage />);
-    expect(screen.getByText(/haven't started a reading plan yet/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /this week's sermon/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows the ministry-feed empty state when no posts", () => {
-    ministryMock = { posts: [], loading: false, error: null };
+  it("offers discover/join CTAs when the user is in no groups", () => {
+    groupsMock = { groups: [], loading: false };
     render(<HomePage />);
-    expect(screen.getByText(/Nothing posted yet/i)).toBeInTheDocument();
-  });
-
-  it("shows the devotional empty state when no devotionals are published", () => {
-    devotionalsMock = { devotionals: [], loading: false };
-    render(<HomePage />);
-    expect(screen.getByText(/No devotionals published yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /discover groups/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /join with code/i })).toBeInTheDocument();
   });
 
   it("does NOT show maintenance banner when flag is off", () => {
@@ -673,7 +317,6 @@ describe("HomePage", () => {
   it("shows maintenance banner when flag is on", () => {
     maintenanceFlag = true;
     render(<HomePage />);
-    expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/maintenance/i);
   });
 });

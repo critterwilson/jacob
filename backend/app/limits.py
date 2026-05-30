@@ -58,6 +58,11 @@ PLAN_MUTATION: str = "20/hour"
 # T52 — sermon archive. Leaders add sermons; volume is low.
 SERMON_MUTATION: str = "20/hour"
 
+# Weekly sermon — one org-wide video per ISO week. Read is heavily
+# cached client-side (ETag); owner publish/update is once-a-week volume.
+WEEKLY_SERMON_READ: str = "60/minute"
+WEEKLY_SERMON_MUTATION: str = "20/hour"
+
 # T53 — unfurl. Per-IP cap on the SSRF-guarded fetch surface so it
 # can't be turned into a generic egress hop. The cache absorbs most
 # repeat requests so 30/min/IP is comfortable for typical chat use.
