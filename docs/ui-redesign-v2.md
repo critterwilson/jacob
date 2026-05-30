@@ -148,7 +148,7 @@ it to a destination.
 2. **Catch up on what I missed** — `groups/mine` ordering, `notifications`.
 3. **Reply in a thread / react** — `/messages/{mid}/thread`, `/react`, reaction slugs `like|love|pray|laugh|wow|sad`.
 4. **Hear the ministry's word** — `weekly_sermons` (this week's video), `ministry_feed` posts, react.
-5. **See what's coming up & RSVP** — `events`, `PUT …/rsvp` (`going|maybe|declined`).
+5. **See what's coming up & RSVP** — `events`, `POST …/rsvp` (`going|maybe|declined`).
 6. **Read a devotional / follow a plan** — `devotionals` (merged feed), `reading_plans`, `plan_progress`.
 7. **Browse the cross-group forums** — `boards` posts (sticker-tagged) + flat replies + reactions.
 8. **Find & join another group** — `/discover/groups`, `POST /groups/{gid}/join` → `joinRequests`, or accept an invite (`/invites/{code}/accept`).
@@ -466,7 +466,7 @@ stream.
 │ ┌────────────────────────────────────┐   │   │ Open rolling, all levels. Bring water.    │
 │ │ Fri · Jun 5 · 6:00 PM              │   │   ├──────────────────────────────────────────┤
 │ │ Open Mat · Tuesday Teens           │   │   │ ARE YOU GOING?                            │
-│ │ ✅ Going (8) · you're going         │   │   │ [ ✅ Going ] [ 🤔 Maybe ] [ ✕ Can't ]     │  ← PUT …/rsvp
+│ │ ✅ Going (8) · you're going         │   │   │ [ ✅ Going ] [ 🤔 Maybe ] [ ✕ Can't ]     │  ← POST …/rsvp
 │ └────────────────────────────────────┘   │   │ Going 8 · Maybe 3 · Can't 1               │  ← rsvp summary
 │ ┌────────────────────────────────────┐   │   │  ▸ Marcus, Sarah, Aiden, +5               │  ← GET …/rsvps
 │ │ Sat · Jun 6 · Belt Testing         │   │   ├──────────────────────────────────────────┤
@@ -781,7 +781,7 @@ appears (backend-only, NCMEC).
 
 ### 6.6 RSVP
 Three large mutually-exclusive targets (Going / Maybe / Can't) on the event detail; tapping issues
-`PUT …/rsvp` and optimistically updates the summary. An optional one-line `note` appears after you
+`POST …/rsvp` and optimistically updates the summary. An optional one-line `note` appears after you
 pick. Changing your mind is just tapping a different target — no separate edit mode.
 
 ### 6.7 Watch Together
