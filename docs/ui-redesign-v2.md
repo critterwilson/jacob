@@ -62,7 +62,7 @@ applications. A waiting minor is never more than one tap from the owner's attent
 is the single most safety-critical flow in the product; it earns dedicated pixels.
 
 ### 1.4 Duties are work queues, not settings
-Join-request approval (`/groups/{gid}/requests`), leader-application review
+Join-request approval (`/groups/{gid}/join-requests`), leader-application review
 (`/admin/leader-applications`), reports (`/admin/reports`), appeals (`/admin/appeals`), and
 incidents (`/admin/incidents`) are *inboxes with counts and one-tap actions*, not configuration
 screens you navigate into and hunt around. A leader/owner/admin should see a number, tap it, and
@@ -103,7 +103,7 @@ high-stakes. He is the only user who routinely touches every surface.
 
 ### 2.2 The Group Leader — a coach (`members/{uid}.role == "leader"`)
 Leads one group (sometimes two), anointed by the owner via an approved leader application.
-Approves **adult** join requests to *their* group (`/groups/{gid}/requests`), posts to and
+Approves **adult** join requests to *their* group (`/groups/{gid}/join-requests`), posts to and
 moderates their own chat, creates the group's events, authors group-scoped `devotionals`, may
 start a Watch Together. **A typical session:** opens from a push ("2 people want to join Tuesday
 Teens"), approves both adults, sees a minor request he *can't* action (escalated to the owner),
@@ -157,12 +157,12 @@ it to a destination.
 11. **Watch together** — `groups/{gid}/watch` synchronized video sessions.
 
 ### Group Leader (adds, on top of member jobs)
-1. **Approve adults waiting on my group** — `/groups/{gid}/requests` → approve/reject. *The signature job.*
+1. **Approve adults waiting on my group** — `/groups/{gid}/join-requests` → approve/reject. *The signature job.*
 2. **Post & moderate in my chat / pin** — `messages`, soft-delete (`deletedAt`).
 3. **Create & manage my group's events** — `events` create/patch, delete sets `cancelledAt`.
 4. **Author a group devotional** — `POST /devotionals` (group-scoped).
 5. **Start a Watch Together** — `POST /groups/{gid}/watch`.
-6. **See who's pending vs active** — `/groups/{gid}/requests`, `/groups/{gid}/members`.
+6. **See who's pending vs active** — `/groups/{gid}/join-requests`, `/groups/{gid}/members`.
 
 ### Ministry Owner (adds, on top of leader jobs)
 1. **Approve minors** — escalated `joinRequests` (`requiresOwnerReview`), attest consent. *Never delegated.*
@@ -540,7 +540,7 @@ deliberately separate from the owner's Ministry voice.
 ┌──────────────────────────────────────────┐
 │ ‹  Requests                               │
 ├──────────────────────────────────────────┤
-│ TUESDAY TEENS                             │  ← /groups/{gid}/requests
+│ TUESDAY TEENS                             │  ← /groups/{gid}/join-requests
 │ ┌────────────────────────────────────┐   │
 │ │ Jordan Lee · adult · 2h ago        │   │
 │ │            [ ✕ Decline ] [ ✓ Approve ]│ │  ← approve → onJoinRequestWrite → membership
@@ -752,7 +752,7 @@ replies).
 
 ### 6.3 The approval flow (the product's signature interaction)
 A join request lands as a notification **and** a Manage badge.
-- **Adult → leader or owner:** one tap Approve on `/groups/{gid}/requests` → `onJoinRequestWrite`
+- **Adult → leader or owner:** one tap Approve on `/groups/{gid}/join-requests` → `onJoinRequestWrite`
   creates the membership → the new member is in, gets notified, and a welcome system message posts
   to the group.
 - **Minor → owner only:** the request sits in the amber MINORS band; Approve walks through a
