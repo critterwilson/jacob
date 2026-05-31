@@ -1,18 +1,23 @@
-"""ADR 0015 — minor escalation tests for the join-request flow.
+"""Two-step minor approval tests for the join-request flow.
 
-The load-bearing safety rules under test:
+Supersedes the single-step ADR 0015 model. The load-bearing rules under
+test:
 
-1. A minor's `POST /api/groups/{gid}/join-requests` stamps the
-   join-request with `requiresOwnerReview: true`.
-2. A group leader's approve endpoint refuses with 403
-   `minor_owner_review_required` when the request has the owner-review
-   flag, even if every other check would pass.
-3. A group leader's reject endpoint refuses with the same code.
-4. The leader-facing list endpoint hides owner-review rows entirely.
-5. The owner-facing approve endpoint refuses without parental consent.
+1. A minor's `POST /api/groups/{gid}/join-requests` enters at
+   `status: "pending_leader"` with `requiresOwnerReview: true`.
+2. A group leader's approve endpoint VOUCHES for a minor — it advances
+   the request to `pending_owner` and records `leaderVouched`, but never
+   creates a member. Adults keep the one-step approve.
+3. A group leader can reject a minor at their own stage.
+4. The leader-facing list now SHOWS minors at `pending_leader` so the
+   leader can vouch.
+5. The owner approve endpoint refuses (409 `leader_vouch_required`)
+   unless a leader has vouched (status `pending_owner` + `leaderVouched`)
+   — the "owner cannot approve without leader vouch" backstop — and
+   refuses (422) without parental consent.
 
-These are the rules that protect a child from a group leader making
-the decision unilaterally. They run on every PR.
+Both stages are required: a leader cannot finalize a minor, and an owner
+cannot approve one a leader has not vouched for. These run on every PR.
 """
 
 from __future__ import annotations
@@ -75,12 +80,7 @@ def _build_request_mode_db(
     jr_exists: bool = False,
     join_mode: str = "request",
 ) -> MagicMock:
-    """Wire the request-mode happy path: group exists, joinMode=request.
-
-    `join_mode` defaults to "request" but can be overridden to "open"
-    so the minor-escalation test for the open-mode branch (OPUS_REVIEW
-    § P0-2) can reuse this fixture.
-    """
+    """Wire the request-mode happy path: group exists, joinMode=request."""
     db = MagicMock()
 
     group_snap = MagicMock()
@@ -98,7 +98,7 @@ def _build_request_mode_db(
 
     jr_snap = MagicMock()
     jr_snap.exists = jr_exists
-    jr_snap.to_dict.return_value = {"status": "pending"}
+    jr_snap.to_dict.return_value = {"status": "pending_leader"}
     jr_doc_ref = MagicMock()
     jr_doc_ref.get.return_value = jr_snap
 
@@ -135,10 +135,62 @@ def _build_request_mode_db(
     return db
 
 
+def _minor_decision_db(
+    *, status: str, leader_vouched: bool
+) -> tuple[MagicMock, MagicMock, MagicMock]:
+    """Build a db whose single join-request is a minor in the given state.
+
+    Returns (db, jr_ref, txn). The transaction mock is wired so a router
+    using `@gcf.transactional` (patched to identity) sees `jr_ref.get`
+    and `group_ref.get` and records `txn.update` / `txn.set` calls.
+    """
+    db = MagicMock()
+    data: dict[str, object] = {
+        "status": status,
+        "requiresOwnerReview": True,
+        "isMinor": True,
+        "inviteCode": None,
+    }
+    if leader_vouched:
+        data["leaderVouched"] = {"uid": "leader", "at": "2026-05-30T00:00:00+00:00"}
+
+    jr_snap = MagicMock()
+    jr_snap.exists = True
+    jr_snap.to_dict.return_value = data
+    jr_ref = MagicMock()
+    jr_ref.get.return_value = jr_snap
+
+    group_snap = MagicMock()
+    group_snap.exists = True
+    group_snap.to_dict.return_value = {"memberCount": 1, "memberCap": 20}
+    group_ref = MagicMock()
+    group_ref.get.return_value = group_snap
+
+    member_ref = MagicMock()
+
+    def _subcol(name: str) -> MagicMock:
+        sub = MagicMock()
+        if name == "joinRequests":
+            sub.document.return_value = jr_ref
+        elif name == "members":
+            sub.document.return_value = member_ref
+        return sub
+
+    group_ref.collection.side_effect = _subcol
+    groups_col = MagicMock()
+    groups_col.document.return_value = group_ref
+    db.collection.return_value = groups_col
+
+    txn = MagicMock()
+    txn.get.return_value = jr_snap
+    db.transaction.return_value = txn
+    return db, jr_ref, txn
+
+
 # ── join-request creation: minor branch ────────────────────────────────────
 
 
-def test_minor_join_request_sets_requires_owner_review() -> None:
+def test_minor_join_request_enters_pending_leader() -> None:
     db = _build_request_mode_db(applicant_is_minor=True)
     with (
         patch("app.routers.discover._db", return_value=db),
@@ -155,22 +207,16 @@ def test_minor_join_request_sets_requires_owner_review() -> None:
     assert body["requiresOwnerReview"] is True
 
     set_call = db._jr_doc_ref.set.call_args[0][0]  # type: ignore[attr-defined]
-    assert set_call["status"] == "pending"
+    # Two-step: a minor starts in the LEADER's queue, not the owner's.
+    assert set_call["status"] == "pending_leader"
     assert set_call["isMinor"] is True
     assert set_call["requiresOwnerReview"] is True
+    assert set_call["leaderVouched"] is None
     assert set_call["parentalConsentObtained"] is None
 
 
 def test_minor_open_mode_join_escalates_instead_of_self_joining() -> None:
-    """OPUS_REVIEW § P0-2 regression — load-bearing safety.
-
-    Before this fix, `joinMode == "open"` (the default) ran a
-    transparent self-join with no isMinor check, letting a minor
-    self-join any open-mode group with no owner review. The fix
-    branches on `isMinor` BEFORE the open-mode short-circuit so a
-    minor lands in the owner-escalation queue regardless of
-    joinMode.
-    """
+    """OPUS_REVIEW § P0-2 regression — load-bearing safety (preserved)."""
     db = _build_request_mode_db(applicant_is_minor=True, join_mode="open")
     with (
         patch("app.routers.discover._db", return_value=db),
@@ -183,12 +229,12 @@ def test_minor_open_mode_join_escalates_instead_of_self_joining() -> None:
         )
     assert res.status_code == 200
     body = res.json()
-    # The decisive contract: NOT joined; pending owner review.
     assert body.get("joined") is not True
     assert body["pending"] is True
     assert body["requiresOwnerReview"] is True
 
     set_call = db._jr_doc_ref.set.call_args[0][0]  # type: ignore[attr-defined]
+    assert set_call["status"] == "pending_leader"
     assert set_call["isMinor"] is True
     assert set_call["requiresOwnerReview"] is True
 
@@ -209,101 +255,76 @@ def test_adult_join_request_does_not_set_owner_review() -> None:
     assert body["pending"] is True
     assert body["requiresOwnerReview"] is False
     set_call = db._jr_doc_ref.set.call_args[0][0]  # type: ignore[attr-defined]
+    assert set_call["status"] == "pending"
     assert set_call["isMinor"] is False
     assert set_call["requiresOwnerReview"] is False
 
 
-# ── leader approve/reject must refuse minors ───────────────────────────────
+# ── leader stage: vouch / reject a minor ───────────────────────────────────
 
 
-def test_leader_cannot_approve_minor_join_request() -> None:
-    """Load-bearing safety: a group leader must NOT be able to approve a
-    minor's join-request. ADR 0015 § 4.
+def test_leader_vouch_advances_minor_to_pending_owner() -> None:
+    """A leader VOUCHES for a minor: pending_leader → pending_owner.
+
+    Load-bearing: the leader never creates a member doc — they only
+    forward the decision to the owner.
     """
-    db = MagicMock()
-    group_ref = MagicMock()
-    group_ref.get.return_value.exists = True
-    group_ref.get.return_value.to_dict.return_value = {"memberCount": 1, "memberCap": 20}
-    jr_snap = MagicMock()
-    jr_snap.exists = True
-    jr_snap.to_dict.return_value = {
-        "status": "pending",
-        "requiresOwnerReview": True,
-        "isMinor": True,
-    }
-    jr_ref = MagicMock()
-    jr_ref.get.return_value = jr_snap
-
-    def _subcol(name: str) -> MagicMock:
-        sub = MagicMock()
-        if name == "joinRequests":
-            sub.document.return_value = jr_ref
-        return sub
-
-    group_ref.collection.side_effect = _subcol
-    groups_col = MagicMock()
-    groups_col.document.return_value = group_ref
-    db.collection.return_value = groups_col
-    db.transaction.return_value = MagicMock()
-
+    db, jr_ref, txn = _minor_decision_db(status="pending_leader", leader_vouched=False)
     with (
         patch("app.routers.discover._db", return_value=db),
         patch("app.routers.discover.gcf.transactional", lambda f: f),
+        patch("app.routers.discover.write_audit_log"),
     ):
         res = TestClient(_leader_app()).post(
             "/api/groups/g1/join-requests/minor/approve",
             headers={"Authorization": "Bearer t"},
         )
-    assert res.status_code == 403
-    assert res.json()["error"]["code"] == "minor_owner_review_required"
+    assert res.status_code == 200
+    assert res.json()["status"] == "pending_owner"
+
+    update_payload = txn.update.call_args[0][1]
+    assert update_payload["status"] == "pending_owner"
+    assert update_payload["leaderVouched"]["uid"] == "leader"
+    assert "at" in update_payload["leaderVouched"]
+    # No member doc created on the vouch path.
+    assert txn.set.call_count == 0
 
 
-def test_leader_cannot_reject_minor_join_request() -> None:
-    """Symmetric to approve — a leader doesn't decide on a minor at all."""
-    db = MagicMock()
-    group_ref = MagicMock()
-    jr_snap = MagicMock()
-    jr_snap.exists = True
-    jr_snap.to_dict.return_value = {
-        "status": "pending",
-        "requiresOwnerReview": True,
-        "isMinor": True,
-    }
-    jr_ref = MagicMock()
-    jr_ref.get.return_value = jr_snap
-
-    def _subcol(name: str) -> MagicMock:
-        sub = MagicMock()
-        if name == "joinRequests":
-            sub.document.return_value = jr_ref
-        return sub
-
-    group_ref.collection.side_effect = _subcol
-    groups_col = MagicMock()
-    groups_col.document.return_value = group_ref
-    db.collection.return_value = groups_col
-    db.transaction.return_value = MagicMock()
-
-    # The reject endpoint uses a transactional read; emulate that by
-    # making the txn.get(jr_ref) call return our snap.
-    txn = MagicMock()
-    txn.get.return_value = jr_snap
-    db.transaction.return_value = txn
-
+def test_leader_cannot_finalize_already_vouched_minor() -> None:
+    """A minor already at pending_owner is out of the leader's hands (404)."""
+    db, jr_ref, txn = _minor_decision_db(status="pending_owner", leader_vouched=True)
     with (
         patch("app.routers.discover._db", return_value=db),
         patch("app.routers.discover.gcf.transactional", lambda f: f),
+        patch("app.routers.discover.write_audit_log"),
+    ):
+        res = TestClient(_leader_app()).post(
+            "/api/groups/g1/join-requests/minor/approve",
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 404
+    assert txn.set.call_count == 0
+
+
+def test_leader_can_reject_minor_at_pending_leader() -> None:
+    """A leader may decline to vouch — rejecting a pending_leader minor."""
+    db, jr_ref, txn = _minor_decision_db(status="pending_leader", leader_vouched=False)
+    with (
+        patch("app.routers.discover._db", return_value=db),
+        patch("app.routers.discover.gcf.transactional", lambda f: f),
+        patch("app.routers.discover.write_audit_log"),
     ):
         res = TestClient(_leader_app()).post(
             "/api/groups/g1/join-requests/minor/reject",
             headers={"Authorization": "Bearer t"},
         )
-    assert res.status_code == 403
-    assert res.json()["error"]["code"] == "minor_owner_review_required"
+    assert res.status_code == 200
+    assert res.json()["status"] == "rejected"
+    assert txn.update.call_args[0][1]["status"] == "rejected"
 
 
-def test_leader_list_hides_minor_join_requests() -> None:
-    """ADR 0015: minor rows are removed from the leader-facing list entirely."""
+def test_leader_list_shows_minor_pending_leader() -> None:
+    """Two-step: the leader queue now surfaces minors awaiting their vouch."""
     db = MagicMock()
     group_ref = MagicMock()
     groups_col = MagicMock()
@@ -321,7 +342,7 @@ def test_leader_list_hides_minor_join_requests() -> None:
     minor_snap = MagicMock()
     minor_snap.id = "minor"
     minor_snap.to_dict.return_value = {
-        "status": "pending",
+        "status": "pending_leader",
         "message": "let me in",
         "requestedAt": None,
         "isMinor": True,
@@ -361,42 +382,19 @@ def test_leader_list_hides_minor_join_requests() -> None:
         )
     assert res.status_code == 200
     body = res.json()
-    uids = {r["uid"] for r in body["requests"]}
-    assert "adult" in uids
-    assert "minor" not in uids
+    rows = {r["uid"]: r for r in body["requests"]}
+    assert "adult" in rows
+    assert "minor" in rows
+    assert rows["minor"]["status"] == "pending_leader"
+    assert rows["minor"]["isMinor"] is True
+    assert rows["minor"]["requiresOwnerReview"] is True
 
 
-# ── owner-side approve: parental consent gate ──────────────────────────────
+# ── owner stage: parental-consent gate + leader-vouch backstop ─────────────
 
 
-def test_owner_approve_minor_without_consent_returns_422() -> None:
-    db = MagicMock()
-    group_ref = MagicMock()
-    group_ref.get.return_value.exists = True
-    group_ref.get.return_value.to_dict.return_value = {"memberCount": 1, "memberCap": 20}
-    jr_snap = MagicMock()
-    jr_snap.exists = True
-    jr_snap.to_dict.return_value = {
-        "status": "pending",
-        "requiresOwnerReview": True,
-        "isMinor": True,
-    }
-    jr_ref = MagicMock()
-    jr_ref.get.return_value = jr_snap
-
-    def _subcol(name: str) -> MagicMock:
-        sub = MagicMock()
-        if name == "joinRequests":
-            sub.document.return_value = jr_ref
-        elif name == "members":
-            sub.document.return_value = MagicMock()
-        return sub
-
-    group_ref.collection.side_effect = _subcol
-    groups_col = MagicMock()
-    groups_col.document.return_value = group_ref
-    db.collection.return_value = groups_col
-
+def test_owner_approve_without_consent_returns_422() -> None:
+    db, jr_ref, _txn = _minor_decision_db(status="pending_owner", leader_vouched=True)
     with patch("app.routers.admin._db", return_value=db):
         res = TestClient(_owner_app()).post(
             "/api/admin/groups/g1/join-requests/minor/approve",
@@ -408,8 +406,49 @@ def test_owner_approve_minor_without_consent_returns_422() -> None:
     jr_ref.update.assert_not_called()
 
 
-def test_owner_approve_refuses_non_minor_request_with_409() -> None:
-    """If a request isn't owner-review (i.e. an adult's), owner endpoint refuses."""
+def test_owner_cannot_approve_minor_without_leader_vouch() -> None:
+    """Bypass-proofing — load-bearing: owner cannot approve a minor still
+    at pending_leader (no leader vouch), even with parental consent.
+    """
+    db, jr_ref, txn = _minor_decision_db(status="pending_leader", leader_vouched=False)
+    with patch("app.routers.admin._db", return_value=db):
+        res = TestClient(_owner_app()).post(
+            "/api/admin/groups/g1/join-requests/minor/approve",
+            json={"parentalConsentObtained": True, "parentalConsentNotes": "ok"},
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "leader_vouch_required"
+    # No member created and no state change.
+    jr_ref.update.assert_not_called()
+    assert txn.set.call_count == 0
+
+
+def test_owner_approve_vouched_minor_creates_member() -> None:
+    db, jr_ref, txn = _minor_decision_db(status="pending_owner", leader_vouched=True)
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.admin.gcf.transactional", lambda f: f),
+        patch("app.routers.admin.write_audit_log"),
+    ):
+        res = TestClient(_owner_app()).post(
+            "/api/admin/groups/g1/join-requests/minor/approve",
+            json={"parentalConsentObtained": True, "parentalConsentNotes": "spoke to mom"},
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 200
+    assert res.json()["status"] == "approved"
+    # The join-request is finalized and a member doc is written.
+    jr_update = txn.update.call_args_list[0][0][1]
+    assert jr_update["status"] == "approved"
+    assert jr_update["parentalConsentObtained"] is True
+    member_payload = txn.set.call_args[0][1]
+    assert member_payload["role"] == "member"
+    assert member_payload["uid"] == "minor"
+
+
+def test_owner_approve_adult_request_returns_404() -> None:
+    """An adult request is never in the owner's actionable set."""
     db = MagicMock()
     group_ref = MagicMock()
     jr_snap = MagicMock()
@@ -439,5 +478,24 @@ def test_owner_approve_refuses_non_minor_request_with_409() -> None:
             json={"parentalConsentObtained": True, "parentalConsentNotes": "ok"},
             headers={"Authorization": "Bearer t"},
         )
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "not_a_minor_request"
+    assert res.status_code == 404
+    assert res.json()["error"]["code"] == "not_found"
+    jr_ref.update.assert_not_called()
+
+
+def test_owner_reject_vouched_minor() -> None:
+    db, jr_ref, _txn = _minor_decision_db(status="pending_owner", leader_vouched=True)
+    with (
+        patch("app.routers.admin._db", return_value=db),
+        patch("app.routers.admin.write_audit_log"),
+    ):
+        res = TestClient(_owner_app()).post(
+            "/api/admin/groups/g1/join-requests/minor/reject",
+            json={"reason": "Could not verify guardian consent"},
+            headers={"Authorization": "Bearer t"},
+        )
+    assert res.status_code == 200
+    assert res.json()["status"] == "rejected"
+    update_payload = jr_ref.update.call_args[0][0]
+    assert update_payload["status"] == "rejected"
+    assert update_payload["rejectionReason"] == "Could not verify guardian consent"

@@ -64,7 +64,12 @@ export default function JoinRequestsPage({ params }: Props) {
   if (!user || !isLeader) return null;
 
   const requests =
-    state.status === "ok" ? state.requests.filter((r: PendingRequest) => r.status === "pending") : [];
+    state.status === "ok"
+      ? state.requests.filter(
+          (r: PendingRequest) =>
+            r.status === "pending" || r.status === "pending_leader",
+        )
+      : [];
 
   const memberCapReached =
     !!group?.memberCap && group.memberCount >= group.memberCap;
@@ -150,6 +155,15 @@ export default function JoinRequestsPage({ params }: Props) {
                   <p className="mt-0.5 text-xs text-cream-muted">
                     {new Date(req.requestedAt).toLocaleDateString()}
                   </p>
+                  {req.status === "pending_leader" && (
+                    <p
+                      data-testid={`minor-note-${req.uid}`}
+                      className="mt-1 rounded bg-gold/10 px-2 py-1 text-xs text-gold"
+                    >
+                      Minor — your approval forwards to the owner for final
+                      review.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -161,7 +175,7 @@ export default function JoinRequestsPage({ params }: Props) {
                   onClick={() => void review(req, "approve")}
                   disabled={pending !== null}
                 >
-                  Approve
+                  {req.status === "pending_leader" ? "Vouch & forward" : "Approve"}
                 </Button>
                 <Button
                   type="button"
