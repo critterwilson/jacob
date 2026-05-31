@@ -50,10 +50,10 @@ export default function WeeklySermonAdminPage() {
     return (
       <main className="mx-auto max-w-2xl space-y-4 p-6">
         <Link href="/feed" variant="muted" className="text-caption">
-          ← Organization feed
+          ← Ministry feed
         </Link>
         <Banner tone="error">
-          Only organization owners can manage the weekly sermon.
+          Only ministry owners can manage the weekly sermon.
         </Banner>
       </main>
     );
@@ -91,7 +91,7 @@ export default function WeeklySermonAdminPage() {
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-6">
       <Link href="/feed" variant="muted" className="text-caption">
-        ← Organization feed
+        ← Ministry feed
       </Link>
 
       <header className="space-y-1">

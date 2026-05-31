@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 const AUDIENCES = [
   { value: "", label: "All" },
   { value: "christian", label: "Christian" },
-  { value: "bjj", label: "BJJ" },
   { value: "general", label: "General" },
 ] as const;
 

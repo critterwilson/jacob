@@ -56,7 +56,7 @@ describe("WeeklySermonAdminPage", () => {
     ownerMock = false;
     render(<WeeklySermonAdminPage />);
     expect(
-      screen.getByText(/only organization owners can manage the weekly sermon/i),
+      screen.getByText(/only ministry owners can manage the weekly sermon/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publish/i })).not.toBeInTheDocument();
   });

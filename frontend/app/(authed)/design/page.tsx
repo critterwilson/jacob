@@ -255,7 +255,6 @@ export default function DesignSystemShowcase() {
           />
           <Select label="Audience" defaultValue="christian">
             <option value="christian">Christian</option>
-            <option value="bjj">BJJ</option>
             <option value="general">General</option>
           </Select>
         </div>

@@ -14,7 +14,6 @@ export const christianCopy: CopyMap = {
   "discover.audienceFilter.label": "Group type",
   "discover.audienceFilter.all": "All groups",
   "discover.audienceFilter.christian": "Christian small groups",
-  "discover.audienceFilter.bjj": "BJJ teams",
   "stickerPicker.label": "Choose a sticker",
   "messageInput.placeholder": "Share an encouragement, request prayer…",
   "groupCreate.audienceLabel": "Group type",

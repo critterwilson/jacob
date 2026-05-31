@@ -73,7 +73,7 @@ function JoinForm() {
         // group (they're not a member yet) — show the pending state and
         // route home.
         setSubmitError(
-          "Thanks! Because you're under 18, your request was sent to the organization owner for review. You can use the rest of JACOB while you wait.",
+          "Thanks! Because you're under 18, your request was sent to the ministry owner for review. You can use the rest of JACOB while you wait.",
         );
         return;
       }

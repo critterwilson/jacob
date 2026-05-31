@@ -18,7 +18,7 @@ you may use JACOB only with the consent of a parent or legal guardian. If
 you are under 13, you may not use JACOB.
 
 New accounts go through an admin-approval queue. After you verify your
-email and submit your application, an organization admin reviews it and
+email and submit your application, a ministry admin reviews it and
 either approves or declines your account. For applicants aged 13 to 17,
 the admin will additionally confirm that parental or legal-guardian
 consent has been obtained before approving the account.

@@ -153,7 +153,7 @@ describe("NotificationsPage", () => {
       screen.getByLabelText("Weekly activity summary"),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Posts from your organization"),
+      screen.getByLabelText("Posts from your ministry"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Group messages")).toBeInTheDocument();
   });

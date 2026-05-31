@@ -49,7 +49,7 @@ function formatDate(v: string | null): string {
 /**
  * ADR 0015 leader-application form.
  *
- * Any signed-in user can apply to lead a new group. The organization
+ * Any signed-in user can apply to lead a new group. The ministry
  * owner reviews the application; on approval the backend creates the
  * group atomically with the applicant as its leader.
  */
@@ -112,7 +112,7 @@ export default function LeaderApplicationPage() {
           Lead a new group
         </Heading>
         <p className="text-body-sm text-cream-muted">
-          Tell us about the group you want to lead. The organization owner
+          Tell us about the group you want to lead. The ministry owner
           will review your application; on approval the group is created with
           you as its leader.
         </p>
@@ -166,7 +166,6 @@ export default function LeaderApplicationPage() {
               onChange={(e) => setAudience(e.target.value as Audience)}
             >
               <option value="christian">christian</option>
-              <option value="bjj">bjj</option>
               <option value="general">general</option>
             </select>
           </label>

@@ -215,7 +215,7 @@ def _authorize_devotional_mutation(db: Any, user: CurrentUser, group_id: str | N
         raise APIError(
             status_code=status.HTTP_403_FORBIDDEN,
             code="forbidden",
-            message="Organization owner privileges required",
+            message="Ministry owner privileges required",
         )
     if _is_group_leader(db, group_id, user.uid):
         return

@@ -245,7 +245,7 @@ def require_ministry_owner_or_admin(
     raise APIError(
         status_code=status.HTTP_403_FORBIDDEN,
         code="forbidden",
-        message="Organization owner privileges required",
+        message="Ministry owner privileges required",
     )
 
 
@@ -264,13 +264,13 @@ def require_ministry_owner(
     matches the M4 write-side guard pattern and satisfies the
     `lint_writes_have_not_banned.py` check.
     """
-    # Internal identifier kept as "ministry_owner"; user-facing term is "Organization"
+    # Internal identifier kept as "ministry_owner"; user-facing term is "Ministry"
     # (rebrand PR #302). Renaming would require a data migration of Firebase custom claims.
     if user.claims.get("ministry_owner") is not True:
         raise APIError(
             status_code=status.HTTP_403_FORBIDDEN,
             code="forbidden",
-            message="Organization owner privileges required",
+            message="Ministry owner privileges required",
         )
     return user
 

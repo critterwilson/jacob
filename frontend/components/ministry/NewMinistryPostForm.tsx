@@ -84,7 +84,7 @@ export function NewMinistryPostForm({ onPosted }: Props) {
     <Card surface="raised" padding="md">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        aria-label="New organization post"
+        aria-label="New ministry post"
         className="space-y-3"
       >
         <div>

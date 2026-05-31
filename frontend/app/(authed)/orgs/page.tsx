@@ -18,16 +18,16 @@ export default function OrgsIndexPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-8">
       <header>
-        <h1 className="text-2xl font-semibold">Your organizations</h1>
+        <h1 className="text-2xl font-semibold">Your ministries</h1>
         <p className="mt-1 text-sm text-cream-muted">
-          Organizations you administer or belong to.
+          Ministries you administer or belong to.
         </p>
       </header>
 
       {orgs.length === 0 ? (
         <div className="rounded border border-line bg-ink-raised p-8 text-center">
           <p className="text-sm text-cream-muted">
-            You don&apos;t belong to any organizations yet.
+            You don&apos;t belong to any ministries yet.
           </p>
         </div>
       ) : (

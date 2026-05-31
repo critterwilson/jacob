@@ -256,7 +256,6 @@ export default function LeaderApplicationsPage() {
                             (keep {item.proposedAudience})
                           </option>
                           <option value="christian">christian</option>
-                          <option value="bjj">bjj</option>
                           <option value="general">general</option>
                         </select>
                       </label>
