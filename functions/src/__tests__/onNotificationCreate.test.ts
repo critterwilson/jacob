@@ -45,7 +45,12 @@ vi.mock("firebase-admin/functions", () => ({
   getFunctions: vi.fn(),
 }));
 
-import { buildPayload, kindToPrefKey, onNotificationCreate } from "../onNotificationCreate";
+import {
+  buildPayload,
+  deepLinkFor,
+  kindToPrefKey,
+  onNotificationCreate,
+} from "../onNotificationCreate";
 import { getFirestore } from "firebase-admin/firestore";
 import { getFunctions } from "firebase-admin/functions";
 
@@ -139,6 +144,49 @@ describe("buildPayload", () => {
     const long = "a".repeat(120);
     const p = buildPayload({ kind: "mention", body: long, groupId: "g1" }, "alice");
     expect(p.body.length).toBeLessThanOrEqual(101); // 100 chars + ellipsis
+  });
+
+  it("carries a deep link so a tap opens the relevant surface (Android fix)", () => {
+    expect(
+      buildPayload({ kind: "group_message", body: "hi", groupId: "g1" }, "alice").link,
+    ).toBe("/groups/g1");
+    expect(
+      buildPayload({ kind: "ministry_post", body: "sermon", groupId: "g1" }, "alice").link,
+    ).toBe("/feed");
+  });
+});
+
+describe("deepLinkFor", () => {
+  it("routes group-scoped kinds to /groups/{gid}", () => {
+    expect(deepLinkFor({ kind: "group_message", groupId: "g1" })).toBe("/groups/g1");
+    expect(deepLinkFor({ kind: "mention", groupId: "g2" })).toBe("/groups/g2");
+    expect(deepLinkFor({ kind: "reply", groupId: "g3" })).toBe("/groups/g3");
+    expect(deepLinkFor({ kind: "announcement", groupId: "g4" })).toBe("/groups/g4");
+  });
+
+  it("routes ministry posts to /feed and board mentions to /boards/{boardId}", () => {
+    expect(deepLinkFor({ kind: "ministry_post", groupId: null })).toBe("/feed");
+    expect(deepLinkFor({ kind: "board_mention", boardId: "b1" })).toBe("/boards/b1");
+    expect(deepLinkFor({ kind: "board_mention" })).toBe("/boards");
+  });
+
+  it("falls back to /home when there is no group context", () => {
+    expect(deepLinkFor({ kind: "group_message", groupId: null })).toBe("/home");
+    expect(deepLinkFor({ kind: "unknown_kind" })).toBe("/home");
+  });
+
+  it("always returns a scope-anchored relative path", () => {
+    for (const kind of [
+      "group_message",
+      "mention",
+      "reply",
+      "announcement",
+      "ministry_post",
+      "board_mention",
+    ]) {
+      const link = deepLinkFor({ kind, groupId: "g1", boardId: "b1" });
+      expect(link.startsWith("/")).toBe(true);
+    }
   });
 });
 

@@ -64,6 +64,13 @@ export type FcmPayload = {
   body: string;
   data?: Record<string, string>;
   /**
+   * In-app path to open when the notification is tapped (scope-anchored,
+   * e.g. "/groups/g1"). Forwarded to the service worker via the message
+   * data + webpush notification data so our notificationclick handler can
+   * open it. Fixes the Android "tap clears but doesn't open" bug.
+   */
+  link?: string;
+  /**
    * Required collapse key. Ensures retries deduplicate at the device level.
    * Conventions:
    *   - Group reply notifications:  `groupId:${gid}`
@@ -93,6 +100,7 @@ export async function sendFcm(token: string, payload: FcmPayload): Promise<void>
   }
 
   const messaging = getMessaging();
+  const link = payload.link ?? "/home";
   try {
     await messaging.send({
       token,
@@ -100,7 +108,9 @@ export async function sendFcm(token: string, payload: FcmPayload): Promise<void>
         title: payload.title,
         body: payload.body,
       },
-      data: payload.data,
+      // Carry the deep link in the message data so it reaches the SW's
+      // notificationclick handler (event.notification.data.link).
+      data: { ...(payload.data ?? {}), link },
       android: { collapseKey: payload.collapseKey },
       apns: { headers: { "apns-collapse-id": payload.collapseKey } },
       webpush: {
@@ -115,6 +125,12 @@ export async function sendFcm(token: string, payload: FcmPayload): Promise<void>
           // replacing the earlier one. Match the two so collapse
           // behaviour is consistent end-to-end.
           tag: payload.collapseKey,
+          // Mirror the link onto the notification data so it lands on
+          // `event.notification.data.link` in the service worker. We do
+          // NOT use webpush.fcmOptions.link — that requires an absolute
+          // HTTPS URL (the prod origin isn't known here) and competes
+          // with our own notificationclick handler.
+          data: { link },
         },
       },
     });

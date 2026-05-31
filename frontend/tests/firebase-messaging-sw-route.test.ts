@@ -129,4 +129,33 @@ describe("GET /firebase-messaging-sw.js", () => {
     expect(body).toContain("/home");
     expect(body).toContain("/manifest.webmanifest");
   });
+
+  // ── Android notification-click fix ─────────────────────────────────────
+  // The FCM SDK auto-displays the notification but its built-in click
+  // handler only opens a link when fcmOptions.link/click_action is set —
+  // which it wasn't — so a tap cleared the notification without opening
+  // the app. We add our own notificationclick handler that closes the
+  // notification AND opens/focuses the deep link.
+
+  it("registers a notificationclick handler that opens the deep link", async () => {
+    const { body } = await fetchSw();
+    expect(body).toMatch(/addEventListener\(\s*["']notificationclick["']/);
+    // Closes the notification AND waitUntil()s the open — both required.
+    expect(body).toContain("event.notification.close()");
+    expect(body).toContain("event.waitUntil(");
+    // Reads the relative link from the notification data and resolves it
+    // against the SW's own origin (no hard-coded prod domain).
+    expect(body).toContain("data.link");
+    expect(body).toContain("self.location.origin");
+    // Focuses an existing window, else opens a new one.
+    expect(body).toContain("matchAll");
+    expect(body).toContain("openWindow");
+  });
+
+  it("bumps the SW version so clients pick up the new handler", async () => {
+    const { body } = await fetchSw();
+    // SW source is versioned; bumping it changes the served bytes and
+    // forces the browser to install the new worker (PR #355 pattern).
+    expect(body).toContain("jacob-shell-v5");
+  });
 });
