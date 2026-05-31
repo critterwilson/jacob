@@ -3,7 +3,7 @@
  *
  * Asserts the mobile bottom tab bar's four slots (Home / Groups /
  * Boards / Grow) and the AppShell mobile-header "Account" shortcut that
- * replaces the now-removed You tab. The organization feed is not a tab;
+ * replaces the now-removed You tab. The ministry feed is not a tab;
  * it lives in the drawer's Explore section.
  */
 import { render, screen } from "@testing-library/react";
@@ -61,7 +61,7 @@ describe("MobileTabBar", () => {
     expect(tabs[3]).toHaveAttribute("href", "/grow");
   });
 
-  it("does not render an organization Feed tab", () => {
+  it("does not render a ministry Feed tab", () => {
     render(<MobileTabBar />);
     expect(
       screen.queryByRole("link", { name: /^feed$/i }),

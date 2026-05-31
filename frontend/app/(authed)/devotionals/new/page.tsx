@@ -30,7 +30,7 @@ export default function NewDevotionalPage() {
           ← Devotionals
         </Link>
         <Banner tone="error">
-          Only organization owners can write devotionals.
+          Only ministry owners can write devotionals.
         </Banner>
       </main>
     );
@@ -63,7 +63,7 @@ export default function NewDevotionalPage() {
       <header className="flex items-center gap-5">
         <OpenBook className="h-12 w-auto shrink-0 text-gold-soft opacity-90" />
         <div className="space-y-1">
-          <Eyebrow>Organization</Eyebrow>
+          <Eyebrow>Ministry</Eyebrow>
           <Heading level={1} size="md">
             Write a devotional
           </Heading>

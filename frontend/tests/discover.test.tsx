@@ -79,9 +79,9 @@ describe("DiscoverPage", () => {
     render(<DiscoverPage />);
 
     await waitFor(() => screen.getByRole("group", { name: /filter by audience/i }));
-    const bjjBtn = screen.getByRole("button", { name: "BJJ" });
-    await user.click(bjjBtn);
-    expect(bjjBtn).toHaveAttribute("aria-pressed", "true");
+    const christianBtn = screen.getByRole("button", { name: "Christian" });
+    await user.click(christianBtn);
+    expect(christianBtn).toHaveAttribute("aria-pressed", "true");
   });
 
   it("Join button calls join-request endpoint", async () => {

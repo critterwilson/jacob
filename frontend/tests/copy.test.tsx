@@ -10,13 +10,11 @@ describe("getCopy (T56)", () => {
     expect(getCopy("christian", "discover.title")).toBe("Find a small group");
   });
 
-  it("returns the bjj variant when audience=bjj", () => {
-    expect(getCopy("bjj", "discover.title")).toBe(
-      "Find your next training partner",
-    );
+  it("resolves the bjj audience to christian copy (BJJ flavor scrapped)", () => {
+    expect(getCopy("bjj", "discover.title")).toBe("Find a small group");
   });
 
-  it("falls back to christian when bjj doesn't override the key", () => {
+  it("resolves any audience to a defined christian key", () => {
     expect(getCopy("bjj", "discover.audienceFilter.label")).toBe("Group type");
   });
 

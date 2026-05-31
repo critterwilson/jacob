@@ -18,10 +18,10 @@ const tabs = [
  * Four tabs covering the most-used destinations: Home, Groups, Boards,
  * Grow. "Groups" is the user's group list, and group chat lives one tap
  * inside each group — so the list and chat are one destination, not two
- * tabs. The organization feed is intentionally NOT a tab: groups are the
+ * tabs. The ministry feed is intentionally NOT a tab: groups are the
  * daily reality, the org tier is mostly future structure, so the feed is
  * demoted to the drawer's Explore section (and the home surface's
- * organization section) while groups take a primary slot. Profile /
+ * ministry section) while groups take a primary slot. Profile /
  * settings / sign-out live on `/settings` and are reachable in one tap
  * via the avatar button in the mobile header (and the drawer's "You"
  * section).

@@ -38,7 +38,7 @@ const SLIDES: Slide[] = [
   {
     id: "boards",
     illustration: <BoardsIcon />,
-    heading: "Boards and your organization",
+    heading: "Boards and your ministry",
     body: "Boards carry wider announcements, devotionals, and notes from leaders. Find them in the Boards tab and on your Home page.",
   },
   {

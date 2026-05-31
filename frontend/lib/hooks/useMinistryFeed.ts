@@ -81,7 +81,7 @@ export function useMinistryFeed() {
       } catch (err) {
         if (ctl.signal.aborted) return;
         if (err instanceof ApiError && err.code !== "aborted") {
-          setError("Couldn't load the organization feed.");
+          setError("Couldn't load the ministry feed.");
         }
       } finally {
         if (!ctl.signal.aborted) setLoading(false);

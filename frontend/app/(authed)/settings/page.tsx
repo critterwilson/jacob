@@ -53,7 +53,7 @@ export default function YouPage() {
             id="you-orgs-heading"
             className="px-1 text-eyebrow uppercase tracking-wider text-cream-muted"
           >
-            Organizations
+            Ministries
           </h2>
           <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-ink-raised shadow-raise">
             {orgs.map((org) => (

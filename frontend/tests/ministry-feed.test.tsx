@@ -139,7 +139,7 @@ describe("MinistryFeedPage read view", () => {
       screen.queryByRole("link", { name: /new post/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("form", { name: /new organization post/i }),
+      screen.queryByRole("form", { name: /new ministry post/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe("MinistryFeedPage read view", () => {
     expect(ctas.length).toBeGreaterThan(0);
     ctas.forEach((cta) => expect(cta).toHaveAttribute("href", "/feed/new"));
     expect(
-      screen.queryByRole("form", { name: /new organization post/i }),
+      screen.queryByRole("form", { name: /new ministry post/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -230,7 +230,7 @@ describe("NewMinistryPostPage (/feed/new) role gate", () => {
     render(<NewMinistryPostPage />);
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("form", { name: /new organization post/i }),
+      screen.queryByRole("form", { name: /new ministry post/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -238,11 +238,11 @@ describe("NewMinistryPostPage (/feed/new) role gate", () => {
     mockUseMinistryOwner.mockReturnValue(false);
     render(<NewMinistryPostPage />);
     expect(
-      screen.getByText(/only organization owners can create posts/i),
+      screen.getByText(/only ministry owners can create posts/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /organization feed/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /ministry feed/i })).toBeInTheDocument();
     expect(
-      screen.queryByRole("form", { name: /new organization post/i }),
+      screen.queryByRole("form", { name: /new ministry post/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -250,7 +250,7 @@ describe("NewMinistryPostPage (/feed/new) role gate", () => {
     mockUseMinistryOwner.mockReturnValue(true);
     render(<NewMinistryPostPage />);
     expect(
-      screen.getByRole("form", { name: /new organization post/i }),
+      screen.getByRole("form", { name: /new ministry post/i }),
     ).toBeInTheDocument();
   });
 

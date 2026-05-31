@@ -111,7 +111,7 @@ export function buildPayload(
       return { title: "↩️ New reply to your message", body, collapseKey: `groupId:${gid}` };
     case "ministry_post":
       return {
-        title: "✝️ New organization post",
+        title: "✝️ New ministry post",
         body,
         collapseKey: `ministry_post:${msgId}`,
       };

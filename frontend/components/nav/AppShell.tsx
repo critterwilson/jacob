@@ -27,7 +27,7 @@ function dispatchOpenSearch() {
 // (Explore / Grow / You / Admin) so a flat 12-item list becomes a
 // navigable hierarchy. The mobile bottom tab bar (see MobileTabBar)
 // surfaces four destinations — Home, Groups, Boards (from Explore) and
-// Grow. The organization feed is deliberately drawer-only, not a tab:
+// Grow. The ministry feed is deliberately drawer-only, not a tab:
 // groups are the daily reality, the org tier is mostly future structure.
 // The drawer continues to list every entry so desktop (which has no tab
 // bar) and any user browsing the long tail still has one authoritative
@@ -41,7 +41,7 @@ const EXPLORE: NavGroup = {
     { href: "/home", label: "Home" },
     { href: "/groups", label: "Groups" },
     { href: "/boards", label: "Boards" },
-    // Organization feed — still reachable here, but no longer a bottom
+    // Ministry feed — still reachable here, but no longer a bottom
     // tab. Listed last in Explore to mirror its demoted prominence.
     { href: "/feed", label: "Feed" },
   ],
@@ -65,12 +65,12 @@ const YOU_BASE_LINKS: NavLink[] = [
 ];
 
 function buildYouGroup(hasOrgs: boolean): NavGroup {
-  // Organizations sits between Settings and the legal/info long-tail —
+  // Ministries sits between Settings and the legal/info long-tail —
   // visible only when the user actually belongs to ≥1 org, matching the
   // previous "irrelevant for most users" treatment.
   const links: NavLink[] = [YOU_BASE_LINKS[0]];
   if (hasOrgs) {
-    links.push({ href: "/orgs", label: "Organizations" });
+    links.push({ href: "/orgs", label: "Ministries" });
   }
   links.push(...YOU_BASE_LINKS.slice(1));
   return { label: "You", links };

@@ -27,7 +27,7 @@ const ROLE_DESCRIPTIONS: Record<keyof UserRoles, string> = {
   isModerator:
     "Can review and action wellbeing flags and moderation queue items.",
   isMinistryOwner:
-    "Can author and publish posts to the central organization feed.",
+    "Can author and publish posts to the central ministry feed.",
 };
 
 export default function AdminUsersPage() {
@@ -180,7 +180,7 @@ export default function AdminUsersPage() {
     if (
       !grant &&
       !window.confirm(
-        "Remove Organization Owner access? This user will no longer be able to publish to the organization feed.",
+        "Remove Ministry Owner access? This user will no longer be able to publish to the ministry feed.",
       )
     )
       return;
@@ -359,9 +359,9 @@ export default function AdminUsersPage() {
                       onRevoke={() => void toggleModerator(u.uid, false)}
                     />
 
-                    {/* Organization Owner */}
+                    {/* Ministry Owner */}
                     <RoleRow
-                      label="Organization Owner"
+                      label="Ministry Owner"
                       description={ROLE_DESCRIPTIONS.isMinistryOwner}
                       active={rolesData[u.uid]!.isMinistryOwner}
                       actionState={

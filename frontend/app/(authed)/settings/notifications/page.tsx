@@ -28,9 +28,9 @@ const LABELS: Record<PrefKey, { title: string; description: string }> = {
       "A weekly summary of activity in your groups, sent every Sunday.",
   },
   ministryFeed: {
-    title: "Posts from your organization",
+    title: "Posts from your ministry",
     description:
-      "When your organization shares a new sermon, devotional, or announcement.",
+      "When your ministry shares a new sermon, devotional, or announcement.",
   },
   groupMessages: {
     title: "Group messages",

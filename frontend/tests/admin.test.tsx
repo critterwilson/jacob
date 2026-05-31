@@ -324,7 +324,7 @@ describe("AdminUsersPage — role management", () => {
     await waitFor(() =>
       expect(screen.getByText("Moderator")).toBeInTheDocument(),
     );
-    expect(screen.getByText("Organization Owner")).toBeInTheDocument();
+    expect(screen.getByText("Ministry Owner")).toBeInTheDocument();
     // Roles fetch should have been called for uid-1
     const roleCall = fetchMock.mock.calls.find((c) =>
       String(c[0]).includes("/roles"),

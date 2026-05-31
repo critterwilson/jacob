@@ -1,25 +1,23 @@
 // T56 — audience-keyed copy lookup.
 //
-// `useCopy("some.key")` returns the right variant for the workspace
-// org's audience (christian by default, bjj for BJJ orgs, general
-// behaves as christian until / unless we ship a third copy table).
-//
-// Christian is the canonical/fallback variant. BJJ overrides only the
-// keys where the christian wording would be jarring — anything else
-// falls through to christian. Untranslated keys return the key itself
-// (so missing-string regressions are visually obvious in dev).
+// `useCopy("some.key")` returns the copy for the workspace org's
+// audience. JACOB targets Christian ministries only; the christian
+// table is the single source of copy. The `audience` enum is retained
+// in the data model for now (see the PR that scrapped the BJJ flavor),
+// but every audience resolves to the christian copy. Untranslated keys
+// return the key itself (so missing-string regressions are visually
+// obvious in dev).
 
 "use client";
 
 import { useWorkspaceOrg } from "@/lib/org-context";
 
-import { bjjCopy } from "./bjj";
 import { christianCopy } from "./christian";
 import type { Audience, CopyMap } from "./types";
 
 const VARIANTS: Record<Audience, CopyMap> = {
   christian: christianCopy,
-  bjj: bjjCopy,
+  bjj: christianCopy,
   general: christianCopy,
 };
 

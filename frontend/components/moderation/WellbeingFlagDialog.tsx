@@ -136,7 +136,7 @@ export function WellbeingFlagDialog({
             </h2>
 
             <p className="mb-4 text-sm text-cream-muted">
-              This goes only to the moderators (you and the organization
+              This goes only to the moderators (you and the ministry
               leadership). The person you&apos;re flagging will not be told.
               You&apos;re not getting them in trouble; you&apos;re letting
               people who care reach out.

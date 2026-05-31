@@ -22,9 +22,9 @@ export default function NewMinistryPostPage() {
     return (
       <main className="mx-auto max-w-2xl space-y-4 p-6">
         <Link href="/feed" variant="muted" className="text-caption">
-          ← Organization feed
+          ← Ministry feed
         </Link>
-        <Banner tone="error">Only organization owners can create posts.</Banner>
+        <Banner tone="error">Only ministry owners can create posts.</Banner>
       </main>
     );
   }
@@ -32,7 +32,7 @@ export default function NewMinistryPostPage() {
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-6">
       <Link href="/feed" variant="muted" className="text-caption">
-        ← Organization feed
+        ← Ministry feed
       </Link>
 
       <header className="space-y-1">

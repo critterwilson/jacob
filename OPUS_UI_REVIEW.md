@@ -60,7 +60,7 @@ _None. Every reviewed surface is usable in its normal flow; the issues below are
 ### Settings/drawer — Appeals, About, and FAQ appear in both the drawer and the /settings page
 **File:** `frontend/components/nav/AppShell.tsx:60-65` and `frontend/app/(authed)/settings/page.tsx:20-30`
 **Problem:** The drawer's "You" section lists Settings, Submit an appeal, About, FAQ. The `/settings` page then lists Account items, an Appeals section ("Submit an appeal"), and an Info section (About / FAQ / Guidelines / Terms / Privacy). So "Submit an appeal", "About", and "FAQ" each exist as a tap target in two places, and the drawer's "You" group is essentially a partial, less-complete copy of the /settings page it links to.
-**Fix:** Reduce the drawer's "You" group to just "Settings" (and the conditional "Organizations") — let `/settings` be the single authoritative home for appeals/about/faq/legal. The drawer shouldn't half-duplicate a page it already links to.
+**Fix:** Reduce the drawer's "You" group to just "Settings" (and the conditional "Ministries") — let `/settings` be the single authoritative home for appeals/about/faq/legal. The drawer shouldn't half-duplicate a page it already links to.
 
 ## P3
 

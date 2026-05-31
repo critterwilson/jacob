@@ -25,7 +25,7 @@ When you create an account, we collect:
   background, only if you fill them in. You can leave them blank.
 
 New accounts go through an admin-approval queue: after you verify your
-email and submit your application, an organization admin reviews it and
+email and submit your application, a ministry admin reviews it and
 either approves or declines your account. We don't share what you
 submitted with anyone outside the admin team.
 
@@ -177,7 +177,7 @@ Users aged 13–17 may use JACOB only with the consent of a parent or legal
 guardian. The in-app gate that enforces this works as follows: when a 13–17
 year old signs up, the application enters the admin-approval queue (the
 same queue every new account goes through). Before approving an under-18
-applicant, an organization admin confirms that parental or legal-guardian
+applicant, a ministry admin confirms that parental or legal-guardian
 consent has been obtained and records that confirmation as part of the
 admin's audit trail. We do not approve under-18 accounts without that
 confirmation. If you are a parent or guardian and believe your child has

@@ -45,12 +45,12 @@ export default function MinistryFeedPage() {
     >
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <Eyebrow>From your organization</Eyebrow>
+          <Eyebrow>From your ministry</Eyebrow>
           <Heading id="ministry-feed-heading" level={1} size="md">
-            Organization feed
+            Ministry feed
           </Heading>
           <p className="text-body-sm text-cream-muted">
-            Sermons, devotionals, and announcements from your organization.
+            Sermons, devotionals, and announcements from the ministry team.
             Pinned posts stay at the top.{" "}
             <Link href="/settings/notifications" variant="muted" className="underline">
               Manage notifications

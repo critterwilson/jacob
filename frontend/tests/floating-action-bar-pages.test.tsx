@@ -127,8 +127,8 @@ function expectMobileAndDesktopCta(role: "link" | "button", name: RegExp) {
   return bar;
 }
 
-describe("FloatingActionBar — organization feed", () => {
-  it("shows the bar for the organization owner", () => {
+describe("FloatingActionBar — ministry feed", () => {
+  it("shows the bar for the ministry owner", () => {
     mockMinistryOwner.mockReturnValue(true);
     render(<MinistryFeedPage />);
     const bar = expectMobileAndDesktopCta("link", /new post/i);
@@ -205,7 +205,7 @@ describe("FloatingActionBar — group devotionals", () => {
 });
 
 describe("FloatingActionBar — platform devotionals", () => {
-  it("shows the bar for the organization owner", () => {
+  it("shows the bar for the ministry owner", () => {
     mockRoleClaims.mockReturnValue({
       isAdmin: false,
       isModerator: false,

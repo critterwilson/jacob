@@ -281,7 +281,7 @@ describe("HomePage", () => {
   it("no longer renders the stripped sections", () => {
     render(<HomePage />);
     expect(screen.queryByRole("heading", { name: /^Your groups$/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /from your organization/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /from your ministry/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /^Browse$/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/Psalms in 21 days/)).not.toBeInTheDocument();
   });

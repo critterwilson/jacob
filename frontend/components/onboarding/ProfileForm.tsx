@@ -233,7 +233,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
             autoComplete="bday"
             required
             {...register("dob")}
-            helperText="JACOB requires you to be at least 13. Applicants under 18 need an organization owner to confirm parental consent before they can join a group."
+            helperText="JACOB requires you to be at least 13. Applicants under 18 need a ministry owner to confirm parental consent before they can join a group."
             error={errors.dob?.message}
           />
 

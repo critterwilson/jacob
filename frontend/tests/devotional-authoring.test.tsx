@@ -181,7 +181,7 @@ describe("NewDevotionalPage", () => {
     });
     render(<NewDevotionalPage />);
     expect(
-      screen.getByText(/only organization owners can write devotionals/i),
+      screen.getByText(/only ministry owners can write devotionals/i),
     ).toBeInTheDocument();
   });
 
