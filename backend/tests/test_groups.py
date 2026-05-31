@@ -338,7 +338,13 @@ def test_archive_group_not_leader_returns_403() -> None:
 
 
 def test_unarchive_group_happy_path() -> None:
-    archived_ts = datetime(2026, 4, 1, tzinfo=UTC)
+    # Relative date inside the _ARCHIVE_HIDE_DAYS (60) window. Previously
+    # hardcoded to 2026-04-01, which silently tipped past the 60-day
+    # cutoff once the calendar reached 2026-05-31 and started returning
+    # 410 — a date bomb. Use a recent relative date so the test stays
+    # green regardless of the run date. The too-old (410) sibling test
+    # already uses `now - 61 days`.
+    archived_ts = datetime.now(UTC) - timedelta(days=5)
     mock_db = _make_archive_db(archived_at=archived_ts)
     with (
         patch("app.routers.groups._db", return_value=mock_db),
