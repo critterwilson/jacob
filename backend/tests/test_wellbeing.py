@@ -28,6 +28,17 @@ from app.models.user import CurrentUser
 from app.models.wellbeing import valid_next_statuses
 from app.routers.wellbeing import admin_router, router
 
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limit() -> Any:
+    """Disable per-IP rate limiting so the many submit POSTs in this file
+    don't exhaust the shared 5/day window (same pattern as other routers'
+    test suites, e.g. test_applications.py)."""
+    limiter.enabled = False
+    yield
+    limiter.enabled = True
+
+
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 
@@ -498,3 +509,137 @@ def test_list_moderators_happy_path() -> None:
     body = r.json()
     assert len(body["moderators"]) == 1
     assert body["moderators"][0]["uid"] == "mod-uid"
+
+
+# ── wellbeing flag → group-leader notification (owner ask) ──────────────────
+
+
+def _make_db_leaders(
+    leader_uids: list[str], *, has_field: bool = True, dedup: bool = False
+) -> MagicMock:
+    """db where the dedup query returns []/an existing flag and the group
+    doc carries `leaderUids`."""
+    db = MagicMock()
+
+    modq = MagicMock()
+    modq.where.return_value = modq
+    modq.limit.return_value = modq
+    if dedup:
+        existing = MagicMock()
+        existing.id = "existing-flag"
+        modq.stream.return_value = [existing]
+    else:
+        modq.stream.return_value = []
+    modq.document.return_value = MagicMock()
+
+    groups_col = MagicMock()
+    group_ref = MagicMock()
+    group_snap = MagicMock()
+    group_snap.exists = True
+    group_snap.to_dict.return_value = {"leaderUids": leader_uids} if has_field else {}
+    group_ref.get.return_value = group_snap
+    members_col = MagicMock()
+    members_col.where.return_value.stream.return_value = []
+    group_ref.collection.return_value = members_col
+    groups_col.document.return_value = group_ref
+
+    def _col(name: str) -> MagicMock:
+        if name == "groups":
+            return groups_col
+        return modq
+
+    db.collection.side_effect = _col
+    return db
+
+
+def test_wellbeing_flag_notifies_group_leaders_not_owner() -> None:
+    """Owner ask: a group-scoped wellbeing flag notifies the GROUP'S
+    LEADERS — never the ministry owner / admin."""
+    db = _make_db_leaders(["leader-1", "leader-2"])
+    bulk = MagicMock(return_value=2)
+    with (
+        patch("app.routers.wellbeing.init_firebase_admin"),
+        patch("app.routers.wellbeing._db", return_value=db),
+        patch("app.routers.wellbeing.bulk_write_notifications", bulk),
+    ):
+        r = TestClient(_make_app(uid="reporter-1")).post(
+            "/api/wellbeing/flags",
+            json={
+                "subjectUid": "subject-1",
+                "note": "I am worried about this person",
+                "groupId": "g1",
+                "messageId": "m1",
+            },
+        )
+    assert r.status_code == 201
+    bulk.assert_called_once()
+    kwargs = bulk.call_args.kwargs
+    assert set(kwargs["recipient_uids"]) == {"leader-1", "leader-2"}
+    assert kwargs["kind"] == "wellbeing_flag"
+    assert kwargs["group_id"] == "g1"
+    # The ministry owner is never a recipient — they are not a group leader.
+    assert "owner-uid" not in set(kwargs["recipient_uids"])
+
+
+def test_wellbeing_flag_excludes_subject_and_reporter_even_if_leaders() -> None:
+    """A flag must never reach its subject (confidentiality), nor pointlessly
+    the reporter — even when they hold the leader role."""
+    db = _make_db_leaders(["leader-1", "subject-1", "reporter-1"])
+    bulk = MagicMock(return_value=1)
+    with (
+        patch("app.routers.wellbeing.init_firebase_admin"),
+        patch("app.routers.wellbeing._db", return_value=db),
+        patch("app.routers.wellbeing.bulk_write_notifications", bulk),
+    ):
+        r = TestClient(_make_app(uid="reporter-1")).post(
+            "/api/wellbeing/flags",
+            json={
+                "subjectUid": "subject-1",
+                "note": "I am worried about this person",
+                "groupId": "g1",
+            },
+        )
+    assert r.status_code == 201
+    kwargs = bulk.call_args.kwargs
+    assert set(kwargs["recipient_uids"]) == {"leader-1"}
+
+
+def test_wellbeing_flag_without_group_does_not_notify_leaders() -> None:
+    """A profile-level flag (no group) has no leaders to reach — it just
+    sits in the queue. No proactive notification fires."""
+    db = _make_db_leaders([])
+    bulk = MagicMock()
+    with (
+        patch("app.routers.wellbeing.init_firebase_admin"),
+        patch("app.routers.wellbeing._db", return_value=db),
+        patch("app.routers.wellbeing.bulk_write_notifications", bulk),
+    ):
+        r = TestClient(_make_app(uid="reporter-1")).post(
+            "/api/wellbeing/flags",
+            json={"subjectUid": "subject-1", "note": "I am worried about this person"},
+        )
+    assert r.status_code == 201
+    bulk.assert_not_called()
+
+
+def test_wellbeing_flag_dedup_does_not_renotify_leaders() -> None:
+    """A duplicate submission within the window returns the existing flag
+    and must NOT re-notify the leaders."""
+    db = _make_db_leaders(["leader-1"], dedup=True)
+    bulk = MagicMock()
+    with (
+        patch("app.routers.wellbeing.init_firebase_admin"),
+        patch("app.routers.wellbeing._db", return_value=db),
+        patch("app.routers.wellbeing.bulk_write_notifications", bulk),
+    ):
+        r = TestClient(_make_app(uid="reporter-1")).post(
+            "/api/wellbeing/flags",
+            json={
+                "subjectUid": "subject-1",
+                "note": "I am worried about this person",
+                "groupId": "g1",
+            },
+        )
+    assert r.status_code == 201
+    assert r.json()["dedup"] is True
+    bulk.assert_not_called()

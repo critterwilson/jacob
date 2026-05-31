@@ -51,6 +51,7 @@ from app.models.wellbeing import (
 )
 from app.services.audit import write_audit_log
 from app.services.firebase import init_firebase_admin
+from app.services.notifications import bulk_write_notifications
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,69 @@ def _ts_to_str(ts: Any) -> str | None:
         return str(ts.isoformat())
     except AttributeError:
         return str(ts)
+
+
+def _group_leader_uids(db: Any, gid: str) -> list[str]:
+    """Resolve the leaders of a group.
+
+    Reads the denormalised `leaderUids` off the group doc (maintained by
+    `functions/src/onMemberWrite.ts`); falls back to a members scan for
+    groups not yet backfilled — same pattern as `discover.list_discover_groups`.
+    """
+    group_snap = db.collection("groups").document(gid).get()
+    data = group_snap.to_dict() or {} if getattr(group_snap, "exists", False) else {}
+    leader_uids = list(data.get("leaderUids") or [])
+    if not leader_uids and "leaderUids" not in data:
+        member_snaps = (
+            db.collection("groups")
+            .document(gid)
+            .collection("members")
+            .where("role", "==", "leader")
+            .stream()
+        )
+        leader_uids = [m.id for m in member_snaps]
+    return leader_uids
+
+
+def _notify_group_leaders_of_wellbeing(
+    db: Any, *, gid: str, reporter_uid: str, subject_uid: str
+) -> int:
+    """Notify the flagged group's leaders of a wellbeing concern.
+
+    Owner ask (2026 meeting): wellbeing concerns must reach the GROUP'S
+    LEADERS so someone who knows the person can reach out — NOT the
+    ministry owner, who was being overwhelmed. This deliberately targets
+    the `leader` role on the group, never the `ministry_owner` or `admin`
+    custom claims. Harassment/violation reports are unchanged (no
+    proactive notification; they remain visible in the moderation queue).
+
+    The flagged `subject_uid` is always excluded — even if they happen to
+    be a group leader — so a flag never leaks back to its subject. The
+    reporter is excluded too (they filed it). Best-effort: a failure here
+    must never block the flag write.
+    """
+    try:
+        recipients = [
+            uid
+            for uid in _group_leader_uids(db, gid)
+            if uid and uid != subject_uid and uid != reporter_uid
+        ]
+        if not recipients:
+            return 0
+        # Discreet body — no subject name, no note. Leaders see who/what
+        # by opening the conversation; the push must not leak the concern.
+        return bulk_write_notifications(
+            db,
+            recipient_uids=recipients,
+            kind="wellbeing_flag",
+            group_id=gid,
+            message_ref=None,
+            from_uid=None,
+            body="A wellbeing concern was raised in your group. Please check in with your people.",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("wellbeing_flag leader-notify failed gid=%s", gid)
+        return 0
 
 
 # ── user-facing: submit a wellbeing flag ──────────────────────────────────────
@@ -158,6 +222,20 @@ def submit_wellbeing_flag(
         user.uid,
         body.subjectUid,
     )
+
+    # Route the concern to the GROUP'S LEADERS — never the ministry owner
+    # (owner ask). Only when the flag is group-scoped; a profile-level
+    # flag with no group has no leaders to reach and simply sits in the
+    # queue for moderators.
+    if body.groupId:
+        notified = _notify_group_leaders_of_wellbeing(
+            db,
+            gid=body.groupId,
+            reporter_uid=user.uid,
+            subject_uid=body.subjectUid,
+        )
+        logger.info("wellbeing_flag_notified_leaders id=%s count=%d", flag_id, notified)
+
     return SubmitWellbeingFlagResponse(flagId=flag_id, dedup=False)
 
 
