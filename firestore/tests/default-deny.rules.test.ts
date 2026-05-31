@@ -318,6 +318,28 @@ describe("M6 default-deny — groups", () => {
       }),
     );
   });
+
+  it("denies a client driving the two-step minor approval state machine", async () => {
+    // Two-step minor approval (leader vouch -> owner finalize) is
+    // enforced entirely in the backend. A client must not be able to
+    // forge the leader-vouch marker or advance a minor's request to
+    // pending_owner / approved — default-deny makes every such write
+    // fail at the rules layer too, as defense-in-depth.
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "joinRequests", "minor"), {
+        status: "pending_owner",
+        requiresOwnerReview: true,
+        leaderVouched: { uid: "alice", at: serverTimestamp() },
+      }),
+    );
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1", "joinRequests", "minor"), {
+        status: "approved",
+        requiresOwnerReview: true,
+        parentalConsentObtained: true,
+      }),
+    );
+  });
 });
 
 describe("M6 default-deny — boards", () => {

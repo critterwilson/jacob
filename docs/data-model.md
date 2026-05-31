@@ -408,30 +408,41 @@ target `groups/{gid}` document with the applicant as leader and stamps
 * `createdGroupId` is set when `status == "approved"`. It is the gid of
   the group the approval produced; the applicant is its leader.
 
-## Minor-escalation fields on `groups/{gid}/joinRequests/{uid}` (ADR 0015)
+## Minor-escalation fields on `groups/{gid}/joinRequests/{uid}` (ADR 0015 + two-step minor approval)
 
-The join-request schema introduced in PR #284 grows five new fields to
-support the owner-side minor-review queue. Existing rows pre-dating
-ADR 0015 lack these fields and default to "adult / leader-decided" —
-the leader-side queue treats `requiresOwnerReview` as `false` when
-missing.
+The join-request schema introduced in PR #284 grows fields to support a
+**two-step** minor-review flow. Existing rows pre-dating ADR 0015 lack
+these fields and default to "adult / leader-decided".
 
 ```json
 {
+  "status": "pending",
   "isMinor": false,
   "requiresOwnerReview": false,
+  "leaderVouched": null,
   "inviteCode": null,
   "parentalConsentObtained": null,
   "parentalConsentNotes": ""
 }
 ```
 
-* `requiresOwnerReview` — true when the request must be decided by the
-  ministry owner. Stamped on creation from `users/{uid}.isMinor`. The
-  leader-side approve/reject endpoints refuse rows with this flag set
-  (`403 minor_owner_review_required`).
+* `status` — the request's stage. Adults are one-step:
+  `pending → approved | rejected`. **Minors are two-step:**
+  `pending_leader → pending_owner → approved | rejected`. A minor enters
+  at `pending_leader` (the group-leader queue); the leader's approve
+  endpoint *vouches*, advancing it to `pending_owner` (the owner queue),
+  and the owner finalizes with parental consent. Both stages are
+  required — the leader cannot create a member, and the owner cannot
+  approve a request still at `pending_leader`.
+* `requiresOwnerReview` — true when the request is a minor's. Stamped on
+  creation from `users/{uid}.isMinor`.
 * `isMinor` — denormalised from the user doc so the owner CG query
   doesn't have to re-fetch every user.
+* `leaderVouched` — `{ uid, at }` of the group leader who vouched (set
+  when the leader advances a minor to `pending_owner`); `null` until
+  then. The owner approve endpoint refuses
+  (`409 leader_vouch_required`) any minor request lacking this marker —
+  the "owner cannot approve without a leader vouch" backstop.
 * `inviteCode` — set when the join-request was created from an invite
   landing (`POST /api/groups/join` for a minor). The owner approval
   endpoint runs `consume_invite(code, uid)` at decision time; failures

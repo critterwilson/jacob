@@ -1104,19 +1104,20 @@ def list_minor_join_requests(
     limit: int = Query(default=_PAGE_SIZE, ge=1, le=100),
     owner: CurrentUser = Depends(require_ministry_owner_or_admin),
 ) -> MinorJoinRequestsResponse:
-    """Owner queue: pending join-requests that escalated for minor review.
+    """Owner queue: minor join-requests a group leader has vouched for.
 
-    Collection-group query on `joinRequests` filtered by
-    `requiresOwnerReview == true && status == "pending"`. The CG index
-    is declared in `firestore/firestore.indexes.json` (ADR 0015).
-    The leader-facing queue strips these rows so a leader can never see
-    or action a minor's request.
+    Two-step minor approval: a minor's request enters at "pending_leader"
+    (in the leader's queue). Only once a leader vouches does it advance
+    to "pending_owner" and surface here for the owner's final
+    parental-consent decision. The CG query is
+    `requiresOwnerReview == true && status == "pending_owner"`; the CG
+    index is declared in `firestore/firestore.indexes.json` (ADR 0015).
     """
     db = _db()
     snaps = list(
         db.collection_group("joinRequests")
         .where("requiresOwnerReview", "==", True)
-        .where("status", "==", "pending")
+        .where("status", "==", "pending_owner")
         .order_by("requestedAt", direction=gcf.Query.ASCENDING)
         .limit(limit)
         .stream()
@@ -1137,6 +1138,12 @@ def list_minor_join_requests(
         parent_path_by_snap[snap.id] = (gid, uid)
         group_refs.setdefault(gid, parent_group)
         user_refs.setdefault(uid, db.collection("users").document(uid))
+        # Resolve the vouching leader's profile in the same batch so the
+        # owner card can show "Leader-vouched: yes, by {name} on …".
+        lv0 = (snap.to_dict() or {}).get("leaderVouched")
+        lv_uid0 = lv0.get("uid") if isinstance(lv0, dict) else None
+        if lv_uid0:
+            user_refs.setdefault(lv_uid0, db.collection("users").document(lv_uid0))
 
     group_data_by_gid: dict[str, dict[str, Any]] = {}
     user_data_by_uid: dict[str, dict[str, Any]] = {}
@@ -1157,6 +1164,16 @@ def list_minor_join_requests(
         group_data = group_data_by_gid.get(gid, {})
         user_data = user_data_by_uid.get(uid, {})
 
+        # Leader-vouch attribution (two-step minor approval).
+        lv = data.get("leaderVouched")
+        lv_uid = lv.get("uid") if isinstance(lv, dict) else None
+        lv_at = lv.get("at") if isinstance(lv, dict) else None
+        leader_name = ""
+        if lv_uid:
+            leader_name = (
+                str((user_data_by_uid.get(lv_uid) or {}).get("displayName") or "") or lv_uid
+            )
+
         # Surface age if we have it on the user doc; otherwise leave None.
         # DOB lives on `users/{uid}/private/profile` (ADR 0015 § 1) so this
         # CG-time read does not have access to it — by design, to keep the
@@ -1174,6 +1191,9 @@ def list_minor_join_requests(
                 message=str(data.get("message") or ""),
                 requestedAt=_ts_to_iso(data.get("requestedAt")),
                 inviteCode=data.get("inviteCode"),
+                leaderVouchedByUid=lv_uid,
+                leaderVouchedByName=leader_name,
+                leaderVouchedAt=(_ts_to_iso(lv_at) if lv_at is not None else None),
             )
         )
 
@@ -1206,14 +1226,17 @@ def owner_approve_join_request(
 
     jr_snap = jr_ref.get()
     jr_exists = getattr(jr_snap, "exists", False)
-    jr_status = (jr_snap.to_dict() or {}).get("status") if jr_exists else None
-    if jr_status != "pending":
+    jr_data = jr_snap.to_dict() or {}
+    jr_status = jr_data.get("status") if jr_exists else None
+    # Two-step minor approval: owner-actionable minor states are the two
+    # minor stages. Anything else (adult "pending", terminal, missing)
+    # is a 404 for this endpoint.
+    if not jr_exists or jr_status not in ("pending_leader", "pending_owner"):
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="not_found",
             message="Pending join request not found",
         )
-    jr_data = jr_snap.to_dict() or {}
     if not bool(jr_data.get("requiresOwnerReview")):
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
@@ -1221,6 +1244,16 @@ def owner_approve_join_request(
             message=(
                 "This request is not flagged for owner review; " "the group leader can approve it."
             ),
+        )
+    # Load-bearing: the owner cannot finalize a minor until a group
+    # leader has vouched. A request still at "pending_leader" (or one
+    # missing the leaderVouched marker) is refused — this is the
+    # "owner cannot approve without leader vouch" backstop.
+    if jr_status != "pending_owner" or not jr_data.get("leaderVouched"):
+        raise APIError(
+            status_code=status.HTTP_409_CONFLICT,
+            code="leader_vouch_required",
+            message=("A group leader must vouch for this minor before the owner can approve."),
         )
 
     if body.parentalConsentObtained is not True:
@@ -1235,7 +1268,15 @@ def owner_approve_join_request(
     @gcf.transactional
     def _txn(transaction: Any) -> None:
         fresh_jr = jr_ref.get(transaction=transaction)
-        if not fresh_jr.exists or (fresh_jr.to_dict() or {}).get("status") != "pending":
+        fresh_data = fresh_jr.to_dict() or {}
+        # Re-check inside the transaction: still leader-vouched and still
+        # awaiting the owner. Guards against a concurrent state change
+        # between the pre-check above and this write.
+        if (
+            not fresh_jr.exists
+            or fresh_data.get("status") != "pending_owner"
+            or not fresh_data.get("leaderVouched")
+        ):
             raise APIError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 code="not_found",
@@ -1347,19 +1388,24 @@ def owner_reject_join_request(
     body: OwnerRejectJoinRequest,
     owner: CurrentUser = Depends(require_ministry_owner_or_admin),
 ) -> ReviewResponse:
-    """Owner rejects a minor's join-request with a reason (ADR 0015)."""
+    """Owner rejects a minor's join-request with a reason (ADR 0015).
+
+    Two-step minor approval: the owner can reject at either minor stage —
+    a request a leader has vouched for ("pending_owner") or one still
+    awaiting the leader ("pending_leader").
+    """
     db = _db()
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(uid)
     jr_snap = jr_ref.get()
     jr_exists = getattr(jr_snap, "exists", False)
-    jr_status = (jr_snap.to_dict() or {}).get("status") if jr_exists else None
-    if jr_status != "pending":
+    jr_data = jr_snap.to_dict() or {}
+    jr_status = jr_data.get("status") if jr_exists else None
+    if not jr_exists or jr_status not in ("pending_leader", "pending_owner"):
         raise APIError(
             status_code=status.HTTP_404_NOT_FOUND,
             code="not_found",
             message="Pending join request not found",
         )
-    jr_data = jr_snap.to_dict() or {}
     if not bool(jr_data.get("requiresOwnerReview")):
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,

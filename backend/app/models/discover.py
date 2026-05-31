@@ -47,11 +47,17 @@ class PendingRequest(BaseModel):
     photoURL: str | None = None
     message: str
     requestedAt: str  # ISO-8601
-    status: Literal["pending", "approved", "rejected"]
-    # ADR 0015 — denormalised onto the join-request doc so the owner
-    # queue can render the applicant's age band without re-reading every
-    # user doc. The leader-facing endpoint strips these out (a leader
-    # cannot see, let alone action, a minor's request).
+    # Two-step minor approval: adult requests are "pending"; a minor's
+    # request starts at "pending_leader" (awaiting the group leader's
+    # vouch). The leader queue surfaces both so the leader can act. Once
+    # a leader vouches, the request becomes "pending_owner" and leaves
+    # the leader queue for the owner queue — so this view never carries
+    # that state.
+    status: Literal["pending", "pending_leader", "approved", "rejected"]
+    # ADR 0015 — denormalised onto the join-request doc. The leader queue
+    # now surfaces minor rows (so the leader can vouch), with `isMinor`
+    # true and the status set to "pending_leader" so the UI can render
+    # the "your approval forwards to the owner" affordance.
     isMinor: bool = False
     requiresOwnerReview: bool = False
     inviteCode: str | None = None
@@ -78,6 +84,12 @@ class MinorJoinRequest(BaseModel):
     message: str
     requestedAt: str  # ISO-8601
     inviteCode: str | None = None
+    # Two-step minor approval: a request only reaches this owner queue
+    # after a group leader has vouched. These carry who vouched and when
+    # so the owner card can show "Leader-vouched: yes, by {name} on …".
+    leaderVouchedByUid: str | None = None
+    leaderVouchedByName: str = ""
+    leaderVouchedAt: str | None = None  # ISO-8601
 
 
 class MinorJoinRequestsResponse(BaseModel):
@@ -88,7 +100,9 @@ class MinorJoinRequestsResponse(BaseModel):
 class ReviewResponse(BaseModel):
     gid: str
     uid: str
-    status: Literal["approved", "rejected"]
+    # "pending_owner" is returned when a leader vouches for a minor: the
+    # decision is forwarded to the owner rather than finalized.
+    status: Literal["approved", "rejected", "pending_owner"]
 
 
 class OwnerApproveJoinRequest(BaseModel):

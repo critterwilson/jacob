@@ -10,7 +10,12 @@ export type PendingRequest = {
   photoURL: string | null;
   message: string;
   requestedAt: string;
-  status: "pending" | "approved" | "rejected";
+  // Two-step minor approval: adults are "pending"; a minor awaiting the
+  // group leader's vouch is "pending_leader" and shown with a distinct
+  // card. Once a leader vouches, the request leaves this queue.
+  status: "pending" | "pending_leader" | "approved" | "rejected";
+  isMinor?: boolean;
+  requiresOwnerReview?: boolean;
 };
 
 type PendingRequestsResponse = {
@@ -63,7 +68,10 @@ export function useJoinRequests(gid: string | undefined) {
 
   const pendingCount =
     state.status === "ok"
-      ? state.requests.filter((r: PendingRequest) => r.status === "pending").length
+      ? state.requests.filter(
+          (r: PendingRequest) =>
+            r.status === "pending" || r.status === "pending_leader",
+        ).length
       : 0;
 
   return { state, pendingCount, refresh: load };

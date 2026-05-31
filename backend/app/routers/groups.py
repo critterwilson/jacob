@@ -227,17 +227,26 @@ def join_group(
 
     jr_ref = db.collection("groups").document(gid).collection("joinRequests").document(user.uid)
     existing = jr_ref.get()
-    if existing.exists and (existing.to_dict() or {}).get("status") == "pending":
-        # Already escalated — idempotent.
+    if existing.exists and (existing.to_dict() or {}).get("status") in (
+        "pending",
+        "pending_leader",
+        "pending_owner",
+    ):
+        # Already escalated — idempotent (at whichever two-step stage).
         return JoinGroupResponse(groupId=gid, joined=False, pendingOwnerReview=True)
 
+    # Two-step minor approval: the request enters at "pending_leader" — a
+    # group leader must vouch (advancing it to "pending_owner") before
+    # the owner makes the final parental-consent call. The invite is
+    # consumed only at owner approval.
     jr_ref.set(
         {
             "message": "",
             "requestedAt": gcf.SERVER_TIMESTAMP,
-            "status": "pending",
+            "status": "pending_leader",
             "isMinor": True,
             "requiresOwnerReview": True,
+            "leaderVouched": None,
             "inviteCode": code,
             "parentalConsentObtained": None,
             "parentalConsentNotes": "",

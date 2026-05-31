@@ -99,6 +99,35 @@ describe("JoinRequestsPage", () => {
     });
   });
 
+  it("renders a minor (pending_leader) row with the forward-to-owner affordance", async () => {
+    const MINOR_REQ = {
+      uid: "kid",
+      displayName: "Casey Minor",
+      photoURL: null,
+      message: "can I join?",
+      requestedAt: "2026-05-17T10:00:00Z",
+      status: "pending_leader" as const,
+      isMinor: true,
+      requiresOwnerReview: true,
+    };
+    mockJoinRequestsState.mockReturnValue({
+      state: { status: "ok", requests: [MINOR_REQ], nextCursor: null },
+      pendingCount: 1,
+      refresh: mockRefresh,
+    });
+    render(<JoinRequestsPage params={{ gid: "g1" }} />);
+    await waitFor(() => {
+      expect(screen.getByText("Casey Minor")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("minor-note-kid")).toHaveTextContent(
+      /your approval forwards to the owner/i,
+    );
+    // The approve button is relabeled to make the vouch semantics clear.
+    expect(screen.getByTestId("approve-kid")).toHaveTextContent(
+      /vouch & forward/i,
+    );
+  });
+
   it("approve calls correct endpoint and refreshes", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,

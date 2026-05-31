@@ -23,6 +23,11 @@ type MinorJoinRequest = {
   message: string;
   requestedAt: string;
   inviteCode: string | null;
+  // Two-step minor approval: who vouched (a group leader) and when. The
+  // request only reaches this owner queue after a leader has vouched.
+  leaderVouchedByUid: string | null;
+  leaderVouchedByName: string;
+  leaderVouchedAt: string | null;
 };
 
 type ListResponse = {
@@ -141,9 +146,9 @@ export default function MinorReviewsPage() {
           Minor join requests
         </Heading>
         <p className="text-body-sm text-cream-muted">
-          Under-18 applicants who requested to join a group. Group leaders
-          cannot approve these — confirm parental consent before letting them
-          in.
+          Under-18 applicants a group leader has already vouched for. Both
+          steps are required: the leader vouches first, then you confirm
+          parental consent here before the applicant becomes a member.
         </p>
       </header>
 
@@ -178,6 +183,18 @@ export default function MinorReviewsPage() {
                           <code className="text-cream">{item.inviteCode}</code>
                         </>
                       )}
+                    </p>
+                    <p
+                      data-testid={`leader-vouch-${item.uid}`}
+                      className="text-body-sm font-medium text-sage"
+                    >
+                      Leader-vouched: yes
+                      {item.leaderVouchedByName
+                        ? `, by ${item.leaderVouchedByName}`
+                        : ""}
+                      {item.leaderVouchedAt
+                        ? ` on ${formatDate(item.leaderVouchedAt)}`
+                        : ""}
                     </p>
                   </header>
                   {item.message && (
