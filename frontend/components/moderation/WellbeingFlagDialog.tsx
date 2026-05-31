@@ -110,9 +110,9 @@ export function WellbeingFlagDialog({
         {submitted ? (
           <div className="space-y-4" data-testid="wellbeing-flag-success">
             <p className="text-body-sm text-cream">
-              Thank you. A moderator will reach out within a few days. If this
-              is an emergency — someone in immediate danger — please call 911 or
-              988 (Suicide &amp; Crisis Lifeline).
+              Thank you. Your group&apos;s leaders will reach out within a few
+              days. If this is an emergency — someone in immediate danger —
+              please call 911 or 988 (Suicide &amp; Crisis Lifeline).
             </p>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end">
               <Button
@@ -136,9 +136,9 @@ export function WellbeingFlagDialog({
             </h2>
 
             <p className="mb-4 text-sm text-cream-muted">
-              This goes only to the moderators (you and the ministry
-              leadership). The person you&apos;re flagging will not be told.
-              You&apos;re not getting them in trouble; you&apos;re letting
+              This goes to your group&apos;s leaders, so someone who knows you
+              both can reach out. The person you&apos;re flagging will not be
+              told. You&apos;re not getting them in trouble; you&apos;re letting
               people who care reach out.
             </p>
 
@@ -195,7 +195,7 @@ export function WellbeingFlagDialog({
                   fullWidth="mobile"
                   loading={submitting}
                 >
-                  {submitting ? "Sending…" : "Send to moderators"}
+                  {submitting ? "Sending…" : "Send to leaders"}
                 </Button>
               </div>
             </form>
