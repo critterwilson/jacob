@@ -29,6 +29,15 @@ resource "google_bigquery_dataset" "jacob_analytics" {
   location                   = var.bq_location
   delete_contents_on_destroy = false
 
+  # Cost guardrail: reap partitions older than 90 days from any partitioned
+  # table the firestore-to-bigquery job lands. Daily-snapshot analytics never
+  # needs more than a quarter of history. We deliberately use
+  # default_PARTITION_expiration (not default_table_expiration) so it only
+  # trims old partitions of managed tables — the external table
+  # (messages_raw_external) and the SQL views are unpartitioned and unaffected,
+  # so analytics keeps working.
+  default_partition_expiration_ms = 7776000000 # 90 days
+
   labels = {
     env = var.env
   }
@@ -37,9 +46,9 @@ resource "google_bigquery_dataset" "jacob_analytics" {
 # ── External table over GCS Firestore export ──────────────────────────────────
 
 resource "google_bigquery_table" "messages_raw_external" {
-  project    = var.project_id
-  dataset_id = google_bigquery_dataset.jacob_analytics.dataset_id
-  table_id   = "messages_raw_external"
+  project     = var.project_id
+  dataset_id  = google_bigquery_dataset.jacob_analytics.dataset_id
+  table_id    = "messages_raw_external"
   description = "External table over daily Firestore export in GCS. Partitioned by date prefix."
 
   deletion_protection = false

@@ -1,0 +1,17 @@
+[
+  {
+    "name": "delete-stale-images",
+    "action": { "type": "Delete" },
+    "condition": {
+      "tagState": "ANY",
+      "olderThan": "604800s"
+    }
+  },
+  {
+    "name": "keep-most-recent-10",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": {
+      "keepCount": 10
+    }
+  }
+]
