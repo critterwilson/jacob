@@ -43,7 +43,6 @@ from app.deps import (
 )
 from app.errors import APIError
 from app.limits import (
-    DISCOVER_LIST,
     GROUP_READ,
     GROUP_UPDATE,
     MEETING_ADDRESS_NEARBY,
@@ -118,8 +117,10 @@ def _address_from_doc(group: dict[str, Any]) -> MeetingAddress | None:
 def _effective_visibility(group: dict[str, Any]) -> Visibility:
     """Resolve effective visibility, defaulting to private for legacy docs."""
     v = group.get("meetingAddressVisibility")
-    if v in ("private", "members_only", "public"):
-        return v  # type: ignore[return-value]
+    if v == "members_only":
+        return "members_only"
+    if v == "public":
+        return "public"
     return "private"
 
 
@@ -260,7 +261,7 @@ def get_meeting_address(
     pending = bool(group.get("meetingAddressPendingPublic", False))
 
     is_member = isinstance(access, MembershipContext)
-    is_leader = is_member and access.role == "leader"
+    is_leader = is_member and access.role == "leader"  # type: ignore[union-attr]
 
     if address is None:
         return MeetingAddressResponse(
@@ -459,7 +460,9 @@ def reject_public(
         target_ref=f"groups/{gid}",
         payload={"revertedTo": effective},
     )
-    logger.info("meeting_address_reject_public gid=%s actor=%s reverted=%s", gid, owner.uid, effective)
+    logger.info(
+        "meeting_address_reject_public gid=%s actor=%s reverted=%s", gid, owner.uid, effective
+    )
     return ApprovalResponse(gid=gid, visibility=effective, pendingPublic=False)
 
 
