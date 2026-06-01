@@ -7,12 +7,11 @@ import { DeletionBanner } from "@/components/account/DeletionBanner";
 import { MobileTabBar } from "@/components/nav/MobileTabBar";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
-import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+import { useGroups } from "@/lib/hooks/useGroups";
 import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
 import { type RoleClaims, useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
-// The search button (mobile header + desktop sidebar header) dispatches
+// The search button (mobile top bar + desktop sidebar header) dispatches
 // this event; SearchBar (mounted by AuthedLayout) listens for it. Going
 // through window means AppShell doesn't need to import SearchBar — that
 // kept several test bundles lean and avoided dragging useSearch into
@@ -23,27 +22,29 @@ function dispatchOpenSearch() {
   }
 }
 
-// Nav structure — the drawer/sidebar groups the same labels into sections
-// (Explore / Grow / You / Admin) so a flat 12-item list becomes a
-// navigable hierarchy. The mobile bottom tab bar (see MobileTabBar)
-// surfaces four destinations — Home, Groups, Boards (from Explore) and
-// Grow. The ministry feed is deliberately drawer-only, not a tab:
-// groups are the daily reality, the org tier is mostly future structure.
-// The drawer continues to list every entry so desktop (which has no tab
-// bar) and any user browsing the long tail still has one authoritative
-// list.
+// Nav structure for the DESKTOP SIDEBAR.
+//
+// The v2 redesign removes the mobile hamburger drawer entirely: all mobile
+// navigation now lives in the bottom tab bar (Groups / Boards / Events /
+// Grow / Manage) plus the slim top bar (search + avatar → settings).
+//
+// Desktop, however, has no bottom tab bar, so the sidebar stays — a
+// deliberate, documented deviation from the doc's "no side rail" stance to
+// avoid stranding desktop users in Phase 1. The sidebar mirrors the new
+// IA: the four member destinations (no "Home"), the Grow-section long tail
+// (Devotionals / Reading plans / Discover / Search) so nothing is
+// orphaned, the "You" long tail (settings / ministries / legal / info),
+// and a role-gated Manage entry.
 type NavLink = { href: string; label: string };
 type NavGroup = { label: string; links: NavLink[] };
 
 const EXPLORE: NavGroup = {
   label: "Explore",
   links: [
-    { href: "/home", label: "Home" },
     { href: "/groups", label: "Groups" },
     { href: "/boards", label: "Boards" },
-    // Ministry feed — still reachable here, but no longer a bottom
-    // tab. Listed last in Explore to mirror its demoted prominence.
-    { href: "/feed", label: "Feed" },
+    { href: "/events", label: "Events" },
+    { href: "/grow", label: "Grow" },
   ],
 };
 
@@ -76,24 +77,21 @@ function buildYouGroup(hasOrgs: boolean): NavGroup {
   return { label: "You", links };
 }
 
-function buildAdminGroup(roles: RoleClaims | null): NavGroup | null {
+function buildManageGroup(
+  roles: RoleClaims | null,
+  leadsAnyGroup: boolean,
+): NavGroup | null {
   // While `roles` is `null` (first paint after token refresh) we render
-  // nothing so admins don't see a flash-then-disappear "Admin" entry if
-  // the claim later resolves to false.
+  // nothing so admins/leaders don't see a flash-then-disappear "Manage"
+  // entry if the claim later resolves to false.
   if (!roles) return null;
-  if (roles.isAdmin) {
-    return {
-      label: "Admin",
-      links: [{ href: "/admin/queue", label: "Admin console" }],
-    };
-  }
-  if (roles.isModerator) {
-    return {
-      label: "Moderation",
-      links: [{ href: "/admin/wellbeing", label: "Wellbeing" }],
-    };
-  }
-  return null;
+  const privileged =
+    roles.isAdmin ||
+    roles.isModerator ||
+    roles.isMinistryOwner ||
+    leadsAnyGroup;
+  if (!privileged) return null;
+  return { label: "Manage", links: [{ href: "/manage", label: "Manage" }] };
 }
 
 function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
@@ -108,13 +106,7 @@ function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
   );
 }
 
-function NavSection({
-  group,
-  onNavigate,
-}: {
-  group: NavGroup;
-  onNavigate?: () => void;
-}) {
+function NavSection({ group }: { group: NavGroup }) {
   const pathname = usePathname();
   return (
     <div className="px-2 pb-2 pt-3 first:pt-1">
@@ -130,7 +122,6 @@ function NavSection({
               <Link
                 href={href}
                 variant="muted"
-                onClick={onNavigate}
                 className={cn(
                   "flex min-h-11 items-center rounded-md py-2 pl-[10px] pr-3 font-sans text-label no-underline " +
                     "transition-colors duration-fast",
@@ -150,23 +141,26 @@ function NavSection({
   );
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks() {
+  const { user } = useAuth();
   const roles = useRoleClaims();
   const { orgs } = useMyOrgs();
+  const { groups } = useGroups(user?.uid);
+  const leadsAnyGroup = groups.some((g) => g.role === "leader");
   const youGroup = buildYouGroup(orgs.length > 0);
-  const adminGroup = buildAdminGroup(roles);
-  const groups: NavGroup[] = [EXPLORE, GROW, youGroup];
-  if (adminGroup) groups.push(adminGroup);
+  const manageGroup = buildManageGroup(roles, leadsAnyGroup);
+  const sections: NavGroup[] = [EXPLORE, GROW, youGroup];
+  if (manageGroup) sections.push(manageGroup);
   return (
     <div>
-      {groups.map((group) => (
-        <NavSection key={group.label} group={group} onNavigate={onNavigate} />
+      {sections.map((group) => (
+        <NavSection key={group.label} group={group} />
       ))}
     </div>
   );
 }
 
-function SignOutButton({ onNavigate }: { onNavigate?: () => void }) {
+function SignOutButton() {
   const { signOut } = useAuth();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -176,7 +170,6 @@ function SignOutButton({ onNavigate }: { onNavigate?: () => void }) {
     setPending(true);
     try {
       await signOut();
-      onNavigate?.();
       router.replace("/sign-in");
     } catch {
       setPending(false);
@@ -198,38 +191,6 @@ function SignOutButton({ onNavigate }: { onNavigate?: () => void }) {
     >
       {pending ? "Signing out…" : "Sign out"}
     </button>
-  );
-}
-
-function HamburgerIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-5 w-5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-5 w-5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
   );
 }
 
@@ -285,27 +246,19 @@ export function AppShell({
    */
   fullHeight?: boolean;
 }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const closeDrawer = () => setDrawerOpen(false);
-  const drawerRef = useFocusTrap<HTMLDivElement>({
-    active: drawerOpen,
-    onEscape: closeDrawer,
-  });
-  useBodyScrollLock(drawerOpen);
-
   return (
     <div className="flex min-h-svh bg-ink text-cream">
       {/* Desktop sidebar — pinned to the viewport (sticky top-0, full
        * viewport height) so the rail never scrolls away even if the
        * document itself scrolls. Mirrors the always-visible mobile tab
-       * bar on the desktop form factor. */}
+       * bar on the desktop form factor. Desktop has no bottom tab bar, so
+       * the sidebar is the only nav on this form factor (the mobile
+       * hamburger drawer was removed in the v2 redesign). */}
       <aside className="hidden w-56 flex-none flex-col border-r border-line bg-ink md:flex md:sticky md:top-0 md:h-svh md:self-start">
         <div className="flex items-center justify-between px-5 py-6">
           <Wordmark size="sm" />
-          {/* Parity with the mobile header search icon — desktop didn't
-           * have a search shortcut before, so /search was effectively
-           * undiscoverable without typing the URL. The Grow > Search nav
-           * link covers discovery; this icon covers speed. */}
+          {/* Parity with the mobile top-bar search icon. The Grow > Search
+           * nav link covers discovery; this icon covers speed. */}
           <button
             type="button"
             aria-label="Search messages"
@@ -327,23 +280,14 @@ export function AppShell({
         </div>
       </aside>
 
-      {/* Mobile header */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Slim mobile top bar — wordmark + scoped search + avatar. The
+         * hamburger drawer is gone (v2 redesign §7.1); all mobile nav is
+         * the bottom tab bar. The avatar is the one-tap path to /settings,
+         * which aggregates the account long tail (profile, notifications,
+         * blocked, data export, appeals, ministries, about, faq, sign
+         * out). */}
         <header className="flex items-center border-b border-line bg-ink px-4 py-3 pt-safe-t md:hidden">
-          <button
-            type="button"
-            aria-label="Open navigation menu"
-            aria-expanded={drawerOpen}
-            aria-controls="mobile-nav"
-            onClick={() => setDrawerOpen(true)}
-            className={
-              "mr-3 -ml-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
-              "hover:bg-ink-raised hover:text-cream " +
-              "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
-            }
-          >
-            <HamburgerIcon />
-          </button>
           <Wordmark size="sm" />
           <button
             type="button"
@@ -357,10 +301,6 @@ export function AppShell({
           >
             <SearchIcon />
           </button>
-          {/* Profile shortcut — the bottom tab bar (Home / Groups /
-           * Boards / Grow) has no account slot, so this is the one-tap
-           * path to /settings (account, appeals, orgs, admin, info,
-           * sign out). Drawer YOU > Settings also works (two taps). */}
           <Link
             href="/settings"
             aria-label="Account"
@@ -374,64 +314,6 @@ export function AppShell({
             <PersonIcon />
           </Link>
         </header>
-
-        {/* Mobile drawer */}
-        <div
-          ref={drawerRef}
-          id="mobile-nav"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Main navigation"
-          aria-hidden={!drawerOpen}
-          className={cn(
-            "fixed inset-0 z-40 md:hidden",
-            drawerOpen ? "pointer-events-auto" : "pointer-events-none",
-          )}
-        >
-          <button
-            type="button"
-            aria-label="Dismiss navigation menu"
-            tabIndex={drawerOpen ? 0 : -1}
-            onClick={closeDrawer}
-            className={cn(
-              "fixed inset-0 cursor-default bg-black/60 transition-opacity duration-base",
-              "focus:outline-none focus-visible:shadow-glow-gold",
-              drawerOpen ? "opacity-100" : "opacity-0",
-            )}
-          />
-          <nav
-            aria-label="Main navigation"
-            className={cn(
-              "absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-ink-raised shadow-pop",
-              "pt-safe-t pb-safe-b pl-safe-l",
-              "transition-transform duration-base will-change-transform",
-              drawerOpen ? "translate-x-0" : "-translate-x-full",
-            )}
-          >
-            <div className="flex items-center justify-between px-5 py-4">
-              <Wordmark size="sm" />
-              <button
-                type="button"
-                aria-label="Close navigation menu"
-                tabIndex={drawerOpen ? 0 : -1}
-                onClick={closeDrawer}
-                className={
-                  "-mr-2 inline-flex h-11 w-11 items-center justify-center rounded text-cream-muted " +
-                  "hover:bg-ink hover:text-cream " +
-                  "focus:outline-none focus-visible:shadow-glow-gold transition-colors duration-fast"
-                }
-              >
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto scroll-momentum">
-              <NavLinks onNavigate={closeDrawer} />
-            </div>
-            <div className="border-t border-line px-2 py-3">
-              <SignOutButton onNavigate={closeDrawer} />
-            </div>
-          </nav>
-        </div>
 
         <DeletionBanner />
         <main

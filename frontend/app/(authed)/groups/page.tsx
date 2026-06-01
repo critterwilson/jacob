@@ -4,14 +4,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { FloatingActionBar } from "@/components/ui";
+import { WeeklySermon } from "@/components/home/WeeklySermon";
+import { InstallPrompt } from "@/components/nav/InstallPrompt";
+import { PushPrompt } from "@/components/nav/PushPrompt";
+import { FloatingActionBar, Link as UILink } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroups } from "@/lib/hooks/useGroups";
+import { useMinistryOwner } from "@/lib/hooks/useMinistryOwner";
+import { useWeeklySermon } from "@/lib/hooks/useWeeklySermon";
 
 export default function GroupsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { groups, loading: groupsLoading } = useGroups(user?.uid);
+  const isOwner = useMinistryOwner();
+  const { sermon, loading: sermonLoading } = useWeeklySermon();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -31,12 +38,33 @@ export default function GroupsPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
+      {/* Install + Push prompts. Both render null when already installed /
+       * permitted / dismissed, so the wrapper collapses. They moved here
+       * from /home (removed as a destination in the v2 redesign) so they
+       * aren't lost — the Groups list is now where members land. */}
+      <div className="mb-6 flex flex-col gap-2">
+        <PushPrompt uid={user.uid} />
+        <InstallPrompt />
+      </div>
+
+      {/* Weekly sermon hero — relocated from /home so the ministry owner
+       * can still drop a weekly video and members still see it the moment
+       * they open the app (PR #356). */}
+      <div className="mb-8 space-y-2">
+        <WeeklySermon sermon={sermon} loading={sermonLoading} />
+        {isOwner === true && (
+          <UILink
+            href="/feed/weekly-sermon"
+            variant="muted"
+            className="text-body-sm"
+          >
+            {sermon ? "Update this week's sermon →" : "Post this week's sermon →"}
+          </UILink>
+        )}
+      </div>
+
       <div className="mb-6 flex flex-wrap items-center justify-between gap-y-3">
         <h1 className="text-2xl font-semibold">Your groups</h1>
-        {/* Two clear actions only — Discover groups was a third button here
-         * but it's already in the drawer (Grow > Discover groups) and the
-         * Home > Browse block, so dropping it from this header keeps the
-         * row to one primary + one secondary action on mobile. */}
         <div className="flex flex-wrap gap-2">
           <Link
             href="/join"

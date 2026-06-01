@@ -10,13 +10,26 @@ const mockSignOut = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace, push: vi.fn() }),
-  usePathname: () => "/home",
+  usePathname: () => "/groups",
 }));
 
 vi.mock("@/lib/firebase", () => ({
   auth: { __mock: "auth" },
   firestore: { __mock: "firestore" },
   app: { __mock: "app" },
+}));
+
+vi.mock("@/lib/api", () => ({
+  apiGet: vi.fn(),
+  apiGetConditional: vi.fn(),
+  apiPost: vi.fn(),
+  apiPatch: vi.fn(),
+  apiDelete: vi.fn(),
+  ApiError: class ApiError extends Error {
+    constructor(public status: number, public code: string, message: string) {
+      super(message);
+    }
+  },
 }));
 
 vi.mock("@/lib/auth-context", () => ({
@@ -39,7 +52,7 @@ beforeEach(() => {
 });
 
 describe("AppShell sign-out", () => {
-  it("calls signOut and redirects to /sign-in when the desktop button is clicked", async () => {
+  it("calls signOut and redirects to /sign-in when the sidebar button is clicked", async () => {
     mockSignOut.mockResolvedValue(undefined);
 
     render(
@@ -48,10 +61,10 @@ describe("AppShell sign-out", () => {
       </AppShell>,
     );
 
-    // The desktop sidebar and the (hidden, until opened) drawer each render
-    // a "Sign out" button — the desktop one is always visible.
-    const buttons = screen.getAllByRole("button", { name: /sign out/i });
-    await userEvent.click(buttons[0]);
+    // The desktop sidebar renders the only "Sign out" button now (the
+    // mobile drawer that previously carried a second one was removed).
+    const button = screen.getByRole("button", { name: /sign out/i });
+    await userEvent.click(button);
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     await waitFor(() =>
@@ -68,7 +81,7 @@ describe("AppShell sign-out", () => {
       </AppShell>,
     );
 
-    const button = screen.getAllByRole("button", { name: /sign out/i })[0];
+    const button = screen.getByRole("button", { name: /sign out/i });
     await userEvent.click(button);
 
     await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
@@ -76,42 +89,8 @@ describe("AppShell sign-out", () => {
     // Button re-enables after failure so the user can retry.
     await waitFor(() =>
       expect(
-        screen.getAllByRole("button", { name: /^sign out$/i })[0],
+        screen.getByRole("button", { name: /^sign out$/i }),
       ).not.toBeDisabled(),
-    );
-  });
-
-  it("signs out from the mobile drawer and closes it", async () => {
-    mockSignOut.mockResolvedValue(undefined);
-
-    render(
-      <AppShell>
-        <div />
-      </AppShell>,
-    );
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /open navigation menu/i }),
-    );
-    expect(
-      screen.getByRole("button", { name: /close navigation menu/i }),
-    ).toBeInTheDocument();
-
-    // Now there are two "Sign out" buttons (desktop + drawer); click the
-    // drawer one (the second in document order).
-    const signOutButtons = screen.getAllByRole("button", { name: /sign out/i });
-    expect(signOutButtons.length).toBeGreaterThanOrEqual(2);
-    await userEvent.click(signOutButtons[signOutButtons.length - 1]);
-
-    expect(mockSignOut).toHaveBeenCalledTimes(1);
-    await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/sign-in"),
-    );
-    // Drawer collapsed.
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("button", { name: /close navigation menu/i }),
-      ).not.toBeInTheDocument(),
     );
   });
 });

@@ -1,15 +1,22 @@
 /**
  * @vitest-environment jsdom
+ *
+ * Post-v2-redesign: `/home` is no longer a destination — it redirects to
+ * `/groups`, where the weekly sermon now lives (the surface members land
+ * on). This spec covers the new shell, the redirect, the Groups landing
+ * surface, and the shared home components (RecentActivity / VideoEmbed /
+ * WeeklySermon) that survive.
  */
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Module stubs ──────────────────────────────────────────────────────────────
 
+const mockReplace = vi.fn();
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-  usePathname: () => "/home",
+  useRouter: () => ({ replace: mockReplace, push: vi.fn() }),
+  usePathname: () => "/groups",
 }));
 
 vi.mock("@/lib/firebase", () => ({
@@ -36,28 +43,16 @@ vi.mock("@/lib/hooks/useGroups", () => ({
   useGroups: () => groupsMock,
 }));
 
-vi.mock("@/lib/hooks/useRecentMessages", () => ({
-  useRecentMessages: () => ({
-    messages: [
-      {
-        id: "m1",
-        gid: "g1",
-        groupName: "Sunday Study",
-        authorUid: "alice",
-        body: "See you Sunday!",
-        createdAt: null,
-        deletedAt: null,
-        mediaRefs: [],
-      },
-    ],
-    loading: false,
-  }),
+vi.mock("@/lib/hooks/useMyOrgs", () => ({
+  useMyOrgs: () => ({ orgs: [], loading: false, error: null }),
 }));
 
-let maintenanceFlag = false;
-
-vi.mock("@/lib/hooks/useMaintenanceBanner", () => ({
-  useMaintenanceBanner: () => ({ maintenance: maintenanceFlag, loading: false }),
+vi.mock("@/lib/hooks/useRoleClaims", () => ({
+  useRoleClaims: () => ({
+    isAdmin: false,
+    isModerator: false,
+    isMinistryOwner: false,
+  }),
 }));
 
 vi.mock("@/lib/hooks/useDeletionStatus", () => ({
@@ -110,6 +105,7 @@ vi.mock("@/components/nav/InstallPrompt", () => ({
 
 vi.mock("@/lib/api", () => ({
   apiGet: vi.fn(),
+  apiGetConditional: vi.fn(),
   apiPost: vi.fn(async () => ({})),
   ApiError: class ApiError extends Error {
     constructor(
@@ -128,10 +124,11 @@ import { AppShell } from "@/components/nav/AppShell";
 import { RecentActivity } from "@/components/home/RecentActivity";
 import { WeeklySermon } from "@/components/home/WeeklySermon";
 import { VideoEmbed } from "@/components/media/VideoEmbed";
-import HomePage from "@/app/(authed)/home/page";
+import HomeRedirect from "@/app/(authed)/home/page";
+import GroupsPage from "@/app/(authed)/groups/page";
 
 beforeEach(() => {
-  maintenanceFlag = false;
+  mockReplace.mockReset();
   ownerMock = false;
   groupsMock = {
     groups: [
@@ -152,32 +149,82 @@ beforeEach(() => {
     },
     loading: false,
   };
-  vi.restoreAllMocks();
 });
 
-// ── AppShell ──────────────────────────────────────────────────────────────────
+// ── AppShell (drawer removed; desktop sidebar + slim mobile top bar) ──────────
 
 describe("AppShell", () => {
-  it("renders desktop nav links", () => {
+  it("renders desktop nav links matching the new IA", () => {
     render(<AppShell><div /></AppShell>);
     expect(screen.getAllByRole("link", { name: "Groups" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Events" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "FAQ" })).toBeInTheDocument();
   });
 
-  it("shows hamburger button on mobile header", () => {
+  it("no longer renders a Home nav link", () => {
     render(<AppShell><div /></AppShell>);
-    expect(screen.getByRole("button", { name: /open navigation menu/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Home" })).not.toBeInTheDocument();
   });
 
-  it("opens and closes mobile drawer", async () => {
+  it("no longer renders the mobile hamburger drawer", () => {
     render(<AppShell><div /></AppShell>);
-    const hamburger = screen.getByRole("button", { name: /open navigation menu/i });
-    expect(screen.queryByRole("button", { name: /close navigation menu/i })).not.toBeInTheDocument();
-    await userEvent.click(hamburger);
-    expect(screen.getByRole("button", { name: /close navigation menu/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /close navigation menu/i }));
-    expect(screen.queryByRole("button", { name: /close navigation menu/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /open navigation menu/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: /main navigation/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the mobile top-bar account shortcut to /settings", () => {
+    render(<AppShell><div /></AppShell>);
+    expect(
+      screen.getByRole("link", { name: /^account$/i }),
+    ).toHaveAttribute("href", "/settings");
+  });
+});
+
+// ── /home redirect ────────────────────────────────────────────────────────────
+
+describe("HomeRedirect", () => {
+  it("redirects /home to /groups", () => {
+    render(<HomeRedirect />);
+    expect(mockReplace).toHaveBeenCalledWith("/groups");
+  });
+});
+
+// ── Groups page (where the weekly sermon now lives) ───────────────────────────
+
+describe("GroupsPage", () => {
+  it("renders the weekly sermon hero at the top", () => {
+    render(<GroupsPage />);
+    expect(
+      screen.getByRole("heading", { name: "Abiding in the Vine" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("This week's sermon")).toBeInTheDocument();
+  });
+
+  it("lists the user's groups", () => {
+    render(<GroupsPage />);
+    expect(screen.getByText("Sunday Study")).toBeInTheDocument();
+    expect(screen.getByText("Youth Group")).toBeInTheDocument();
+  });
+
+  it("shows an owner-only link to manage the weekly sermon", () => {
+    ownerMock = true;
+    render(<GroupsPage />);
+    expect(
+      screen.getByRole("link", { name: /update this week's sermon/i }),
+    ).toHaveAttribute("href", "/feed/weekly-sermon");
+  });
+
+  it("hides the manage link from non-owners", () => {
+    ownerMock = false;
+    render(<GroupsPage />);
+    expect(
+      screen.queryByRole("link", { name: /this week's sermon/i }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -262,61 +309,5 @@ describe("WeeklySermon", () => {
   it("renders an empty state when no sermon is posted", () => {
     render(<WeeklySermon sermon={null} loading={false} />);
     expect(screen.getByText(/no sermon has been posted yet/i)).toBeInTheDocument();
-  });
-});
-
-// ── HomePage ──────────────────────────────────────────────────────────────────
-
-describe("HomePage", () => {
-  it("shows exactly the two surfaces: weekly sermon hero + recent activity", () => {
-    render(<HomePage />);
-    // Surface 1 — weekly sermon hero.
-    expect(screen.getByRole("heading", { name: "Abiding in the Vine" })).toBeInTheDocument();
-    expect(screen.getByText("This week's sermon")).toBeInTheDocument();
-    // Surface 2 — recent chat activity.
-    expect(screen.getByRole("heading", { name: /recent in your groups/i })).toBeInTheDocument();
-    expect(screen.getByText("See you Sunday!")).toBeInTheDocument();
-  });
-
-  it("no longer renders the stripped sections", () => {
-    render(<HomePage />);
-    expect(screen.queryByRole("heading", { name: /^Your groups$/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /from your ministry/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /^Browse$/ })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Psalms in 21 days/)).not.toBeInTheDocument();
-  });
-
-  it("shows an owner-only link to manage the weekly sermon", () => {
-    ownerMock = true;
-    render(<HomePage />);
-    expect(
-      screen.getByRole("link", { name: /update this week's sermon/i }),
-    ).toHaveAttribute("href", "/feed/weekly-sermon");
-  });
-
-  it("hides the manage link from non-owners", () => {
-    ownerMock = false;
-    render(<HomePage />);
-    expect(
-      screen.queryByRole("link", { name: /this week's sermon/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("offers discover/join CTAs when the user is in no groups", () => {
-    groupsMock = { groups: [], loading: false };
-    render(<HomePage />);
-    expect(screen.getByRole("link", { name: /discover groups/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /join with code/i })).toBeInTheDocument();
-  });
-
-  it("does NOT show maintenance banner when flag is off", () => {
-    render(<HomePage />);
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("shows maintenance banner when flag is on", () => {
-    maintenanceFlag = true;
-    render(<HomePage />);
-    expect(screen.getByRole("alert")).toHaveTextContent(/maintenance/i);
   });
 });
