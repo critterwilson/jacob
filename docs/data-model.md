@@ -202,6 +202,56 @@ Leaders may update `name`, `description`, `isPrivate`, `inviteCode`,
 `stickerSet`. `memberCount` is updated by a Cloud Function in response
 to writes under `members/`.
 
+#### Meeting address + visitor discovery
+
+Groups may register the physical address they meet at so visitors can
+find local groups. A meeting address is **sensitive** (often a member's
+home), so it is **default-private** and publishing it to `public`
+requires ministry-owner approval. All access is backend-mediated via
+`/api/groups/{gid}/meeting-address*` and `/api/admin/meeting-address/*`;
+the fields below ride on the `groups/{gid}` document and stay default-deny
+for direct client access. Existing groups lack these fields → treated as
+private with no address (backward-compatible).
+
+```json
+{
+  "meetingAddress": {
+    "street": "123 Main St",
+    "city": "Provo",
+    "state": "UT",
+    "postalCode": "84601",
+    "country": "USA",
+    "lat": 40.2338,
+    "lng": -111.6585,
+    "geocodedAt": "<serverTimestamp>"
+  },
+  "meetingAddressVisibility": "private",
+  "meetingAddressPendingPublic": false
+}
+```
+
+* `meetingAddress` — object or `null`. `lat`/`lng` are cached from
+  server-side geocoding (OpenStreetMap Nominatim, see
+  `backend/app/services/geocoding.py`) at write time so the discover/map
+  surface never geocodes per render. A geocode failure stores the address
+  with `lat`/`lng` = `null` (logged, never a 500). `geocodedAt` is the
+  server timestamp of the last successful resolve.
+* `meetingAddressVisibility` — `'private' | 'members_only' | 'public'`,
+  default `'private'`. This is the **effective** visibility used by the
+  read and discover endpoints. `private` is leaders/owner-only;
+  `members_only` adds group members; `public` adds non-members and makes
+  the group appear in `GET /api/groups/discover/nearby`.
+* `meetingAddressPendingPublic` — `true` when a leader requested `public`
+  and the owner has not yet approved. While pending, the **effective**
+  visibility is held at the safe value `members_only` (or stays `public`
+  if it was already approved-public and the address was merely re-saved).
+  An owner `approve` flips effective visibility to `public` and clears the
+  flag; an owner `reject` clears the flag and leaves the safe value.
+  `private` / `members_only` requests apply immediately with no approval.
+
+Audit-logged actions: `meeting_address_set`, `meeting_address_delete`,
+`meeting_address_approve_public`, `meeting_address_reject_public`.
+
 ### `groups/{gid}/members/{uid}`
 
 Membership record. Two creation paths:
@@ -834,3 +884,4 @@ Defined in [firestore/firestore.indexes.json](../firestore/firestore.indexes.jso
 | `moderation_queue` | `status ASC`, `createdAt ASC`                         | admin dashboard pending-queue listing     |
 | `devotionals`      | `groupId ASC`, `publishedAt DESC`                     | group-scoped + platform-wide listings; supports `where groupId in […]` for the merged feed |
 | `devotionals`      | `groupId ASC`, `audience ASC`, `publishedAt DESC`     | same listings with the optional audience filter applied |
+| `groups`           | `meetingAddressVisibility ASC`, `archivedAt ASC`      | visitor discovery (`GET /api/groups/discover/nearby`) — two equality filters (effective visibility == public AND not archived) over the server-side groups query |

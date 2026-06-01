@@ -342,6 +342,85 @@ describe("M6 default-deny — groups", () => {
   });
 });
 
+describe("meeting address — backend-mediated, default-deny direct", () => {
+  // The meeting-address fields (meetingAddress, meetingAddressVisibility,
+  // meetingAddressPendingPublic) ride on the groups/{gid} document, which
+  // is already default-deny. These tests confirm a client cannot directly
+  // create or update those fields — the privacy/approval flow is enforced
+  // entirely in the backend (PUT /api/groups/{gid}/meeting-address and the
+  // owner approve/reject endpoints). A client must never be able to
+  // self-publish an address to "public" or forge the pending flag.
+  it("denies a client setting meetingAddress fields via create", async () => {
+    await assertFails(
+      setDoc(doc(authed("alice"), "groups", "g1"), {
+        name: "Test",
+        isPrivate: false,
+        createdAt: serverTimestamp(),
+        memberCount: 1,
+        meetingAddress: {
+          street: "123 Main St",
+          city: "Provo",
+          lat: 40.2338,
+          lng: -111.6585,
+        },
+        meetingAddressVisibility: "public",
+        meetingAddressPendingPublic: false,
+      }),
+    );
+  });
+
+  it("denies a client updating meetingAddress fields on an existing group", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1"), {
+        name: "Test",
+        isPrivate: false,
+        createdAt: Timestamp.now(),
+        memberCount: 1,
+        meetingAddressVisibility: "private",
+      });
+      // Seed alice as a leader so this is the strongest case: even a
+      // leader cannot drive the field directly — only the API can.
+      await setDoc(doc(db, "groups", "g1", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "g1"), {
+        meetingAddress: {
+          street: "123 Main St",
+          city: "Provo",
+          lat: 40.2338,
+          lng: -111.6585,
+        },
+        meetingAddressVisibility: "public",
+      }),
+    );
+  });
+
+  it("denies a client forging the pending-public approval flag", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "g1"), {
+        name: "Test",
+        isPrivate: false,
+        createdAt: Timestamp.now(),
+        memberCount: 1,
+        meetingAddressVisibility: "members_only",
+        meetingAddressPendingPublic: true,
+      });
+    });
+    // A client must not be able to self-approve a pending public request
+    // by clearing the flag + flipping visibility to public.
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "g1"), {
+        meetingAddressVisibility: "public",
+        meetingAddressPendingPublic: false,
+      }),
+    );
+  });
+});
+
 describe("M6 default-deny — boards", () => {
   it("denies reading boards/{bid}", async () => {
     await seed(async (db) => {

@@ -154,6 +154,17 @@ class Settings(BaseSettings):
         "ns1,ns2,app,auth,docs,static,support,internal,platform"
     )
 
+    # Group meeting addresses — forward geocoding via OpenStreetMap
+    # Nominatim (no paid API key). Nominatim's usage policy REQUIRES a
+    # descriptive, contactable User-Agent on every request and rate-limits
+    # to ≤1 req/sec — fine for us because geocoding only happens on an
+    # address write, never on reads (lat/lng is cached on the group doc).
+    # Override `nominatim_base_url` to point at a self-hosted instance for
+    # higher volume. Set the User-Agent to something that identifies this
+    # deployment and includes a contact, e.g. "JACOB/1.0 (ops@jacob.app)".
+    nominatim_base_url: str = "https://nominatim.openstreetmap.org/search"
+    nominatim_user_agent: str = "JACOB/1.0 (+https://jacob.app)"
+
     @model_validator(mode="after")
     def _block_emulator_tokens_in_production(self) -> "Settings":
         # Hard fail-closed: production must never accept emulator tokens.

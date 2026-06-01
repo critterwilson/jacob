@@ -137,6 +137,14 @@
       ]
     },
     {
+      "collectionGroup": "groups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "meetingAddressVisibility", "order": "ASCENDING" },
+        { "fieldPath": "archivedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "joinRequests",
       "queryScope": "COLLECTION",
       "fields": [
