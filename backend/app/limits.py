@@ -163,6 +163,14 @@ MINISTRY_POST_EDIT: str = "30/hour"
 MINISTRY_POST_DELETE: str = "30/hour"
 MINISTRY_POST_PIN: str = "30/hour"
 
+# Group meeting addresses + visitor discovery. The write geocodes via
+# Nominatim (≤1 req/sec policy), so cap the leader-facing set/update
+# surface tightly. The nearby-discovery read geocodes the origin query
+# (postalCode/q) so it MUST be limited even though it's a read — an
+# unthrottled geocoding endpoint is an egress + cost amplifier.
+MEETING_ADDRESS_WRITE: str = "20/hour"
+MEETING_ADDRESS_NEARBY: str = "30/minute"
+
 # Wellbeing flag pipeline. Submission is per-user per-day (mirrors REPORT_SUBMIT);
 # moderator reads are generous since they poll the queue; moderator mutations
 # match the existing ADMIN_MUTATION budget.
