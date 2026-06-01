@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MobileTabBar } from "@/components/nav/MobileTabBar";
 import { useAuth } from "@/lib/auth-context";
-import { useGroups } from "@/lib/hooks/useGroups";
+import { useGroups, type Group } from "@/lib/hooks/useGroups";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 vi.mock("next/navigation", () => ({
@@ -34,6 +34,24 @@ const NO_CLAIMS = {
   isMinistryOwner: false,
 };
 
+// Build a complete Group matching the useGroups projection. The tab bar only
+// reads `role`, but the mock return is type-checked against the full type, so
+// supply every field and override per test.
+const makeGroup = (overrides: Partial<Group> = {}): Group => ({
+  id: "g1",
+  gid: "g1",
+  name: "Tuesday Teens",
+  description: "",
+  avatarUrl: null,
+  isPrivate: false,
+  archivedAt: null,
+  role: "member",
+  joinedAt: null,
+  memberCount: 5,
+  lastMessageAt: null,
+  ...overrides,
+});
+
 beforeEach(() => {
   mockUsePathname.mockReturnValue("/groups");
   // useAuth returns a broad shape across the app; the tab bar only reads
@@ -41,7 +59,7 @@ beforeEach(() => {
   mockUseAuth.mockReturnValue({ user: { uid: "u1" } } as ReturnType<
     typeof useAuth
   >);
-  mockUseGroups.mockReturnValue({ groups: [], loading: false });
+  mockUseGroups.mockReturnValue({ groups: [], loading: false, refresh: vi.fn() });
   mockUseRoleClaims.mockReturnValue(NO_CLAIMS);
 });
 
@@ -74,16 +92,9 @@ describe("MobileTabBar", () => {
 
   it("shows the Manage tab when the user leads any group", () => {
     mockUseGroups.mockReturnValue({
-      groups: [
-        {
-          id: "g1",
-          name: "Tuesday Teens",
-          memberCount: 5,
-          lastMessagePreview: null,
-          role: "leader",
-        },
-      ],
+      groups: [makeGroup({ id: "g1", gid: "g1", name: "Tuesday Teens", role: "leader" })],
       loading: false,
+      refresh: vi.fn(),
     });
     render(<MobileTabBar />);
 
