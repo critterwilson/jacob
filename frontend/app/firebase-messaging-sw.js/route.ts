@@ -38,7 +38,7 @@ const FIREBASE_COMPAT_VERSION = "10.12.2";
 // re-precaches a fresh /home. Bumped to "4" alongside the always-visible
 // nav fix (#354) so installed PWAs that cached the old bottom-nav shell
 // pick up the pinned bar instead of serving the pre-fix /home.
-const SW_VERSION = "4";
+const SW_VERSION = "5";
 
 export const dynamic = "force-static";
 
@@ -181,6 +181,54 @@ function networkFirstWithFallback(request) {
       });
   });
 }
+
+// Open the app on the notification's deep link when tapped.
+//
+// Bug fix (Android): the FCM SDK auto-displays the notification, but its
+// built-in notificationclick handler only opens a destination when
+// fcmOptions.link / click_action is set — which it wasn't — so a tap just
+// cleared the notification without opening the app. We send the deep link
+// as a RELATIVE path in the message data and resolve it here against the
+// SW's own origin (no hard-coded prod domain). We always close the
+// notification AND waitUntil an openWindow/focus — the two steps a tap
+// needs. An existing app window is reused (focus + navigate) before a new
+// one is opened.
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  var data = (event.notification && event.notification.data) || {};
+  // FCM may nest the original message under FCM_MSG depending on how the
+  // notification was displayed; check every plausible location.
+  var fcm = data.FCM_MSG || {};
+  var link =
+    data.link ||
+    (fcm.data && fcm.data.link) ||
+    (fcm.notification && fcm.notification.click_action) ||
+    "/home";
+  var url = new URL(link, self.location.origin).href;
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(function (clientList) {
+        for (var i = 0; i < clientList.length; i++) {
+          var client = clientList[i];
+          if ("focus" in client) {
+            client.focus();
+            if ("navigate" in client && client.url !== url) {
+              try {
+                client.navigate(url);
+              } catch (e) {
+                /* cross-context navigate can fail; focus already happened */
+              }
+            }
+            return;
+          }
+        }
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(url);
+        }
+      }),
+  );
+});
 `;
 
   return new NextResponse(body, {

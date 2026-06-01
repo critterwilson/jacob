@@ -83,17 +83,52 @@ function truncate(text: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max - 1) + "…";
 }
 
+/**
+ * The in-app path a notification should open when tapped.
+ *
+ * Surfaced as `link` on the FCM payload and forwarded to the service
+ * worker (see services/fcm.ts), where our notificationclick handler opens
+ * it. Without it, tapping an Android web push just cleared the
+ * notification without opening the app. Always a scope-anchored relative
+ * path (leading "/") so the SW can resolve it against its own origin.
+ *
+ * Exported for unit tests.
+ */
+export function deepLinkFor(notif: {
+  kind: string;
+  groupId?: string | null;
+  messageRef?: string | null;
+  boardId?: string | null;
+}): string {
+  const gid = notif.groupId;
+  switch (notif.kind) {
+    case "ministry_post":
+      return "/feed";
+    case "board_mention":
+      return notif.boardId ? `/boards/${notif.boardId}` : "/boards";
+    case "announcement":
+    case "mention":
+    case "reply":
+    case "group_message":
+      return gid ? `/groups/${gid}` : "/home";
+    default:
+      return gid ? `/groups/${gid}` : "/home";
+  }
+}
+
 /** Exported for unit tests. */
 export function buildPayload(
-  notif: Pick<NotificationDoc, "kind" | "body" | "groupId" | "messageRef">,
+  notif: Pick<NotificationDoc, "kind" | "body" | "groupId" | "messageRef" | "boardId">,
   recipientUid: string,
 ): FcmPayload {
   const body = truncate(notif.body ?? "", 100);
   const gid = notif.groupId ?? "unknown";
   const msgId = notif.messageRef?.split("/").pop() ?? "unknown";
+  // Every push carries a deep link so a tap opens the relevant surface.
+  const link = deepLinkFor(notif);
   switch (notif.kind) {
     case "announcement":
-      return { title: "📢 Announcement", body, collapseKey: `announcement:${gid}` };
+      return { title: "📢 Announcement", body, link, collapseKey: `announcement:${gid}` };
     case "mention":
     case "board_mention":
       // `m:${msgId}` — msgId (a Firestore auto-id, or postId for
@@ -105,14 +140,16 @@ export function buildPayload(
       return {
         title: "💬 You were mentioned",
         body,
+        link,
         collapseKey: `m:${msgId}`,
       };
     case "reply":
-      return { title: "↩️ New reply to your message", body, collapseKey: `groupId:${gid}` };
+      return { title: "↩️ New reply to your message", body, link, collapseKey: `groupId:${gid}` };
     case "ministry_post":
       return {
         title: "✝️ New ministry post",
         body,
+        link,
         collapseKey: `ministry_post:${msgId}`,
       };
     case "group_message":
@@ -121,10 +158,11 @@ export function buildPayload(
       return {
         title: "💬 New message",
         body,
+        link,
         collapseKey: `group_message:${gid}`,
       };
     default:
-      return { title: "JACOB", body, collapseKey: `notif:${recipientUid}` };
+      return { title: "JACOB", body, link, collapseKey: `notif:${recipientUid}` };
   }
 }
 
