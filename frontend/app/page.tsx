@@ -14,7 +14,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/home");
+      // Land approved members in their groups (the gravity well), not a
+      // synthetic dashboard — /home was removed as a destination in the
+      // v2 redesign (§7.2) and now just redirects here.
+      router.replace("/groups");
     }
   }, [user, loading, router]);
 

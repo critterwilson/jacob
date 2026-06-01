@@ -1,105 +1,113 @@
-/**
- * @vitest-environment jsdom
- *
- * Asserts the mobile bottom tab bar's four slots (Home / Groups /
- * Boards / Grow) and the AppShell mobile-header "Account" shortcut that
- * replaces the now-removed You tab. The ministry feed is not a tab;
- * it lives in the drawer's Explore section.
- */
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { usePathname } from "next/navigation";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { MobileTabBar } from "@/components/nav/MobileTabBar";
+import { useAuth } from "@/lib/auth-context";
+import { useGroups } from "@/lib/hooks/useGroups";
+import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-  usePathname: () => "/home",
-}));
-
-vi.mock("@/lib/firebase", () => ({
-  auth: { __mock: "auth" },
-  firestore: { __mock: "firestore" },
-  app: { __mock: "app" },
-}));
-
-vi.mock("@/lib/api", () => ({
-  apiGet: vi.fn(),
-  apiPost: vi.fn(),
-  apiPatch: vi.fn(),
-  apiDelete: vi.fn(),
-  ApiError: class ApiError extends Error {
-    constructor(public status: number, public code: string, message: string) {
-      super(message);
-    }
-  },
+  usePathname: vi.fn(),
 }));
 
 vi.mock("@/lib/auth-context", () => ({
-  useAuth: () => ({
-    user: { uid: "alice", email: "alice@example.com" },
-    loading: false,
-    signOut: vi.fn(),
-  }),
+  useAuth: vi.fn(),
 }));
 
-vi.mock("@/lib/hooks/useDeletionStatus", () => ({
-  useDeletionStatus: () => ({ pending: false, finalizeAt: null, keepBody: true }),
+vi.mock("@/lib/hooks/useGroups", () => ({
+  useGroups: vi.fn(),
 }));
 
-import { MobileTabBar } from "@/components/nav/MobileTabBar";
-import { AppShell } from "@/components/nav/AppShell";
+vi.mock("@/lib/hooks/useRoleClaims", () => ({
+  useRoleClaims: vi.fn(),
+}));
 
-describe("MobileTabBar", () => {
-  it("renders the four primary destinations ending with Grow", () => {
-    render(<MobileTabBar />);
-    const tabs = screen.getAllByRole("link");
-    expect(tabs.map((t) => t.textContent?.trim())).toEqual([
-      "Home",
-      "Groups",
-      "Boards",
-      "Grow",
-    ]);
-    expect(tabs[1]).toHaveAttribute("href", "/groups");
-    expect(tabs[3]).toHaveAttribute("href", "/grow");
-  });
+const mockUsePathname = vi.mocked(usePathname);
+const mockUseAuth = vi.mocked(useAuth);
+const mockUseGroups = vi.mocked(useGroups);
+const mockUseRoleClaims = vi.mocked(useRoleClaims);
 
-  it("does not render a ministry Feed tab", () => {
-    render(<MobileTabBar />);
-    expect(
-      screen.queryByRole("link", { name: /^feed$/i }),
-    ).not.toBeInTheDocument();
-  });
+const NO_CLAIMS = {
+  isAdmin: false,
+  isModerator: false,
+  isMinistryOwner: false,
+};
 
-  it("does not render a You / Settings tab", () => {
-    render(<MobileTabBar />);
-    expect(
-      screen.queryByRole("link", { name: /^you$/i }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /^settings$/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("is pinned to the bottom of the viewport (fixed, full-width, above content)", () => {
-    render(<MobileTabBar />);
-    const nav = screen.getByRole("navigation", { name: /primary navigation/i });
-    // Always-visible: fixed at the bottom edge, never scrolls away.
-    expect(nav).toHaveClass("fixed");
-    expect(nav).toHaveClass("bottom-0");
-    expect(nav).toHaveClass("inset-x-0");
-    // Above page content, below drawer (z-40) / dialogs (z-50).
-    expect(nav).toHaveClass("z-30");
-    // Lifts touch targets above the iOS home indicator.
-    expect(nav).toHaveClass("pb-safe-b");
-  });
+beforeEach(() => {
+  mockUsePathname.mockReturnValue("/groups");
+  // useAuth returns a broad shape across the app; the tab bar only reads
+  // `user.uid`, so a minimal stub is enough.
+  mockUseAuth.mockReturnValue({ user: { uid: "u1" } } as ReturnType<
+    typeof useAuth
+  >);
+  mockUseGroups.mockReturnValue({ groups: [], loading: false });
+  mockUseRoleClaims.mockReturnValue(NO_CLAIMS);
 });
 
-describe("AppShell mobile header", () => {
-  it("renders the Account shortcut linking to /settings", () => {
-    render(
-      <AppShell>
-        <div />
-      </AppShell>,
-    );
-    const account = screen.getByRole("link", { name: /^account$/i });
-    expect(account).toHaveAttribute("href", "/settings");
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("MobileTabBar", () => {
+  it("shows the four member destinations and not Manage for a plain member", () => {
+    render(<MobileTabBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(nav).getByText("Groups")).toBeInTheDocument();
+    expect(within(nav).getByText("Boards")).toBeInTheDocument();
+    expect(within(nav).getByText("Events")).toBeInTheDocument();
+    expect(within(nav).getByText("Grow")).toBeInTheDocument();
+
+    expect(within(nav).queryByText("Manage")).not.toBeInTheDocument();
+    // Home was removed as a destination.
+    expect(within(nav).queryByText("Home")).not.toBeInTheDocument();
+  });
+
+  it("shows the Manage tab for a privileged claim (admin / ministry owner)", () => {
+    mockUseRoleClaims.mockReturnValue({ ...NO_CLAIMS, isMinistryOwner: true });
+    render(<MobileTabBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(nav).getByText("Manage")).toBeInTheDocument();
+  });
+
+  it("shows the Manage tab when the user leads any group", () => {
+    mockUseGroups.mockReturnValue({
+      groups: [
+        {
+          id: "g1",
+          name: "Tuesday Teens",
+          memberCount: 5,
+          lastMessagePreview: null,
+          role: "leader",
+        },
+      ],
+      loading: false,
+    });
+    render(<MobileTabBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(nav).getByText("Manage")).toBeInTheDocument();
+  });
+
+  it("hides Manage while role claims are still loading (null)", () => {
+    mockUseRoleClaims.mockReturnValue(null);
+    render(<MobileTabBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    expect(within(nav).queryByText("Manage")).not.toBeInTheDocument();
+  });
+
+  it("marks the active tab with aria-current=page", () => {
+    mockUsePathname.mockReturnValue("/groups");
+    render(<MobileTabBar />);
+
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" });
+    const groupsLink = within(nav).getByRole("link", { name: /groups/i });
+    expect(groupsLink).toHaveAttribute("aria-current", "page");
+
+    const boardsLink = within(nav).getByRole("link", { name: /boards/i });
+    expect(boardsLink).not.toHaveAttribute("aria-current");
   });
 });
