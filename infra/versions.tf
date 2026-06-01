@@ -20,6 +20,12 @@ terraform {
       source  = "hashicorp/google-beta"
       version = "~> 7.0"
     }
+    # Used to zip the billing kill-switch function source for deploy
+    # (see billing-killswitch.tf).
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
 

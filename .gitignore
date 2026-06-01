@@ -368,6 +368,7 @@ vite.config.ts.timestamp-*
 
 # Terraform — state, working dir, and variable files with real values
 infra/.terraform/
+infra/.build/
 infra/terraform.tfstate
 infra/terraform.tfstate.backup
 infra/.terraform.tfstate.lock.info
