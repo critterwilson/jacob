@@ -1,12 +1,18 @@
 /**
  * @vitest-environment jsdom
  *
- * Behavioral tests for useFocusTrap + the dialog/drawer hardening across
- * AppShell, ThreadPanel, PinnedSheet, GroupArchiveDialog, and ReportDialog.
+ * Behavioral tests for useFocusTrap + the dialog hardening across
+ * ThreadPanel, PinnedSheet, GroupArchiveDialog, and ReportDialog.
  *
  * Asserts: Tab cycles within the dialog; Shift+Tab cycles backward;
  * ESC fires onClose; aria-modal="true" + role="dialog" present; backdrop is a
  * real button.
+ *
+ * NOTE: the AppShell mobile hamburger drawer (previously the canonical
+ * focus-trapped nav surface) was removed in the v2 redesign (§7.1) — all
+ * mobile nav now lives in the bottom tab bar + slim top bar. Its
+ * focus-trap assertions were removed with it; the useFocusTrap unit tests
+ * below still cover the hook itself.
  */
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -154,52 +160,6 @@ describe("useFocusTrap", () => {
 
     await user.keyboard("{Escape}");
     expect(onEscape).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ── AppShell mobile drawer ─────────────────────────────────────────────────
-async function openMobileDrawer() {
-  const { AppShell } = await import("@/components/nav/AppShell");
-  render(
-    <AppShell>
-      <main>page</main>
-    </AppShell>,
-  );
-  const user = userEvent.setup();
-  await user.click(screen.getByLabelText(/open navigation menu/i));
-  return { user };
-}
-
-describe("AppShell mobile drawer (M-FRONT-2)", () => {
-  it("renders as role=dialog with aria-modal=true", async () => {
-    await openMobileDrawer();
-    const dialog = screen.getByRole("dialog", { name: /main navigation/i });
-    expect(dialog).toHaveAttribute("aria-modal", "true");
-  });
-
-  it("backdrop is a real <button>", async () => {
-    await openMobileDrawer();
-    const backdrop = screen.getByRole("button", {
-      name: /dismiss navigation menu/i,
-    });
-    expect(backdrop.tagName).toBe("BUTTON");
-  });
-
-  it("Escape closes the drawer", async () => {
-    const { user } = await openMobileDrawer();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
-    );
-  });
-
-  it("Tab stays inside the drawer", async () => {
-    const { user } = await openMobileDrawer();
-    const dialog = screen.getByRole("dialog");
-    await user.tab();
-    await user.tab();
-    expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });
 
