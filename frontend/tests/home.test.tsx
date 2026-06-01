@@ -156,8 +156,11 @@ beforeEach(() => {
 describe("AppShell", () => {
   it("renders desktop nav links matching the new IA", () => {
     render(<AppShell><div /></AppShell>);
+    // Groups and Events also appear in the mobile bottom tab bar (rendered
+    // inside AppShell; hidden on desktop via CSS but present in jsdom), so
+    // match all occurrences. About/FAQ live only in the desktop sidebar.
     expect(screen.getAllByRole("link", { name: "Groups" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Events" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Events" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "About" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "FAQ" })).toBeInTheDocument();
   });
