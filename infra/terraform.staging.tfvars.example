@@ -26,3 +26,11 @@ moderation_service_account_email = "jacob-moderation@YOUR_PROJECT.iam.gserviceac
 alert_email                      = "YOUR_ALERT_EMAIL@example.com"
 budget_email                     = "YOUR_ALERT_EMAIL@example.com"  # should match alert_email; used for billing budget alerts
 billing_budget_usd               = 50                              # early-warning monthly budget; alerts at 50/90/100/120%
+
+# ── $10 hard cap kill switch (billing-killswitch.tf) ─────────────────────────
+# killswitch_cap_usd     — hard monthly cap; billing is DISABLED when actual spend hits it
+# killswitch_project_ids — projects to unlink when the cap fires; empty = [project_id] (staging only)
+# killswitch_dry_run     — true logs the intended disable without unlinking (use to test the wiring first)
+killswitch_cap_usd               = 10
+killswitch_project_ids           = []      # defaults to [project_id]; add "jacob-494515" to also cap prod
+killswitch_dry_run               = false   # set true for a no-op rehearsal, then flip to false to arm
