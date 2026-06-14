@@ -32,9 +32,19 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  # Required so the billingbudgets API (and other user-project-quota APIs)
+  # bill/quota against this project instead of the ADC default project.
+  # Without this, google_billing_budget creation fails with a 403
+  # "quota project not set" / SERVICE_DISABLED on project 764086051850.
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 provider "google-beta" {
   project = var.project_id
   region  = var.region
+
+  user_project_override = true
+  billing_project       = var.project_id
 }
