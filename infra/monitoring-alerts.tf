@@ -45,12 +45,6 @@ variable "firestore_daily_read_budget" {
   default     = 50000
 }
 
-variable "early_warning_budget_usd" {
-  description = "Early-warning monthly spend threshold (USD). Independent of the kill-switch budget in uptime-checks.tf."
-  type        = number
-  default     = 100
-}
-
 # ── alert policies ────────────────────────────────────────────────────────────
 
 # Backend p95 latency. Cloud Run exposes
@@ -171,32 +165,7 @@ resource "google_monitoring_alert_policy" "firestore_read_volume" {
   }
 }
 
-# Early-warning spend alert. Cheaper to wire as a second
-# `google_billing_budget` than to overload the existing one — preserves
-# the existing kill-switch ceiling while adding a softer signal at $100.
-resource "google_billing_budget" "early_warning" {
-  billing_account = var.billing_account_id
-  display_name    = "jacob-spend-early-warning-${var.env}"
-
-  budget_filter {
-    projects = ["projects/${var.project_id}"]
-  }
-
-  amount {
-    specified_amount {
-      currency_code = "USD"
-      units         = tostring(var.early_warning_budget_usd)
-    }
-  }
-
-  # Single threshold: 100% of the early-warning amount = "we crossed $X".
-  threshold_rules {
-    threshold_percent = 1.0
-    spend_basis       = "CURRENT_SPEND"
-  }
-
-  all_updates_rule {
-    monitoring_notification_channels = local.notification_channels
-    disable_default_iam_recipients   = true
-  }
-}
+# NOTE: the early-warning $ budget that used to live here was removed in the
+# budget consolidation — the single $10 kill-switch budget
+# (billing-killswitch.tf) now covers alerting (50/75/90/100% + forecast) and
+# enforcement. See docs/runbooks/cost-control.md.
