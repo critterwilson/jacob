@@ -1,11 +1,13 @@
 -- BigQuery views for T29 sticker analytics.
 -- All views use CREATE OR REPLACE and are idempotent.
--- Run after the external table is created (see bigquery.tf).
 --
--- External table definition (Terraform creates this):
---   `jacob_analytics.messages_raw_external`
---   Backed by gs://jacob-backups-{env}/daily/{YYYY-MM-DD}/all_namespaces/all_kinds/output-*
---   Schema inferred from Firestore export format.
+-- ⚠️ STALE: these views read FROM `jacob_analytics.messages_raw_external`, which
+-- was REMOVED (it used an unsupported double-wildcard URI and duplicated the
+-- firestore-to-bigquery job's native tables). Before running this file, repoint
+-- each view at the job's native per-date tables, e.g.
+--   FROM `${project}.jacob_analytics.messages_raw_*`
+-- and add a `_TABLE_SUFFIX` filter where a date range is needed. The analytics
+-- pipeline is currently dormant (empty dataset); see docs/runbooks/bigquery-export.md.
 
 -- ── messages_daily ────────────────────────────────────────────────────────────
 -- Aggregates top-level (non-thread) message counts per group per day.

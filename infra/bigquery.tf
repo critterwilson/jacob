@@ -1,10 +1,15 @@
 /**
  * BigQuery dataset, service account, and IAM bindings for T29 analytics.
  *
- * The external table over the Firestore export bucket is defined here as
- * a google_bigquery_table resource. The three SQL views (messages_daily,
- * sticker_mix_weekly, top_contributors_weekly) are created by running
- * infra/bigquery/views.sql — see docs/runbooks/bigquery-export.md.
+ * Data is loaded by the firestore-to-bigquery Cloud Run job
+ * (infra/scheduled/firestore_to_bigquery.py), which writes native per-date
+ * tables `messages_raw_YYYYMMDD` from the daily Firestore export in GCS.
+ *
+ * NOTE: the old `messages_raw_external` external table was removed — its
+ * source URI used an unsupported double wildcard and it duplicated the job's
+ * native tables. The SQL views in infra/bigquery/views.sql still read from it
+ * and are therefore stale; repoint them at `messages_raw_*` before running
+ * them if/when analytics is activated. See docs/runbooks/bigquery-export.md.
  */
 
 variable "bq_location" {
@@ -30,39 +35,16 @@ resource "google_bigquery_dataset" "jacob_analytics" {
   delete_contents_on_destroy = false
 
   # Cost guardrail: reap partitions older than 90 days from any partitioned
-  # table the firestore-to-bigquery job lands. Daily-snapshot analytics never
-  # needs more than a quarter of history. We deliberately use
-  # default_PARTITION_expiration (not default_table_expiration) so it only
-  # trims old partitions of managed tables — the external table
-  # (messages_raw_external) and the SQL views are unpartitioned and unaffected,
-  # so analytics keeps working.
+  # table in this dataset. default_PARTITION (not default_table) expiration, so
+  # it never reaps whole tables or views. NOTE: today's firestore-to-bigquery
+  # loader writes per-date NON-partitioned tables (messages_raw_YYYYMMDD), which
+  # this does not touch — it's a forward-looking safety net for if the loader
+  # moves to a single date-partitioned table.
   default_partition_expiration_ms = 7776000000 # 90 days
 
   labels = {
     env = var.env
   }
-}
-
-# ── External table over GCS Firestore export ──────────────────────────────────
-
-resource "google_bigquery_table" "messages_raw_external" {
-  project     = var.project_id
-  dataset_id  = google_bigquery_dataset.jacob_analytics.dataset_id
-  table_id    = "messages_raw_external"
-  description = "External table over daily Firestore export in GCS. Partitioned by date prefix."
-
-  deletion_protection = false
-
-  external_data_configuration {
-    autodetect    = true
-    source_format = "DATASTORE_BACKUP"
-
-    source_uris = [
-      "gs://${var.bq_backups_bucket}/daily/*/all_namespaces/all_kinds/output-*",
-    ]
-  }
-
-  depends_on = [google_bigquery_dataset.jacob_analytics]
 }
 
 # ── Service account ───────────────────────────────────────────────────────────
