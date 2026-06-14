@@ -76,14 +76,19 @@ bash infra/firestore-ttls.sh jacob-staging-494515
 gcloud firestore fields ttls list --project=jacob-staging-494515 --filter='ttlConfig:*'
 ```
 
-### 4. Delete the superseded manual budget
+### 4. Keep a single budget (consolidation)
 
-The old toothless "JACOB dev cap" $10 budget has no notification channel and is
-replaced by the kill switch. Remove it so two budgets don't fire at $10:
+The kill-switch budget is the only one needed — it alerts *and* enforces. Older
+revisions had extra $50/$150 alert-only budgets and a manual "JACOB dev cap"; all
+have been removed. If any redundant budget resources are still in state, destroy
+them (targeted, so the rest of the infra is untouched):
 
 ```bash
-gcloud billing budgets list --billing-account=011F58-EB11C1-9D0B34   # find its id
-gcloud billing budgets delete <budget-id> --billing-account=011F58-EB11C1-9D0B34
+terraform apply -var-file="terraform.staging.tfvars" \
+  -target=google_billing_budget.monthly \
+  -target=google_billing_budget.staging \
+  -target=google_billing_budget.early_warning
+# (these resources no longer exist in config, so a targeted apply destroys them)
 ```
 
 ### 5. Non-GCP caps (dashboard / no API — manual)
@@ -99,18 +104,12 @@ gcloud billing budgets delete <budget-id> --billing-account=011F58-EB11C1-9D0B34
 | Budget | Amount | Scope | On breach | Defined in |
 |--------|--------|-------|-----------|------------|
 | **JACOB $10 hard cap (kill switch)** | **$10** | **billing account (all projects)** | emails + **disables billing** | `infra/billing-killswitch.tf` |
-| JACOB staging — monthly | $50 | staging | email only | `infra/billing-budget.tf` |
-| jacob-monthly-budget-staging | $150 | staging | email only | `infra/uptime-checks.tf` |
 
-The `$10` budget is the only one with teeth. The `$50`/`$150` budgets remain as
-early-warning layers. The legacy manually-created **"JACOB dev cap" $10** budget
-is superseded by the kill switch — **delete it** so two budgets don't fire at the
-same threshold:
-
-```bash
-gcloud billing budgets list --billing-account=011F58-EB11C1-9D0B34   # find its id
-gcloud billing budgets delete <budget-id> --billing-account=011F58-EB11C1-9D0B34
-```
+This is the **single** budget by design. It both alerts (50/75/90/100% +
+forecast) and enforces (disables billing at $10 actual spend). Earlier revisions
+carried separate $50 and $150 alert-only budgets plus a manual "JACOB dev cap" —
+all consolidated away, because once everything was set to $10 the extras only
+produced duplicate alert emails without adding any protection.
 
 ## Who gets alerted, at which thresholds
 

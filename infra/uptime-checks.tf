@@ -34,12 +34,6 @@ variable "backend_host" {
   type        = string
 }
 
-variable "monthly_budget_usd" {
-  description = "Monthly GCP spend limit in USD. Alerts fire at 50 % and 100 %."
-  type        = number
-  default     = 150
-}
-
 variable "billing_account_id" {
   description = "GCP billing account ID used for the budget resource."
   type        = string
@@ -186,40 +180,6 @@ resource "google_monitoring_alert_policy" "backend_down" {
 
   alert_strategy {
     auto_close = "604800s"
-  }
-}
-
-# ── budget alert ─────────────────────────────────────────────────────────────
-
-resource "google_billing_budget" "monthly" {
-  billing_account = var.billing_account_id
-  display_name    = "jacob-monthly-budget-${var.env}"
-
-  budget_filter {
-    projects = ["projects/${var.project_id}"]
-  }
-
-  amount {
-    specified_amount {
-      currency_code = "USD"
-      units         = tostring(var.monthly_budget_usd)
-    }
-  }
-
-  # Alert at 50 % and 100 % of the configured budget
-  threshold_rules {
-    threshold_percent = 0.5
-    spend_basis       = "CURRENT_SPEND"
-  }
-
-  threshold_rules {
-    threshold_percent = 1.0
-    spend_basis       = "CURRENT_SPEND"
-  }
-
-  all_updates_rule {
-    monitoring_notification_channels = local.notification_channels
-    disable_default_iam_recipients   = true
   }
 }
 

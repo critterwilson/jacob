@@ -13,10 +13,9 @@
  * is always the newest, so a running Cloud Run revision can never be pruned.
  * Reclaims ~96% of the stored bytes on first sweep, then stays flat.
  *
- * The repo already exists (created by the first CI push, outside Terraform), so
- * the `import` block below adopts it into state on the next apply instead of
- * trying to recreate it. Remove the import block after the first successful
- * apply — it is a one-time adoption, harmless if left but tidier gone.
+ * The repo was created by the first CI push (outside Terraform) and has since
+ * been imported into state, so Terraform now manages its cleanup policy in
+ * place rather than recreating it.
  *
  * Equivalent gcloud (if applying outside Terraform):
  *   gcloud artifacts repositories set-cleanup-policies jacob-images \
@@ -57,12 +56,6 @@ resource "google_artifact_registry_repository" "jacob_images" {
     # Cloud Run / CI may mutate labels on the repo; don't fight that.
     ignore_changes = [labels]
   }
-}
-
-# One-time adoption of the pre-existing repo. Safe to delete after first apply.
-import {
-  to = google_artifact_registry_repository.jacob_images
-  id = "projects/${var.project_id}/locations/us-central1/repositories/jacob-images"
 }
 
 output "jacob_images_repo" {
