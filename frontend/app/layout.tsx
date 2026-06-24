@@ -45,9 +45,7 @@ function hydratedOrg(): WorkspaceOrg | null {
   if (!orgId) return null;
   const audienceHeader = h.get("x-jacob-org-audience") ?? "christian";
   const audience: WorkspaceOrg["audience"] =
-    audienceHeader === "bjj" || audienceHeader === "general"
-      ? audienceHeader
-      : "christian";
+    audienceHeader === "general" ? "general" : "christian";
   return {
     orgId,
     name: h.get("x-jacob-org-name") ?? "",

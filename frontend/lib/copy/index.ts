@@ -1,12 +1,12 @@
 // T56 — audience-keyed copy lookup.
 //
 // `useCopy("some.key")` returns the copy for the workspace org's
-// audience. JACOB targets Christian ministries only; the christian
+// audience. The app targets Christian ministries only; the christian
 // table is the single source of copy. The `audience` enum is retained
-// in the data model for now (see the PR that scrapped the BJJ flavor),
-// but every audience resolves to the christian copy. Untranslated keys
-// return the key itself (so missing-string regressions are visually
-// obvious in dev).
+// in the data model to distinguish Christian-flavored groups from
+// audience-neutral "general" ones, but every audience resolves to the
+// christian copy. Untranslated keys return the key itself (so
+// missing-string regressions are visually obvious in dev).
 
 "use client";
 
@@ -17,7 +17,6 @@ import type { Audience, CopyMap } from "./types";
 
 const VARIANTS: Record<Audience, CopyMap> = {
   christian: christianCopy,
-  bjj: christianCopy,
   general: christianCopy,
 };
 

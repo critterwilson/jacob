@@ -9,7 +9,7 @@ export type Org = {
   name: string;
   slug: string;
   description: string;
-  audience: "christian" | "bjj" | "general";
+  audience: "christian" | "general";
   logoUrl: string | null;
   primaryColor: string | null;
   customDomain: string | null;
@@ -26,7 +26,7 @@ export type Org = {
 export type OrgDashboard = {
   orgId: string;
   name: string;
-  audience: "christian" | "bjj" | "general";
+  audience: "christian" | "general";
   groupCount: number;
   memberCount: number;
   archivedGroupCount: number;

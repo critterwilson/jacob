@@ -1,7 +1,7 @@
 """Org model — pydantic schemas for the multi-tenant T54 surface.
 
 An org is the parent of one or more groups: a church, a ministry
-network, a BJJ school. `groups/{gid}.orgId == null` is the
+network, a campus fellowship. `groups/{gid}.orgId == null` is the
 unaffiliated default; any field shape that touches `orgId` MUST
 treat null as a first-class value (the entire Phase 1/2 install is
 unaffiliated).
@@ -36,7 +36,7 @@ RESERVED_SLUGS = frozenset(
     }
 )
 
-OrgAudience = Literal["christian", "bjj", "general"]
+OrgAudience = Literal["christian", "general"]
 
 
 class OrgCreateRequest(BaseModel):

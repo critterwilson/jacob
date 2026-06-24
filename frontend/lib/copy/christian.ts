@@ -1,6 +1,6 @@
 // T56 — christian audience copy. Default variant; every key landed in
-// the broader app should also live here. The BJJ variant only overrides
-// the keys where the wording would feel out of place.
+// the broader app should also live here. Other audiences fall back to
+// this table (see lib/copy/index.ts).
 
 import type { CopyMap } from "./types";
 

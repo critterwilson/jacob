@@ -10,7 +10,7 @@ export type DiscoverGroup = {
   name: string;
   description: string;
   memberCount: number;
-  audience: "christian" | "bjj" | "general";
+  audience: "christian" | "general";
   joinMode: "open" | "request";
   leaderUids: string[];
   stickerMixSnapshot: object[];

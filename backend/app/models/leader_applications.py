@@ -22,7 +22,7 @@ class SubmitLeaderApplicationRequest(BaseModel):
 
     proposedGroupName: str = Field(min_length=1, max_length=80)
     proposedGroupDescription: str = Field(min_length=1, max_length=500)
-    proposedAudience: Literal["christian", "bjj", "general"] = "christian"
+    proposedAudience: Literal["christian", "general"] = "christian"
     motivation: str = Field(default="", max_length=2000)
 
 
@@ -35,7 +35,7 @@ class LeaderApplicationView(BaseModel):
     applicantEmail: str | None = None
     proposedGroupName: str
     proposedGroupDescription: str
-    proposedAudience: Literal["christian", "bjj", "general"]
+    proposedAudience: Literal["christian", "general"]
     motivation: str = ""
     status: LeaderApplicationStatus
     createdAt: datetime | None = None
@@ -59,7 +59,7 @@ class ApproveLeaderApplicationRequest(BaseModel):
     # Optional override of the proposed audience — useful if the owner
     # wants to redirect a "general" applicant into the "christian" group
     # taxonomy without bouncing the application.
-    audienceOverride: Literal["christian", "bjj", "general"] | None = None
+    audienceOverride: Literal["christian", "general"] | None = None
 
 
 class RejectLeaderApplicationRequest(BaseModel):

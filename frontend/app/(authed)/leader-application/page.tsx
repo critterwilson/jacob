@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 
-type Audience = "christian" | "bjj" | "general";
+type Audience = "christian" | "general";
 
 type LeaderApplicationView = {
   appId: string;

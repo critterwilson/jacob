@@ -14,7 +14,7 @@ class CreateGroupRequest(BaseModel):
     # T56 — audience pins the sticker set + brand voice. Immutable
     # after create (changing it would invalidate the group's sticker
     # history). Defaults to christian for back-compat.
-    audience: Literal["christian", "bjj", "general"] = "christian"
+    audience: Literal["christian", "general"] = "christian"
 
 
 class ArchiveGroupRequest(BaseModel):

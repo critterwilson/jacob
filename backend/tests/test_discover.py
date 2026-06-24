@@ -215,7 +215,7 @@ def test_discover_audience_filter() -> None:
     with patch("app.routers.discover._db", return_value=db):
         client = TestClient(_make_app())
         res = client.get(
-            "/api/discover/groups?audience=bjj",
+            "/api/discover/groups?audience=general",
             headers={"Authorization": "Bearer t"},
         )
     assert res.status_code == 200

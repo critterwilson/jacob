@@ -10,7 +10,7 @@ class DiscoverGroup(BaseModel):
     name: str
     description: str
     memberCount: int
-    audience: Literal["christian", "bjj", "general"]
+    audience: Literal["christian", "general"]
     joinMode: Literal["open", "request"]
     leaderUids: list[str]
     stickerMixSnapshot: list[dict[str, object]]

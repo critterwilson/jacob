@@ -15,7 +15,7 @@ import {
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 
 type Status = "pending" | "approved" | "rejected";
-type Audience = "christian" | "bjj" | "general";
+type Audience = "christian" | "general";
 
 type LeaderApplication = {
   appId: string;
@@ -132,7 +132,7 @@ export default function LeaderApplicationsPage() {
         const body: { decisionNotes: string; audienceOverride?: Audience } = {
           decisionNotes: notes[item.appId] ?? "",
         };
-        if (ov === "christian" || ov === "bjj" || ov === "general") {
+        if (ov === "christian" || ov === "general") {
           body.audienceOverride = ov;
         }
         await apiPost(
