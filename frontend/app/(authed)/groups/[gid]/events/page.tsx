@@ -229,7 +229,7 @@ export default function EventsListPage() {
                   [
                     { value: "going", label: "Going" },
                     { value: "maybe", label: "Maybe" },
-                    { value: "no", label: "Can't" },
+                    { value: "no", label: "Not going" },
                   ] as { value: RsvpStatus; label: string }[]
                 ).map(({ value, label }) => (
                   <button

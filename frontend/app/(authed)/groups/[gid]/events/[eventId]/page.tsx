@@ -229,17 +229,23 @@ export default function EventDetailPage() {
           RSVP
         </h2>
         <div className="flex flex-wrap gap-2">
-          {(["going", "maybe", "no"] as RsvpStatus[]).map((s) => (
+          {(
+            [
+              { value: "going", label: "Going" },
+              { value: "maybe", label: "Maybe" },
+              { value: "no", label: "Not going" },
+            ] as { value: RsvpStatus; label: string }[]
+          ).map(({ value, label }) => (
             <button
-              key={s}
+              key={value}
               type="button"
               onClick={async () => {
-                const ok = await rsvp(event.eventId, s);
-                setActionInfo(ok ? `RSVP set to ${s}` : "RSVP failed");
+                const ok = await rsvp(event.eventId, value);
+                setActionInfo(ok ? `RSVP set to ${label}` : "RSVP failed");
               }}
-              className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised"
+              className="rounded border border-line px-3 py-1 text-sm hover:bg-ink-raised focus:outline-none focus-visible:shadow-glow-gold"
             >
-              {s}
+              {label}
             </button>
           ))}
         </div>

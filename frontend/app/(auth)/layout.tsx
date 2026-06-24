@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { LegalFooter } from "@/components/legal/LegalFooter";
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
+import { OliveDivider } from "@/components/motifs/OliveDivider";
 import { Card, Heading } from "@/components/ui";
 import { BRAND_NAME } from "@/lib/brand";
 
@@ -15,6 +16,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <Heading level={1} size="md" className="normal-case">
             {BRAND_NAME}
           </Heading>
+          <OliveDivider className="h-3 w-40 text-line-strong" />
         </div>
 
         <Card surface="raised" padding="lg" className="w-full">

@@ -86,7 +86,7 @@ describe("MessageList", () => {
 
   it("renders empty-state text when there are no messages", () => {
     render(<MessageList {...defaultProps} />);
-    expect(screen.getByText(/no messages yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/this branch is quiet for now/i)).toBeInTheDocument();
   });
 
   it("renders a message for each item", () => {
