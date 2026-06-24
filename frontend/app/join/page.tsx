@@ -132,7 +132,7 @@ function JoinForm() {
             autoComplete="off"
             spellCheck={false}
             {...register("code")}
-            className="mt-1 block w-full rounded border border-line px-3 py-2 font-mono uppercase tracking-widest"
+            className="mt-1 block w-full rounded border border-line bg-ink-overlay px-3 py-2 font-mono uppercase tracking-widest text-cream placeholder:text-cream-muted transition-colors duration-fast focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold"
             placeholder="XXXXXXXX"
           />
           {errors.code && (

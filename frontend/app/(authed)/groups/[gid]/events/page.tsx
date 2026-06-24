@@ -9,9 +9,17 @@ import {
   type RsvpStatus,
   useEvents,
 } from "@/lib/hooks/useEvents";
-import { Button, FloatingActionBar } from "@/components/ui";
+import { Button, FloatingActionBar, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useGroupMembership } from "@/lib/hooks/useGroupMembership";
+
+// Shared chrome for the inline event-create controls. Mirrors the
+// shared Input/Select primitives (themed ground + the one gold focus
+// ring) without restructuring the compact inline-label layout.
+const fieldClass =
+  "rounded border border-line bg-ink-overlay px-2 py-1 text-sm " +
+  "text-cream placeholder:text-cream-muted transition-colors duration-fast " +
+  "focus:outline-none focus-visible:border-gold focus-visible:shadow-glow-gold";
 
 export default function EventsListPage() {
   const params = useParams();
@@ -105,14 +113,14 @@ export default function EventsListPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title"
-            className="w-full rounded border border-line px-2 py-1 text-sm"
+            className={cn("w-full", fieldClass)}
           />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Description (optional)"
             rows={2}
-            className="w-full rounded border border-line px-2 py-1 text-sm"
+            className={cn("w-full", fieldClass)}
           />
           <div className="grid grid-cols-2 gap-2">
             <label className="block text-xs text-cream-muted">
@@ -121,7 +129,7 @@ export default function EventsListPage() {
                 type="datetime-local"
                 value={startsAt}
                 onChange={(e) => setStartsAt(e.target.value)}
-                className="mt-1 w-full rounded border border-line px-2 py-1 text-sm"
+                className={cn("mt-1 w-full", fieldClass)}
               />
             </label>
             <label className="block text-xs text-cream-muted">
@@ -130,7 +138,7 @@ export default function EventsListPage() {
                 type="datetime-local"
                 value={endsAt}
                 onChange={(e) => setEndsAt(e.target.value)}
-                className="mt-1 w-full rounded border border-line px-2 py-1 text-sm"
+                className={cn("mt-1 w-full", fieldClass)}
               />
             </label>
           </div>
@@ -138,7 +146,7 @@ export default function EventsListPage() {
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="Location (optional)"
-            className="w-full rounded border border-line px-2 py-1 text-sm"
+            className={cn("w-full", fieldClass)}
           />
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <label className="text-xs text-cream-muted">Repeat</label>
@@ -147,7 +155,7 @@ export default function EventsListPage() {
               onChange={(e) =>
                 setRecurKind(e.target.value as "none" | "weekly" | "biweekly")
               }
-              className="rounded border border-line px-2 py-1 text-sm"
+              className={fieldClass}
             >
               <option value="none">Don&apos;t repeat</option>
               <option value="weekly">Weekly</option>
@@ -164,7 +172,7 @@ export default function EventsListPage() {
                   max={12}
                   value={recurCount}
                   onChange={(e) => setRecurCount(Number(e.target.value))}
-                  className="w-16 rounded border border-line px-2 py-1 text-sm"
+                  className={cn("w-16", fieldClass)}
                 />
               </>
             )}

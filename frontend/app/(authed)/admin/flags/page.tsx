@@ -145,7 +145,7 @@ export default function AdminFlagsPage() {
           <button
             type="button"
             onClick={() => setFilter("all")}
-            className={`rounded border px-3 py-1 ${
+            className={`rounded border px-3 py-1 focus:outline-none focus-visible:shadow-glow-gold ${
               filter === "all"
                 ? "border-gold-soft/60 bg-ink-raised text-gold-soft"
                 : "border-line text-cream"
@@ -156,7 +156,7 @@ export default function AdminFlagsPage() {
           <button
             type="button"
             onClick={() => setFilter("candidate-cleanup")}
-            className={`rounded border px-3 py-1 ${
+            className={`rounded border px-3 py-1 focus:outline-none focus-visible:shadow-glow-gold ${
               filter === "candidate-cleanup"
                 ? "border-parchment-amber/60 bg-ink-raised text-parchment-amber"
                 : "border-line text-cream"

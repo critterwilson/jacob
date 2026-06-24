@@ -43,7 +43,7 @@ export function DiscoverFilters({ audience, q, onAudienceChange, onQChange }: Pr
             type="button"
             onClick={() => onAudienceChange(a.value)}
             aria-pressed={audience === a.value}
-            className={`px-3 py-1.5 first:rounded-l last:rounded-r ${
+            className={`px-3 py-1.5 first:rounded-l last:rounded-r focus:outline-none focus-visible:shadow-glow-gold ${
               audience === a.value
                 ? "bg-gold text-ink"
                 : "bg-ink-raised text-cream-muted hover:bg-ink-overlay"
