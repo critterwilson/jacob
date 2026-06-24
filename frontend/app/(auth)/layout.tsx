@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { LegalFooter } from "@/components/legal/LegalFooter";
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { Card, Heading } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -12,7 +13,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <div className="flex flex-col items-center gap-3 text-gold-soft">
           <LightFromClouds className="h-20 w-auto opacity-90" />
           <Heading level={1} size="md" className="normal-case">
-            JACOB
+            {BRAND_NAME}
           </Heading>
         </div>
 

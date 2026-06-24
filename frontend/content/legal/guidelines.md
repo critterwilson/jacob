@@ -1,6 +1,6 @@
 ## In plain words
 
-JACOB is a quiet place for your small group to stay close between
+{{brand}} is a quiet place for your small group to stay close between
 Sundays. The point of these guidelines is to keep this space worthy of
 that — kind, honest, safe, and rooted in respect for the people you
 share it with. Read them once when you join. Come back to them if
@@ -33,7 +33,7 @@ it with care for the people on the other side of the screen.
 
 ## What's not allowed
 
-The following are not welcome in JACOB and may result in content
+The following are not welcome in {{brand}} and may result in content
 removal, account suspension, or termination, depending on severity:
 
 - **Harassment, bullying, or personal attacks.** This includes pile-ons,
@@ -50,7 +50,7 @@ removal, account suspension, or termination, depending on severity:
   the National Center for Missing & Exploited Children (NCMEC) and to
   law enforcement, as we are required to do by U.S. law. The account
   is removed immediately.
-- **Adult sexual content.** JACOB is a small-group ministry app and
+- **Adult sexual content.** {{brand}} is a small-group ministry app and
   is not the place for it.
 - **Violent or graphic imagery,** including self-harm content posted
   to encourage rather than to seek help.
@@ -68,7 +68,7 @@ removal, account suspension, or termination, depending on severity:
 
 ## A note on faith conversations
 
-JACOB is a Christian app and faith conversations are part of why it
+{{brand}} is a Christian app and faith conversations are part of why it
 exists. Inside your own group, talk freely about Scripture, prayer,
 doubt, what you're learning. That's the whole point.
 

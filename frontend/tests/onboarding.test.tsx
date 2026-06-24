@@ -67,7 +67,13 @@ import * as fbAuth from "firebase/auth";
 
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
 import { AuthProvider } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import OnboardingPage from "@/app/onboarding/page";
+
+const AGE_GATE_RE = new RegExp(
+  `${BRAND_NAME} requires you to be at least 13`,
+  "i",
+);
 
 // ---------------------------------------------------------------------------
 // Fetch mock
@@ -500,9 +506,7 @@ describe("Under-13 path", () => {
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/JACOB requires you to be at least 13/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(AGE_GATE_RE)).toBeInTheDocument();
     });
     // deleteUser must NOT have been called yet — user must confirm first.
     expect(fbAuth.deleteUser).not.toHaveBeenCalled();
@@ -539,9 +543,7 @@ describe("Under-13 path", () => {
     );
     await user.click(screen.getByRole("button", { name: /create account/i }));
 
-    await waitFor(() =>
-      screen.getByText(/JACOB requires you to be at least 13/i),
-    );
+    await waitFor(() => screen.getByText(AGE_GATE_RE));
 
     // Deletion only happens on explicit Continue (the banner's button).
     await user.click(screen.getByRole("button", { name: /continue/i }));

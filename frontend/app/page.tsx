@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { LegalFooter } from "@/components/legal/LegalFooter";
 import { Dove } from "@/components/motifs/Dove";
 import { Button, Heading } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { useAuth } from "@/lib/auth-context";
 
 export default function LandingPage() {
@@ -37,7 +38,7 @@ export default function LandingPage() {
 
       <div className="space-y-4">
         <Heading level={1} size="xl" className="normal-case">
-          JACOB
+          {BRAND_NAME}
         </Heading>
         <p className="mx-auto max-w-prose text-body-lg text-cream-muted">
           A quiet place for your small group. Share scripture, pray together,

@@ -7,6 +7,7 @@ import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
 import { Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { useUser } from "@/lib/hooks/useUser";
 import { safeNext } from "@/lib/safe-redirect";
 
@@ -50,13 +51,13 @@ function OnboardingContent() {
         <div className="flex flex-col items-center gap-3 text-gold-soft">
           <LightFromClouds className="h-16 w-auto opacity-90" />
           <Heading level={1} size="md" className="normal-case">
-            JACOB
+            {BRAND_NAME}
           </Heading>
         </div>
 
         <Card surface="raised" padding="lg" className="w-full space-y-6">
           <header className="space-y-2">
-            <Eyebrow>Welcome to JACOB</Eyebrow>
+            <Eyebrow>{`Welcome to ${BRAND_NAME}`}</Eyebrow>
             <Heading level={2} size="sm">
               Set up your profile
             </Heading>

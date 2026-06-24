@@ -3,6 +3,7 @@
 import { type ReactNode } from "react";
 
 import { Button } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { usePWAInstall } from "@/lib/hooks/usePWAInstall";
 
 // iOS Share icon: square with up-arrow, exactly as it appears in Safari's toolbar.
@@ -61,12 +62,12 @@ export function InstallPrompt() {
       role="banner"
       className="rounded-lg border border-line bg-ink-raised px-4 py-4 text-sm"
     >
-      <p className="mb-2 font-semibold text-cream">Install JACOB</p>
+      <p className="mb-2 font-semibold text-cream">{`Install ${BRAND_NAME}`}</p>
 
       {platform === "ios-safari" && (
         <>
           <p className="mb-3 text-cream-muted">
-            Add JACOB to your Home Screen for the full app experience.
+            {`Add ${BRAND_NAME} to your Home Screen for the full app experience.`}
           </p>
           <ol className="mb-4 space-y-2">
             <Step n={1}>
@@ -144,7 +145,7 @@ export function InstallPrompt() {
       {platform === "android" && canInstall && (
         <>
           <p className="mb-4 text-cream-muted">
-            Install JACOB for a faster, offline-capable experience.
+            {`Install ${BRAND_NAME} for a faster, offline-capable experience.`}
           </p>
           <div className="flex justify-between gap-2">
             <Button
@@ -170,7 +171,7 @@ export function InstallPrompt() {
       {platform === "android" && !canInstall && (
         <>
           <p className="mb-3 text-cream-muted">
-            Add JACOB to your Home Screen from your browser menu.
+            {`Add ${BRAND_NAME} to your Home Screen from your browser menu.`}
           </p>
           <ol className="mb-4 space-y-2">
             <Step n={1}>
@@ -197,7 +198,7 @@ export function InstallPrompt() {
       {platform === "desktop" && canInstall && (
         <>
           <p className="mb-4 text-cream-muted">
-            Install JACOB for faster access and offline support.
+            {`Install ${BRAND_NAME} for faster access and offline support.`}
           </p>
           <div className="flex justify-between gap-2">
             <Button

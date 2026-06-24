@@ -9,6 +9,7 @@ import {
 } from "@/components/admin/boards/BoardForm";
 import { Eyebrow, Heading, Link } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
+import { BRAND_NAME } from "@/lib/brand";
 
 type Board = {
   boardId: string;
@@ -56,7 +57,7 @@ export default function NewBoardPage() {
           New board
         </Heading>
         <p className="text-body-sm text-cream-muted">
-          A cross-group forum anyone in JACOB can read and post to.
+          {`A cross-group forum anyone in ${BRAND_NAME} can read and post to.`}
         </p>
       </header>
 

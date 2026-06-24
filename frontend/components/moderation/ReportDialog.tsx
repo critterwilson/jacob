@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { Button, cn } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useDelayedUnmount } from "@/lib/hooks/useDelayedUnmount";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
@@ -132,7 +133,7 @@ export function ReportDialog({
           Report this {resourceType}
         </h2>
         <p className="mb-4 text-sm text-cream-muted">
-          Reports go to JACOB&apos;s moderation team. We review every report.
+          {`Reports go to ${BRAND_NAME}'s moderation team. We review every report.`}
         </p>
 
         {success ? (

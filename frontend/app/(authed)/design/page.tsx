@@ -13,6 +13,7 @@ import {
   Skeleton,
   Textarea,
 } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 
 /*
  * Internal design-system showcase. Renders one of every primitive at
@@ -25,7 +26,7 @@ import {
  */
 
 export const metadata: Metadata = {
-  title: "Design system — JACOB",
+  title: "Design system",
   robots: { index: false, follow: false },
 };
 
@@ -93,7 +94,7 @@ export default function DesignSystemShowcase() {
       <header className="space-y-4">
         <Eyebrow>Internal · /design</Eyebrow>
         <Heading level={1} size="xl">
-          The JACOB design system
+          The {BRAND_NAME} design system
         </Heading>
         <p className="max-w-2xl text-body-lg text-cream-muted">
           Study-Bible meets restrained Swiss. Reverence, warmth, restraint. The
@@ -310,7 +311,8 @@ export default function DesignSystemShowcase() {
             Your group settings were updated.
           </Banner>
           <Banner tone="warning" title="Maintenance window">
-            JACOB will be undergoing scheduled maintenance on Thursday at 9 PM.
+            {BRAND_NAME} will be undergoing scheduled maintenance on Thursday at
+            9 PM.
           </Banner>
           <Banner tone="error" title="Couldn&rsquo;t save">
             We weren&rsquo;t able to update the group description. Try again in

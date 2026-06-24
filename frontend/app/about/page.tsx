@@ -1,4 +1,5 @@
 import { Heading, Link } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function AboutPage() {
   return (
@@ -8,12 +9,12 @@ export default function AboutPage() {
       </Link>
 
       <Heading level={1} size="lg">
-        About JACOB
+        {`About ${BRAND_NAME}`}
       </Heading>
 
       <div className="space-y-4 text-body-lg leading-relaxed text-cream">
         <p>
-          JACOB is a messaging app built for Christian small groups. It
+          {BRAND_NAME} is a messaging app built for Christian small groups. It
           provides a private, focused space for groups to share messages,
           encouragement, and media with one another.
         </p>

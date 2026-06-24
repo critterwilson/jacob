@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Your JACOB Week</title>
+<title>Your {{ brand_name }} Week</title>
 <style>
   body { font-family: sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
   .wrap { max-width: 520px; margin: 32px auto; background: #fff; border-radius: 8px;
@@ -27,7 +27,7 @@
 <body>
 <div class="wrap">
   <div class="header">
-    <h1>Your JACOB Week</h1>
+    <h1>Your {{ brand_name }} Week</h1>
     <p style="margin:4px 0 0;color:#bfdbfe;font-size:14px;">Hi {{ display_name }} 👋</p>
   </div>
   <div class="body">
@@ -67,11 +67,11 @@
     {% endif %}
 
     <div class="cta">
-      <a href="{{ app_url }}">Open JACOB</a>
+      <a href="{{ app_url }}">Open {{ brand_name }}</a>
     </div>
   </div>
   <div class="footer">
-    <p>You received this email as a member of a JACOB small group.</p>
+    <p>You received this email as a member of a {{ brand_name }} small group.</p>
     <p><a href="{{ unsubscribe_url }}">Unsubscribe from weekly digests</a></p>
   </div>
 </div>

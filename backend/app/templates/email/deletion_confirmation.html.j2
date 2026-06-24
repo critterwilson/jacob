@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your JACOB account deletion has been scheduled</title>
+  <title>Your {{ brand_name }} account deletion has been scheduled</title>
   <style>
     body { font-family: sans-serif; color: #1a1a1a; background: #f9f9f9; margin: 0; padding: 0; }
     .container { max-width: 560px; margin: 32px auto; background: #fff; border-radius: 8px; padding: 32px; }
@@ -15,10 +15,10 @@
 </head>
 <body>
   <div class="container">
-    <div class="logo">JACOB</div>
+    <div class="logo">{{ brand_name }}</div>
     <p>Hi {{ display_name }},</p>
     <p>
-      We've received your request to delete your JACOB account. Your account is
+      We've received your request to delete your {{ brand_name }} account. Your account is
       scheduled for permanent deletion on <strong>{{ finalize_date }}</strong>
       ({{ grace_days }} days from now).
     </p>
@@ -34,9 +34,9 @@
       If you did not request this, please sign in immediately and cancel, or
       contact us right away.
     </p>
-    <p>— The JACOB team</p>
+    <p>— The {{ brand_name }} team</p>
     <div class="footer">
-      You received this email because a deletion was requested for your JACOB account.
+      You received this email because a deletion was requested for your {{ brand_name }} account.
     </div>
   </div>
 </body>

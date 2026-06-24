@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { stashPendingInviteCode } from "@/lib/pending-application";
 
 const joinSchema = z.object({
@@ -73,7 +74,7 @@ function JoinForm() {
         // group (they're not a member yet) — show the pending state and
         // route home.
         setSubmitError(
-          "Thanks! Because you're under 18, your request was sent to the ministry owner for review. You can use the rest of JACOB while you wait.",
+          `Thanks! Because you're under 18, your request was sent to the ministry owner for review. You can use the rest of ${BRAND_NAME} while you wait.`,
         );
         return;
       }

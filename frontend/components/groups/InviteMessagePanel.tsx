@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Input, Textarea } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 
 export function buildInviteMessage(
   groupName: string,
@@ -16,7 +17,7 @@ export function buildInviteMessage(
   const lines = [
     greeting,
     "",
-    `I'd love for you to join ${groupName}, our group on JACOB. It's a place for us to stay connected, share prayer requests, and encourage each other.`,
+    `I'd love for you to join ${groupName}, our group on ${BRAND_NAME}. It's a place for us to stay connected, share prayer requests, and encourage each other.`,
   ];
   if (personalNote.trim()) {
     lines.push("", personalNote.trim());

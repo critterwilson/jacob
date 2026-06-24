@@ -6,6 +6,7 @@ import { AppRegistrations } from "@/components/AppRegistrations";
 import { IncidentBanner } from "@/components/IncidentBanner";
 import { SentryInit } from "@/components/SentryInit";
 import { AuthProvider } from "@/lib/auth-context";
+import { BRAND_NAME, BRAND_DESCRIPTION } from "@/lib/brand";
 import { WorkspaceOrgProvider, type WorkspaceOrg } from "@/lib/org-context";
 
 // Variable fonts, latin subset only. Self-hosted by next/font.
@@ -24,9 +25,11 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "JACOB",
-  description: "Small-group messaging for Christian communities",
-  manifest: "/manifest.webmanifest",
+  // `template` brands every child page's <title> (e.g. "Sign in — Olivet")
+  // from the single BRAND_NAME constant, so pages set just their own label.
+  title: { default: BRAND_NAME, template: `%s — ${BRAND_NAME}` },
+  description: BRAND_DESCRIPTION,
+  // The PWA manifest link is auto-injected from app/manifest.ts.
 };
 
 // viewport-fit=cover is what makes env(safe-area-inset-*) non-zero on

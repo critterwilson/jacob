@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Heading, Link } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { renderLegalMarkdown } from "@/lib/legal/render";
 
 export type LegalDocumentSlug = "privacy" | "terms" | "guidelines";
@@ -16,7 +17,10 @@ type LegalDocumentProps = {
 // would be fine, but we resolve per-render so dev edits hot-reload.
 function readLegalMarkdown(slug: LegalDocumentSlug): string {
   const path = join(process.cwd(), "content", "legal", `${slug}.md`);
-  return readFileSync(path, "utf8");
+  const raw = readFileSync(path, "utf8");
+  // The legal source uses a `{{brand}}` placeholder so the app name lives
+  // in exactly one place (lib/brand.ts). Substitute before rendering.
+  return raw.replaceAll("{{brand}}", BRAND_NAME);
 }
 
 /**

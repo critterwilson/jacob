@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>An organization wants to add your group to JACOB</title>
+  <title>An organization wants to add your group to {{ brand_name }}</title>
   <style>
     body { font-family: sans-serif; color: #1a1a1a; background: #f9f9f9; margin: 0; padding: 0; }
     .container { max-width: 560px; margin: 32px auto; background: #fff; border-radius: 8px; padding: 32px; }
@@ -15,10 +15,10 @@
 </head>
 <body>
   <div class="container">
-    <div class="logo">JACOB</div>
+    <div class="logo">{{ brand_name }}</div>
     <p>Hi {{ displayName }},</p>
     <p>
-      An organization on JACOB has requested to attach your group to its
+      An organization on {{ brand_name }} has requested to attach your group to its
       workspace. If you consent, the org's admins will gain leader-equivalent
       visibility into the group (membership, moderation, analytics).
     </p>
@@ -31,7 +31,7 @@
       If you did not expect this request, you can safely ignore this email —
       no action will be taken without the code.
     </p>
-    <p>— The JACOB team</p>
+    <p>— The {{ brand_name }} team</p>
     <div class="footer">
       You received this email because you are a leader of group {{ gid }}.
     </div>

@@ -14,6 +14,7 @@ import { useForm } from "react-hook-form";
 import { humanizeAuthError } from "@/components/auth/error-messages";
 import { Banner, Button, Input, Link } from "@/components/ui";
 import { type SignUpValues, signUpSchema } from "@/lib/auth-schemas";
+import { BRAND_NAME } from "@/lib/brand";
 import { auth } from "@/lib/firebase";
 import { stashPendingDob } from "@/lib/pending-application";
 import { safeNext } from "@/lib/safe-redirect";
@@ -126,7 +127,7 @@ export function SignUpForm() {
         type="date"
         autoComplete="bday"
         {...register("dob")}
-        helperText="JACOB requires you to be at least 13."
+        helperText={`${BRAND_NAME} requires you to be at least 13.`}
         error={errors.dob?.message}
       />
 
