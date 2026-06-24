@@ -20,12 +20,12 @@ type StickerDoc = {
   color: string;
 };
 
-// Sticker palette retuned for the dark-first design system (PR 9 of the
-// design sweep). Earlier values were vivid Tailwind primaries sized for
-// a light surface; on the new ink ground (#0E1726) those read as acidic.
-// New values are jewel-toned: ~30-50% saturation, mid-luminance, each
-// readable as text on its own 15%-alpha background. Sticker identities
+// Sticker palette tuned for the dark-first design system. Values are
+// jewel-toned: ~30-50% saturation, mid-luminance, each readable as text
+// on its own 15%-alpha background, and they carry over cleanly onto the
+// Olive Branch "Evening Olive" ground (#1C2118). Sticker identities are
 // preserved (blue-ish stays blue-ish, etc.). See docs/design-tokens.md.
+// Re-verify each chip's legibility on the olive ground before shipping.
 const STICKERS: StickerDoc[] = [
   // Christian audience (Phase 1).
   { slug: "check-in",       name: "Check-In",       audience: "christian", order: 1, color: "#7AA2D9" },

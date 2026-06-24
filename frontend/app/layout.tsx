@@ -36,7 +36,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0e1726",
+  themeColor: "#1c2118",
 };
 
 function hydratedOrg(): WorkspaceOrg | null {

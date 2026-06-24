@@ -1,16 +1,17 @@
 import type { Config } from "tailwindcss";
 
 /*
- * JACOB design tokens — Tailwind theme.
+ * Olive Branch design tokens — Tailwind theme ("Evening Olive", dark-first).
  *
  * Source of truth: docs/design-system.md
  * CSS variable mirror: frontend/styles/tokens.css
  *
- * The values below intentionally reference CSS custom properties so a
- * future light-mode pass can flip token values via :root selectors
- * without touching this file. Token names match the spec; component
- * code references them via standard Tailwind utilities (bg-ink,
- * text-cream, font-display, text-display-md, rounded-xl, etc.).
+ * The values below intentionally reference CSS custom properties so the
+ * Olive Branch recolor (and any future light-mode pass) can flip token
+ * values via :root selectors in tokens.css without touching this file.
+ * Token names are kept stable through the rebrand; component code
+ * references them via standard Tailwind utilities (bg-ink, text-cream,
+ * font-display, text-display-md, rounded-xl, etc.).
  */
 const config: Config = {
   content: [
