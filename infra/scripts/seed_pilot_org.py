@@ -35,7 +35,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--admin-uid", required=True)
     parser.add_argument(
         "--audience",
-        choices=["christian", "bjj", "general"],
+        choices=["christian", "general"],
         default="christian",
     )
     parser.add_argument("--description", default="")

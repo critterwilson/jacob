@@ -710,8 +710,10 @@ existing group has `orgId = null` (unaffiliated).
 * `slug` — URL-safe; reserved as the T55 subdomain claim. Stored
   also as the doc id of `org_slugs/{slug}` for at-most-one
   uniqueness.
-* `audience` — `christian` / `bjj` / `general`. Immutable once set;
-  changing it would invalidate every group's sticker history.
+* `audience` — `christian` / `general`. Immutable once set; changing
+  it would invalidate every group's sticker history. (The retired
+  `bjj` value from the cancelled Phase-3 BJJ vertical needs a one-time
+  prod backfill to `general` — see the rebrand migration note.)
 * `billing` — placeholder shape so Phase 4 paid tiers don't reshape
   the doc.
 * AI policy fields (`llmModerationPolicy`, `*Enabled`) — reserved

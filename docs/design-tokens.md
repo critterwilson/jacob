@@ -26,17 +26,6 @@ blue-ish, etc.).
 | `need-help`      | Need Help      | `#C16B5C` |
 | `event-meetup`   | Event / Meetup | `#D58FA8` |
 
-### BJJ audience
-
-| Slug                    | Name                 | Hex       |
-|-------------------------|----------------------|-----------|
-| `roll-partner-needed`   | Roll Partner Needed  | `#6E8AA9` |
-| `tournament-prep`       | Tournament Prep      | `#B8584A` |
-| `technique-question`    | Technique Question   | `#7DAEC2` |
-| `recovery`              | Recovery             | `#6FA59D` |
-| `conditioning`          | Conditioning         | `#9A7FCB` |
-| `bjj-milestone`         | Milestone            | `#C49866` |
-
 ### General (cross-audience)
 
 | Slug             | Name           | Hex       |
