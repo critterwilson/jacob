@@ -1,9 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Brand name — single source of truth for the app's user-facing name.
 //
-// PROVISIONAL: "Olivet" is a placeholder pending Christopher's final
-// choice. Shortlist from the Olive Branch rebrand: Olivet / Branch / Selah.
-// Change this ONE constant to rename the app across every user-facing
+// "Branch" is the final chosen name (Olive Branch rebrand). It carries a
+// triple resonance: "the Branch" as a messianic title (Jeremiah 23:5), the
+// olive *branch* of peace, and a small group as a *branch* of the larger
+// body. Change this ONE constant to rename the app across every user-facing
 // surface (titles, wordmark, manifest, prompts, validation copy, legal
 // docs). Do NOT hard-code the brand name anywhere else — import this.
 //
@@ -15,10 +16,10 @@
 //
 // The backend keeps its own mirror of this value (see
 // backend/app/config.py `brand_name`) used for transactional email; keep
-// the two in sync when the final name is picked.
+// the two in sync.
 // ─────────────────────────────────────────────────────────────────────────
 
-export const BRAND_NAME = "Olivet";
+export const BRAND_NAME = "Branch";
 
 // One-line product promise, reused in metadata + the PWA manifest.
 export const BRAND_DESCRIPTION =

@@ -25,7 +25,7 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  // `template` brands every child page's <title> (e.g. "Sign in — Olivet")
+  // `template` brands every child page's <title> (e.g. "Sign in — Branch")
   // from the single BRAND_NAME constant, so pages set just their own label.
   title: { default: BRAND_NAME, template: `%s — ${BRAND_NAME}` },
   description: BRAND_DESCRIPTION,
