@@ -115,9 +115,7 @@ class _V1PathRewriteMiddleware:
         await self._app(scope, receive, send)
 
 
-app: FastAPI = FastAPI(
-    title=f"{settings.brand_name} API", version="0.1.0", lifespan=_lifespan
-)
+app: FastAPI = FastAPI(title=f"{settings.brand_name} API", version="0.1.0", lifespan=_lifespan)
 
 app.state.limiter = limiter
 # CORS must be the outermost middleware so its response headers reach the
