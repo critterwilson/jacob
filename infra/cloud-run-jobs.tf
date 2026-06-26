@@ -173,60 +173,6 @@ resource "google_cloud_run_v2_job" "finalize_deletions" {
   }
 }
 
-# ── firestore-to-bigquery (T29, daily 04:30 UTC) ─────────────────────────────
-
-resource "google_cloud_run_v2_job" "firestore_to_bigquery" {
-  name     = var.firestore_to_bigquery_job_name
-  location = var.cloudrun_jobs_region
-  project  = var.project_id
-
-  template {
-    template {
-      service_account = google_service_account.jacob_analytics.email
-      timeout         = var.cloudrun_job_task_timeout
-      max_retries     = 1
-
-      containers {
-        image   = var.cloudrun_jobs_image
-        command = ["python", "/app/scheduled/firestore_to_bigquery.py"]
-
-        resources {
-          limits = {
-            cpu    = var.cloudrun_job_cpu
-            memory = var.cloudrun_job_memory
-          }
-        }
-
-        dynamic "env" {
-          for_each = local.cloudrun_job_common_env
-          content {
-            name  = env.key
-            value = env.value
-          }
-        }
-
-        env {
-          name  = "BQ_ANALYTICS_DATASET"
-          value = google_bigquery_dataset.jacob_analytics.dataset_id
-        }
-
-        env {
-          name  = "BQ_BACKUPS_BUCKET"
-          value = "jacob-backups-${var.env}"
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].template[0].containers[0].image,
-      client,
-      client_version,
-    ]
-  }
-}
-
 # ── cleanup-stale-devices (T34, daily 05:00 UTC) ─────────────────────────────
 
 resource "google_cloud_run_v2_job" "cleanup_stale_devices" {
@@ -309,11 +255,6 @@ resource "google_cloud_run_v2_job" "weekly_digest" {
           name  = "JACOB_DIGEST_ENABLED"
           value = "false"
         }
-
-        env {
-          name  = "BQ_ANALYTICS_DATASET"
-          value = google_bigquery_dataset.jacob_analytics.dataset_id
-        }
       }
     }
   }
@@ -385,7 +326,6 @@ output "cloud_run_job_names" {
   value = [
     google_cloud_run_v2_job.firestore_export.name,
     google_cloud_run_v2_job.finalize_deletions.name,
-    google_cloud_run_v2_job.firestore_to_bigquery.name,
     google_cloud_run_v2_job.cleanup_stale_devices.name,
     google_cloud_run_v2_job.weekly_digest.name,
     google_cloud_run_v2_job.process_export_jobs.name,
