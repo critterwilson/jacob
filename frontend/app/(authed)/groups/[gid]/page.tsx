@@ -148,7 +148,7 @@ export default function GroupPage({ params }: Props) {
                 {pendingCount > 0 && (
                   <span
                     aria-label={`${pendingCount} pending`}
-                    className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-terracotta px-1 text-[10px] font-semibold text-cream"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-on-emphasis"
                   >
                     {pendingCount}
                   </span>

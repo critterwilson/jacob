@@ -23,18 +23,23 @@ exports[`design tokens — resolved Tailwind theme > colors include the JACOB pa
 {
   "cream": "var(--color-cream)",
   "cream-muted": "var(--color-cream-muted)",
+  "danger": "var(--color-danger)",
+  "emphasis-ink": "var(--color-emphasis-ink)",
   "gold": "var(--color-gold)",
   "gold-deep": "var(--color-gold-deep)",
   "gold-soft": "var(--color-gold-soft)",
+  "info": "var(--color-info)",
   "ink": "var(--color-ink)",
   "ink-overlay": "var(--color-ink-overlay)",
   "ink-raised": "var(--color-ink-raised)",
   "lake": "var(--color-lake)",
   "line": "var(--color-line)",
   "line-strong": "var(--color-line-strong)",
+  "on-emphasis": "var(--color-on-emphasis)",
   "parchment-amber": "var(--color-parchment-amber)",
   "sage": "var(--color-sage)",
   "terracotta": "var(--color-terracotta)",
+  "warning": "var(--color-warning)",
 }
 `;
 

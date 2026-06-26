@@ -8,7 +8,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
-import { LightFromClouds } from "@/components/motifs/LightFromClouds";
+import { BranchMark } from "@/components/motifs/BranchMark";
 import { Banner, Button, Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { BRAND_NAME } from "@/lib/brand";
@@ -104,8 +104,8 @@ function VerifyEmailContent() {
   return (
     <main className="flex min-h-svh flex-col items-center justify-center bg-ink px-4 py-12">
       <div className="flex w-full max-w-md flex-col items-center gap-6">
-        <div className="flex flex-col items-center gap-3 text-gold-soft">
-          <LightFromClouds className="h-20 w-auto opacity-90" />
+        <div className="flex flex-col items-center gap-3">
+          <BranchMark className="h-20" />
           <Heading level={1} size="md" className="normal-case">
             {BRAND_NAME}
           </Heading>

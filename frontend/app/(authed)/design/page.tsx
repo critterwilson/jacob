@@ -107,31 +107,37 @@ export default function DesignSystemShowcase() {
       <Section
         eyebrow="01"
         title="Color"
-        description="Olive Branch 'Evening Olive' — dark-first. Olive-night for ground, dove cream for type, anointing-oil gold used sparingly as the single accent."
+        description="Branch — warm sand & parchment in light, deep espresso in dark. Hexes below are the light-mode values; each token name also maps to a dark palette (toggle the theme to compare). The accent and the page ground are always set to opposite lightness so a single token system stays legible in both modes."
       >
         <Tile label="Surfaces">
-          <Swatch name="ink" hex="#1C2118" />
-          <Swatch name="ink-raised" hex="#262C1F" />
-          <Swatch name="ink-overlay" hex="#2F3725" />
+          <Swatch name="ink" hex="#D9C3AC" />
+          <Swatch name="ink-raised" hex="#F2E8D8" />
+          <Swatch name="ink-overlay" hex="#FBF5EA" />
         </Tile>
         <Tile label="Lines">
-          <Swatch name="line" hex="#3A4230" />
-          <Swatch name="line-strong" hex="#55603F" />
+          <Swatch name="line" hex="#C3AB91" />
+          <Swatch name="line-strong" hex="#A98E72" />
         </Tile>
         <Tile label="Text">
-          <Swatch name="cream" hex="#F3EEDE" />
-          <Swatch name="cream-muted" hex="#BFB89F" />
+          <Swatch name="cream" hex="#2A1710" />
+          <Swatch name="cream-muted" hex="#6B5346" />
         </Tile>
-        <Tile label="Accent">
-          <Swatch name="gold" hex="#D8B45A" />
-          <Swatch name="gold-soft" hex="#E6C878" />
-          <Swatch name="gold-deep" hex="#B9892E" />
+        <Tile label="Accent · espresso (light) / caramel (dark)">
+          <Swatch name="gold" hex="#4E302E" />
+          <Swatch name="gold-soft" hex="#5E3D37" />
+          <Swatch name="gold-deep" hex="#3A2420" />
         </Tile>
-        <Tile label="Semantic">
-          <Swatch name="terracotta" hex="#C56A4A" />
-          <Swatch name="sage" hex="#9DAE6E" />
-          <Swatch name="parchment-amber" hex="#E0B86A" />
-          <Swatch name="lake" hex="#6E93A8" />
+        <Tile label="Semantic · adaptive (text)">
+          <Swatch name="terracotta" hex="#A8442B" />
+          <Swatch name="sage" hex="#51613C" />
+          <Swatch name="parchment-amber" hex="#8A6418" />
+          <Swatch name="lake" hex="#4F6064" />
+        </Tile>
+        <Tile label="Semantic · fixed fills">
+          <Swatch name="danger" hex="#A8442B" />
+          <Swatch name="warning" hex="#B5852B" />
+          <Swatch name="info" hex="#5C6E72" />
+          <Swatch name="on-emphasis" hex="#FBF5EA" />
         </Tile>
       </Section>
 
@@ -199,7 +205,7 @@ export default function DesignSystemShowcase() {
       <Section
         eyebrow="03"
         title="Buttons"
-        description="One gold per surface. Secondary holds the line. Ghost stays out of the way. Destructive earns its terracotta."
+        description="One accent per surface. Secondary holds the line. Ghost stays out of the way. Destructive earns its clay."
       >
         <Tile label="Variants · md">
           <Button variant="primary">Save changes</Button>

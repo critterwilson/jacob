@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { LegalFooter } from "@/components/legal/LegalFooter";
-import { Dove } from "@/components/motifs/Dove";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { BranchMark } from "@/components/motifs/BranchMark";
 import { Button, Heading } from "@/components/ui";
 import { BRAND_NAME } from "@/lib/brand";
 import { useAuth } from "@/lib/auth-context";
@@ -34,7 +35,7 @@ export default function LandingPage() {
 
   return (
     <main className="mx-auto flex min-h-svh max-w-2xl flex-col items-center justify-center gap-10 bg-ink px-6 py-16 text-center">
-      <Dove className="h-32 w-auto text-gold-soft opacity-90" />
+      <BranchMark className="h-32" alt={`${BRAND_NAME} logo`} />
 
       <div className="space-y-4">
         <Heading level={1} size="xl" className="normal-case">
@@ -63,7 +64,10 @@ export default function LandingPage() {
         </Button>
       </div>
 
-      <LegalFooter />
+      <div className="flex flex-col items-center gap-4">
+        <ThemeToggle />
+        <LegalFooter />
+      </div>
     </main>
   );
 }

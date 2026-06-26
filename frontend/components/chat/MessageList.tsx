@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MessageItem } from "@/components/chat/MessageItem";
-import { OliveSprig } from "@/components/motifs/OliveSprig";
+import { BranchMark } from "@/components/motifs/BranchMark";
 import {
   MessageMenuProvider,
   useMessageMenu,
@@ -286,7 +286,7 @@ function MessageListInner({
 
         {visible.length === 0 && (
           <div className="mt-12 flex flex-col items-center gap-3 text-center">
-            <OliveSprig className="h-10 w-auto text-sage" />
+            <BranchMark className="h-12 opacity-80" />
             <p className="max-w-xs text-body-sm text-cream-muted">
               It&apos;s quiet here for now. Share something to get it growing.
             </p>

@@ -32,9 +32,11 @@ const variants: Record<ButtonVariant, string> = {
     "hover:bg-ink-raised hover:border-line-strong",
   // No chrome — for tertiary actions inside dense UI.
   ghost: "bg-transparent text-cream hover:bg-ink-raised",
-  // Warm-red, never the default; reserved for genuinely destructive.
+  // Warm clay, never the default; reserved for genuinely destructive.
+  // `danger` + `on-emphasis` are mode-invariant so the fill stays legible
+  // in both light and dark (the adaptive `terracotta` token flips lightness).
   destructive:
-    "bg-terracotta text-cream hover:opacity-90 active:opacity-100 " +
+    "bg-danger text-on-emphasis hover:opacity-90 active:opacity-100 " +
     "disabled:opacity-50",
 };
 

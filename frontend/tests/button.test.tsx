@@ -21,7 +21,7 @@ describe("Button", () => {
     rerender(<Button variant="ghost">x</Button>);
     expect(screen.getByRole("button").className).toContain("bg-transparent");
     rerender(<Button variant="destructive">x</Button>);
-    expect(screen.getByRole("button").className).toContain("bg-terracotta");
+    expect(screen.getByRole("button").className).toContain("bg-danger");
   });
 
   it("maps fullWidth to width classes", () => {

@@ -10,10 +10,13 @@
 
 import { useActiveIncidents } from "@/lib/hooks/useActiveIncidents";
 
+// Mode-invariant fills (danger/warning/info) + on-colors so the banner is
+// legible in both light and dark — the adaptive semantic tokens flip
+// lightness and would break a fixed text colour.
 const SEVERITY_STYLES: Record<string, string> = {
-  SEV1: "bg-terracotta text-cream",
-  SEV2: "bg-parchment-amber text-ink",
-  SEV3: "bg-lake text-cream",
+  SEV1: "bg-danger text-on-emphasis",
+  SEV2: "bg-warning text-emphasis-ink",
+  SEV3: "bg-info text-on-emphasis",
 };
 
 export function IncidentBanner() {
