@@ -147,50 +147,6 @@ resource "google_cloud_scheduler_job" "finalize_deletions" {
   ]
 }
 
-# ── firestore-to-bigquery (T29, 04:30 UTC) ───────────────────────────────────
-
-variable "firestore_to_bigquery_job_name" {
-  description = "Cloud Run Job name for the Firestore → BigQuery analytics loader."
-  type        = string
-  default     = "firestore-to-bigquery"
-}
-
-locals {
-  scheduler_run_invoke_url_bq_loader = "https://${var.scheduler_region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.firestore_to_bigquery_job_name}:run"
-}
-
-resource "google_cloud_scheduler_job" "firestore_to_bigquery" {
-  name        = "firestore-to-bigquery-daily"
-  project     = var.project_id
-  region      = var.scheduler_region
-  description = "Daily Firestore → BigQuery analytics load (04:30 UTC). Runs after firestore-export."
-  schedule    = "30 4 * * *"
-  time_zone   = "Etc/UTC"
-
-  retry_config {
-    retry_count          = 1
-    max_retry_duration   = "0s"
-    min_backoff_duration = "60s"
-    max_backoff_duration = "3600s"
-    max_doublings        = 5
-  }
-
-  http_target {
-    http_method = "POST"
-    uri         = local.scheduler_run_invoke_url_bq_loader
-
-    oauth_token {
-      service_account_email = google_service_account.jacob_scheduler_analytics.email
-      scope                 = local.scheduler_run_oauth_scope
-    }
-  }
-
-  depends_on = [
-    google_project_iam_member.scheduler_analytics_run_invoker,
-    google_cloud_run_v2_job.firestore_to_bigquery,
-  ]
-}
-
 # ── weekly-digest (T35, Sundays 16:00 UTC) ───────────────────────────────────
 
 variable "weekly_digest_job_name" {
