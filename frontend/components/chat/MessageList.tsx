@@ -288,7 +288,7 @@ function MessageListInner({
           <div className="mt-12 flex flex-col items-center gap-3 text-center">
             <OliveSprig className="h-10 w-auto text-sage" />
             <p className="max-w-xs text-body-sm text-cream-muted">
-              This branch is quiet for now. Share something to get it growing.
+              It&apos;s quiet here for now. Share something to get it growing.
             </p>
           </div>
         )}
