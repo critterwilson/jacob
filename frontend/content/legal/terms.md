@@ -2,7 +2,7 @@
 
 ## In plain words
 
-These are the rules of the road for using JACOB. By creating an account
+These are the rules of the road for using {{brand}}. By creating an account
 you agree to use the app for its intended purpose — staying in touch with
 your small group — and to follow our Community Guidelines. You own what
 you post; we operate the platform that delivers it. We'll moderate when
@@ -11,11 +11,11 @@ specifics.
 
 *Effective: [DATE TO BE SET ON LAUNCH]*
 
-## Who can use JACOB
+## Who can use {{brand}}
 
-You may use JACOB if you are at least 13 years old. If you are 13 to 17,
-you may use JACOB only with the consent of a parent or legal guardian. If
-you are under 13, you may not use JACOB.
+You may use {{brand}} if you are at least 13 years old. If you are 13 to 17,
+you may use {{brand}} only with the consent of a parent or legal guardian. If
+you are under 13, you may not use {{brand}}.
 
 New accounts go through an admin-approval queue. After you verify your
 email and submit your application, a ministry admin reviews it and
@@ -41,24 +41,24 @@ That means:
 If we believe an account has been compromised, we may temporarily
 suspend it to protect you and the people in your groups.
 
-## Using JACOB the right way
+## Using {{brand}} the right way
 
-You agree to use JACOB only for lawful purposes and in line with our
+You agree to use {{brand}} only for lawful purposes and in line with our
 [Community Guidelines](/guidelines). Specifically, you agree not to:
 
 - Post content that violates the Community Guidelines (harassment, hate
   speech, threats, sexual content involving minors, spam, or commercial
   solicitation).
-- Use JACOB to break the law or to facilitate someone else doing so.
+- Use {{brand}} to break the law or to facilitate someone else doing so.
 - Try to access another person's account, data, or group without
   permission.
 - Probe, scan, or attack our infrastructure, or attempt to disable or
   bypass safety features (rate limits, moderation, security rules).
-- Scrape, mirror, or copy content from JACOB except your own data, which
+- Scrape, mirror, or copy content from {{brand}} except your own data, which
   you can export at any time from your account settings.
-- Use JACOB to send unsolicited bulk messages, advertising, or to
+- Use {{brand}} to send unsolicited bulk messages, advertising, or to
   proselytize across faith lines in a way that is unwanted by the
-  recipient (see the Community Guidelines for the specifics — JACOB is a
+  recipient (see the Community Guidelines for the specifics — {{brand}} is a
   faith app, but it's a private space for groups, not a soapbox).
 
 We may add to or update these rules from time to time. The current
@@ -66,10 +66,10 @@ version always lives at this page.
 
 ## Your content
 
-**You own the content you post on JACOB.** Your messages, posts, photos,
+**You own the content you post on {{brand}}.** Your messages, posts, photos,
 and replies are yours. You give us a limited license — no payment owed to
 you, no exclusivity — to host, copy, transmit, and display that content
-solely as needed to operate JACOB. That license ends when you delete the
+solely as needed to operate {{brand}}. That license ends when you delete the
 content or your account, except to the extent the content has already
 been shared into another member's group or copied into a moderation
 record.
@@ -80,7 +80,7 @@ law or anyone else's rights.
 
 ## Moderation
 
-JACOB is a moderated platform. We may:
+{{brand}} is a moderated platform. We may:
 
 - Remove content that violates the Community Guidelines or these terms.
 - Limit a user's ability to post (a temporary mute or rate limit).
@@ -109,7 +109,7 @@ fix the problem.
 
 ## Service availability
 
-We work hard to keep JACOB running, but we don't guarantee that the
+We work hard to keep {{brand}} running, but we don't guarantee that the
 service will be uninterrupted, error-free, or available at any specific
 time. We may change, suspend, or discontinue features. If we discontinue
 the service entirely, we'll give you reasonable notice and a way to
@@ -117,7 +117,7 @@ export your data first.
 
 ## Disclaimers
 
-JACOB is provided **"as is" and "as available."** We make no warranties,
+{{brand}} is provided **"as is" and "as available."** We make no warranties,
 express or implied, about the service, including warranties of
 merchantability, fitness for a particular purpose, or non-infringement.
 We don't guarantee that the service will meet your needs, that messages
@@ -126,14 +126,14 @@ piece of harmful content.
 
 ## Limitation of liability
 
-To the fullest extent permitted by law, neither JACOB nor anyone
+To the fullest extent permitted by law, neither {{brand}} nor anyone
 operating it is liable for indirect, incidental, special, consequential,
 or punitive damages, or for any loss of data, profits, revenues, or
 goodwill, arising out of your use of the service.
 
 Our total liability to you for any claim arising out of or relating to
-the service is limited to the amount you paid for JACOB in the twelve
-months before the claim — which, since JACOB is free, is generally zero.
+the service is limited to the amount you paid for {{brand}} in the twelve
+months before the claim — which, since {{brand}} is free, is generally zero.
 
 Some jurisdictions don't allow the limitations above; in those places,
 the limitations apply only to the extent allowed.
@@ -149,7 +149,7 @@ consumer-protection law gives you a different right.
 
 We may update these terms from time to time. If we make a material
 change, we will notify you by email or through an in-app notice at least
-30 days before the change takes effect. Continued use of JACOB after the
+30 days before the change takes effect. Continued use of {{brand}} after the
 effective date means you accept the updated terms. If you don't accept
 them, you can delete your account before they take effect.
 

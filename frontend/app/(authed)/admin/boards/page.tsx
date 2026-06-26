@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import { ApiError, apiDelete, apiGet, apiPatch } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 
 type Board = {
   boardId: string;
@@ -136,7 +137,7 @@ export default function AdminBoardsPage() {
             Boards
           </Heading>
           <p className="text-body-sm text-cream-muted">
-            Cross-group forums anyone in JACOB can read and post to.
+            {`Cross-group forums anyone in ${BRAND_NAME} can read and post to.`}
           </p>
         </div>
         {/* Mobile gets the FloatingActionBar below; this CTA covers desktop. */}

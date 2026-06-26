@@ -1,5 +1,6 @@
 import { FaqTutorialLauncher } from "@/components/onboarding/FaqTutorialLauncher";
 import { Heading, Link } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 
 const faqs = [
   {
@@ -11,8 +12,8 @@ const faqs = [
     a: 'Ask a group leader for the invite code, then click "Join with code" on the Chats page.',
   },
   {
-    q: "Is JACOB free?",
-    a: "Yes — JACOB is free to use in Phase 1.",
+    q: `Is ${BRAND_NAME} free?`,
+    a: `Yes — ${BRAND_NAME} is free to use in Phase 1.`,
   },
   {
     q: "How do I report inappropriate content?",
@@ -39,7 +40,7 @@ export default function FaqPage() {
           id="faq-tour-heading"
           className="font-display text-display-sm text-cream"
         >
-          New to JACOB?
+          {`New to ${BRAND_NAME}?`}
         </h2>
         <p className="mt-1 text-body-sm text-cream-muted">
           Take a quick walkthrough of how groups, scripture, and the rest of

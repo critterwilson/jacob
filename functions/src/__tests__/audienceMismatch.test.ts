@@ -117,16 +117,17 @@ describe("flagAudienceMismatch (T56)", () => {
   });
 
   it("flags + queues a row when a sticker's audience doesn't match", async () => {
+    // A christian-only sticker posted into a general-audience group.
     const { db, writes } = makeFakeDb({
-      groupAudience: "christian",
-      stickers: { "roll-partner-needed": "bjj" },
+      groupAudience: "general",
+      stickers: { "prayer-request": "christian" },
     });
     await flagAudienceMismatch(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       db as any,
       "g1",
       "m1",
-      ["roll-partner-needed"],
+      ["prayer-request"],
       "evt-2",
     );
     const messageWrite = writes.find((w) =>
@@ -146,7 +147,7 @@ describe("flagAudienceMismatch (T56)", () => {
 
   it("treats `general` stickers as universally allowed", async () => {
     const { db, writes } = makeFakeDb({
-      groupAudience: "bjj",
+      groupAudience: "christian",
       stickers: { praise: "general" },
     });
     await flagAudienceMismatch(
@@ -178,15 +179,15 @@ describe("flagAudienceMismatch (T56)", () => {
 
   it("uses the event id in the queue doc id (idempotent on retry)", async () => {
     const { db, writes } = makeFakeDb({
-      groupAudience: "christian",
-      stickers: { "roll-partner-needed": "bjj" },
+      groupAudience: "general",
+      stickers: { "prayer-request": "christian" },
     });
     await flagAudienceMismatch(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       db as any,
       "g1",
       "m1",
-      ["roll-partner-needed"],
+      ["prayer-request"],
       "evt-fixed",
     );
     const queueWrite = writes.find((w) => w.path.startsWith("moderation_queue/"));

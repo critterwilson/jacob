@@ -492,15 +492,15 @@ describe("runTextModeration", () => {
     await runTextModeration({
       db: harness.db,
       resourceDocRef: harness.resourceDocRef,
-      resourcePath: "boards/bjj/posts/p1",
+      resourcePath: "boards/general-board/posts/p1",
       resourceType: "board_post",
-      resourceFkFields: { boardId: "bjj" },
+      resourceFkFields: { boardId: "general-board" },
       eventId: "evt-xyz",
       body: "rude",
       policy: "standard",
       // No queueDocIdPrefix → board path.
       getNLClient: () => midToxicClient as never,
-      logContext: { boardId: "bjj", postId: "p1" },
+      logContext: { boardId: "general-board", postId: "p1" },
     });
 
     expect(harness.resourceWrites[0]).toMatchObject({
@@ -513,9 +513,9 @@ describe("runTextModeration", () => {
     expect(harness.queueWrites).toHaveLength(1);
     expect(harness.queueWrites[0].docId).toBe("AUTO");
     expect(harness.queueWrites[0].data).toMatchObject({
-      resourceRef: "boards/bjj/posts/p1",
+      resourceRef: "boards/general-board/posts/p1",
       resourceType: "board_post",
-      boardId: "bjj",
+      boardId: "general-board",
       severity: 1,
       auto: true,
       reasons: ["Toxic"],

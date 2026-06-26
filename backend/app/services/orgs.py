@@ -304,8 +304,9 @@ def attach_group(
 
     org_audience = (org_snap.to_dict() or {}).get("audience", "christian")
     group_sticker_set = (group_snap.to_dict() or {}).get("stickerSet", "christian")
-    # Audience-mismatch guard: a christian-org cannot absorb a bjj group
-    # (the sticker set wouldn't make sense in either group).
+    # Audience-mismatch guard: a non-"general" org only absorbs groups
+    # whose sticker set matches its audience (a christian org won't
+    # absorb a group whose sticker set is anything but christian).
     if org_audience != "general" and group_sticker_set != org_audience:
         raise ValueError("audience_mismatch")
 

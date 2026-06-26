@@ -12,8 +12,9 @@ import {
   Textarea,
 } from "@/components/ui";
 import { ApiError, apiGet, apiPost } from "@/lib/api";
+import { BRAND_NAME } from "@/lib/brand";
 
-type Audience = "christian" | "bjj" | "general";
+type Audience = "christian" | "general";
 
 type LeaderApplicationView = {
   appId: string;
@@ -132,7 +133,7 @@ export default function LeaderApplicationPage() {
           </p>
           <p className="text-body-sm text-cream-muted">
             We&rsquo;ll email you when the owner makes a decision. You can
-            keep using JACOB in the meantime — browse boards or request to
+            keep using {BRAND_NAME} in the meantime — browse boards or request to
             join an existing group from{" "}
             <a href="/discover" className="text-gold underline">
               Discover

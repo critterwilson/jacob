@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="64" fill="#1e40af"/>
-  <text x="256" y="348" font-family="sans-serif" font-size="300" font-weight="bold" fill="#ffffff" text-anchor="middle">J</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="512" height="512">
+  <!-- Olive Branch app icon (provisional, name-independent): an olive
+       branch on the Evening Olive ground. Replaces the pre-rebrand blue "J". -->
+  <rect width="192" height="192" rx="24" fill="#1c2118"/>
+  <g fill="#9dae6e" stroke="none">
+    <path d="M96 132 Q70 130 64 110 Q88 116 96 132 Z"/>
+    <path d="M96 132 Q122 130 128 110 Q104 116 96 132 Z"/>
+    <path d="M96 108 Q72 106 67 88 Q89 94 96 108 Z"/>
+    <path d="M96 108 Q120 106 125 88 Q103 94 96 108 Z"/>
+    <path d="M96 86 Q76 84 72 70 Q90 76 96 86 Z"/>
+    <path d="M96 86 Q116 84 120 70 Q102 76 96 86 Z"/>
+    <path d="M96 86 Q91 64 96 54 Q101 64 96 86 Z"/>
+  </g>
+  <path d="M96 152 L96 66" fill="none" stroke="#d8b45a" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="87" cy="143" r="5" fill="#d8b45a"/>
+  <circle cx="105" cy="143" r="5" fill="#d8b45a"/>
 </svg>

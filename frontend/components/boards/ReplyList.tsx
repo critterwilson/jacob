@@ -18,7 +18,7 @@ export function ReplyList({ replies }: Props) {
   if (replies.length === 0) {
     return (
       <p className="py-4 text-body-sm text-cream-muted">
-        No replies yet. Be the first.
+        No replies yet — be the first to respond.
       </p>
     );
   }

@@ -2,7 +2,7 @@
 
 ## In plain words
 
-JACOB is a small messaging app for Christian small groups. We collect the
+{{brand}} is a small messaging app for Christian small groups. We collect the
 information you give us to help your group stay in touch — your email, your
 display name, your messages, the photos you choose to share. We don't sell it,
 we don't share it with advertisers, and we use it for the smallest set of
@@ -45,7 +45,7 @@ While you use the service, we collect:
 
 ## How we use it
 
-We use this information only for what's needed to run JACOB:
+We use this information only for what's needed to run {{brand}}:
 
 - Sign you in and keep your session alive.
 - Deliver messages, posts, and notifications to the people in your group.
@@ -61,7 +61,7 @@ networks against your activity in the app.
 
 ## Who we share it with
 
-We share data only with service providers that help us run JACOB, and only
+We share data only with service providers that help us run {{brand}}, and only
 the minimum each one needs:
 
 - **Firebase Authentication, Cloud Firestore, and Cloud Storage** (operated
@@ -90,7 +90,7 @@ the minimum each one needs:
   systems flag content that matches a known child sexual abuse material
   (CSAM) hash, we are legally required to report it to NCMEC. We share only
   what is required by law (the offending content, the account, and basic
-  context). This is the only routine third-party reporting path in JACOB.
+  context). This is the only routine third-party reporting path in {{brand}}.
 - **Law enforcement** — we will respond to valid legal process (subpoena,
   warrant, court order) and to good-faith requests where we believe a person
   is in immediate physical danger. We will resist overly broad requests.
@@ -100,8 +100,8 @@ use your data for their own products.
 
 ## Where it's stored
 
-JACOB runs on Google Cloud infrastructure in the United States. If you
-access JACOB from outside the United States, your information will be
+{{brand}} runs on Google Cloud infrastructure in the United States. If you
+access {{brand}} from outside the United States, your information will be
 transferred to and processed in the United States.
 
 ## How long we keep it
@@ -154,7 +154,7 @@ we will honor them in accordance with that law.
 
 ## Cookies and local storage
 
-JACOB uses a small number of cookies and local-storage entries:
+{{brand}} uses a small number of cookies and local-storage entries:
 
 - **Authentication session** — Firebase Authentication stores your sign-in
   state in browser storage so you don't have to sign in again on every
@@ -169,11 +169,11 @@ sharing widgets, or other tracking technologies.
 
 ## Children
 
-JACOB is not intended for children under 13. We do not knowingly collect
+{{brand}} is not intended for children under 13. We do not knowingly collect
 personal information from children under 13. If we learn we have collected
 information from a child under 13, we will delete it.
 
-Users aged 13–17 may use JACOB only with the consent of a parent or legal
+Users aged 13–17 may use {{brand}} only with the consent of a parent or legal
 guardian. The in-app gate that enforces this works as follows: when a 13–17
 year old signs up, the application enters the admin-approval queue (the
 same queue every new account goes through). Before approving an under-18

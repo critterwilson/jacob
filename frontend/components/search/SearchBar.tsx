@@ -84,7 +84,7 @@ export function SearchBar() {
             }}
             placeholder="Search messages…"
             aria-label="Search query"
-            className="w-full bg-transparent text-body text-cream placeholder:text-cream-muted focus:outline-none"
+            className="w-full rounded bg-transparent text-body text-cream placeholder:text-cream-muted focus:outline-none focus-visible:shadow-glow-gold"
             maxLength={200}
           />
         </div>

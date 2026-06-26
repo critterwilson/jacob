@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import { ApiError, apiPost } from "@/lib/api";
 import { MIN_AGE, computeAge, dobSchema } from "@/lib/auth-schemas";
+import { BRAND_NAME } from "@/lib/brand";
 import { auth } from "@/lib/firebase";
 import {
   clearPendingDob,
@@ -167,7 +168,10 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
 
   if (under13Blocked) {
     return (
-      <Banner tone="error" title="JACOB requires you to be at least 13.">
+      <Banner
+        tone="error"
+        title={`${BRAND_NAME} requires you to be at least 13.`}
+      >
         <p>
           We&rsquo;re unable to create an account for users under 13. Clicking
           Continue will permanently delete your account — this cannot be undone.
@@ -233,7 +237,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
             autoComplete="bday"
             required
             {...register("dob")}
-            helperText="JACOB requires you to be at least 13. Applicants under 18 need a ministry owner to confirm parental consent before they can join a group."
+            helperText={`${BRAND_NAME} requires you to be at least 13. Applicants under 18 need a ministry owner to confirm parental consent before they can join a group.`}
             error={errors.dob?.message}
           />
 
@@ -271,8 +275,7 @@ export function ProfileForm({ uid, email: _email }: ProfileFormProps) {
       {step === 2 && (
         <div className="space-y-6">
           <p className="text-body-sm text-cream-muted">
-            Last step — agree to JACOB&rsquo;s community guidelines to
-            finish creating your account.
+            {`Last step — agree to ${BRAND_NAME}'s community guidelines to finish creating your account.`}
           </p>
 
           <div className="space-y-2">

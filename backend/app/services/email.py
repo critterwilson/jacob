@@ -67,8 +67,12 @@ def _redact_email(addr: str) -> str:
 
 def _render(template_name: str, context: dict[str, Any]) -> tuple[str, str]:
     """Return (html_body, text_body) for *template_name*."""
-    html = _jinja_env.get_template(f"{template_name}.html.j2").render(**context)
-    text = _jinja_env.get_template(f"{template_name}.txt.j2").render(**context)
+    # Inject the brand name into every template so the app name lives in
+    # exactly one place (config `brand_name`). An explicit context key of
+    # the same name still wins.
+    merged = {"brand_name": get_settings().brand_name, **context}
+    html = _jinja_env.get_template(f"{template_name}.html.j2").render(**merged)
+    text = _jinja_env.get_template(f"{template_name}.txt.j2").render(**merged)
     return html, text
 
 
@@ -168,7 +172,7 @@ def send_moderation_notice(
     send_email(
         to_email=to_email,
         display_name=display_name,
-        subject="An update on your JACOB content",
+        subject=f"An update on your {settings.brand_name} content",
         template_name="moderation_notice",
         context={
             "reason": reason,
@@ -188,7 +192,7 @@ def send_deletion_confirmation(
     send_email(
         to_email=to_email,
         display_name=display_name,
-        subject="Your JACOB account deletion has been scheduled",
+        subject=f"Your {get_settings().brand_name} account deletion has been scheduled",
         template_name="deletion_confirmation",
         context={
             "grace_days": grace_days,
@@ -204,7 +208,7 @@ def send_deletion_finalized(
     send_email(
         to_email=to_email,
         display_name=display_name,
-        subject="Your JACOB account has been deleted",
+        subject=f"Your {get_settings().brand_name} account has been deleted",
         template_name="deletion_finalized",
         context={},
     )
@@ -225,7 +229,7 @@ def send_export_ready(
     send_email(
         to_email=to_email,
         display_name=display_name,
-        subject="Your JACOB data export is ready",
+        subject=f"Your {get_settings().brand_name} data export is ready",
         template_name="export_ready",
         context={
             "download_url": download_url,
@@ -268,7 +272,7 @@ def send_weekly_digest(
     message = Mail(
         from_email=settings.email_sender,
         to_emails=To(email=to_email, name=payload.display_name),
-        subject="Your JACOB Week",
+        subject=f"Your {settings.brand_name} Week",
     )
     message.content = [
         Content("text/plain", text_body),

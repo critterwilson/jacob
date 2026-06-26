@@ -26,6 +26,7 @@ from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 from starlette.responses import Response as StarletteResponse
 
+from app.config import get_settings
 from app.deps import get_current_user, require_not_banned
 from app.errors import APIError
 from app.limits import (
@@ -249,7 +250,7 @@ def create_profile(
         raise APIError(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             code="under_minimum_age",
-            message="JACOB requires you to be at least 13",
+            message=f"{get_settings().brand_name} requires you to be at least {MIN_AGE}",
             details={"minimumAge": MIN_AGE},
         )
 

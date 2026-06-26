@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 
 import { Button } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { registerPushToken } from "@/lib/push";
 
 const SNOOZE_KEY = "jacob_push_prompt_snoozed_until";
@@ -61,8 +62,7 @@ export function PushPrompt({ uid }: Props) {
     typeof navigator !== "undefined" &&
     /iphone|ipad/i.test(navigator.userAgent) ? (
       <p className="mt-1 text-xs text-cream-muted">
-        On iOS, push notifications require installing JACOB to your home screen
-        (Safari → Share → Add to Home Screen).
+        {`On iOS, push notifications require installing ${BRAND_NAME} to your home screen (Safari → Share → Add to Home Screen).`}
       </p>
     ) : null;
 
@@ -77,9 +77,7 @@ export function PushPrompt({ uid }: Props) {
         <div className="flex-1">
           <p className="font-medium text-cream">Notifications are blocked</p>
           <p className="text-cream-muted">
-            You&apos;ve blocked notifications for JACOB. Re-enable them in your
-            browser settings (click the lock icon in the address bar →
-            Notifications → Allow) to get mentions, replies, and announcements.
+            {`You've blocked notifications for ${BRAND_NAME}. Re-enable them in your browser settings (click the lock icon in the address bar → Notifications → Allow) to get mentions, replies, and announcements.`}
           </p>
           {iosNote}
         </div>

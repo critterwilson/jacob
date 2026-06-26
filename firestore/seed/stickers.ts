@@ -15,17 +15,17 @@ if (USE_EMULATOR) {
 type StickerDoc = {
   slug: string;
   name: string;
-  audience: "christian" | "bjj" | "general";
+  audience: "christian" | "general";
   order: number;
   color: string;
 };
 
-// Sticker palette retuned for the dark-first design system (PR 9 of the
-// design sweep). Earlier values were vivid Tailwind primaries sized for
-// a light surface; on the new ink ground (#0E1726) those read as acidic.
-// New values are jewel-toned: ~30-50% saturation, mid-luminance, each
-// readable as text on its own 15%-alpha background. Sticker identities
+// Sticker palette tuned for the dark-first design system. Values are
+// jewel-toned: ~30-50% saturation, mid-luminance, each readable as text
+// on its own 15%-alpha background, and they carry over cleanly onto the
+// Olive Branch "Evening Olive" ground (#1C2118). Sticker identities are
 // preserved (blue-ish stays blue-ish, etc.). See docs/design-tokens.md.
+// Re-verify each chip's legibility on the olive ground before shipping.
 const STICKERS: StickerDoc[] = [
   // Christian audience (Phase 1).
   { slug: "check-in",       name: "Check-In",       audience: "christian", order: 1, color: "#7AA2D9" },
@@ -35,19 +35,9 @@ const STICKERS: StickerDoc[] = [
   { slug: "need-help",      name: "Need Help",       audience: "christian", order: 5, color: "#C16B5C" },
   { slug: "event-meetup",   name: "Event / Meetup",  audience: "christian", order: 6, color: "#D58FA8" },
 
-  // BJJ audience (T56). Picked to match the BJJ training cadence: roll
-  // partners, prep, technique discussion, recovery, conditioning,
-  // milestones (stripes / belts / first comp).
-  { slug: "roll-partner-needed", name: "Roll Partner Needed", audience: "bjj", order: 11, color: "#6E8AA9" },
-  { slug: "tournament-prep",     name: "Tournament Prep",     audience: "bjj", order: 12, color: "#B8584A" },
-  { slug: "technique-question",  name: "Technique Question",  audience: "bjj", order: 13, color: "#7DAEC2" },
-  { slug: "recovery",            name: "Recovery",            audience: "bjj", order: 14, color: "#6FA59D" },
-  { slug: "conditioning",        name: "Conditioning",        audience: "bjj", order: 15, color: "#9A7FCB" },
-  { slug: "bjj-milestone",       name: "Milestone",           audience: "bjj", order: 16, color: "#C49866" },
-
   // Cross-audience "general" stickers — usable in any group regardless
-  // of the parent group's audience. Keeps the Christian and BJJ surfaces
-  // from feeling silo'd when a member just wants a thumbs-up.
+  // of the parent group's audience. Keeps groups from feeling silo'd
+  // when a member just wants a thumbs-up.
   { slug: "encouragement", name: "Encouragement", audience: "general", order: 21, color: "#7FB39A" },
   { slug: "question",      name: "Question",      audience: "general", order: 22, color: "#82A2C2" },
   { slug: "praise",        name: "Praise",        audience: "general", order: 23, color: "#D9BE7C" },

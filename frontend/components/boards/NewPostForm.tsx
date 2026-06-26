@@ -26,9 +26,8 @@ type Props = {
   archived?: boolean;
   /**
    * Board audience — when "christian", narrows the sticker picker to
-   * christian + general stickers (9 of 15) and hides the BJJ-specific
-   * set. "general" boards fall through to all stickers (legacy). Mirrors
-   * the wiring landed for chat in PR #280.
+   * christian + general stickers. "general" boards fall through to all
+   * stickers (legacy). Mirrors the wiring landed for chat in PR #280.
    */
   boardAudience?: "christian" | "general";
 };

@@ -1,6 +1,8 @@
 // T56 — christian audience copy. Default variant; every key landed in
-// the broader app should also live here. The BJJ variant only overrides
-// the keys where the wording would feel out of place.
+// the broader app should also live here. Other audiences fall back to
+// this table (see lib/copy/index.ts).
+
+import { BRAND_NAME } from "@/lib/brand";
 
 import type { CopyMap } from "./types";
 
@@ -8,9 +10,8 @@ export const christianCopy: CopyMap = {
   "discover.title": "Find a small group",
   "discover.subtitle":
     "Discover groups studying scripture, growing together, or serving their community.",
-  "onboarding.welcome.title": "Welcome to JACOB",
-  "onboarding.welcome.body":
-    "JACOB is a small-group messaging app for Christian communities. Pick a display name to get started.",
+  "onboarding.welcome.title": `Welcome to ${BRAND_NAME}`,
+  "onboarding.welcome.body": `${BRAND_NAME} is a small-group messaging app for Christian communities. Pick a display name to get started.`,
   "discover.audienceFilter.label": "Group type",
   "discover.audienceFilter.all": "All groups",
   "discover.audienceFilter.christian": "Christian small groups",

@@ -13,6 +13,7 @@ import {
   Skeleton,
   Textarea,
 } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 
 /*
  * Internal design-system showcase. Renders one of every primitive at
@@ -25,7 +26,7 @@ import {
  */
 
 export const metadata: Metadata = {
-  title: "Design system — JACOB",
+  title: "Design system",
   robots: { index: false, follow: false },
 };
 
@@ -93,7 +94,7 @@ export default function DesignSystemShowcase() {
       <header className="space-y-4">
         <Eyebrow>Internal · /design</Eyebrow>
         <Heading level={1} size="xl">
-          The JACOB design system
+          The {BRAND_NAME} design system
         </Heading>
         <p className="max-w-2xl text-body-lg text-cream-muted">
           Study-Bible meets restrained Swiss. Reverence, warmth, restraint. The
@@ -106,32 +107,31 @@ export default function DesignSystemShowcase() {
       <Section
         eyebrow="01"
         title="Color"
-        description="Dark-first palette. Ink for ground, cream for type, gold used sparingly as the single accent."
+        description="Olive Branch 'Evening Olive' — dark-first. Olive-night for ground, dove cream for type, anointing-oil gold used sparingly as the single accent."
       >
         <Tile label="Surfaces">
-          <Swatch name="ink" hex="#0E1726" />
-          <Swatch name="ink-raised" hex="#15233A" />
-          <Swatch name="ink-overlay" hex="#1C2D49" />
+          <Swatch name="ink" hex="#1C2118" />
+          <Swatch name="ink-raised" hex="#262C1F" />
+          <Swatch name="ink-overlay" hex="#2F3725" />
         </Tile>
         <Tile label="Lines">
-          <Swatch name="line" hex="#243149" />
-          <Swatch name="line-strong" hex="#3A4D6E" />
+          <Swatch name="line" hex="#3A4230" />
+          <Swatch name="line-strong" hex="#55603F" />
         </Tile>
         <Tile label="Text">
-          <Swatch name="cream" hex="#F5EFE0" />
-          <Swatch name="cream-muted" hex="#C9C2B3" />
-          <Swatch name="cream-muted" hex="#8E8878" />
+          <Swatch name="cream" hex="#F3EEDE" />
+          <Swatch name="cream-muted" hex="#BFB89F" />
         </Tile>
         <Tile label="Accent">
-          <Swatch name="gold" hex="#C9A95C" />
-          <Swatch name="gold-soft" hex="#D9BE7C" />
-          <Swatch name="gold-deep" hex="#A8893E" />
+          <Swatch name="gold" hex="#D8B45A" />
+          <Swatch name="gold-soft" hex="#E6C878" />
+          <Swatch name="gold-deep" hex="#B9892E" />
         </Tile>
         <Tile label="Semantic">
-          <Swatch name="terracotta" hex="#C16B5C" />
-          <Swatch name="sage" hex="#7E9B7C" />
-          <Swatch name="parchment-amber" hex="#D9B068" />
-          <Swatch name="lake" hex="#6E8AA9" />
+          <Swatch name="terracotta" hex="#C56A4A" />
+          <Swatch name="sage" hex="#9DAE6E" />
+          <Swatch name="parchment-amber" hex="#E0B86A" />
+          <Swatch name="lake" hex="#6E93A8" />
         </Tile>
       </Section>
 
@@ -311,7 +311,8 @@ export default function DesignSystemShowcase() {
             Your group settings were updated.
           </Banner>
           <Banner tone="warning" title="Maintenance window">
-            JACOB will be undergoing scheduled maintenance on Thursday at 9 PM.
+            {BRAND_NAME} will be undergoing scheduled maintenance on Thursday at
+            9 PM.
           </Banner>
           <Banner tone="error" title="Couldn&rsquo;t save">
             We weren&rsquo;t able to update the group description. Try again in

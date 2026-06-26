@@ -19,6 +19,7 @@ from firebase_admin import auth as firebase_auth
 from firebase_admin import firestore as fb_firestore
 from google.cloud import firestore as gcf
 
+from app.config import get_settings
 from app.deps import require_admin, require_ministry_owner_or_admin
 from app.errors import APIError
 from app.limits import ADMIN_LIST, ADMIN_MUTATION
@@ -989,7 +990,7 @@ def approve_leader_application(
         raise APIError(
             status_code=status.HTTP_409_CONFLICT,
             code="applicant_missing",
-            message="The applicant no longer has a JACOB account",
+            message=f"The applicant no longer has a {get_settings().brand_name} account",
         )
 
     audience = body.audienceOverride or str(app_data.get("proposedAudience") or "christian")

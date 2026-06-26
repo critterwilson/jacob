@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MessageItem } from "@/components/chat/MessageItem";
+import { OliveSprig } from "@/components/motifs/OliveSprig";
 import {
   MessageMenuProvider,
   useMessageMenu,
@@ -284,9 +285,12 @@ function MessageListInner({
         )}
 
         {visible.length === 0 && (
-          <p className="mt-12 text-center text-body-sm text-cream-muted">
-            No messages yet. Be the first to say something!
-          </p>
+          <div className="mt-12 flex flex-col items-center gap-3 text-center">
+            <OliveSprig className="h-10 w-auto text-sage" />
+            <p className="max-w-xs text-body-sm text-cream-muted">
+              It&apos;s quiet here for now. Share something to get it growing.
+            </p>
+          </div>
         )}
 
         {/*

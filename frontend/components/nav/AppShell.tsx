@@ -7,6 +7,7 @@ import { DeletionBanner } from "@/components/account/DeletionBanner";
 import { MobileTabBar } from "@/components/nav/MobileTabBar";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { useGroups } from "@/lib/hooks/useGroups";
 import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
 import { type RoleClaims, useRoleClaims } from "@/lib/hooks/useRoleClaims";
@@ -101,7 +102,7 @@ function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
       size={size}
       className={cn("normal-case tracking-tight", size === "sm" && "leading-none")}
     >
-      JACOB
+      {BRAND_NAME}
     </Heading>
   );
 }

@@ -128,7 +128,7 @@ def test_create_group_default_audience_is_christian() -> None:
     assert group_doc["stickerSet"] == "christian"
 
 
-def test_create_group_bjj_audience_persists() -> None:
+def test_create_group_general_audience_persists() -> None:
     """T56 — caller-supplied audience pins both `audience` and `stickerSet`."""
     mock_db = _make_db()
     captured: list[object] = []
@@ -145,21 +145,22 @@ def test_create_group_bjj_audience_persists() -> None:
     ):
         TestClient(_make_app()).post(
             "/api/groups",
-            json={"name": "Mat Time", "audience": "bjj"},
+            json={"name": "Tuesday Group", "audience": "general"},
         )
 
     group_doc = next((d for d in captured if isinstance(d, dict) and "name" in d), None)
     assert group_doc is not None
-    assert group_doc["audience"] == "bjj"
-    assert group_doc["stickerSet"] == "bjj"
+    assert group_doc["audience"] == "general"
+    assert group_doc["stickerSet"] == "general"
 
 
 def test_create_group_invalid_audience_returns_422() -> None:
-    """T56 — only the three known audiences are accepted."""
+    """T56 — only the two known audiences are accepted; the retired
+    "bjj" literal is now rejected (rebrand to a 100%-ministry app)."""
     with patch("app.routers.groups._db", return_value=_make_db()):
         res = TestClient(_make_app()).post(
             "/api/groups",
-            json={"name": "G", "audience": "yoga"},
+            json={"name": "G", "audience": "bjj"},
         )
     assert res.status_code == 422
 

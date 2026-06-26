@@ -691,9 +691,11 @@ def test_attach_409_when_attached_elsewhere() -> None:
 
 
 def test_attach_audience_mismatch() -> None:
+    # A non-"general" org only absorbs groups whose sticker set matches its
+    # audience; here a christian org rejects a general-audience group.
     fs = FakeFirestore()
     _seed_org(fs, org_id="o1", admins=["admin-1"], audience="christian")
-    _seed_group(fs, gid="g1", leaders=["admin-1"], sticker_set="bjj")
+    _seed_group(fs, gid="g1", leaders=["admin-1"], sticker_set="general")
     user = _user("admin-1")
     with (
         patch("app.routers.orgs._db", return_value=fs),

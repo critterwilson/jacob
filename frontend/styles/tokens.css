@@ -1,39 +1,49 @@
 /*
- * JACOB design tokens
+ * Olive Branch design tokens — "Evening Olive" (dark-first).
  *
- * Source of truth: docs/design-system.md
+ * Source of truth: docs/design-system.md + DESIGN_REVIEW_REBRAND.md (Part B).
  * Mirrored into Tailwind theme via frontend/tailwind.config.ts so that
  * `bg-ink`, `text-cream`, `font-display`, `text-display-md`, `rounded-xl`
  * all resolve to the same values exposed here as CSS custom properties.
+ *
+ * Rebrand note: the token NAMES are intentionally kept stable (ink, cream,
+ * gold, sage, …) so the recolor is a pure value-swap that doesn't touch
+ * component markup. Their MEANINGS rotate from the old navy study-Bible
+ * palette to an olive-grove-at-evening one:
+ *   - `ink*`  : deep warm olive-black grounds (was cold navy)
+ *   - `gold*` : anointing-oil amber-gold — the single blessed accent/CTA
+ *   - `sage`  : the flourishing olive green (Psalm 52:8) — brand/success
+ *   - `terracotta`/`parchment-amber`/`lake`: clay / harvest-amber / Galilee
+ * New olive/dove motif components consume `sage` (green) and `gold` (oil).
  *
  * Use the CSS custom properties when authoring outside Tailwind utilities
  * (e.g. inline styles, third-party widgets, prose plugin overrides).
  */
 
 :root {
-  /* Surfaces — dark-first ground */
-  --color-ink: #0e1726;
-  --color-ink-raised: #15233a;
-  --color-ink-overlay: #1c2d49;
+  /* Surfaces — dark-first "Evening Olive" ground */
+  --color-ink: #1c2118;
+  --color-ink-raised: #262c1f;
+  --color-ink-overlay: #2f3725;
 
-  /* Lines and borders */
-  --color-line: #243149;
-  --color-line-strong: #3a4d6e;
+  /* Lines and borders — olive bark */
+  --color-line: #3a4230;
+  --color-line-strong: #55603f;
 
-  /* Text — cream on ink */
-  --color-cream: #f5efe0;
-  --color-cream-muted: #c9c2b3;
+  /* Text — dove cream on olive-night */
+  --color-cream: #f3eede;
+  --color-cream-muted: #bfb89f;
 
-  /* Accent — the gold bookmark */
-  --color-gold: #c9a95c;
-  --color-gold-soft: #d9be7c;
-  --color-gold-deep: #a8893e;
+  /* Accent — anointing oil (gold), lifted for dark grounds */
+  --color-gold: #d8b45a;
+  --color-gold-soft: #e6c878;
+  --color-gold-deep: #b9892e;
 
-  /* Semantic — warm, never vivid */
-  --color-terracotta: #c16b5c;
-  --color-sage: #7e9b7c;
-  --color-parchment-amber: #d9b068;
-  --color-lake: #6e8aa9;
+  /* Semantic — warm/olive, never vivid */
+  --color-terracotta: #c56a4a; /* clay (danger) */
+  --color-sage: #9dae6e; /* flourishing olive (success / brand green) */
+  --color-parchment-amber: #e0b86a; /* harvest amber (warning) */
+  --color-lake: #6e93a8; /* Galilee lake-blue (info) */
 
   /* Type families. Set by next/font in app/layout.tsx. */
   --font-display: var(--font-eb-garamond, "EB Garamond"), "Iowan Old Style",
@@ -55,9 +65,11 @@
   --shadow-pop:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 24px 60px -20px rgba(0, 0, 0, 0.8);
+  /* The one consistent focus ring — re-tinted to anointing-oil gold so it
+   * stays visible on every olive ground (fixes the invisible-focus risk). */
   --shadow-glow-gold:
-    0 0 0 1px rgba(201, 169, 92, 0.3),
-    0 0 0 4px rgba(201, 169, 92, 0.12);
+    0 0 0 1px rgba(216, 180, 90, 0.45),
+    0 0 0 4px rgba(216, 180, 90, 0.18);
 
   /* Motion */
   --duration-fast: 120ms;

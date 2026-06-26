@@ -8,7 +8,7 @@ export type OrgSummary = {
   orgId: string;
   name: string;
   slug: string;
-  audience: "christian" | "bjj" | "general";
+  audience: "christian" | "general";
   logoUrl: string | null;
   role: "admin" | "member";
 };

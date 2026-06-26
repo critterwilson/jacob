@@ -1,6 +1,7 @@
 "use client";
 
 import { Heading, Link } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
@@ -22,7 +23,7 @@ const APPEALS_ITEMS: Item[] = [
 ];
 
 const INFO_ITEMS: Item[] = [
-  { href: "/about", label: "About JACOB" },
+  { href: "/about", label: `About ${BRAND_NAME}` },
   { href: "/faq", label: "FAQ" },
   { href: "/guidelines", label: "Community guidelines" },
   { href: "/terms", label: "Terms" },

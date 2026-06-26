@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { BRAND_NAME } from "@/lib/brand";
+
 // Password rule per spec: at least 10 chars, one digit, one symbol.
 const password = z
   .string()
@@ -45,7 +47,7 @@ export const dobSchema = z
       if (Number.isNaN(dob.getTime())) return false;
       return computeAge(dob) >= MIN_AGE;
     },
-    { error: `JACOB requires you to be at least ${MIN_AGE}` },
+    { error: `${BRAND_NAME} requires you to be at least ${MIN_AGE}` },
   );
 
 export const signInSchema = z.object({

@@ -21,7 +21,7 @@ import {
 export type WorkspaceOrg = {
   orgId: string;
   name: string;
-  audience: "christian" | "bjj" | "general";
+  audience: "christian" | "general";
   logoUrl: string | null;
   primaryColor: string | null;
 };

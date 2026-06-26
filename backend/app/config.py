@@ -18,10 +18,16 @@ class Settings(BaseSettings):
 
     # T18 — Transactional email via SendGrid
     sendgrid_api_key: str = ""
-    # Full RFC 5322 sender address, e.g. "JACOB <noreply@yourdomain.com>"
-    email_sender: str = "JACOB <noreply@example.com>"
+    # Full RFC 5322 sender address, e.g. "Branch <noreply@yourdomain.com>".
+    # The display-name half is user-facing; prod overrides this via env.
+    email_sender: str = "Branch <noreply@example.com>"
     # Reply-to address that maps to a monitored inbox
     email_reply_to: str = ""
+    # User-facing product name, injected into every transactional email
+    # template as `{{ brand_name }}`. "Branch" is the final Olive Branch
+    # rebrand name. Mirror of the frontend's lib/brand.ts BRAND_NAME; keep
+    # the two in sync.
+    brand_name: str = "Branch"
 
     # T25 — Invite URL base (used in InviteResponse.url)
     app_url: str = "https://jacob.app"

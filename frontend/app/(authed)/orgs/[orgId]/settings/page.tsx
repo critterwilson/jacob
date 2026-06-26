@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui";
 import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { BRAND_NAME } from "@/lib/brand";
 import { useOrg } from "@/lib/hooks/useOrg";
 
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -255,7 +256,7 @@ function BrandingSection({ orgId }: { orgId: string }) {
       ) : (
         <>
           <div>
-            <h3 className="text-sm font-medium">JACOB subdomain</h3>
+            <h3 className="text-sm font-medium">{BRAND_NAME} subdomain</h3>
             <p className="text-xs text-cream-muted">
               Claim a `*.jacob.app` host. Members visit
               `&lt;your-name&gt;.jacob.app`. Claims are unique platform-wide.

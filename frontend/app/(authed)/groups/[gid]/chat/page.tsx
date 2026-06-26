@@ -83,7 +83,7 @@ export default function ChatPage({ params }: Props) {
 
   const groupName = group?.name ?? null;
   const archivedAt = group?.archivedAt ?? null;
-  const groupAudience = (group?.audience as "christian" | "bjj" | "general" | null) ?? undefined;
+  const groupAudience = (group?.audience as "christian" | "general" | null) ?? undefined;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-ink text-cream">

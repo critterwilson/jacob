@@ -11,11 +11,11 @@ type Props = {
   onChange: (slugs: string[]) => void;
   /**
    * T56 — when set, only stickers whose `audience` matches OR equals
-   * `general` are surfaced. Pass the parent group's audience so a BJJ
-   * group can't surface christian-only stickers and vice versa. Omit
-   * to show every sticker (legacy behaviour).
+   * `general` are surfaced. Pass the parent group's audience so a
+   * general group can't surface christian-only stickers and vice
+   * versa. Omit to show every sticker (legacy behaviour).
    */
-  groupAudience?: "christian" | "bjj" | "general";
+  groupAudience?: "christian" | "general";
 };
 
 export function StickerPicker({ value, onChange, groupAudience }: Props) {

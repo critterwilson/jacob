@@ -3,6 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { Button, cn } from "@/components/ui";
+import { BRAND_NAME } from "@/lib/brand";
 import { useBodyScrollLock } from "@/lib/hooks/useBodyScrollLock";
 import { useDelayedUnmount } from "@/lib/hooks/useDelayedUnmount";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
@@ -20,7 +21,7 @@ const SLIDES: Slide[] = [
   {
     id: "welcome",
     illustration: <SparkIcon />,
-    heading: "Welcome to JACOB",
+    heading: `Welcome to ${BRAND_NAME}`,
     body: "A quiet space for your group to stay connected — talk together, share, and grow in scripture.",
   },
   {

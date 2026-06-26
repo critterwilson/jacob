@@ -95,7 +95,7 @@ export default function MembersPage({ params }: Props) {
         </p>
       )}
 
-      <ul className="divide-y divide-gray-200 rounded border border-line">
+      <ul className="divide-y divide-line rounded border border-line">
         {members.map((m) => {
           const isFounderRow = group?.founderUid === m.uid;
           const isSelf = m.uid === user.uid;

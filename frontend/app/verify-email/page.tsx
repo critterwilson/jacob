@@ -11,6 +11,7 @@ import { Suspense, useEffect, useState } from "react";
 import { LightFromClouds } from "@/components/motifs/LightFromClouds";
 import { Banner, Button, Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { auth } from "@/lib/firebase";
 import { useRefetchOnFocus } from "@/lib/hooks/useRefetchOnFocus";
 import { safeNext } from "@/lib/safe-redirect";
@@ -106,7 +107,7 @@ function VerifyEmailContent() {
         <div className="flex flex-col items-center gap-3 text-gold-soft">
           <LightFromClouds className="h-20 w-auto opacity-90" />
           <Heading level={1} size="md" className="normal-case">
-            JACOB
+            {BRAND_NAME}
           </Heading>
         </div>
 

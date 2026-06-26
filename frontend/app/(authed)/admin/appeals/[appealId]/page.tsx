@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiGet, apiPost } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui";
 
 type Appeal = {
@@ -150,8 +151,8 @@ export default function AdminAppealDetailPage() {
           <h2 className="mb-3 font-medium">Decide</h2>
           <p className="mb-3 text-xs text-parchment-amber">
             ⚠️ If you made the original decision on this content, ask another
-            admin to handle this appeal — JACOB won&apos;t let the same person
-            review their own action.
+            admin to handle this appeal — {BRAND_NAME} won&apos;t let the same
+            person review their own action.
           </p>
           <label className="block">
             <span className="text-xs font-medium text-cream">Outcome</span>

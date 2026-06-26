@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { BoardCard } from "@/components/boards/BoardCard";
 import { ButtonLink, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { BRAND_NAME } from "@/lib/brand";
 import { useBoards } from "@/lib/hooks/useBoards";
 import { useRoleClaims } from "@/lib/hooks/useRoleClaims";
 
@@ -50,7 +51,7 @@ export default function BoardsPage() {
           )}
         </div>
         <p className="text-body-sm text-cream-muted">
-          Cross-group conversations. Open to everyone in JACOB.
+          {`Cross-group conversations. Open to everyone in ${BRAND_NAME}.`}
         </p>
       </header>
 

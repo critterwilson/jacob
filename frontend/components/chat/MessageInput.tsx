@@ -38,7 +38,7 @@ type Props = {
    */
   onTyping?: (active: boolean) => void;
   /** T56 — filters the sticker picker to the group's audience + general. */
-  groupAudience?: "christian" | "bjj" | "general";
+  groupAudience?: "christian" | "general";
 };
 
 function StickerIcon({ className }: { className?: string }) {

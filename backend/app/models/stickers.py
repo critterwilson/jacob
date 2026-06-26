@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class Sticker(BaseModel):
     slug: str
     name: str
-    audience: Literal["christian", "bjj", "general"]
+    audience: Literal["christian", "general"]
     order: int
     color: str
 

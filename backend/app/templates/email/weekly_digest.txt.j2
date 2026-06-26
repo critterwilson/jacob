@@ -1,12 +1,12 @@
 Hi {{ display_name }},
 
-Here's your weekly JACOB digest.
+Here's your weekly {{ brand_name }} digest.
 
 {% if quiet_week %}
 🕊️  Quiet week — see you next Sunday!
 
 {% else %}
-YOUR WEEK IN JACOB
+YOUR WEEK IN {{ brand_name }}
 {% if new_members > 0 %}• {{ new_members }} new member{{ 's' if new_members != 1 else '' }} joined your groups
 {% endif %}
 {% if missed_replies > 0 %}• {{ missed_replies }} repl{{ 'ies' if missed_replies != 1 else 'y' }} in threads you're part of
@@ -23,10 +23,10 @@ YOUR WEEK IN JACOB
 {% endfor %}
 {% endif %}
 
-Open JACOB: {{ app_url }}
+Open {{ brand_name }}: {{ app_url }}
 
 ---
 To stop receiving these digests:
 {{ unsubscribe_url }}
 
-You received this email because you are a member of a JACOB small group.
+You received this email because you are a member of a {{ brand_name }} small group.

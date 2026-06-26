@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { SignInForm } from "@/components/auth/SignInForm";
 import { Eyebrow, Heading } from "@/components/ui";
 
-export const metadata = { title: "Sign in — JACOB" };
+export const metadata = { title: "Sign in" };
 
 export default function SignInPage() {
   return (

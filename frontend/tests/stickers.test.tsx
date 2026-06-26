@@ -22,7 +22,6 @@ const MOCK_STICKERS: Sticker[] = [
   { id: "offering-help",       slug: "offering-help",       name: "Offering Help",        audience: "christian", order: 4,  color: "#059669" },
   { id: "need-help",           slug: "need-help",           name: "Need Help",            audience: "christian", order: 5,  color: "#DC2626" },
   { id: "event-meetup",        slug: "event-meetup",        name: "Event / Meetup",       audience: "christian", order: 6,  color: "#DB2777" },
-  { id: "roll-partner-needed", slug: "roll-partner-needed", name: "Roll Partner Needed",  audience: "bjj",       order: 11, color: "#6E8AA9" },
   { id: "encouragement",       slug: "encouragement",       name: "Encouragement",        audience: "general",   order: 21, color: "#7FB39A" },
 ];
 
@@ -136,27 +135,25 @@ describe("StickerPicker", () => {
     expect(DEFAULT_STICKER_SLUG).toBe("check-in");
   });
 
-  it("groupAudience=christian hides bjj stickers but shows general ones", () => {
+  it("groupAudience=christian shows christian + general stickers", () => {
     render(<StickerPicker value={[]} onChange={() => {}} groupAudience="christian" />);
     // christian sticker visible
     expect(screen.getByRole("button", { name: "Check-In" })).toBeInTheDocument();
     // general sticker visible
     expect(screen.getByRole("button", { name: "Encouragement" })).toBeInTheDocument();
-    // bjj-only sticker hidden
-    expect(screen.queryByRole("button", { name: "Roll Partner Needed" })).not.toBeInTheDocument();
   });
 
-  it("groupAudience=bjj hides christian stickers but shows general ones", () => {
-    render(<StickerPicker value={[]} onChange={() => {}} groupAudience="bjj" />);
-    expect(screen.getByRole("button", { name: "Roll Partner Needed" })).toBeInTheDocument();
+  it("groupAudience=general hides christian stickers but shows general ones", () => {
+    render(<StickerPicker value={[]} onChange={() => {}} groupAudience="general" />);
+    // general sticker visible
     expect(screen.getByRole("button", { name: "Encouragement" })).toBeInTheDocument();
+    // christian-only sticker hidden in a general group
     expect(screen.queryByRole("button", { name: "Check-In" })).not.toBeInTheDocument();
   });
 
   it("no groupAudience shows all stickers", () => {
     render(<StickerPicker value={[]} onChange={() => {}} />);
     expect(screen.getByRole("button", { name: "Check-In" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Roll Partner Needed" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Encouragement" })).toBeInTheDocument();
   });
 });

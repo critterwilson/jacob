@@ -1,7 +1,7 @@
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { Eyebrow, Heading } from "@/components/ui";
 
-export const metadata = { title: "Reset password — JACOB" };
+export const metadata = { title: "Reset password" };
 
 export default function ForgotPasswordPage() {
   return (
