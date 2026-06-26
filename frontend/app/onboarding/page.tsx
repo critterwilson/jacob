@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect } from "react";
 
-import { LightFromClouds } from "@/components/motifs/LightFromClouds";
+import { BranchMark } from "@/components/motifs/BranchMark";
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
 import { Card, Eyebrow, Heading } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -48,8 +48,8 @@ function OnboardingContent() {
   return (
     <main className="flex min-h-svh flex-col items-center bg-ink px-4 py-12 pt-safe-t pb-safe-b">
       <div className="flex w-full max-w-lg flex-col items-center gap-6">
-        <div className="flex flex-col items-center gap-3 text-gold-soft">
-          <LightFromClouds className="h-16 w-auto opacity-90" />
+        <div className="flex flex-col items-center gap-3">
+          <BranchMark className="h-16" />
           <Heading level={1} size="md" className="normal-case">
             {BRAND_NAME}
           </Heading>

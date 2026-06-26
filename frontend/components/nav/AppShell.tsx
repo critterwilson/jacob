@@ -5,6 +5,8 @@ import { type ReactNode, useState } from "react";
 
 import { DeletionBanner } from "@/components/account/DeletionBanner";
 import { MobileTabBar } from "@/components/nav/MobileTabBar";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { BranchMark } from "@/components/motifs/BranchMark";
 import { Heading, Link, cn } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { BRAND_NAME } from "@/lib/brand";
@@ -97,13 +99,19 @@ function buildManageGroup(
 
 function Wordmark({ size = "sm" }: { size?: "sm" | "md" }) {
   return (
-    <Heading
-      level={2}
-      size={size}
-      className={cn("normal-case tracking-tight", size === "sm" && "leading-none")}
-    >
-      {BRAND_NAME}
-    </Heading>
+    <span className="flex items-center gap-2">
+      <BranchMark className="h-7" />
+      <Heading
+        level={2}
+        size={size}
+        className={cn(
+          "normal-case tracking-tight",
+          size === "sm" && "leading-none",
+        )}
+      >
+        {BRAND_NAME}
+      </Heading>
+    </span>
   );
 }
 
@@ -276,7 +284,10 @@ export function AppShell({
         <nav aria-label="Main navigation" className="flex-1 overflow-y-auto">
           <NavLinks />
         </nav>
-        <div className="border-t border-line px-2 py-3">
+        <div className="space-y-2 border-t border-line px-2 py-3">
+          <div className="px-1">
+            <ThemeToggle />
+          </div>
           <SignOutButton />
         </div>
       </aside>
