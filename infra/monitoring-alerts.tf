@@ -146,7 +146,11 @@ resource "google_monitoring_alert_policy" "firestore_read_volume" {
     condition_threshold {
       filter = join(" AND ", [
         "metric.type=\"firestore.googleapis.com/document/read_count\"",
-        "resource.type=\"firestore.googleapis.com/Database\"",
+        # document/read_count is reported against the firestore_instance
+        # monitored resource, not firestore.googleapis.com/Database (that
+        # pairs with the newer document/read_ops_count metric). The mismatch
+        # was rejected at create time with a 400 "invalid combination".
+        "resource.type=\"firestore_instance\"",
       ])
       duration        = "300s"
       comparison      = "COMPARISON_GT"
