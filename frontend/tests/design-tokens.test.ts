@@ -49,6 +49,11 @@ describe("design tokens — resolved Tailwind theme", () => {
         "sage",
         "parchment-amber",
         "lake",
+        "danger",
+        "warning",
+        "info",
+        "on-emphasis",
+        "emphasis-ink",
       ]),
     ).toMatchSnapshot();
   });

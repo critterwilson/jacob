@@ -185,9 +185,9 @@ export default function AdminIncidentsPage() {
                     <span
                       className={`rounded px-2 py-0.5 text-xs ${
                         i.severity === "SEV1"
-                          ? "bg-terracotta text-cream"
+                          ? "bg-danger text-on-emphasis"
                           : i.severity === "SEV2"
-                            ? "bg-parchment-amber text-ink"
+                            ? "bg-warning text-emphasis-ink"
                             : "bg-gold text-ink"
                       }`}
                     >

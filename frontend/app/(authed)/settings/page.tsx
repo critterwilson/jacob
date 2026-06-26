@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Heading, Link } from "@/components/ui";
 import { BRAND_NAME } from "@/lib/brand";
 import { useMyOrgs } from "@/lib/hooks/useMyOrgs";
@@ -39,6 +40,19 @@ export default function YouPage() {
       <Heading level={1} size="md">
         You
       </Heading>
+
+      <section className="space-y-2" aria-labelledby="you-appearance-heading">
+        <h2
+          id="you-appearance-heading"
+          className="px-1 text-eyebrow uppercase tracking-wider text-cream-muted"
+        >
+          Appearance
+        </h2>
+        <div className="flex items-center justify-between rounded-lg border border-line bg-ink-raised px-4 py-3 shadow-raise">
+          <span className="text-body text-cream">Theme</span>
+          <ThemeToggle />
+        </div>
+      </section>
 
       <Section title="Account" items={ACCOUNT_ITEMS} />
 

@@ -8,6 +8,7 @@ import { SentryInit } from "@/components/SentryInit";
 import { AuthProvider } from "@/lib/auth-context";
 import { BRAND_NAME, BRAND_DESCRIPTION } from "@/lib/brand";
 import { WorkspaceOrgProvider, type WorkspaceOrg } from "@/lib/org-context";
+import { ThemeProvider, themeInitScript } from "@/lib/theme-context";
 
 // Variable fonts, latin subset only. Self-hosted by next/font.
 // Combined cold-load impact ~50 KB. Exposed as CSS variables so
@@ -39,7 +40,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#1c2118",
+  // Match the page ground per OS preference. The ThemeProvider further
+  // updates this meta when the user makes an explicit light/dark choice.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#d9c3ac" },
+    { media: "(prefers-color-scheme: dark)", color: "#241310" },
+  ],
 };
 
 function hydratedOrg(): WorkspaceOrg | null {
@@ -65,11 +71,24 @@ export default function RootLayout({
 }>) {
   const org = hydratedOrg();
   return (
-    <html lang="en" className={`${inter.variable} ${ebGaramond.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${ebGaramond.variable}`}
+      suppressHydrationWarning
+    >
       <head>
+        {/* No-flash theme bootstrap: apply the persisted light/dark choice
+            before first paint. Must run before the body renders. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+        <link rel="icon" href="/brand/favicon-32.png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/brand/branch-icon-light-192.png" />
+        <link
+          rel="apple-touch-icon"
+          media="(prefers-color-scheme: dark)"
+          href="/brand/branch-icon-dark-192.png"
+        />
       </head>
       <body>
         {/*
@@ -85,13 +104,15 @@ export default function RootLayout({
           Skip to content
         </a>
         <SentryInit />
-        <AuthProvider>
-          <AppRegistrations />
-          <WorkspaceOrgProvider org={org}>
-            <IncidentBanner />
-            {children}
-          </WorkspaceOrgProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <AppRegistrations />
+            <WorkspaceOrgProvider org={org}>
+              <IncidentBanner />
+              {children}
+            </WorkspaceOrgProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -1,16 +1,15 @@
 import type { Config } from "tailwindcss";
 
 /*
- * Olive Branch design tokens — Tailwind theme ("Evening Olive", dark-first).
+ * Branch design tokens — Tailwind theme (warm sand / espresso, light + dark).
  *
- * Source of truth: docs/design-system.md
- * CSS variable mirror: frontend/styles/tokens.css
+ * CSS variable mirror + source of truth: frontend/styles/tokens.css
  *
  * The values below intentionally reference CSS custom properties so the
- * Olive Branch recolor (and any future light-mode pass) can flip token
- * values via :root selectors in tokens.css without touching this file.
- * Token names are kept stable through the rebrand; component code
- * references them via standard Tailwind utilities (bg-ink, text-cream,
+ * theme can flip light ⇄ dark via :root / [data-theme] selectors in
+ * tokens.css without touching this file. Token names are kept stable
+ * through the rebrand and across both modes; component code references
+ * them via standard Tailwind utilities (bg-ink, text-cream, bg-gold,
  * font-display, text-display-md, rounded-xl, etc.).
  */
 const config: Config = {
@@ -39,11 +38,19 @@ const config: Config = {
         "gold-soft": "var(--color-gold-soft)",
         "gold-deep": "var(--color-gold-deep)",
 
-        // Semantic
+        // Semantic — adaptive per mode, tuned for legibility as TEXT.
         terracotta: "var(--color-terracotta)",
         sage: "var(--color-sage)",
         "parchment-amber": "var(--color-parchment-amber)",
         lake: "var(--color-lake)",
+
+        // Fixed status fills + their on-colors — mode-invariant, for solid
+        // badges / incident banners / destructive buttons.
+        danger: "var(--color-danger)",
+        warning: "var(--color-warning)",
+        info: "var(--color-info)",
+        "on-emphasis": "var(--color-on-emphasis)",
+        "emphasis-ink": "var(--color-emphasis-ink)",
       },
       fontFamily: {
         display: ["var(--font-display)"],

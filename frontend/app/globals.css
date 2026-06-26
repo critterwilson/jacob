@@ -16,9 +16,21 @@
 @layer base {
   html {
     background-color: var(--color-ink);
+    /* Native form controls, scrollbars and the like follow the theme. */
+    color-scheme: light;
     /* Stop the system from re-firing horizontal swipes as back/forward
      * navigation while scrolling chats and lists on mobile. */
     overscroll-behavior-x: none;
+  }
+
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme]) {
+      color-scheme: dark;
+    }
   }
 
   body {
@@ -51,5 +63,33 @@
   time,
   [data-tabular] {
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Theme-aware brand mark (BranchMark). The component renders both
+   * cutouts; CSS reveals the one that suits the current ground, mirroring
+   * the token cascade so there is no JS / hydration flash:
+   *   - light ground → branch-tree.png  (espresso cutout)  → .branch-mark--on-light
+   *   - dark  ground → branch-tree-light.png (parchment)   → .branch-mark--on-dark
+   */
+  .branch-mark--on-light {
+    display: block;
+  }
+  .branch-mark--on-dark {
+    display: none;
+  }
+  [data-theme="dark"] .branch-mark--on-light {
+    display: none;
+  }
+  [data-theme="dark"] .branch-mark--on-dark {
+    display: block;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .branch-mark--on-light {
+      display: none;
+    }
+    :root:not([data-theme]) .branch-mark--on-dark {
+      display: block;
+    }
   }
 }
