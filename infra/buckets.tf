@@ -116,6 +116,12 @@ resource "google_storage_bucket_iam_binding" "quarantine_api_writer" {
   role   = "roles/storage.objectAdmin"
   members = [
     "serviceAccount:${var.api_service_account_email}",
+    # The jacob-backend Cloud Run service currently runs as the default
+    # Compute Engine SA (CI deploy never sets --service-account), and it
+    # writes upload objects here. Listed so this authoritative binding
+    # matches the live grant. See the "future cleanup" note in the PR:
+    # move backend + functions onto dedicated least-privilege SAs.
+    "serviceAccount:732806466572-compute@developer.gserviceaccount.com",
   ]
 }
 
@@ -124,6 +130,11 @@ resource "google_storage_bucket_iam_binding" "quarantine_moderation_reader" {
   role   = "roles/storage.objectViewer"
   members = [
     "serviceAccount:${var.moderation_service_account_email}",
+    # onPhotoUploadFinalize (and the other Cloud Functions) currently run
+    # as the default Compute Engine SA and read quarantined uploads during
+    # moderation. Listed so this authoritative binding matches the live
+    # grant; see the "future cleanup" note about dedicated SAs.
+    "serviceAccount:732806466572-compute@developer.gserviceaccount.com",
   ]
 }
 
@@ -253,11 +264,15 @@ resource "google_storage_bucket" "backup" {
   }
 }
 
-# Only the backup job's service account may read or write exports.
+# The backup job's service account reads/writes exports here. The default
+# Compute Engine SA also holds objectAdmin live (backend/functions run as it);
+# listed so this authoritative binding does not revoke it. See the PR's
+# "future cleanup" note about moving onto dedicated least-privilege SAs.
 resource "google_storage_bucket_iam_binding" "backup_rw" {
   bucket = google_storage_bucket.backup.name
   role   = "roles/storage.objectAdmin"
   members = [
     "serviceAccount:${var.backup_service_account_email}",
+    "serviceAccount:732806466572-compute@developer.gserviceaccount.com",
   ]
 }
