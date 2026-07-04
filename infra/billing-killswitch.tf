@@ -1,5 +1,5 @@
 /**
- * $10/mo hard cap — budget → Pub/Sub → Cloud Function that DISABLES BILLING.
+ * $7/mo hard cap — budget → Pub/Sub → Cloud Function that DISABLES BILLING.
  *
  * This is the enforcement layer the cost-alerts runbook flagged as an unbuilt
  * follow-up. The alert-only budgets in `billing-budget.tf` / `uptime-checks.tf`
@@ -33,7 +33,7 @@
 variable "killswitch_cap_usd" {
   description = "Hard monthly spend cap in USD. When ACTUAL spend reaches this, billing is disabled on the target project(s)."
   type        = number
-  default     = 10
+  default     = 7
 }
 
 variable "killswitch_project_ids" {
@@ -221,7 +221,7 @@ resource "google_cloudfunctions2_function" "killswitch" {
 
 resource "google_billing_budget" "killswitch" {
   billing_account = var.billing_account_id
-  display_name    = "JACOB $10 hard cap (kill switch)"
+  display_name    = "JACOB $7 hard cap (kill switch)"
 
   budget_filter {
     calendar_period        = "MONTH"
