@@ -32,5 +32,5 @@ alert_email                      = "YOUR_ALERT_EMAIL@example.com"
 # killswitch_project_ids — projects to unlink when the cap fires; empty = [project_id] (staging only)
 # killswitch_dry_run     — true logs the intended disable without unlinking (use to test the wiring first)
 killswitch_cap_usd               = 7
-killswitch_project_ids           = []      # defaults to [project_id]; add "jacob-494515" to also cap prod
+killswitch_project_ids           = ["jacob-staging-494515", "jacob-494515"]  # cap BOTH staging + prod (account-wide budget → true hard cap)
 killswitch_dry_run               = false   # set true for a no-op rehearsal, then flip to false to arm
