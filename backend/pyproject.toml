@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
     "firebase-admin>=6.5",
-    "google-cloud-bigquery>=3.25",
+    "google-cloud-bigquery>=3.41.0",
     "google-cloud-storage>=2.18",
     "google-cloud-vision>=3.7",
     "pydantic-settings>=2.0",
