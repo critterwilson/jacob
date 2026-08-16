@@ -44,7 +44,7 @@
     "@vitejs/plugin-react": "^4",
     "autoprefixer": "^10",
     "eslint": "^8",
-    "eslint-config-next": "^14.2.0",
+    "eslint-config-next": "^16.2.6",
     "fake-indexeddb": "^6",
     "firebase-admin": "^12",
     "jsdom": "^25",
