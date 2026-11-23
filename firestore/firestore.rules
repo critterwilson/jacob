@@ -155,16 +155,30 @@ service cloud.firestore {
 
       // memberCount, leaderCount, founderUid, and moderationPolicy are all
       // system-only (Admin SDK bypasses these rules). Leaders edit metadata
-      // only via the listed fields.
+      // only via the listed fields. T23 adds `avatarUrl` (max 500 chars,
+      // nullable) and `archivedAt` (a timestamp transition, see below).
       allow update: if isGroupLeader(gid) && notBanned()
-        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode', 'stickerSet'])
+        && onlyChanges(['name', 'description', 'isPrivate', 'inviteCode',
+                        'stickerSet', 'avatarUrl', 'archivedAt'])
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 100
+        && request.resource.data.name.size() <= 80
         && request.resource.data.inviteCode is string
         && request.resource.data.inviteCode.size() >= 6
         && request.resource.data.description is string
-        && request.resource.data.description.size() <= 500;
+        && request.resource.data.description.size() <= 1000
+        && (!('avatarUrl' in request.resource.data)
+            || request.resource.data.avatarUrl == null
+            || (request.resource.data.avatarUrl is string
+                && request.resource.data.avatarUrl.size() <= 500))
+        // `archivedAt` may only transition: null→serverTimestamp (archive)
+        // or timestamp→null (unarchive). Once archived, the value cannot
+        // be updated to a different timestamp by the client.
+        && (!('archivedAt' in changedKeys())
+            || (resource.data.get('archivedAt', null) == null
+                && request.resource.data.archivedAt == request.time)
+            || (resource.data.get('archivedAt', null) != null
+                && request.resource.data.archivedAt == null));
 
       allow delete: if false;
 
@@ -230,7 +244,11 @@ service cloud.firestore {
       match /messages/{mid} {
         allow read: if isGroupMember(gid);
 
+        // T23: archived groups are read-only — no new messages, no edits.
+        // The check reads `groups/{gid}.archivedAt`; when null or absent
+        // the group accepts writes as before.
         allow create: if isGroupMember(gid) && notBanned()
+          && get(/databases/$(database)/documents/groups/$(gid)).data.get('archivedAt', null) == null
           && request.resource.data.keys().hasOnly(
                ['authorUid', 'body', 'stickerIds', 'createdAt', 'editedAt',
                 'deletedAt', 'parentMessageId', 'threadReplyCount', 'mediaRefs'])

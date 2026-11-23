@@ -18,6 +18,8 @@ import {
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  addDoc,
+  collection,
   deleteDoc,
   doc,
   getDoc,
@@ -217,6 +219,253 @@ describe("member bootstrap path", () => {
         role: "leader",
         joinedAt: serverTimestamp(),
       }),
+    );
+  });
+});
+
+// ── T23: settings (avatar, archival) ──────────────────────────────────────────
+
+describe("T23 — group settings", () => {
+  it("leader can set avatarUrl", async () => {
+    await seedGroup({ gid: "ts1", createdBy: "alice", leaderUid: "alice" });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "ts1"), {
+        avatarUrl: "https://storage.googleapis.com/jacob-public/groups/ts1.jpg",
+      }),
+    );
+  });
+
+  it("leader can clear avatarUrl back to null", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "ts2"), {
+        name: "g",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE10",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        avatarUrl: "https://storage.googleapis.com/x/y.jpg",
+      });
+      await setDoc(doc(db, "groups", "ts2", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "ts2"), { avatarUrl: null }),
+    );
+  });
+
+  it("non-leader cannot set avatarUrl", async () => {
+    await seedGroup({
+      gid: "ts3",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    await assertFails(
+      updateDoc(doc(authed("bob"), "groups", "ts3"), {
+        avatarUrl: "https://storage.googleapis.com/x/y.jpg",
+      }),
+    );
+  });
+
+  it("leader can update description up to 1000 chars", async () => {
+    await seedGroup({ gid: "ts4", createdBy: "alice", leaderUid: "alice" });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "ts4"), {
+        description: "x".repeat(1000),
+      }),
+    );
+  });
+
+  it("rejects description over 1000 chars", async () => {
+    await seedGroup({ gid: "ts5", createdBy: "alice", leaderUid: "alice" });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "ts5"), {
+        description: "x".repeat(1001),
+      }),
+    );
+  });
+
+  it("rejects name over 80 chars on edit", async () => {
+    await seedGroup({ gid: "ts6", createdBy: "alice", leaderUid: "alice" });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "ts6"), {
+        name: "x".repeat(81),
+      }),
+    );
+  });
+
+  it("leader can archive (null → serverTimestamp)", async () => {
+    await seedGroup({ gid: "ts7", createdBy: "alice", leaderUid: "alice" });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "ts7"), {
+        archivedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("rejects archive when already archived", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "ts8"), {
+        name: "g",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE11",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        archivedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", "ts8", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+    });
+    await assertFails(
+      updateDoc(doc(authed("alice"), "groups", "ts8"), {
+        archivedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("leader can unarchive (timestamp → null)", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "ts9"), {
+        name: "g",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE12",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        archivedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", "ts9", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(authed("alice"), "groups", "ts9"), { archivedAt: null }),
+    );
+  });
+
+  it("non-leader cannot archive", async () => {
+    await seedGroup({
+      gid: "ts10",
+      createdBy: "alice",
+      leaderUid: "alice",
+      memberUid: "bob",
+    });
+    await assertFails(
+      updateDoc(doc(authed("bob"), "groups", "ts10"), {
+        archivedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("rejects message create when group is archived", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "ts11"), {
+        name: "g",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE13",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        archivedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", "ts11", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+    });
+    await assertFails(
+      addDoc(collection(authed("alice"), "groups", "ts11", "messages"), {
+        authorUid: "alice",
+        body: "hello",
+        stickerIds: ["amen"],
+        createdAt: serverTimestamp(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      }),
+    );
+  });
+
+  it("allows message create on a non-archived group", async () => {
+    await seedGroup({ gid: "ts12", createdBy: "alice", leaderUid: "alice" });
+    await assertSucceeds(
+      addDoc(collection(authed("alice"), "groups", "ts12", "messages"), {
+        authorUid: "alice",
+        body: "hello",
+        stickerIds: ["amen"],
+        createdAt: serverTimestamp(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      }),
+    );
+  });
+
+  it("messages on archived groups remain readable", async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "groups", "ts13"), {
+        name: "g",
+        description: "",
+        createdBy: "alice",
+        founderUid: "alice",
+        createdAt: Timestamp.now(),
+        isPrivate: false,
+        inviteCode: "INVITE14",
+        memberCount: 1,
+        stickerSet: "christian",
+        schemaVersion: 1,
+        archivedAt: Timestamp.now(),
+      });
+      await setDoc(doc(db, "groups", "ts13", "members", "alice"), {
+        role: "leader",
+        joinedAt: Timestamp.now(),
+        uid: "alice",
+      });
+      await setDoc(doc(db, "groups", "ts13", "messages", "m1"), {
+        authorUid: "alice",
+        body: "before archive",
+        stickerIds: ["amen"],
+        createdAt: Timestamp.now(),
+        editedAt: null,
+        deletedAt: null,
+        parentMessageId: null,
+        threadReplyCount: 0,
+        mediaRefs: [],
+      });
+    });
+    await assertSucceeds(
+      getDoc(doc(authed("alice"), "groups", "ts13", "messages", "m1")),
     );
   });
 });
